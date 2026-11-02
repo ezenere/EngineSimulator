@@ -154,14 +154,15 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
   }
 
   let rebuildTimer = 0;
-  function pushConfig(structural) {
+  function pushConfig(structural, fresh = false) {
     engine = G.build(spec);
     renderReadout();
     updatePlate();
     if (!audio) return;
     if (structural) {
       clearTimeout(rebuildTimer);
-      rebuildTimer = setTimeout(() => audio.send({ type: 'config', cfg: engineConfig(audio.ctx.sampleRate) }), 60);
+      // carro novo com o motor ligado: ele dá a partida do zero
+      rebuildTimer = setTimeout(() => audio.send({ type: 'config', cfg: { ...engineConfig(audio.ctx.sampleRate), fresh } }), 60);
     } else {
       audio.send({ type: 'tune', cfg: { ...spec } });
     }
@@ -254,6 +255,14 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     const was = spec.valve || 'none';
     setSpec({ valve: v }, { structural: (was === 'none') !== (v === 'none') });
   }
+
+  const DRIVE_MODES = [
+    ['track', 'Pista', 'Sobe quase no corte e reduz cedo: o motor fica sempre cheio'],
+    ['sport', 'Esportivo', 'Sobe alto e reduz em giro médio'],
+    ['normal', 'Normal', 'Trocas em giro médio, como no dia a dia'],
+    ['eco', 'Econômico', 'Sobe o mais cedo possível e reduz quase na lenta'],
+    ['auto', 'Automático', 'Decide pelo quanto você pisa: pouco acelerador troca cedo, pé no fundo estica'],
+  ];
 
   // relações atuais (as do preset/escalonamento padrão até o usuário mexer)
   function currentRatios() {
@@ -365,10 +374,8 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     tr.append(slider('shiftTime', 'Tempo de troca', 0.04, 1, 0.01, st, (v) => `${v.toFixed(2).replace('.', ',')} s · ${stName(v)}`,
       (v) => setSpec({ shiftTime: v }, { structural: false, render: false })));
     if (spec.transmission === 'auto') {
-      const sp = spec.shiftPoint ?? 0.5;
-      tr.append(slider('shiftPoint', 'Ponto de troca do automático', 0, 1, 0.01, sp,
-        (v) => (v < 0.25 ? 'econômico (troca cedo)' : v < 0.6 ? 'normal' : v < 0.85 ? 'esportivo' : 'pista (estica tudo)'),
-        (v) => setSpec({ shiftPoint: v }, { structural: false, render: false })));
+      tr.append(field('Modo do câmbio (M)', chipGroup('driveMode', DRIVE_MODES.map(([value, label, title]) => ({ value, label, title })),
+        spec.driveMode || 'auto', (v) => setSpec({ driveMode: v }, { structural: false }))));
     }
     // relações: número maior = marcha mais curta (mais força, menos velocidade)
     const ratios = currentRatios();
@@ -535,10 +542,10 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     document.querySelectorAll('.preset').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.id === presetId)));
   }
   // cada carro vem com o próprio escape: acessórios que ele não define voltam ao padrão
-  const STOCK = { valve: 'none', pipeD: 2.5, reso: false, twoStep: 'off', launchRpm: undefined, fuel: 'efi', shiftTime: undefined, shiftPoint: undefined };
+  const STOCK = { valve: 'none', pipeD: 2.5, reso: false, twoStep: 'off', launchRpm: undefined, fuel: 'efi', shiftTime: undefined, driveMode: 'auto' };
   function loadPreset(p) {
     spec = { ...STOCK, ...p };
-    pushConfig(true);
+    pushConfig(true, true);
     presetId = p.id;
     markPreset();
     renderControls();
@@ -909,6 +916,10 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     else if (e.repeat) return;
     else if (e.code === 'KeyE' || e.code === 'PageUp') shift(1);
     else if (e.code === 'KeyQ' || e.code === 'PageDown') shift(-1);
+    else if (e.code === 'KeyM' && spec.transmission === 'auto') {
+      const i = DRIVE_MODES.findIndex(([v]) => v === (spec.driveMode || 'auto'));
+      setSpec({ driveMode: DRIVE_MODES[(i + 1) % DRIVE_MODES.length][0] }, { structural: false });
+    }
     else if (e.code === 'KeyB') setValve((spec.valve || 'none') === 'open' ? 'closed' : 'open');
     else if (e.code === 'KeyI') { ignitionAt = performance.now(); setIgnition(!ignition); }
     else if (e.code === 'KeyC') { const order = ['pipe', 'ext', 'int', 'bay']; observer = 'car'; carMic = order[(order.indexOf(carMic) + 1) % 4]; setListener(); }

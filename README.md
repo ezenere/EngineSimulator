@@ -19,14 +19,15 @@ Dá para mexer em quase tudo:
 - a ordem em que os cilindros explodem;
 - o escapamento: abafador, válvula, diâmetro, ressonador;
 - turbo ou compressor;
-- câmbio: número de marchas, manual ou automático, a relação de cada marcha e o tempo de troca;
+- câmbio: número de marchas, manual ou automático (com modos pista, esportivo, normal, econômico e automático), a relação de cada marcha e o tempo de troca;
+- temperatura do motor: ele começa frio e o som muda enquanto esquenta;
 - 2-step (corte ou controle de largada).
 
 Você também escolhe de onde ouve: ao lado do escape, atrás do carro, dentro da cabine, no cofre do motor ou parado na rua vendo o carro passar. E escolhe o lugar: céu aberto, rua com prédios, túnel, garagem, autódromo ou serra.
 
 ![Mustang passando pela rua, com o mapa mostrando onde ele está](docs/ronco-rua.png)
 
-**Teclas:** `I` liga · `W` acelera · `S` freia · `E` e `Q` trocam marcha · `C` muda o microfone · `V` alterna entre dentro do carro e na rua · `B` abre e fecha a válvula do escape.
+**Teclas:** `I` liga · `W` acelera · `S` freia · `E` e `Q` trocam marcha · `C` muda o microfone · `V` alterna entre dentro do carro e na rua · `B` abre e fecha a válvula do escape · `M` muda o modo do câmbio automático (pista, esportivo, normal, econômico, automático).
 
 ## Turbina (aviões)
 

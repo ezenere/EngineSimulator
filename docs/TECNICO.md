@@ -96,7 +96,8 @@ Isso cria as ordens que não são de ignição (meia-ordem, 1ª, 2ª…), que d�
   - correção rápida pelo avanço;
   - "resgate" contra apagamento;
   - dashpot que decai com o tempo.
-- O integrador só fica congelado enquanto o giro está despencando de uma acelerada. Com o giro parado acima do alvo, ele integra para baixo, o que é necessário quando o motor esquenta e a lenta acelerada acaba.
+- Com o giro bem acima do alvo, o integrador fica congelado enquanto o giro está despencando de uma acelerada. Com o giro parado acima do alvo, ele integra para baixo **devagar** (15% da taxa normal). Isso é necessário quando o motor esquenta e a lenta acelerada acaba. Integrar rápido nesse caso fazia o controle exagerar e entrar num vai-e-vem que chegava a apagar o motor.
+- **Troca de carro com o motor ligado** (ou mudança no número de cilindros): o motor novo dá a partida do zero. Ele não herda giro, marcha nem o controle de lenta "aprendido" no motor anterior. Mudar peças do mesmo carro (escape, admissão…) mantém o motor funcionando.
 - **Som da admissão:** é a derivada da vazão total que entra nos cilindros (monopolo), filtrada pelo tipo de entrada:
   - caixa de ar corta acima de ~1 kHz;
   - filtro esportivo e borboletas, acima de ~1,3 a 1,7 kHz.
@@ -174,8 +175,18 @@ Depois do abafador original a não linearidade do tubo é quase desligada. Com o
 - **Tempo de troca:** é um parâmetro por carro, de 0,04 a 1 s. Metade é a marcha em transição e metade a embreagem voltando.
 - **Trocas rápidas** (até 0,2 s, automático, dupla embreagem, quickshifter): cortam a ignição com a borboleta aberta. O turbo não despeja, e um atraso de ignição alisa a descida do giro.
 - **Troca manual comum:** fecha a borboleta, como o motorista tirando o pé. O turbo despeja pela válvula de alívio.
-- **Automático:**
-  - **Subida:** acontece num giro entre ~2× a lenta e 94% da faixa vermelha, conforme o acelerador e o "ponto de troca" (econômico ↔ pista). Sem acelerar ele segura a marcha.
+- **Automático:** tem cinco modos.
+
+  | Modo | Sobe em | Reduz em |
+  |---|---|---|
+  | Pista | 97% da faixa vermelha | 70% |
+  | Esportivo | 85% | 50% |
+  | Normal | ~3,6× a lenta (entre 38% e 60% da faixa) | ~1,9× a lenta |
+  | Econômico | ~2,6× a lenta (entre 25% e 45% da faixa) | ~1,4× a lenta |
+  | Automático | entre ~2× a lenta e 94% da faixa, conforme o acelerador | conforme o acelerador (kickdown) |
+
+  - **Modos fixos:** nos quatro primeiros o ponto de troca não depende do acelerador, e uma redução só acontece se o giro depois dela ficar abaixo do ponto de subida, para não ficar caçando marcha.
+  - **Sem acelerar:** em todos os modos ele segura a marcha.
   - **Redução:** acontece ao desacelerar e no kickdown, e ao parar ele volta direto para a 1ª.
   - **Troca embreagem-a-embreagem:** a marcha nova já pega enquanto a outra solta, e o motor não dispara.
 - **Limitador:** corta a ignição acima da faixa vermelha, com histerese de 160 rpm.
@@ -364,7 +375,7 @@ O que foi medido nas simulações offline (Node) durante o desenvolvimento:
 | `header`, `routing`, `muffler`, `pipeLen` | Coletor, traçado, abafador, comprimento do escape (m) |
 | `aspiration`, `boost`, `intake` | `'na'`, `'turbo'` ou `'super'`, pressão (bar), entrada de ar |
 | `pops` | Estalos no escape (0–1) |
-| `gears`, `transmission`, `shiftTime`, `shiftPoint` | Marchas, câmbio, tempo de troca (s), ponto de troca do automático |
+| `gears`, `transmission`, `shiftTime`, `driveMode` | Marchas, câmbio, tempo de troca (s), modo do automático (`'track'`, `'sport'`, `'normal'`, `'eco'`, `'auto'`) |
 | `ratios`, `finalDrive` | Opcionais: relações de cada marcha e diferencial |
 | `valve`, `pipeD`, `reso`, `twoStep`, `launchRpm` | Acessórios |
 

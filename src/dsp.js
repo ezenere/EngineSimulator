@@ -210,7 +210,7 @@ function EngineDSPFactory() {
       this.state = 'off'; this.crankT = 0;
       this.thr = 0; this.thrTarget = 0; this.brake = 0;
       this.iac = 0.004; this.iacI = 0.006; this.advTrim = 0; this.ePrev = 0; this.dash = 0;
-      this.KP = 0.0015; this.KI = 0.0035; this.KD = 0; this.KA = 40; this.KAD = 0; this.RG = 0.08;
+      this.KP = 0.0015; this.KI = 0.0035; this.iacTrim = 1; this.KD = 0; this.KA = 40; this.KAD = 0; this.RG = 0.08;
       this.pMan = P0; this.boost = 0; this.turboW = 0; this.bovEnv = 0; this.bovAmp = 0;
       this.limiter = false; this.popWindow = 0; this.prevThrUser = 0;
       this.gear = 0; this.shiftT = 0; this.shifting = false; this.shiftCut = false; this.blip = false; this.clutch = 1; this.locked = false;
@@ -284,6 +284,7 @@ function EngineDSPFactory() {
     }
 
     setConfig(cfg, calibrate = true) {
+      const prevN = this.N;
       this.cfg = cfg;
       const N = cfg.N;
       this.N = N;
@@ -341,6 +342,19 @@ function EngineDSPFactory() {
       this.buildFilters(cfg);
       this.cfgGain = cfg.gain || (calibrate ? this.calibrate(cfg) : 1);
       this.fade = 0;
+      // trocou de carro com o motor ligado: o motor novo dá a partida do zero. Herdar giro,
+      // marcha e o controle de marcha lenta "aprendido" no outro motor deixava a lenta
+      // instável e às vezes apagava (uma moto nascendo a 750 rpm de um V8, por exemplo)
+      if ((this.state === 'run' || this.state === 'crank') && (cfg.fresh || prevN !== N)) this.freshStart();
+    }
+
+    freshStart() {
+      this.state = 'crank'; this.crankT = 0; this.runT = 0;
+      this.omega = 0; this.rpmAvg = 0;
+      this.iacI = 0.006; this.iac = 0.004; this.dash = 0; this.ePrev = 0; this.advTrim = 0; this.lcI = 0.12; this.lcPrev = undefined;
+      this.limiter = false; this.pops.length = 0; this.boost = 0; this.turboW = 0; this.bovEnv = 0; this.catRetard = 0;
+      this.gear = 0; this.clutch = 1; this.locked = false; this.shifting = false; this.shiftCut = false; this.blip = false; this.v = 0;
+      this.pMan = P0; this.thr = 0;
     }
 
     // Parâmetros escalares que podem mudar sem reconstruir a acústica.
@@ -376,7 +390,7 @@ function EngineDSPFactory() {
       }
       if (cfg.transmission) this.auto = cfg.transmission === 'auto';
       this.shiftTime = clamp(cfg.shiftTime || (this.auto ? 0.36 : 0.26), 0.04, 1);
-      this.shiftPoint = clamp(cfg.shiftPoint ?? 0.5, 0, 1);
+      this.driveMode = cfg.driveMode || 'auto';
     }
 
     volume(a) {
@@ -596,8 +610,9 @@ function EngineDSPFactory() {
         const de = (e - this.ePrev) / dtc; this.ePrev = e;
         // integra também para baixo quando o giro está parado acima do alvo (ex.: o motor esquentou
         // e a lenta acelerada acabou); só não integra enquanto o giro está despencando de uma acelerada
-        const settling = de < 0.08;
-        if (active && (e > -0.15 || this.runT < 4 || settling)) this.iacI = clamp(this.iacI + clamp(e, -0.3, 0.3) * dtc * this.KI, 0, 0.05);
+        // (bem devagar: puxar com força aqui fazia o controle exagerar e entrar num vai-e-vem que apagava o motor)
+        if (active && (e > -0.15 || this.runT < 4)) this.iacI = clamp(this.iacI + clamp(e, -0.3, 0.3) * dtc * this.KI, 0, 0.05);
+        else if (active && de < 0.08) this.iacI = clamp(this.iacI - 0.15 * dtc * this.KI * this.iacTrim, 0, 0.05);
         // resgate contra apagamento: só age quando a rotação cai abaixo da lenta
         const rescue = active && e > 0.15 ? e - 0.15 : 0;
         // "dashpot": mantém ar extra na desaceleração para o coletor não chegar vazio na lenta
@@ -685,18 +700,27 @@ function EngineDSPFactory() {
         const n = this.ratios.length - 1;
         const t = clamp(user, 0, 1);
         // sem acelerar o câmbio segura a marcha (freio-motor); só sobe para não estourar o giro
-        // ponto de troca: econômico sobe cedo; esportivo estica o giro mesmo com pouco acelerador
-        const sp = this.shiftPoint, base = this.idle * (1.4 + 1.2 * sp);
-        const up = t < 0.05 ? this.redline * 0.94 : base + (this.redline * 0.94 - base) * Math.pow(t, 2.2 - 1.8 * sp);
+        // modo do câmbio: pista/esportivo/normal/econômico trocam em rotações fixas;
+        // automático decide pelo quanto o acelerador está pisado
+        const Rl = this.redline, I = this.idle, mode = this.driveMode;
+        const FIXED = {
+          track: [0.97 * Rl, 0.7 * Rl],
+          sport: [0.85 * Rl, 0.5 * Rl],
+          normal: [clamp(I * 3.6, 0.38 * Rl, 0.6 * Rl), I * 1.9],
+          eco: [clamp(I * 2.6, 0.25 * Rl, 0.45 * Rl), I * 1.4],
+        }[mode];
+        const sp = 0.5, base = this.idle * (1.4 + 1.2 * sp);
+        let up = FIXED ? FIXED[0] : base + (this.redline * 0.94 - base) * Math.pow(t, 2.2 - 1.8 * sp);
+        if (t < 0.05) up = Math.max(up, this.redline * 0.94); // sem acelerar segura a marcha (freio-motor)
         // reduz desacelerando (antes de o giro cair na lenta) e no kickdown
-        const down = this.idle * (1.3 + 0.8 * sp) + this.redline * 0.42 * t * t;
+        const down = FIXED ? FIXED[1] : this.idle * (1.3 + 0.8 * sp) + this.redline * 0.42 * t * t;
         if (this.v < 0.6 && this.gear > 1) {
           // parado: volta direto para a 1ª, pronto para sair
           this.gear = 1; this.shifting = true; this.shiftT = 0.15; this.clutch = 0; this.shiftCut = false; this.blip = false; this.shiftCool = 0.4;
         } else if (this.locked && rpm > up && this.gear < n) this.requestShift(1);
         else if (rpm < down && this.gear > 1) {
           const nextRpm = rpm * this.ratios[this.gear - 1] / this.ratios[this.gear];
-          if (nextRpm < this.redline * 0.9) this.requestShift(-1);
+          if (nextRpm < this.redline * 0.9 && (!FIXED || nextRpm < up * 0.92)) this.requestShift(-1);
         }
       }
     }
