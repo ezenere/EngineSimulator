@@ -129,17 +129,20 @@ function EngineDSPFactory() {
       let lr = 1400;
       if (kind === 'straight') { this.gT = 0.96; this.rA = 0.04; this.rB = 0; this.x = 0; }
       // esportivo: tubo perfurado reto com lã; a lã come os agudos, o grave passa livre
-      else if (kind === 'sport') { q(new Biquad().lp(fs, 3800, 0.6)); q(new Biquad().peak(fs, 120, 0.9, 2)); this.gT = 0.78; this.rA = 0.2; this.rB = 0.1; this.x = 0.06; }
+      // (a lã absorve cada vez mais com a frequência: 2ª ordem a partir de ~2 kHz, mais um corte em 4,5 kHz)
+      else if (kind === 'sport') { q(new Biquad().lp(fs, 2200, 0.7)); q(new Biquad().lp(fs, 4500, 0.6)); q(new Biquad().peak(fs, 120, 0.9, 2)); this.gT = 0.78; this.rA = 0.2; this.rB = 0.1; this.x = 0.06; }
       // original: câmaras de reflexão + ressonador. Elas matam o médio (onde mora o
       // "rasgado") e o agudo, mas o grave das explosões atravessa: fica baixo e encorpado
       else if (kind === 'stock') {
-        q(new Biquad().peak(fs, 350, 0.9, -10)); q(new Biquad().peak(fs, 800, 0.9, -8)); q(new Biquad().lp(fs, 1200, 0.6)); q(new Biquad().lp(fs, 2400, 0.7)); q(new Biquad().peak(fs, 55, 1.0, 3));
+        // (câmaras + lã: o agudo cai uns 40 dB acima de 2 kHz, como num escape de fábrica; o médio
+        // é cortado, mas não tanto que sobre só o agudo que vaza)
+        q(new Biquad().peak(fs, 350, 0.9, -7)); q(new Biquad().peak(fs, 800, 0.9, -6)); q(new Biquad().lp(fs, 900, 0.7)); q(new Biquad().lp(fs, 900, 0.7)); q(new Biquad().lp(fs, 2000, 0.6)); q(new Biquad().peak(fs, 55, 1.0, 3));
         this.gT = 0.95; this.rA = 0.22; this.rB = 0.15; this.x = 0.06; lr = 500;
       }
       else {
         // turbina: o rotor quebra a frente dos pulsos (agudos caem uns 6 dB) e reforça um pouco o
         // grave do coletor, mas não é uma parede; um passa-baixa forte aqui soava "de longe"
-        q(new Biquad().hshelf(fs, 1300, -6)); q(new Biquad().lp(fs, 4500, 0.6)); q(new Biquad().peak(fs, 150, 0.8, 2.5));
+        q(new Biquad().hshelf(fs, 1300, -6)); q(new Biquad().lp(fs, 3500, 0.6)); q(new Biquad().peak(fs, 150, 0.8, 2.5));
         this.gT = 0.74; this.rA = 0.24; this.rB = 0.12; this.x = 0.08;
       }
       this.k = onePole(fs, lr); this.s = 0;
@@ -154,28 +157,41 @@ function EngineDSPFactory() {
     }
   }
 
-  // Extremidade aberta: reflete invertido em baixas frequências, irradia o resto.
+  // Extremidade aberta: reflete invertido em baixas frequências e irradia como um
+  // monopolo. A pressão irradiada é a derivada da vazão que sai pela boca: abaixo de
+  // ka ≈ 1 (c/2πa, ~2 kHz num tubo de 2,5") sobe 6 dB por oitava, acima disso a boca
+  // irradia como um pistão. Sem isso o grave da ignição domina tudo e o nível não
+  // cresce com o giro, porque a boca "irradia" por igual em todas as frequências.
   class Radiator {
-    constructor(fs, line, panL, panR, fc = 1500, gain = 1) { this.line = line; this.k = onePole(fs, fc); this.s = 0; this.panL = panL; this.panR = panR; this.emit = 0; this.gain = gain; }
+    constructor(fs, line, panL, panR, fc = 1500, gain = 1, fRad = 2000) {
+      this.line = line; this.k = onePole(fs, fc); this.s = 0; this.panL = panL; this.panR = panR; this.emit = 0; this.gain = gain;
+      this.kr = onePole(fs, fRad); this.d = 0; this.u = 0; this.R = 0.93;
+    }
+    radiate(u) {
+      // u ∝ vazão volumétrica na boca; emite a parte "rápida" (passa-alta de 1ª ordem)
+      this.u = u;
+      this.d += this.kr * (u - this.d);
+      return (u - this.d) * this.gain;
+    }
     step() {
       const x = this.line.in1;
       this.s += this.k * (x - this.s);
-      const refl = -0.82 * this.s;
+      const refl = -this.R * this.s;
       this.line.out1 = refl;
-      this.emit = (x - refl) * this.gain;
+      this.emit = this.radiate(x - refl);
     }
   }
 
   // Válvula cutout ("escape aberto"): boca lateral antes do abafador. Fechada é um
   // toco tampado; aberta vira uma saída livre e o gás escolhe o caminho mais fácil.
   class Cutout extends Radiator {
-    constructor(fs, line, panL, panR, fc, gain, valve) { super(fs, line, panL, panR, fc, gain); this.valve = valve; }
+    constructor(fs, line, panL, panR, fc, gain, valve, fRad) { super(fs, line, panL, panR, fc, gain, fRad); this.valve = valve; }
     step() {
       const x = this.line.in1, o = this.valve.v;
       this.s += this.k * (x - this.s);
-      const open = -0.82 * this.s;
-      this.line.out1 = o * open + (1 - o) * 0.96 * x;
-      this.emit = o * (x - open) * this.gain;
+      const open = -this.R * this.s;
+      this.line.out1 = o * open + (1 - o) * 0.7 * x; // fechada: a borboleta da válvula vaza e absorve um pouco
+      this.emit = this.radiate(o * (x - open));
     }
   }
 
@@ -412,27 +428,44 @@ function EngineDSPFactory() {
       // turbo calibrado em pressão parcial: com a pressão cheia o motor sopra quase o dobro de ar e
       // o resto do tempo (sem pressão) ficaria baixo demais, como se o carro estivesse longe
       t.thrTarget = 1; t.thr = 1; t.turboW = 0.6; t.boost = cfg.boost * (this.blower ? 0.8 : 0.3);
+      t.maxBoost = cfg.boost * (this.blower ? 0.8 : 0.4); // (o controle recalcula a pressão; limita aqui de verdade)
       t.params.master = 0.02;
       const B = 256, L = new Float32Array(B), R = new Float32Array(B);
-      let acc = 0, cnt = 0;
+      let acc = 0, cnt = 0, pk = 0;
       for (let i = 0; i < 0.5 * this.fs; i += B) {
         t.process(L, R, B);
-        if (i > 0.25 * this.fs) for (let k = 0; k < B; k++) { acc += L[k] * L[k] + R[k] * R[k]; cnt += 2; }
+        if (i > 0.25 * this.fs) for (let k = 0; k < B; k++) { acc += L[k] * L[k] + R[k] * R[k]; cnt += 2; pk = Math.max(pk, Math.abs(L[k]), Math.abs(R[k])); }
       }
       const rms = Math.sqrt(acc / Math.max(1, cnt)) / 0.01;
-      const target = 0.32 * 0.82;
-      return clamp(target / Math.max(rms, 1e-6), 0.05, 30);
+      const target = 0.17; // RMS em carga total (master 1); deixa ~5 dB de folga antes do limitador de saída
+      const gWot = Math.min(target / Math.max(rms, 1e-6), 0.9 / Math.max(pk / 0.01, 1e-6)); // (e o pico em carga fica abaixo do limitador)
+      // e em marcha lenta: motores com dinâmica muito diferente (turbo abafado × corrida) ficavam
+      // 30 dB apartados na lenta; a média geométrica (pesada 60/40 para a carga) dos dois ganhos divide essa diferença ao meio
+      const ti = new EngineDSP(this.fs);
+      ti.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false }, false);
+      ti.state = 'run'; ti.lockOmega = true; ti.tempMode = 'fixed'; ti.tempSet = 90; ti.coolant = 90; ti.runT = 60;
+      ti.omega = (this.idle * TAU) / 60; ti.rpmAvg = this.idle; ti.thrTarget = 0; ti.thr = 0; ti.params.master = 0.02;
+      let acc2 = 0, cnt2 = 0;
+      for (let i = 0; i < 0.8 * this.fs; i += B) {
+        ti.process(L, R, B);
+        if (i > 0.4 * this.fs) for (let k = 0; k < B; k++) { acc2 += L[k] * L[k] + R[k] * R[k]; cnt2 += 2; }
+      }
+      const rmsIdle = Math.sqrt(acc2 / Math.max(1, cnt2)) / 0.01;
+      const gIdle = (target * 0.07) / Math.max(rmsIdle, 1e-6);
+      return clamp(Math.pow(gWot, 0.6) * Math.pow(gIdle, 0.4), 0.05, 40);
     }
 
     buildExhaust(cfg) {
       const fs = this.fs, N = this.N;
       const lines = []; const nodes = []; const runners = new Array(N); const rads = [];
-      const L = (len, Y, loss, damp = 1) => { const l = new Line(fs, len, Y, loss, damp); l.kNL = 0.6; lines.push(l); return l; };
+      const L = (len, Y, loss, damp = 1) => { const l = new Line(fs, len, Y, loss, damp); l.kNL = 0.28; lines.push(l); return l; };
       const pipe = cfg.pipeLen;
       // diâmetro do escape (referência 2,5"): área muda a impedância vista pelo coletor,
       // tubo fino atrita mais e acelera o gás (mais chiado de jato), ponta larga irradia mais grave
       const ds = clamp((cfg.pipeD || 2.5) / 2.5, 0.6, 1.6), A2 = ds * ds, dw = 1 / ds;
       this.pipeA = A2;
+      // ka = 1 na boca: c/(2πa) com o gás já mais frio na ponta (~400 m/s); raio 31,75 mm numa ponta de 2,5"
+      const fRad = 400 / (TAU * 0.03175 * ds);
       const bankOut = []; this.bankJ = [];
       for (let b = 0; b < cfg.banks; b++) {
         const cyls = [];
@@ -468,17 +501,17 @@ function EngineDSPFactory() {
           feed = m2;
         }
         if (cfg.valve && cfg.valve !== 'none') {
-          const stub = L(0.12, mid.Y * 0.9, 9000, dw), m3 = L(0.12, mid.Y, 9000, dw);
+          const stub = L(0.2, mid.Y * 0.9, 5000, dw), m3 = L(0.12, mid.Y, 9000, dw);
           nodes.push(new Junction([port(feed, 1), port(stub, 0), port(m3, 0)]));
-          const cut = new Cutout(fs, stub, 0.5 + 0.3 * (panL - panR), 0.5 + 0.3 * (panR - panL), 1500 / ds, 1.25 * A2, this.valveState);
+          const cut = new Cutout(fs, stub, 0.5 + 0.3 * (panL - panR), 0.5 + 0.3 * (panR - panL), 1500 / ds, 1.0 * A2, this.valveState, fRad);
           nodes.push(cut); rads.push(cut);
           feed = m3;
         }
         const tail = L(pipe * 0.3, mid.Y, 9000, dw);
         // depois do abafador a onda já é fraca: quase não se afia de novo (senão refaz os agudos que ele tirou)
-        tail.kNL = cfg.muffler === 'stock' ? 0.08 : 0.6;
+        tail.kNL = cfg.muffler === 'stock' ? 0.05 : 0.28;
         nodes.push(new TwoPort(fs, port(feed, 1), port(tail, 0), cfg.muffler));
-        const r = new Radiator(fs, tail, panL, panR, 1500 / ds, A2); nodes.push(r); rads.push(r);
+        const r = new Radiator(fs, tail, panL, panR, 1500 / ds, A2, fRad); nodes.push(r); rads.push(r);
       };
       const routing = cfg.routing;
       if (routing === 'single') {
@@ -512,7 +545,7 @@ function EngineDSPFactory() {
       }
       this.lines = lines; this.nodes = nodes; this.runners = runners; this.rads = rads;
       this.radHP = rads.map(() => new Biquad().hp(this.fs, 45, 0.7));
-      this.radSh = rads.map(() => new Biquad().hshelf(this.fs, 900, 5));
+      this.radSh = rads.map(() => new Biquad().hshelf(this.fs, 900, 0));
       this.jetF = rads.map(() => [new Biquad().bp(this.fs, 450, 0.5), new Biquad().bp(this.fs, 1400, 0.6)]);
       this.jetEnv = rads.map(() => 0);
     }
@@ -532,7 +565,7 @@ function EngineDSPFactory() {
         this.inF = [new Biquad().hp(fs, 35), new Biquad().peak(fs, 160, 2.0, 8), new Biquad().lp(fs, 1000, 0.7)];
         this.inGain = 0.8; this.hissF = new Biquad().bp(fs, 1200, 0.8); this.hissGain = 0.2;
       }
-      this.clickF = [new Biquad().bp(fs, 3600, 3), new Biquad().bp(fs, 7200, 4)];
+      this.clickF = [new Biquad().bp(fs, 2600, 2.5), new Biquad().bp(fs, 5200, 3)];
       this.knockF = [new Biquad().bp(fs, 900, 3), new Biquad().bp(fs, 2100, 4), new Biquad().bp(fs, 4200, 5)];
       this.mechHP = new Biquad().hp(fs, 80);
       this.saF = new Biquad().bp(fs, 2600, 0.8);
@@ -546,6 +579,7 @@ function EngineDSPFactory() {
       this.cabR = [new Biquad().lp(fs, 420, 0.7), new Biquad().lp(fs, 1100, 0.6), new Biquad().peak(fs, 70, 1.1, 7)];
       this.cabIn = new Biquad().lp(fs, 900, 0.7);
       this.cabMech = new Biquad().lp(fs, 1200, 0.7);
+      this.extMech = new Biquad().lp(fs, 3000, 0.7); // de fora, atrás do carro, a carroceria sombreia o agudo da mecânica
       this.bayEx = new Biquad().lp(fs, 900, 0.7);
       this.inPrev = 0;
       this.clickEnv = 0; this.knockEnv = 0;
@@ -985,7 +1019,7 @@ function EngineDSPFactory() {
           const pp = this.pops[i];
           if (pp.d > 0) { pp.d--; continue; }
           const t = pp.t / fs;
-          const v = pp.amp * (Math.exp(-t / 0.0006) * (1 + 0.6 * rng.bi()) + 0.55 * rng.bi() * Math.exp(-t / 0.0035));
+          const v = pp.amp * 0.55 * (Math.exp(-t / 0.0025) * (1 + 0.3 * rng.bi()) + 0.45 * rng.bi() * Math.exp(-t / 0.006));
           this.bankJ[Math.min(pp.bank, this.bankJ.length - 1)].inj += v;
           if (++pp.t > 0.03 * fs) this.pops.splice(i, 1);
         }
@@ -998,7 +1032,7 @@ function EngineDSPFactory() {
           const rd = rads[i];
           const e = rd.emit;
           let x = this.radSh[i].run(this.radHP[i].run(e));
-          const vel = Math.max(0, e) / (2.5e4 * this.pipeA);
+          const vel = Math.max(0, rd.u) / (2.5e4 * this.pipeA);
           this.jetEnv[i] += (vel - this.jetEnv[i]) * 0.15;
           const jv = this.jetEnv[i];
           const nz = rng.bi();
@@ -1025,10 +1059,10 @@ function EngineDSPFactory() {
           // frio: tuchos e pistão batem mais até o óleo esquentar e as folgas fecharem
           const coldN = 1 - this.warm;
           const cn = rng.bi() * this.clickEnv * (0.15 + rf) * (1 + 1.6 * coldN);
-          mech += (this.clickF[0].run(cn) + 0.6 * this.clickF[1].run(cn)) * 0.05;
+          mech += (this.clickF[0].run(cn) + 0.35 * this.clickF[1].run(cn)) * 0.05;
           this.knockEnv *= 0.93;
           const kn = rng.bi() * this.knockEnv * (0.3 + 0.7 * pMan / P0) * (1 + 1.2 * coldN);
-          mech += (this.knockF[0].run(kn) + 0.7 * this.knockF[1].run(kn) + 0.4 * this.knockF[2].run(kn)) * 0.07;
+          mech += (this.knockF[0].run(kn) + 0.6 * this.knockF[1].run(kn) + 0.25 * this.knockF[2].run(kn)) * 0.07;
           this.phW += omega * dt; if (this.phW > 1e4) this.phW -= TAU * 1000;
           mech += (Math.sin(this.phW * 23) * 0.6 + Math.sin(this.phW * 2.9 * 12) * 0.4) * 0.002 * rf * rf;
           if (this.state === 'crank') {
@@ -1075,15 +1109,16 @@ function EngineDSPFactory() {
         }
 
         // ---- ouvinte (exL/exR em Pa, o resto já em escala de áudio)
-        const exScale = 3e-5;
+        const exScale = 2.4e-4;
         exL *= exScale * P.exhaust; exR *= exScale * P.exhaust;
         this.wE += (targetE - this.wE) * kw; this.wI += (targetI - this.wI) * kw; this.wB += (targetB - this.wB) * kw;
         this.wP += (targetP - this.wP) * kw; this.wR += (targetR - this.wR) * kw;
         inS *= P.intake; mech *= P.mech; vib *= P.mech;
         let L = 0, R = 0;
         if (this.wE > 1e-4) {
-          L += this.wE * (exL + 0.18 * inS + 0.07 * mech + 0.2 * tur + 0.1 * vib);
-          R += this.wE * (exR + 0.18 * inS + 0.07 * mech + 0.2 * tur + 0.1 * vib);
+          const me = this.extMech.run(mech);
+          L += this.wE * (exL + 0.12 * inS + 0.1 * me + 0.2 * tur + 0.1 * vib);
+          R += this.wE * (exR + 0.12 * inS + 0.1 * me + 0.2 * tur + 0.1 * vib);
         }
         if (this.wP > 1e-4) {
           // microfone colado na ponteira esquerda: campo próximo, quase só escape
@@ -1109,7 +1144,8 @@ function EngineDSPFactory() {
         this.road((exL + exR) * 0.5, inS + 0.6 * mech + tur, P);
         if (this.wR > 1e-4) { L += this.wR * this.roadL; R += this.wR * this.roadR; }
         // bloqueio DC + compensação de loudness por rotação + saturação suave
-        this.mk += (Math.min(3.5, Math.pow(0.3 + 0.7 * Math.min(1, rpmFrac), -1.3)) - this.mk) * 0.0005;
+        // (leve: um motor real fica uns 25 dB mais alto da lenta ao corte; aqui comprimimos só ~5 dB disso)
+        this.mk += (Math.min(2, Math.pow(0.3 + 0.7 * Math.min(1, rpmFrac), -0.6)) - this.mk) * 0.0005;
         if (this.fade < 1) this.fade = Math.min(1, this.fade + dt / 0.04);
         const gOut = P.master * 0.5 * this.cfgGain * this.mk * this.fade;
         this.dcL = L - this.dcxL + 0.9985 * this.dcL; this.dcxL = L;
@@ -1182,9 +1218,9 @@ function EngineDSPFactory() {
       const bp = { open: 2500, street: 900, tunnel: 700, garage: 1500, track: 650, canyon: 1600 }[env] || 900;
       a[0].lp(fs, lp, 0.7); a[1].lp(fs, lp, 0.7); a[2].bp(fs, bp, 0.6); a[3].bp(fs, bp, 0.6);
       this.ambSpec = {
-        open: [0.05, 0.004, 0, 0], street: [0.045, 0.01, 0, 0], tunnel: [0.04, 0.006, 100, 0.004],
-        garage: [0.02, 0.003, 120, 0.002], track: [0.05, 0.012, 0, 0], canyon: [0.06, 0.003, 0, 0],
-      }[env] || [0.04, 0.004, 0, 0];
+        open: [0.05, 0.0012, 0, 0], street: [0.045, 0.0035, 0, 0], tunnel: [0.04, 0.002, 100, 0.004],
+        garage: [0.02, 0.001, 120, 0.002], track: [0.05, 0.004, 0, 0], canyon: [0.06, 0.001, 0, 0],
+      }[env] || [0.04, 0.0012, 0, 0];
     }
 
     // vento, trânsito distante, ventilação do túnel, murmúrio da arquibancada...

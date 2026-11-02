@@ -40,7 +40,7 @@ AudioWorklet (DSP, 4 canais)
 
 - O DSP tenta carregar como AudioWorklet por URL `blob:` e depois `data:`. A segunda forma é necessária ao abrir pelo `file://`, onde a origem é nula. Se nenhuma funcionar, cai para `ScriptProcessorNode` na thread principal.
 - Cada ambiente (céu aberto, túnel, hangar…) tem uma resposta ao impulso gerada na hora. Ela soma uma cauda difusa, com decaimento exponencial que escurece com o tempo, a ecos discretos com atraso, ganho e espalhamento próprios: prédios, arquibancada, paredões do vale. Um som de fundo fraco (vento, trânsito, ventilação) é gerado dentro do DSP.
-- **Calibração de volume.** Ao montar um motor, a thread principal renderiza 0,5 s em carga máxima numa cópia do DSP, com escape e acessórios de referência e motor quente, e calcula um ganho fixo. Assim motores diferentes têm volumes comparáveis. Abafador, válvula, diâmetro e temperatura continuam mudando o volume de verdade, porque ficam fora dessa normalização.
+- **Calibração de volume.** Ao montar um motor, a thread principal renderiza numa cópia do DSP, com escape e acessórios de referência e motor quente, 0,5 s em carga máxima a 55% da faixa vermelha e 0,8 s em marcha lenta, e calcula um ganho fixo como a **média geométrica** (pesada 60/40 para a carga) dos dois ganhos: o que levaria a carga ao alvo e o que levaria a lenta ao alvo, 23 dB abaixo. Só com a carga, um turbo abafado e um motor de corrida ficavam 30 dB apartados na lenta; com a média, a diferença cai pela metade (~12 dB entre os 65 carros). O turbo é calibrado com 40% da pressão máxima. Abafador, válvula, diâmetro e temperatura continuam mudando o volume de verdade, porque ficam fora dessa normalização.
 
 ---
 
@@ -113,7 +113,7 @@ O escape é uma rede de tubos acústicos unidimensionais.
 - perda nas paredes `exp(−0,09·L)`;
 - passa-baixa de perda.
 
-Há também **propagação não linear**: a parte de alta pressão da onda anda mais rápido, `atraso efetivo = D·(1 − 0,6·p/p₀)`, e a frente do pulso vai se afiando quase até virar choque. Esse é o "rasgado" do escape em carga.
+Há também **propagação não linear**: a parte de alta pressão da onda anda mais rápido, `atraso efetivo = D·(1 − 0,28·p/p₀)`, e a frente do pulso vai se afiando quase até virar choque. Esse é o "rasgado" do escape em carga. (O coeficiente era 0,6; com a irradiação correta da ponteira, descrita abaixo, isso gerava um muro de agudo com centroide espectral em ~950 Hz, contra ~600 Hz nas gravações reais de um V8 acelerando.)
 
 **Junções:** espalhamento por conservação de vazão entre tubos de admitâncias diferentes:
 
@@ -130,18 +130,18 @@ $$P = \frac{2\sum Y_i\,p_i^{+}}{\sum Y_i}, \qquad p_i^{-} = P - p_i^{+}$$
 | Tipo | Comportamento |
 |---|---|
 | Direto | Quase transparente |
-| Esportivo | Tubo perfurado com lã: corta acima de ~3,8 kHz, o grave passa livre |
-| Original | Câmaras e ressonador: corta forte o médio (−10 dB perto de 350 Hz, −8 dB perto de 800 Hz) e o agudo, deixa passar o grave das explosões |
-| Turbina do turbo | Prateleira de −6 dB acima de ~1,3 kHz e leve reforço do grave do coletor |
+| Esportivo | Tubo perfurado com lã: a lã absorve cada vez mais com a frequência, passa-baixa de 2ª ordem a partir de ~2,2 kHz mais um corte em 4,5 kHz; o grave passa livre |
+| Original | Câmaras e ressonador: corta o médio (−7 dB perto de 350 Hz, −6 dB perto de 800 Hz) e o agudo cai uns 40 dB acima de 2 kHz (dois passa-baixas em 900 Hz e um em 2 kHz); o grave das explosões passa |
+| Turbina do turbo | Prateleira de −6 dB acima de ~1,3 kHz, corte em 3,5 kHz e leve reforço do grave do coletor |
 
 Depois do abafador original a não linearidade do tubo é quase desligada. Com onda fraca o choque não se forma de novo, e mantê-lo refazia os agudos que o abafador tinha tirado.
 
-**Ponteira** (`Radiator`): reflete invertido nas baixas frequências (filtro de 1,5 kHz) e irradia o resto. O som irradiado é proporcional ao volume de ar que sai, por isso cresce com a área da ponta.
+**Ponteira** (`Radiator`): reflete invertido nas baixas frequências (−0,93, com filtro de 1,5 kHz) e irradia como um **monopolo**: a pressão que chega ao ouvinte é a *derivada* da vazão volumétrica que sai pela boca. Abaixo de `ka ≈ 1` (`f = c/2πa`, uns 2 kHz numa ponta de 2,5") a irradiação sobe 6 dB por oitava; acima, a boca irradia como um pistão. É um passa-alta de 1ª ordem aplicado à vazão, com o canto dependendo do diâmetro da ponta (a ponta larga irradia mais grave). Esse detalhe é o que faz o som de motor crescer uns 20 dB da lenta ao corte e ter o médio do "ronco" em vez de só o grave da ignição: uma versão anterior emitia a pressão incidente diretamente (resposta plana), e com isso o nível saturava em metade do giro e o espectro ficava quase todo abaixo de 400 Hz. O som irradiado cresce com a área da ponta.
 
 **Acessórios do escape:**
 - **Diâmetro:** a área muda a admitância dos tubos (o que o coletor "enxerga") e a perda nas paredes. A ponta mais larga irradia mais grave; o tubo fino acelera o gás e chia mais.
 - **Ressonador:** um tubo lateral fechado de ¼ de onda, afinado na frequência de ignição a ~2200 rpm (o "drone" de estrada).
-- **Válvula de escape (cutout):** uma boca lateral antes do abafador. Fechada, é um toco tampado. Aberta, vira uma segunda ponteira, e o gás escolhe o caminho mais fácil.
+- **Válvula de escape (cutout):** uma boca lateral de 20 cm antes do abafador. Fechada, é um toco tampado que vaza e absorve um pouco (reflete 0,7), para não virar um ressonador de ¼ de onda. Aberta, vira uma segunda ponteira, e o gás escolhe o caminho mais fácil.
 - **Boxer:** o tubo de uma bancada cruza por baixo do motor e as ponteiras ficam assimétricas. Sem isso a meia-ordem de cada bancada, a 1,5ª num flat-6, se anula ao somar as duas. É ela que diferencia um boxer de um 6 em linha.
 
 ### Ruídos que não são o pulso
@@ -155,7 +155,7 @@ Depois do abafador original a não linearidade do tubo é quase desligada. Com o
   - há assobio do compressor e chiado;
   - a válvula de alívio dispara quando a borboleta fecha com pressão.
 - **Compressor mecânico:** a pressão é proporcional ao giro, sem atraso. Ele tem o uivo dos rotores, com polia de 2,4× o virabrequim e 6 passagens de lóbulo por volta.
-- **Estalos (pops):** quando a ignição é cortada (limitador, troca rápida, 2-step) ou há corte de combustível na desaceleração, parte do combustível explode no escape. É uma injeção de pressão impulsiva na junção do coletor.
+- **Estalos (pops):** quando a ignição é cortada (limitador, troca rápida, 2-step) ou há corte de combustível na desaceleração, parte do combustível explode no escape. É uma injeção de pressão na junção do coletor: um pulso positivo de ~2,5 ms mais ruído que decai em ~6 ms (combustão no tubo, não um clique).
 
 ### Dinâmica: virabrequim, embreagem, câmbio e carro
 
@@ -258,7 +258,7 @@ Cada fonte de ruído de um motor a jato é sintetizada à parte, com a lei de es
   2. Em 20% abrem o combustível e os ignitores, que estalam ~1 vez por segundo.
   3. A chama pega 1,5 a 3 s depois. A EGT e o ronco crescem em ~3 s, com um "vum" grave e curto.
   4. Motor de partida e turbina aceleram juntos até ~54%, quando o motor de partida desacopla e o assobio dele morre.
-- **Pós-combustão:** libera a manete até 130%. Aumenta a velocidade e a temperatura do jato, acende com um "whump" e soma o ronco grave da câmara de reaquecimento.
+- **Pós-combustão:** libera a manete até 130%. Aumenta a velocidade do jato em 42% e a temperatura, acende com um "whump" e soma o ronco grave da câmara de reaquecimento. (Mais que isso saturava o limitador de saída: 5% das amostras no clip no Concorde.)
 - **Vários motores:** cada um gira um pouco diferente (±0,3%), e os tons batem. O sincronizador iguala as rotações e acaba com o batimento.
 
 ### Fan e compressor
@@ -286,7 +286,7 @@ Cada fonte de ruído de um motor a jato é sintetizada à parte, com a lei de es
 - **Dois espectros**, por número de Strouhal `St = f·D/V`:
   - **estruturas grandes:** pico em St ≈ 0,18, irradiando para trás (~30° do eixo do jato);
   - **estruturas pequenas:** largo, pico em St ≈ 0,65, para o lado.
-- **Turbofan:** o jato do núcleo mistura com o do bypass. A velocidade relativa que conta é `V_núcleo − 0,55·V_bypass`, e o jato do bypass é somado à parte. Em voo, a velocidade do avião reduz a velocidade relativa.
+- **Turbofan:** o jato do núcleo mistura com o do bypass. A velocidade relativa que conta é `V_núcleo − 0,55·V_bypass`, e o jato do bypass é somado à parte. O bypass é um jato **anular**: a camada de mistura tem a espessura do anel, `(D_bypass − D_núcleo)/2`, então o Strouhal usa `D_bypass − D_núcleo` para as estruturas grandes e a altura do anel para as pequenas (que vão para o lado). Com o diâmetro equivalente cheio o pico de um CFM56 caía em ~30 Hz, só tremor; o real fica em algumas centenas de Hz. Em voo, a velocidade do avião reduz a velocidade relativa.
 - **Redutores:**
   - **chevrons:** −2,8 dB no grave, um pouco mais de agudo;
   - **hush kit:** −6 dB.
@@ -300,7 +300,7 @@ Cada fonte de ruído de um motor a jato é sintetizada à parte, com a lei de es
 ### Hélice
 
 - Uma passagem de pá é a soma de um pulso de **espessura** (proporcional a M²) e um dipolo de **carga** (potência).
-- Os harmônicos caem como `exp(−(h − 1)·κ)`, com `κ = 0,15 + 4·(1 − M_ponta)^1,3`. Perto de Mach 1 na ponta, o pulso afina e o som enche de harmônicos. A tabela é refeita a cada ~20 ms.
+- Os harmônicos caem como `exp(−(h − 1)·κ)`, com `κ = 0,1 + 2,6·(1 − M_ponta)^1,3`. Perto de Mach 1 na ponta, o pulso afina e o som enche de harmônicos. A tabela é refeita a cada ~20 ms.
 - O governador mantém a rotação da hélice, e a potência muda o passo (a carga). No reverso o passo inverte e o ruído largo da pá sobe.
 
 ### Diretividade e propagação
@@ -343,6 +343,22 @@ $$\Delta p \approx 1{,}9\,K_s\,p_0\,(M^2-1)^{1/8}\left(\frac{l}{h}\right)^{3/4},
 ## Validação
 
 O que foi medido nas simulações offline (Node) durante o desenvolvimento:
+
+- **Nível × rotação em carga total** (sem a compensação de loudness): cresce de forma monotônica uns 20 a 23 dB entre 15% e 95% da faixa vermelha (V8 cross-plane, V8 flat-plane, 4 em linha, boxer 6, turbos). Antes da irradiação de monopolo o nível saturava em ~40% do giro e caía perto do corte.
+- **Balanço espectral contra gravações reais** (Wikimedia Commons; bandas em dB relativas à banda de 150–400 Hz, canal mono):
+
+  | Trecho | 400–1k | 1–2,5k | 2,5–6k | 6–12k | centroide |
+  |---|---|---|---|---|---|
+  | Real: Maserati GranTurismo S (V8) acelerando em neutro | +2,7 | −5,7 | −14,4 | −19,5 | 610 Hz |
+  | Simulado: Camaro SS acelerando em neutro | +2,3 | −4,7 | −12,7 | −18,2 | 624 Hz |
+  | Real: Oldsmobile 442 (V8) acelerando | −2,0 | −1,7 | −11,8 | −16,7 | 461 Hz |
+  | Real: Ferrari 488 acelerando | −1,4 | −9,5 | −18,1 | −33 | 454 Hz |
+  | Simulado: S2000 acelerando em neutro | −5,2 | −10,7 | −22,7 | −31,7 | 462 Hz |
+  | Real: Maserati em marcha lenta | −7,9 | −23,7 | −28,9 | −31,7 | 305 Hz |
+  | Simulado: Camaro em marcha lenta | −11 | −17 | −18 | −23 | 266 Hz |
+
+  Em marcha lenta o simulado ainda tem um pouco mais de agudo que as gravações; esse agudo vem do som de fundo do ambiente e da mecânica, não do escape (o escape sozinho fica em −40 dB acima de 2,5 kHz).
+- **Volume entre carros:** a marcha lenta dos 65 carros fica numa faixa de ~12 dB (era 30 dB só com a calibração em carga).
 
 - **Doppler da rua:** ignição de 200 Hz a 30 m/s → 216/183 Hz, contra 219/184 Hz na teoria.
 - **Flat-6 contra gravações reais** de um 911 GT3 RS e de um 996 (Wikimedia Commons):

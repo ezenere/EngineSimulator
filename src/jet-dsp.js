@@ -135,7 +135,7 @@ function JetDSPFactory() {
       // ruído largo e barramentos
       const mk = () => ({
         fan: [new Biquad(), new Biquad()], jcL: [new Biquad(), new Biquad()], jcF: [new Biquad(), new Biquad()],
-        jbL: [new Biquad(), new Biquad()], comb: [new Biquad(), new Biquad()], shock: [new Biquad(), new Biquad()],
+        jbL: [new Biquad(), new Biquad()], jbF: [new Biquad(), new Biquad()], comb: [new Biquad(), new Biquad()], shock: [new Biquad(), new Biquad()],
         crk: new Biquad(), ab: [new Biquad(), new Biquad()], rev: new Biquad(), pbb: new Biquad(),
         am: 0, crkE: 0, crkS: 0, scrPh: 0, scrA: 0,
       });
@@ -448,7 +448,7 @@ function JetDSPFactory() {
       this.aFanBB = this.prop ? 0 : 1.6 * Math.pow(Mt, 4) * fanScale;
       // compressor e turbina
       const hpcScale = (0.3 + 0.7 * this.D / 1.5) * (1 - 0.5 * this.liner) * P.core;
-      this.aHpc = (lit || n2 > 0.05 ? 4.5 * Math.pow(n2, 3) : 0) * hpcScale;
+      this.aHpc = (lit || n2 > 0.05 ? 3.0 * Math.pow(n2, 3) : 0) * hpcScale;
       this.aLpt = 1.5 * Math.pow(n1, 2.2) * hpcScale;
       // assobio do motor de partida (segue a rotação dele) e chiado do ar de sangria entrando
       this.aStarter = 0.45 * smooth(0, 0.12, this.starterW) * P.core;
@@ -459,7 +459,7 @@ function JetDSPFactory() {
       // combustão
       // w: quanto o motor já chegou na marcha lenta (partida); u: lenta → máxima
       const w = Math.pow(clamp(n2 / this.n2i, 0, 1), 3);
-      const ff = (0.1 * w + 0.9 * Math.pow(u, 1.5)) * litR;
+      const ff = (0.18 * w + 0.82 * Math.pow(u, 1.5)) * litR;
       this.ff = ff;
       // acendimento: um "vum" grave e curto, bem mais fraco que o motor em marcha lenta
       const lt = this.lightT || 0;
@@ -468,7 +468,7 @@ function JetDSPFactory() {
       // jatos: velocidade relativa ao ar (em voo o jato "empurra menos" o ar parado)
       const sup = this.sup;
       const Vc0 = this.Vj * (0.05 * n2 + litR * (0.32 * w + 0.68 * Math.pow(u, 1.2) - 0.05 * n2));
-      const Vc = Vc0 * (1 + 0.55 * this.ab);
+      const Vc = Vc0 * (1 + 0.42 * this.ab);
       const Vb = this.Vb * n1;
       const vf = this.vFly * 0.75;
       const lh = (V) => { const x = Math.max(0, V) / 300; return (x * x * x * x) / (1 + Math.pow(x / 2, 2.5)); };
@@ -477,10 +477,16 @@ function JetDSPFactory() {
       const VcRel = Math.max(0, Vc - (this.bpr > 0.2 ? 0.55 * Vb : 0) - vf);
       this.aJcL = 9 * lh(VcRel) * this.Dj * supL * P.jet;
       this.aJcF = 3.2 * lh(VcRel) * this.Dj * supF * P.jet;
-      this.aJbL = this.bpr > 0.2 ? 9 * lh(Vb - vf) * this.Db * supL * P.jet : 0;
+      // jato anular do bypass: a camada de mistura tem a espessura do anel (Db − Dj)/2, não o diâmetro
+      // equivalente. Com o diâmetro cheio o pico caía em ~30 Hz (só tremor); o pico real de um CFM56 fica
+      // em algumas centenas de Hz. Divide em estruturas grandes (para trás) e pequenas (para o lado).
+      const Hb = Math.max(0.15, 0.5 * (this.Db - this.Dj));
+      this.aJbL = this.bpr > 0.2 ? 7 * lh(Vb - vf) * this.Db * supL * P.jet : 0;
+      this.aJbF = this.bpr > 0.2 ? 4.5 * lh(Vb - vf) * this.Db * supF * P.jet : 0;
+      this.fJbF = this.bpr > 0.2 ? (0.5 * Math.max(30, Vb - vf) / Hb) * fShift : 300;
       this.fJcL = (0.18 * Math.max(40, VcRel) / this.Dj) * fShift;
       this.fJcF = (0.65 * Math.max(40, VcRel) / this.Dj) * fShift;
-      this.fJbL = this.bpr > 0.2 ? (0.2 * Math.max(30, Vb - vf) / this.Db) * fShift : 100;
+      this.fJbL = this.bpr > 0.2 ? (0.2 * Math.max(30, Vb - vf) / Math.max(0.3, this.Db - this.Dj)) * fShift : 100;
       // jato supersônico: Mach do jato (som no jato quente), células de choque
       const cj = 560 + 330 * this.ab;
       const Mj = Vc / cj;
@@ -497,7 +503,7 @@ function JetDSPFactory() {
       const Mc = uc / C0;
       this.crackRate = smooth(1.05, 1.5, Mc) * (900 + 1500 * this.ab);
       this.aCrack = 0.5 * this.aJcL * smooth(1.05, 1.6, Mc);
-      this.aAB = 0.6 * this.ab * this.aJcL + this.abWhump * 2.5 * this.Dj * P.jet;
+      this.aAB = 0.45 * this.ab * this.aJcL + this.abWhump * 2.5 * this.Dj * P.jet;
       // reversor: o jato frio é jogado para frente pelas cascatas
       const rv = this.rev || 0;
       this.aRev = rv * 1.4 * (this.aJbL + 0.5 * this.aJcL + 0.6 * this.aFanBB);
@@ -509,7 +515,7 @@ function JetDSPFactory() {
         this.Mh = Mh;
         const pload = (0.3 + 0.7 * u) * (1 + 0.8 * rv);
         this.aProp = 9 * Math.pow(Mh / 0.75, 4) * pload * (this.propD / 3.9) * smooth(0.05, 0.3, this.np) * P.fan;
-        this.aPbb = 0.35 * Math.pow(Mh / 0.75, 5) * (1 + 2 * rv) * (this.propD / 3.9) * smooth(0.05, 0.3, this.np) * P.fan;
+        this.aPbb = 0.55 * Math.pow(Mh / 0.75, 5) * (1 + 2 * rv) * (this.propD / 3.9) * smooth(0.05, 0.3, this.np) * P.fan;
         this.fPbb = 900 + 900 * Mh;
         if (++this.propBuild >= 8) { this.propBuild = 0; this.buildPropTab(Mh, pload); }
       }
@@ -520,7 +526,8 @@ function JetDSPFactory() {
         s.fan[0].bp(fs, clamp(0.8 * BPF, 120, 9000), 0.55); s.fan[1].hp(fs, 90, 0.6);
         s.jcL[0].hp(fs, this.fJcL * 0.45, 0.6); s.jcL[1].lp(fs, this.fJcL * 1.7, 0.6);
         s.jcF[0].hp(fs, this.fJcF * 0.3, 0.55); s.jcF[1].lp(fs, this.fJcF * 2.8, 0.5);
-        s.jbL[0].hp(fs, this.fJbL * 0.45, 0.6); s.jbL[1].lp(fs, this.fJbL * 1.7, 0.6);
+        s.jbL[0].hp(fs, this.fJbL * 0.45, 0.6); s.jbL[1].lp(fs, this.fJbL * 2.2, 0.6);
+        s.jbF[0].hp(fs, this.fJbF * 0.3, 0.55); s.jbF[1].lp(fs, this.fJbF * 2.8, 0.5);
         s.comb[0].bp(fs, 420 + 200 * this.ab, 0.7); s.comb[1].bp(fs, 110, 0.9);
         s.shock[0].bp(fs, this.fShock, 1.6); s.shock[1].bp(fs, this.fShock * 2, 3);
         s.ab[0].lp(fs, 260, 0.7); s.ab[1].bp(fs, 85, 1.1);
@@ -533,7 +540,7 @@ function JetDSPFactory() {
       const lb = (fa, fb) => 1.11 * fb - 0.9 * fa;
       this.nFan = nz(1.57 * clamp(0.8 * BPF, 120, 9000) / 0.55);
       this.nJcL = nz(lb(this.fJcL * 0.45, this.fJcL * 1.7)); this.nJcF = nz(lb(this.fJcF * 0.3, this.fJcF * 2.8));
-      this.nJbL = nz(lb(this.fJbL * 0.45, this.fJbL * 1.7));
+      this.nJbL = nz(lb(this.fJbL * 0.45, this.fJbL * 2.2)); this.nJbF = nz(lb(this.fJbF * 0.3, this.fJbF * 2.8));
       this.nComb = nz(1.57 * 420 / 0.7) * 0.7; this.nShock = nz(1.57 * this.fShock / 1.6);
       this.nAB = nz(1.57 * 85 / 1.1) * 0.6; this.nRev = nz(1.57 * 900 / 0.6); this.nPbb = nz(1.57 * (this.fPbb || 1000) / 0.7);
       // diretividade de cada fonte para cada grupo e motor
@@ -560,7 +567,7 @@ function JetDSPFactory() {
     // Com o Mach na ponta subindo o pulso estreita e os harmônicos se espalham.
     buildPropTab(Mh, load) {
       const N = 1024, tab = this.propTabB;
-      const kap = 0.15 + 4 * Math.pow(Math.max(0.02, 1 - Mh), 1.3);
+      const kap = 0.1 + 2.6 * Math.pow(Math.max(0.02, 1 - Mh), 1.3);
       tab.fill(0);
       for (let h = 1; h <= 16; h++) {
         const a = Math.exp(-(h - 1) * kap);
@@ -656,7 +663,7 @@ function JetDSPFactory() {
           const jl = s.jcL[1].run(s.jcL[0].run(rng.bi())) * this.aJcL * this.nJcL * am;
           const jf = s.jcF[1].run(s.jcF[0].run(rng.bi())) * this.aJcF * this.nJcF;
           let jet = jl * d.jetL + jf * d.jetF;
-          if (this.aJbL > 1e-4) jet += s.jbL[1].run(s.jbL[0].run(rng.bi())) * this.aJbL * this.nJbL * am * d.jetL;
+          if (this.aJbL > 1e-4) jet += s.jbL[1].run(s.jbL[0].run(rng.bi())) * this.aJbL * this.nJbL * am * d.jetL + s.jbF[1].run(s.jbF[0].run(rng.bi())) * this.aJbF * this.nJbF * d.jetF;
           rear += jet;
           if (this.aComb > 1e-4) { const nz = rng.bi(); rear += (s.comb[0].run(nz) + s.comb[1].run(nz) * 1.4) * this.aComb * this.nComb * d.core; }
           if (this.aShock > 1e-3) {
