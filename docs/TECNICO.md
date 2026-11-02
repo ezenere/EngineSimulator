@@ -35,7 +35,7 @@ AudioWorklet (DSP, 4 canais)
   ├─ canais 0–1: som direto ─────────────┐
   └─ canais 2–3: envio para o ambiente ─→ ConvolverNode (resposta ao impulso sintética) → passa-baixa
                                          ↓
-                              DynamicsCompressor → ganho → Analyser → saída
+                              DynamicsCompressor → EQ de 3 bandas → ganho → Analyser → saída
 ```
 
 - O DSP tenta carregar como AudioWorklet por URL `blob:` e depois `data:`. A segunda forma é necessária ao abrir pelo `file://`, onde a origem é nula. Se nenhuma funcionar, cai para `ScriptProcessorNode` na thread principal.
@@ -75,6 +75,7 @@ $$dp = \frac{(\gamma-1)\,dQ + \gamma R\,(T_{in}\,\dot m_{in} - T_{ex}\,\dot m_{e
   - aquecimento do catalisador;
   - controle de largada.
 - **Faísca:** é "armada" no curso de admissão e dispara uma única vez por ciclo. Isso evita faísca dupla ou perdida quando o avanço muda de repente.
+- **Corte de combustível na desaceleração:** com o pé fora do acelerador, entra acima de ~1,9× a lenta-alvo e sai abaixo de ~1,4× (histerese); o combustível volta em rampa de 0,4 s. Sem isso a combustão voltava de uma vez com o giro ainda despencando e o motor batia na lenta e quicava. Um termo derivativo na válvula de ar faz o "pouso" do giro ser suave.
 - **Perda de calor** para as paredes, proporcional a `(T − 430 K)`, e **vazamento pelos anéis** (blow-by), que pesa só em baixa rotação e na partida.
 - **Válvulas:** são orifícios com escoamento compressível, inclusive sônico (blocado). A função Ψ da razão de pressões é tabelada, com 4096 pontos, e linearizada perto de 1 para não endurecer a integração.
 - **Comando de válvulas:** os eventos de abertura e fechamento seguem o parâmetro "comando". Comando bravo significa mais cruzamento de válvulas.
@@ -217,7 +218,7 @@ $$\frac{dT}{dt} = 0{,}135\sqrt{\frac{\text{rpm}\cdot p_{col}/p_0}{240}} - 0{,}00
 
 Com o motor frio (`frio = 1 − suavizado(15 °C, 80 °C)`):
 
-- **Marcha lenta:** sobe até +42%, com uma arrancada de 200 a 650 rpm logo depois de pegar.
+- **Marcha lenta:** sobe até `min(0,8·lenta, 650 rpm)` logo depois de pegar (uns 1,7× num V8 de rua), com uma arrancada de 200 a 650 rpm nos primeiros segundos. A central vai baixando a lenta acelerada com o tempo de funcionamento (45% dela decai com constante de ~50 s), mesmo antes de a água esquentar; o resto segue a temperatura.
 - **Ignição:** atrasa até 12° no primeiro minuto, a não ser com escape direto (sem catalisador), para aquecer o catalisador. O ronco fica mais rasgado.
 - **Bomba de ar secundário:** zumbido elétrico nos primeiros ~100 s abaixo de 45 °C.
 - **Atrito:** até +50%.

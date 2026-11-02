@@ -77,11 +77,16 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     const wetLP = ctx.createBiquadFilter(); wetLP.type = 'lowpass'; wetLP.frequency.value = 18000;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -16; comp.knee.value = 10; comp.ratio.value = 3.2; comp.attack.value = 0.004; comp.release.value = 0.22;
+    // equalizador de escuta (grave / médio / agudo), para acertar o balanço no seu alto-falante
+    const eqLo = ctx.createBiquadFilter(); eqLo.type = 'lowshelf'; eqLo.frequency.value = 160;
+    const eqMid = ctx.createBiquadFilter(); eqMid.type = 'peaking'; eqMid.frequency.value = 900; eqMid.Q.value = 0.8;
+    const eqHi = ctx.createBiquadFilter(); eqHi.type = 'highshelf'; eqHi.frequency.value = 3500;
     const out = ctx.createGain(); out.gain.value = 1.35;
     const analyser = ctx.createAnalyser(); analyser.fftSize = 4096; analyser.smoothingTimeConstant = 0.6;
     toDry.connect(dry); toWet.connect(conv); conv.connect(wetLP); wetLP.connect(wet);
-    dry.connect(comp); wet.connect(comp); comp.connect(out); out.connect(analyser); analyser.connect(ctx.destination);
-    audio = { ctx, node, send, dry, wet, wetLP, conv, analyser };
+    dry.connect(comp); wet.connect(comp); comp.connect(eqLo); eqLo.connect(eqMid); eqMid.connect(eqHi); eqHi.connect(out); out.connect(analyser); analyser.connect(ctx.destination);
+    audio = { ctx, node, send, dry, wet, wetLP, conv, analyser, eq: { lo: eqLo, mid: eqMid, hi: eqHi } };
+    applyEq();
     setEnvironment(environment);
     send({ type: 'config', cfg: engineConfig(ctx.sampleRate) });
     send({ type: 'params', params });
@@ -91,16 +96,16 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
 
   // Acústica de cada ambiente: cauda difusa + ecos discretos (prédios, arquibancada, paredões).
   const ENVS = {
-    open: { name: 'Céu aberto', len: 0.6, tau: 0.08, diff: 0.35, wet: 0.1, echoes: [[0.006, 0.5, 0.001]] },
-    street: { name: 'Rua com prédios', len: 1.5, tau: 0.32, diff: 0.5, wet: 0.32, dark: 0.5,
+    open: { name: 'Céu aberto', len: 0.6, tau: 0.08, diff: 0.35, wet: 0.1, dry: 1.0, echoes: [[0.006, 0.5, 0.001]] },
+    street: { name: 'Rua com prédios', len: 1.5, tau: 0.32, diff: 0.5, wet: 0.4, dry: 1.2, dark: 0.5,
       echoes: [[0.047, 0.55, 0.004], [0.061, 0.45, 0.005], [0.094, 0.3, 0.008], [0.122, 0.22, 0.01], [0.141, 0.16, 0.012], [0.19, 0.1, 0.02]] },
-    tunnel: { name: 'Túnel', len: 3.4, tau: 0.9, diff: 1, wet: 0.6, dark: 0.6, flutter: 0.041,
+    tunnel: { name: 'Túnel', len: 3.4, tau: 0.9, diff: 1, wet: 0.8, dry: 1.6, dark: 0.6, flutter: 0.041,
       echoes: [[0.018, 0.5, 0.002], [0.041, 0.45, 0.004], [0.083, 0.35, 0.008], [0.124, 0.25, 0.012]] },
-    garage: { name: 'Garagem', len: 1.3, tau: 0.28, diff: 1, wet: 0.42, dark: 0.25,
+    garage: { name: 'Garagem', len: 1.3, tau: 0.28, diff: 1, wet: 0.6, dry: 1.45, dark: 0.25,
       echoes: [[0.011, 0.5, 0.002], [0.019, 0.4, 0.003], [0.027, 0.3, 0.004]] },
-    track: { name: 'Autódromo', len: 1.8, tau: 0.12, diff: 0.4, wet: 0.24, dark: 0.7,
+    track: { name: 'Autódromo', len: 1.8, tau: 0.12, diff: 0.4, wet: 0.28, dry: 1.1, dark: 0.7,
       echoes: [[0.009, 0.4, 0.001], [0.16, 0.32, 0.04], [0.28, 0.2, 0.06], [0.45, 0.1, 0.09]] },
-    canyon: { name: 'Serra', len: 2.6, tau: 0.25, diff: 0.25, wet: 0.38, dark: 0.8,
+    canyon: { name: 'Serra', len: 2.6, tau: 0.25, diff: 0.25, wet: 0.42, dry: 1.0, dark: 0.8,
       echoes: [[0.38, 0.45, 0.03], [0.71, 0.3, 0.05], [1.05, 0.2, 0.07], [1.5, 0.12, 0.1], [2.1, 0.07, 0.14]] },
   };
 
@@ -151,6 +156,15 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     const k = { int: 0.5, pipe: 0.55, bay: 0.8 }[l] || 1;
     audio.wetLP.frequency.setTargetAtTime(f, t, 0.05);
     audio.wet.gain.setTargetAtTime(ENVS[environment].wet * k, t, 0.05);
+    // dentro do carro o ambiente não muda o som direto
+    audio.dry.gain.setTargetAtTime(l === 'int' || l === 'bay' ? 1 : (ENVS[environment].dry || 1), t, 0.05);
+  }
+
+  const eq = { lo: 0, mid: 0, hi: 0 };
+  function applyEq() {
+    if (!audio) return;
+    const t = audio.ctx.currentTime;
+    audio.eq.lo.gain.setTargetAtTime(eq.lo, t, 0.03); audio.eq.mid.gain.setTargetAtTime(eq.mid, t, 0.03); audio.eq.hi.gain.setTargetAtTime(eq.hi, t, 0.03);
   }
 
   let rebuildTimer = 0;
@@ -514,6 +528,9 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     const mix = (id, label, key, max = 2) => slider(id, label, 0, max, 0.01, params[key], (v) => `${Math.round(v * 100)}%`,
       (v) => { params[key] = v; audio?.send({ type: 'params', params }); });
     li.append(mix('mxEx', 'Escape', 'exhaust'), mix('mxIn', 'Admissão', 'intake'), mix('mxMech', 'Mecânica', 'mech'), mix('mxVol', 'Volume', 'master', 1.5));
+    const tone = (id, label, key) => slider(id, label, -12, 12, 0.5, eq[key], (v) => `${v > 0 ? '+' : ''}${v.toLocaleString('pt-BR')} dB`, (v) => { eq[key] = v; applyEq(); });
+    li.append(field('Equalização', el('div', { class: 'chips' }, [el('button', { type: 'button', class: 'chip', text: 'Zerar', onclick: () => { eq.lo = eq.mid = eq.hi = 0; applyEq(); renderControls(); } })])));
+    li.append(tone('eqLo', 'Grave (abaixo de 160 Hz)', 'lo'), tone('eqMid', 'Médio (900 Hz)', 'mid'), tone('eqHi', 'Agudo (acima de 3,5 kHz)', 'hi'));
     controls.append(li);
     controls.scrollTop = scrollTop;
   }
