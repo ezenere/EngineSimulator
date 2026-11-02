@@ -217,7 +217,7 @@ function EngineDSPFactory() {
       this.shiftCool = 0; this.auto = false; this.ratios = gearRatios(6);
       this.v = 0; this.tqMean = 0; this.tqGas = 0;
       this.ignition = false;
-      this.params = { listener: 'ext', env: 'open', roadDist: 6, exhaust: 1, intake: 1, mech: 1, master: 0.8 };
+      this.params = { listener: 'ext', env: 'open', roadDist: 6, exhaust: 1, intake: 1, mech: 1, master: 0.8, fanSound: true, saSound: true };
       this.wE = 1; this.wI = 0; this.wB = 0; this.wP = 0; this.wR = 0;
       // observador parado na via: propagação pelo ar com atraso variável (Doppler)
       let ps = 1024; while (ps < fs * 2.6) ps <<= 1;
@@ -231,6 +231,9 @@ function EngineDSPFactory() {
       this.phW = 0; this.phT = 0; this.phS = 0;
       this.dcL = 0; this.dcR = 0; this.dcxL = 0; this.dcxR = 0;
       this.lockOmega = false; this.cfgGain = 1; this.mk = 1; this.fade = 1; this.jetGain = 900; this.valveNoise = 0.07; this.tzLP = 0; this.tzK = 0.15; this.revCd = 0.15; this.varScale = 1; this.solverIt = 6; this.spread = 1; this.boxerAsym = 0.15; this.valveState = { v: 0 }; this.valveMode = 'closed'; this.valveAuto = false; this.twoStep = false; this.twoStepMode = 'off'; this.lcI = 0.12; this.launching = false; this.boxerPan = [1.0, 0.5, 0.22, 0.55];
+      // temperatura do líquido de arrefecimento (°C); começa frio, como numa manhã qualquer
+      this.coolant = 20; this.ambientT = 20; this.tempMode = 'real'; this.tempSet = 90; this.warm = 0;
+      this.fanOn = false; this.fanSpin = 0; this.secAir = 0; this.catRetard = 0; this.idleTarget = 0; this.phFan = 0; this.phSA = 0;
     }
 
     message(m) {
@@ -242,6 +245,10 @@ function EngineDSPFactory() {
         if (m.brake !== undefined) this.brake = clamp(m.brake, 0, 1);
         if (m.ignition !== undefined) this.setIgnition(m.ignition);
         if (m.shift) this.requestShift(m.shift);
+        if (m.temp) {
+          if (m.temp.mode) this.tempMode = m.temp.mode;
+          if (m.temp.value !== undefined) { this.coolant = clamp(m.temp.value, -20, 130); this.tempSet = this.coolant; }
+        }
       }
     }
 
@@ -382,7 +389,7 @@ function EngineDSPFactory() {
     calibrate(cfg) {
       const t = new EngineDSP(this.fs);
       t.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false }, false);
-      t.state = 'run'; t.lockOmega = true;
+      t.state = 'run'; t.lockOmega = true; t.tempMode = 'fixed'; t.tempSet = 90; t.coolant = 90;
       t.omega = (this.redline * 0.55 * TAU) / 60; t.rpmAvg = this.redline * 0.55;
       // turbo calibrado em pressão parcial: com a pressão cheia o motor sopra quase o dobro de ar e
       // o resto do tempo (sem pressão) ficaria baixo demais, como se o carro estivesse longe
@@ -510,6 +517,8 @@ function EngineDSPFactory() {
       this.clickF = [new Biquad().bp(fs, 3600, 3), new Biquad().bp(fs, 7200, 4)];
       this.knockF = [new Biquad().bp(fs, 900, 3), new Biquad().bp(fs, 2100, 4), new Biquad().bp(fs, 4200, 5)];
       this.mechHP = new Biquad().hp(fs, 80);
+      this.saF = new Biquad().bp(fs, 2600, 0.8);
+      this.fanF = new Biquad().lp(fs, 900, 0.6);
       this.vibLP = new Biquad().lp(fs, 200, 0.7);
       this.starterLP = new Biquad().lp(fs, 2200, 0.8);
       this.turboHiss = new Biquad().bp(fs, 4800, 0.9);
@@ -553,12 +562,42 @@ function EngineDSPFactory() {
       this.prevThrUser = user;
 
       this.runT = this.state === 'run' ? (this.runT || 0) + dtc : 0;
+      // ---- temperatura do motor
+      if (this.tempMode === 'fixed') this.coolant = this.tempSet;
+      else {
+        // calor que vai para a água cresce com giro e carga; a carcaça perde um pouco para o ar;
+        // a válvula termostática abre perto de 90 °C e manda a água para o radiador
+        const load = this.state === 'run' ? Math.sqrt(Math.max(0.2, (rpm * clamp(this.pMan / P0, 0.15, 2.5)) / 240)) : 0;
+        let dT = 0.135 * load - 0.0008 * (this.coolant - this.ambientT);
+        const air = 0.35 + clamp(this.v / 25, 0, 1.5) + (this.fanOn ? 1.2 : 0);
+        dT -= smooth(86, 95, this.coolant) * 0.06 * (this.coolant - 80) * air;
+        this.coolant += dT * dtc;
+      }
+      // ventoinha do radiador liga perto de 100 °C e desliga uns graus abaixo
+      if (this.coolant > 99 && this.state === 'run') this.fanOn = true; else if (this.coolant < 93 || this.state === 'off') this.fanOn = false;
+      this.fanSpin += ((this.fanOn ? 1 : 0) - this.fanSpin) * (1 - Math.exp(-dtc / (this.fanOn ? 1.5 : 4)));
+      this.warm = smooth(15, 80, this.coolant);
+      const cold = 1 - this.warm;
+      // partida a frio: a central atrasa a ignição para esquentar o catalisador (ronco mais
+      // rasgado) e liga a bomba de ar secundário por um minuto ou dois
+      // (escape direto de corrida/moto não tem catalisador nem bomba de ar)
+      const hasCat = this.cfg && this.cfg.muffler !== 'straight';
+      this.catRetard = this.state === 'run' && hasCat ? 12 * (1 - smooth(30, 60, this.coolant)) * (1 - smooth(45, 80, this.runT)) * (user < 0.3 ? 1 : 0.4) : 0;
+      const saWant = hasCat && this.state === 'run' && this.coolant < 45 && this.runT < 100 ? 1 : 0;
+      this.secAir += (saWant - this.secAir) * (1 - Math.exp(-dtc / (saWant ? 0.8 : 1.5)));
+
       // controle de marcha lenta como numa ECU: válvula de ar (lenta) + avanço (rápido)
       if (this.state === 'run' || this.state === 'crank') {
-        const e = (this.idle - rpm) / this.idle;
+        // motor frio: marcha lenta acelerada, e uma arrancada de giro logo depois de pegar
+        const flare = this.state === 'run' && this.runT < 3 ? Math.exp(-this.runT / 1.2) * (200 + 450 * cold) : 0;
+        this.idleTarget = this.idle * (1 + 0.42 * cold) + flare;
+        const e = (this.idleTarget - rpm) / this.idleTarget;
         const active = user < 0.05 && !(this.shifting && this.blip);
         const de = (e - this.ePrev) / dtc; this.ePrev = e;
-        if (active && (e > -0.15 || this.runT < 4)) this.iacI = clamp(this.iacI + clamp(e, -0.3, 0.3) * dtc * this.KI, 0, 0.05);
+        // integra também para baixo quando o giro está parado acima do alvo (ex.: o motor esquentou
+        // e a lenta acelerada acabou); só não integra enquanto o giro está despencando de uma acelerada
+        const settling = de < 0.08;
+        if (active && (e > -0.15 || this.runT < 4 || settling)) this.iacI = clamp(this.iacI + clamp(e, -0.3, 0.3) * dtc * this.KI, 0, 0.05);
         // resgate contra apagamento: só age quando a rotação cai abaixo da lenta
         const rescue = active && e > 0.15 ? e - 0.15 : 0;
         // "dashpot": mantém ar extra na desaceleração para o coletor não chegar vazio na lenta
@@ -692,7 +731,7 @@ function EngineDSPFactory() {
         const cut = this.limiter || (this.shifting && this.shiftCut);
         const deg = (omega * dt) / DEG;
         const rf = clamp(rpmFrac, 0, 1.1);
-        const adv = 10 + 24 * rf + this.advTrim - (this.shiftRetard ? 26 : 0);
+        const adv = 10 + 24 * rf + this.advTrim - (this.shiftRetard ? 26 : 0) - this.catRetard;
         const aSp = 720 - adv;
         const burn = 42 + 26 * rf;
         const hwr = hw * Math.max(0.06, rpm / 3000);
@@ -721,7 +760,8 @@ function EngineDSPFactory() {
             this.spk[c] = a;
             const combust = (running || cranking) && !cut && !dfco;
             const idleness = clamp(1 - (this.rpmAvg - this.idle) / 1500, 0, 1);
-            const sigma = 0.025 + idleness * (0.015 + 0.06 * this.cam * this.cam);
+            // frio: a mistura vaporiza mal e cada explosão sai um pouco diferente
+            const sigma = (0.025 + idleness * (0.015 + 0.06 * this.cam * this.cam)) * (1 + 0.9 * (1 - this.warm));
             const misfire = rng.next() < this.cam * this.cam * 0.02 * idleness;
             if (combust && !misfire) {
               this.Q[c] = Math.max(0, this.air[c]) * 2.6e6 * this.cylQ[c] * clamp(1 + sigma * this.varScale * this.fuelVar * rng.gauss(), 0.3, 1.5);
@@ -821,7 +861,8 @@ function EngineDSPFactory() {
 
         // ---- dinâmica: virabrequim + embreagem + veículo
         const nk = (rpm / this.redline) * 7;
-        const fmep = 0.95e5 + 0.12e5 * nk + 0.02e5 * nk * nk;
+        // óleo frio é grosso: mais atrito
+        const fmep = (0.95e5 + 0.12e5 * nk + 0.02e5 * nk * nk) * (1 + 0.5 * (1 - this.warm));
         const Tfr = (fmep * this.dispL * 1e-3) / (4 * Math.PI) * (omega > 0.5 ? 1 : 0.6);
         let Tst = 0;
         if (this.state === 'crank') Tst = (70 * this.dispL / Math.sqrt(this.N) * 2 + 40) * Math.max(0, 1 - rpm / 330);
@@ -905,10 +946,12 @@ function EngineDSPFactory() {
         let mech = 0;
         {
           this.clickEnv *= 0.88;
-          const cn = rng.bi() * this.clickEnv * (0.15 + rf);
+          // frio: tuchos e pistão batem mais até o óleo esquentar e as folgas fecharem
+          const coldN = 1 - this.warm;
+          const cn = rng.bi() * this.clickEnv * (0.15 + rf) * (1 + 1.6 * coldN);
           mech += (this.clickF[0].run(cn) + 0.6 * this.clickF[1].run(cn)) * 0.05;
           this.knockEnv *= 0.93;
-          const kn = rng.bi() * this.knockEnv * (0.3 + 0.7 * pMan / P0);
+          const kn = rng.bi() * this.knockEnv * (0.3 + 0.7 * pMan / P0) * (1 + 1.2 * coldN);
           mech += (this.knockF[0].run(kn) + 0.7 * this.knockF[1].run(kn) + 0.4 * this.knockF[2].run(kn)) * 0.07;
           this.phW += omega * dt; if (this.phW > 1e4) this.phW -= TAU * 1000;
           mech += (Math.sin(this.phW * 23) * 0.6 + Math.sin(this.phW * 2.9 * 12) * 0.4) * 0.002 * rf * rf;
@@ -917,6 +960,15 @@ function EngineDSPFactory() {
             mech += this.starterLP.run((this.phS * 2 - 1) * 0.05 + rng.bi() * 0.02) * (0.6 + 0.4 * Math.sin(this.phW * 2));
           }
           mech = this.mechHP.run(mech);
+          // bomba de ar secundário (zumbido elétrico) e ventoinha do radiador
+          if (this.secAir > 0.01 && P.saSound !== false) {
+            this.phSA += 760 * dt; if (this.phSA > 1) this.phSA -= 1;
+            mech += this.secAir * (0.012 * Math.sin(TAU * this.phSA) + 0.005 * Math.sin(2 * TAU * this.phSA) + 0.01 * this.saF.run(rng.bi()));
+          }
+          if (this.fanSpin > 0.01 && P.fanSound !== false) {
+            this.phFan += 7 * 42 * this.fanSpin * dt; if (this.phFan > 1) this.phFan -= 1;
+            mech += this.fanSpin * (0.006 * Math.sin(TAU * this.phFan) + 0.03 * this.fanF.run(rng.bi())) * this.fanSpin;
+          }
           const ripple = (Tgas - this.tqGas) / (this.Tmax + 1);
           vib = this.vibLP.run(vib * 0.04 * rf * rf + ripple * 0.05);
         }
@@ -1082,6 +1134,7 @@ function EngineDSPFactory() {
         boost: this.boost, thr: this.thr, map: this.pMan / P0, limiter: this.limiter, state: this.state,
         torque: Math.max(0, this.tqMean), turbo: this.blower ? this.boost / Math.max(0.2, this.maxBoost) : this.turboW, denied: (this.denied || 0) > 0,
         valve: this.valveState.v, launch: this.launching && (this.twoStepMode === 'cut' ? this.limiter : this.rpmAvg > this.launchRpm * 0.92), launchSoft: this.twoStepMode === 'soft',
+        coolant: this.coolant, fan: this.fanOn, secAir: this.secAir > 0.5, idleTarget: this.idleTarget,
         carX: this.carX, dist: this.rDist, vRad: this.vRad, loop: ENV_LOOP[this.params.env] || 800,
       };
     }

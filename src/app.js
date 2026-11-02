@@ -10,7 +10,8 @@
   let presetId = PRESETS[0].id;
   let engine = G.build(spec);
   let environment = 'open';
-  const params = { listener: 'ext', env: 'open', roadDist: 6, exhaust: 1, intake: 1, mech: 1, master: 0.8 };
+  const params = { listener: 'ext', env: 'open', roadDist: 6, exhaust: 1, intake: 1, mech: 1, master: 0.8, fanSound: true, saSound: true };
+  let tempMode = 'real';
   let observer = 'car', carMic = 'ext';
 
   let audio = null;
@@ -84,6 +85,7 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     setEnvironment(environment);
     send({ type: 'config', cfg: engineConfig(ctx.sampleRate) });
     send({ type: 'params', params });
+    send({ type: 'input', temp: { mode: tempMode } });
     return audio;
   }
 
@@ -329,6 +331,27 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     car.append(slider('inertia', 'Volante do motor', 0.2, 2, 0.05, spec.inertia, (v) => (v < 0.5 ? 'muito leve' : v < 0.85 ? 'leve' : v < 1.25 ? 'normal' : 'pesado'),
       (v) => setSpec({ inertia: v }, { structural: false, render: false })));
     controls.append(car);
+
+    // ---- Temperatura do motor
+    const te = el('section', { class: 'group' }, [el('h2', { text: 'Temperatura do motor' })]);
+    te.append(field('Temperatura', chipGroup('tempMode', [
+      { value: 'real', label: 'Esquentando de verdade', title: 'A água esquenta com o motor funcionando e esfria desligado' },
+      { value: 'fixed', label: 'Fixa', title: 'Fica parada no valor escolhido' },
+    ], tempMode, (v) => { tempMode = v; audio?.send({ type: 'input', temp: { mode: v, value: tele.coolant ?? 20 } }); renderControls(); })));
+    te.append(slider('coolant', 'Água do motor', -10, 120, 1, Math.round(tele.coolant ?? 20), (v) => `${v} °C`,
+      (v) => audio?.send({ type: 'input', temp: { value: v } })));
+    te.append(el('div', { class: 'chips' }, [
+      el('button', { type: 'button', class: 'chip', text: 'Partida a frio (20 °C)', onclick: () => { audio?.send({ type: 'input', temp: { value: 20 } }); } }),
+      el('button', { type: 'button', class: 'chip', text: 'Motor quente (90 °C)', onclick: () => { audio?.send({ type: 'input', temp: { value: 90 } }); } }),
+    ]));
+    te.append(field('Som da ventoinha do radiador', chipGroup('fanSound', [
+      { value: true, label: 'Ligado' }, { value: false, label: 'Desligado' },
+    ], params.fanSound, (v) => { params.fanSound = v; audio?.send({ type: 'params', params }); renderControls(); })));
+    te.append(field('Som da bomba de ar secundário', chipGroup('saSound', [
+      { value: true, label: 'Ligado' }, { value: false, label: 'Desligado' },
+    ], params.saSound, (v) => { params.saSound = v; audio?.send({ type: 'params', params }); renderControls(); })));
+    te.append(el('p', { class: 'note', text: 'Frio: marcha lenta mais alta, ronco mais rasgado nos primeiros segundos (a central esquenta o catalisador), mais barulho de tucho e a bomba de ar zunindo. Perto de 90 °C a termostática abre; acima de ~99 °C liga a ventoinha.' }));
+    controls.append(te);
 
     // ---- Transmissão
     const tr = el('section', { class: 'group' }, [el('h2', { text: 'Transmissão' })]);
@@ -645,6 +668,9 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     g.fillStyle = C.muted;
     const kmh = Math.round(tele.kmh || 0);
     g.fillText(`${kmh} km/h  ·  ${Math.round(tele.torque || 0)} N·m`, cx, cy + R * 0.5);
+    const wt = tele.coolant ?? 20;
+    g.fillStyle = wt < 60 ? C.blue : wt > 105 ? C.hot : C.muted;
+    g.fillText(`água ${Math.round(wt)} °C${tele.fan ? '  ·  ventoinha' : ''}${tele.secAir ? '  ·  bomba de ar' : ''}`, cx, cy + R * 0.62);
     if (tele.limiter) {
       g.fillStyle = C.hot;
       g.font = `600 ${Math.round(R * 0.07)}px ${C.mono}`;
@@ -856,6 +882,12 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
 
   function frame(now) {
     const dt = lastNow ? Math.min(0.1, (now - lastNow) / 1000) : 0;
+    const cs = document.getElementById('coolant');
+    if (cs && document.activeElement !== cs && tele.coolant !== undefined && Math.round(tele.coolant) !== +cs.value) {
+      cs.value = Math.round(tele.coolant);
+      cs.style.setProperty('--p', `${((cs.value - cs.min) / (cs.max - cs.min)) * 100}%`);
+      cs.parentElement.querySelector('output').textContent = `${cs.value} °C`;
+    }
     lastNow = now;
     drawTach(now);
     drawRing(now, dt);
