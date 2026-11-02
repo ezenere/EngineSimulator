@@ -55,3 +55,7 @@ Também dá para pôr pós-combustão em qualquer jato, usar reversor e trocar p
 ## Rodar no seu computador
 
 Baixe esta pasta e abra o arquivo `index.html` (carros) ou `jato.html` (aviões) no navegador. Não precisa instalar nada.
+
+## Quer saber como funciona por dentro?
+
+O documento [Como o Ronco e a Turbina funcionam](docs/TECNICO.md) explica a física e o processamento de som de cada parte: cilindros, escapamento, câmbio, temperatura, turbinas, estrondo sônico, e também como adicionar novos carros e aviões.
