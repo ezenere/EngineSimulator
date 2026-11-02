@@ -341,6 +341,35 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
       (v) => setSpec({ inertia: v }, { structural: false, render: false })));
     controls.append(car);
 
+    // ---- Corte de giro
+    const lim = el('section', { class: 'group' }, [el('h2', { text: 'Corte de giro' })]);
+    const lt = spec.limiter || 'ign';
+    lim.append(field('Tipo de corte', chipGroup('limiter', [
+      { value: 'ign', label: 'Ignição', title: 'Corta a faísca: o combustível passa e estoura no escape (carro preparado)' },
+      { value: 'fuel', label: 'Combustível', title: 'Corta a injeção: o giro bate e volta, seco (corte de fábrica clássico)' },
+      { value: 'partial', label: 'Parcial', title: 'Corta só alguns cilindros em rodízio: o giro fica parado no limite, picotado (Porsche, Ferrari, F1)' },
+      { value: 'throttle', label: 'Borboleta', title: 'A central fecha o acelerador: o giro só para de subir, liso (carro moderno de rua)' },
+      { value: 'none', label: 'Sem corte', title: 'Motor antigo de distribuidor: passando do limite as válvulas flutuam e ele falha' },
+    ], lt, (v) => setSpec({ limiter: v, limiterBand: { ign: 160, fuel: 250, partial: 110, throttle: 300 }[v] ?? spec.limiterBand }, { structural: false }))));
+    if (lt !== 'none') {
+      const range = { ign: [50, 800], fuel: [50, 800], partial: [40, 400], throttle: [250, 800] }[lt];
+      const help = { ign: 'quanto o giro cai antes de voltar', fuel: 'quanto o giro cai antes de voltar', partial: 'quão cedo começa a cortar', throttle: 'quão cedo começa a fechar' }[lt];
+      lim.append(slider('limiterBand', `Faixa do corte (${help})`, range[0], range[1], 10, clamp(spec.limiterBand || 160, range[0], range[1]),
+        (v) => `${v} rpm`, (v) => setSpec({ limiterBand: v }, { structural: false, render: false })));
+    }
+    if (lt === 'ign' || lt === 'fuel') {
+      lim.append(slider('limiterHold', 'Tempo mínimo de cada corte', 0, 0.2, 0.005, spec.limiterHold || 0,
+        (v) => (v === 0 ? 'nenhum' : `${Math.round(v * 1000)} ms`), (v) => setSpec({ limiterHold: v }, { structural: false, render: false })));
+    }
+    lim.append(el('p', { class: 'note', text: {
+      ign: 'Faixa pequena e tempo curto: batido rápido ("brrrr"). Faixa grande e tempo longo: batido lento e fundo ("brap... brap"). Os estouros seguem o controle "Estalos no escape".',
+      fuel: 'Faixa pequena e tempo curto: batido rápido. Faixa grande e tempo longo: batido lento e fundo. Seco, quase sem estouro.',
+      partial: 'O giro fica praticamente parado na faixa vermelha, com um ronco picotado.',
+      throttle: 'O giro para de subir perto da faixa vermelha, sem batida nem estouro.',
+      none: 'Passando da faixa vermelha o motor perde força e começa a falhar (flutuação de válvulas), como num carro antigo.',
+    }[lt] }));
+    controls.append(lim);
+
     // ---- Temperatura do motor
     const te = el('section', { class: 'group' }, [el('h2', { text: 'Temperatura do motor' })]);
     te.append(field('Temperatura', chipGroup('tempMode', [
@@ -542,7 +571,7 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     document.querySelectorAll('.preset').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.id === presetId)));
   }
   // cada carro vem com o próprio escape: acessórios que ele não define voltam ao padrão
-  const STOCK = { valve: 'none', pipeD: 2.5, reso: false, twoStep: 'off', launchRpm: undefined, fuel: 'efi', shiftTime: undefined, driveMode: 'auto' };
+  const STOCK = { valve: 'none', pipeD: 2.5, reso: false, twoStep: 'off', launchRpm: undefined, fuel: 'efi', shiftTime: undefined, driveMode: 'auto', limiter: 'ign', limiterBand: 160, limiterHold: 0 };
   function loadPreset(p) {
     spec = { ...STOCK, ...p };
     pushConfig(true, true);

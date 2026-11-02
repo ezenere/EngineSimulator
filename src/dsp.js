@@ -391,6 +391,10 @@ function EngineDSPFactory() {
       if (cfg.transmission) this.auto = cfg.transmission === 'auto';
       this.shiftTime = clamp(cfg.shiftTime || (this.auto ? 0.36 : 0.26), 0.04, 1);
       this.driveMode = cfg.driveMode || 'auto';
+      // corte de giro: tipo, faixa (quanto o giro cai antes de voltar) e tempo mínimo de cada corte
+      this.limType = cfg.limiter || 'ign';
+      this.limBand = clamp(cfg.limiterBand || 160, 30, 1000);
+      this.limHold = clamp(cfg.limiterHold || 0, 0, 0.5);
     }
 
     volume(a) {
@@ -648,6 +652,26 @@ function EngineDSPFactory() {
         this.dash = 0;
         if (e < 0) { this.advTrim = clamp(160 * e, -35, 0); this.iac = Math.min(this.iac, 0.004); }
       } else { this.lcI = 0.12; this.lcPrev = undefined; }
+      // corte por borboleta (central eletrônica): fecha o acelerador chegando no limite, liso
+      // (olha a velocidade com que o giro sobe para frear antes de chegar, sem passar do limite)
+      const rpmRate = (rpm - (this.limPrev ?? rpm)) / dtc; this.limPrev = rpm;
+      if (this.limType === 'throttle' && !this.launching) {
+        // mesmo controlador do controle de largada (PI + amortecimento pela subida do giro),
+        // mirando um pouco abaixo da faixa vermelha
+        const tb = Math.max(this.limBand, 250), target = this.redline - 40;
+        if (rpm > target - tb) {
+          const e = (target - rpm) / target, de = rpmRate / target;
+          if (this.limI === undefined) this.limI = Math.min(1, want);
+          // ganhos altos: em giro alto a borboleta só tira ar de verdade quando está quase fechada
+          if (Math.abs(e) < 0.08) this.limI = clamp(this.limI + e * dtc * 40, -0.3, 1);
+          want = Math.min(want, clamp(this.limI + 12 * e - 0.25 * de, 0, 1));
+          // a borboleta é lenta (o coletor demora a esvaziar): o atraso de ignição tira torque na hora
+          const ahead = rpm + 0.08 * Math.max(0, rpmRate);
+          this.limRetard = clamp((ahead - (target - 0.25 * tb)) / (0.3 * tb) * 30, 0, 32);
+          // (o ar extra da marcha lenta e do dashpot também é cortado, senão sustenta o giro sozinho)
+          if (this.limRetard > 0) { this.dash = 0; this.iac = Math.min(this.iac, 0.003); }
+        } else { this.limI = undefined; this.limRetard = 0; }
+      } else this.limRetard = 0;
       this.thr += (want - this.thr) * (1 - Math.exp(-dtc / 0.03));
 
       // turbo
@@ -670,9 +694,26 @@ function EngineDSPFactory() {
       this.bovEnv *= Math.exp(-dtc / 0.22);
 
       // 2-step com corte: a ECU segura o giro cortando a ignição (alguns estouros no escape)
-      const limit = this.launching && this.twoStepMode === 'cut' ? this.launchRpm : this.redline;
-      if (this.rpmAvg > limit) this.limiter = true;
-      else if (this.rpmAvg < limit - (this.launching ? 260 : 160)) this.limiter = false;
+      const lt = this.limType;
+      if (this.launching && this.twoStepMode === 'cut') {
+        if (this.rpmAvg > this.launchRpm) this.limiter = true;
+        else if (this.rpmAvg < this.launchRpm - 260) this.limiter = false;
+      } else if (lt === 'partial') {
+        // corte parcial: corta uma fração das explosões, crescendo com o quanto passou do limite
+        const start = this.redline - this.limBand * 0.5;
+        this.limFrac = clamp((this.rpmAvg - start) / (this.limBand * 0.6), 0, 1);
+        this.limiter = this.limFrac > 0;
+      } else if (lt === 'ign' || lt === 'fuel') {
+        // corte total com histerese e tempo mínimo: o giro bate no limite e volta
+        if (!this.limiter && this.rpmAvg > this.redline) { this.limiter = true; this.limT = 0; }
+        else if (this.limiter) {
+          this.limT += dtc;
+          if (this.limT >= this.limHold && this.rpmAvg < this.redline - this.limBand) this.limiter = false;
+        }
+      } else if (lt === 'throttle') {
+        // a borboleta já segura; corta combustível só de segurança se passar muito
+        if (this.rpmAvg > this.redline + 200) this.limiter = true; else if (this.rpmAvg < this.redline) this.limiter = false;
+      } else this.limiter = false; // sem corte: as válvulas flutuam (ver combustão)
 
       // válvula do abafador (atuador leva ~0,15 s); no automático abre com carga ou giro alto
       if (this.valveMode === 'auto') {
@@ -755,7 +796,7 @@ function EngineDSPFactory() {
         const cut = this.limiter || (this.shifting && this.shiftCut);
         const deg = (omega * dt) / DEG;
         const rf = clamp(rpmFrac, 0, 1.1);
-        const adv = 10 + 24 * rf + this.advTrim - (this.shiftRetard ? 26 : 0) - this.catRetard;
+        const adv = 10 + 24 * rf + this.advTrim - (this.shiftRetard ? 26 : 0) - this.catRetard - (this.limRetard || 0);
         const aSp = 720 - adv;
         const burn = 42 + 26 * rf;
         const hwr = hw * Math.max(0.06, rpm / 3000);
@@ -782,13 +823,23 @@ function EngineDSPFactory() {
           if (this.armed[c] && (a >= aSp || a < 180)) {
             this.armed[c] = 0;
             this.spk[c] = a;
-            const combust = (running || cranking) && !cut && !dfco;
+            let cutNow = cut;
+            if (this.limiter && this.limType === 'partial' && !this.launching) {
+              // rodízio: acumula a fração de corte e corta a explosão quando passa de 1
+              cutNow = this.shifting && this.shiftCut;
+              this.lacc = (this.lacc || 0) + this.limFrac;
+              if (this.lacc >= 1) { this.lacc -= 1; cutNow = true; }
+            }
+            const combust = (running || cranking) && !cutNow && !dfco;
             const idleness = clamp(1 - (this.rpmAvg - this.idle) / 1500, 0, 1);
             // frio: a mistura vaporiza mal e cada explosão sai um pouco diferente
             const sigma = (0.025 + idleness * (0.015 + 0.06 * this.cam * this.cam)) * (1 + 0.9 * (1 - this.warm));
-            const misfire = rng.next() < this.cam * this.cam * 0.02 * idleness;
+            // sem limitador (motor antigo): passando da faixa vermelha as válvulas flutuam,
+            // a mistura não entra direito e o motor falha e perde força
+            const float = this.limType === 'none' ? clamp((this.rpmAvg - this.redline) / (0.08 * this.redline), 0, 1) : 0;
+            const misfire = rng.next() < this.cam * this.cam * 0.02 * idleness + 0.6 * float;
             if (combust && !misfire) {
-              this.Q[c] = Math.max(0, this.air[c]) * 2.6e6 * this.cylQ[c] * clamp(1 + sigma * this.varScale * this.fuelVar * rng.gauss(), 0.3, 1.5);
+              this.Q[c] = Math.max(0, this.air[c]) * 2.6e6 * this.cylQ[c] * (1 - 0.7 * float) * clamp(1 + sigma * this.varScale * this.fuelVar * rng.gauss(), 0.3, 1.5);
               this.xb[c] = 0;
               this.knockEnv += 0.6 + 0.4 * rng.next();
             } else {
@@ -797,7 +848,8 @@ function EngineDSPFactory() {
               if (pl > 0 && running && this.rpmAvg > this.idle * 1.4 && !combust) {
                 let pr = 0;
                 if (this.launching && this.limiter) pr = 0.12;
-                else if (this.limiter) pr = 0.4;
+                // ignição cortada: o combustível passa e estoura no escape; corte de combustível é seco
+                else if (this.limiter) pr = { ign: 0.4, fuel: 0.02, partial: 0.15, throttle: 0.02 }[this.limType] ?? 0;
                 else if (this.shifting && this.shiftCut) pr = 0.55;
                 else if (dfco) pr = 0.32 * (this.popWindow / 1.3);
                 if (rng.next() < pr * pl && this.pops.length < 10) {

@@ -189,7 +189,17 @@ Depois do abafador original a não linearidade do tubo é quase desligada. Com o
   - **Sem acelerar:** em todos os modos ele segura a marcha.
   - **Redução:** acontece ao desacelerar e no kickdown, e ao parar ele volta direto para a 1ª.
   - **Troca embreagem-a-embreagem:** a marcha nova já pega enquanto a outra solta, e o motor não dispara.
-- **Limitador:** corta a ignição acima da faixa vermelha, com histerese de 160 rpm.
+- **Corte de giro (limitador):** cada carro tem o tipo, a faixa e o tempo mínimo de corte.
+
+  | Tipo | Como funciona | Som |
+  |---|---|---|
+  | Ignição | Corta a faísca acima da faixa vermelha e volta abaixo de `faixa vermelha − faixa`, respeitando o tempo mínimo de cada corte | Batido com estouros no escape |
+  | Combustível | Igual, mas corta a injeção | Batido seco |
+  | Parcial | Corta uma fração das explosões em rodízio (um acumulador que dispara o corte quando passa de 1). A fração cresce com o quanto o giro passou do início da faixa | Giro parado no limite, picotado |
+  | Borboleta | Controlador PI com amortecimento pela subida do giro, mirando 40 rpm abaixo da faixa vermelha, mais um atraso de ignição para tirar torque na hora. Os ganhos são altos porque em giro alto a borboleta só tira ar quando está quase fechada. Corte de combustível de segurança a +200 rpm | Liso |
+  | Sem corte | Acima da faixa vermelha as válvulas flutuam: falhas e perda de energia crescentes até ~8% acima | Motor falhando, sem batida |
+
+  Faixa grande com tempo mínimo longo dá um batido lento e fundo; faixa pequena com tempo curto, um batido rápido.
 - **2-step:**
   - **Corte:** é um limitador numa rotação escolhida, com estouros.
   - **Controle de largada:** é um PID que fecha a borboleta, com integrador, termo proporcional e amortecimento pela derivada do giro. Atrasa a ignição se a borboleta fechada não bastar. Não corta nada e não estoura.
@@ -375,6 +385,7 @@ O que foi medido nas simulações offline (Node) durante o desenvolvimento:
 | `header`, `routing`, `muffler`, `pipeLen` | Coletor, traçado, abafador, comprimento do escape (m) |
 | `aspiration`, `boost`, `intake` | `'na'`, `'turbo'` ou `'super'`, pressão (bar), entrada de ar |
 | `pops` | Estalos no escape (0–1) |
+| `limiter`, `limiterBand`, `limiterHold` | Tipo de corte (`'ign'`, `'fuel'`, `'partial'`, `'throttle'`, `'none'`), faixa (rpm) e tempo mínimo de cada corte (s) |
 | `gears`, `transmission`, `shiftTime`, `driveMode` | Marchas, câmbio, tempo de troca (s), modo do automático (`'track'`, `'sport'`, `'normal'`, `'eco'`, `'auto'`) |
 | `ratios`, `finalDrive` | Opcionais: relações de cada marcha e diferencial |
 | `valve`, `pipeD`, `reso`, `twoStep`, `launchRpm` | Acessórios |

@@ -19,6 +19,7 @@ Dá para mexer em quase tudo:
 - a ordem em que os cilindros explodem;
 - o escapamento: abafador, válvula, diâmetro, ressonador;
 - turbo ou compressor;
+- o corte de giro: ignição (com estouro), combustível (seco), parcial, borboleta ou sem corte, e o ritmo dele;
 - câmbio: número de marchas, manual ou automático (com modos pista, esportivo, normal, econômico e automático), a relação de cada marcha e o tempo de troca;
 - temperatura do motor: ele começa frio e o som muda enquanto esquenta;
 - 2-step (corte ou controle de largada).
