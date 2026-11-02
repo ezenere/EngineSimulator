@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Turbina</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="jet.css">
+</head>
+<body>
+<div class="app">
+  <header class="bar">
+    <div class="brand">
+      <span class="logo">Turbina</span>
+      <span class="plate" id="plate"></span>
+    </div>
+    <button id="ignition" class="ignition" type="button" aria-pressed="false">
+      <span class="dot"></span><span id="ignLabel">Dar partida</span>
+    </button>
+  </header>
+
+  <nav class="presets" id="presets" aria-label="Motores prontos"></nav>
+
+  <main class="cluster">
+    <section class="tach-wrap" aria-label="Instrumentos do motor">
+      <canvas id="eicas"></canvas>
+      <div class="lever" id="lever" role="slider" tabindex="0" aria-label="Manete de potência" aria-valuemin="0" aria-valuemax="130" aria-valuenow="0">
+        <div class="lever-track"><div class="lever-fill" id="leverFill"></div></div>
+        <div class="lever-marks" id="leverMarks"></div>
+        <div class="lever-knob" id="leverKnob"></div>
+      </div>
+    </section>
+
+    <section class="firing" aria-label="Face do fan">
+      <canvas id="fan"></canvas>
+      <div class="readout">
+        <div class="ro-row"><span class="k">Fan</span><span class="v mono" id="roFan">—</span></div>
+        <div class="ro-row"><span class="k">Ponta da pá</span><span class="v mono" id="roTip">—</span></div>
+        <div class="ro-row"><span class="k">Tom BPF</span><span class="v mono" id="roCut">—</span></div>
+        <div class="ro-row"><span class="k">Compressor</span><span class="v mono" id="roHpc">—</span></div>
+        <div class="ro-row"><span class="k">Jato</span><span class="v mono" id="roJet">—</span></div>
+        <div class="ro-row"><span class="k">No ouvido</span><span class="v mono" id="roSpl">—</span></div>
+      </div>
+    </section>
+
+    <section class="scope-wrap" aria-label="Forma de onda e espectro">
+      <canvas id="scope"></canvas>
+    </section>
+
+    <section class="drive">
+      <div class="gearbox" id="detents">
+        <button type="button" class="key wide" data-tla="0">1 · lenta</button>
+        <button type="button" class="key wide" data-tla="0.8">2 · subida</button>
+        <button type="button" class="key wide" data-tla="1">3 · decolagem</button>
+        <button type="button" class="key wide" data-tla="1.3" id="abKey">4 · pós-combustão</button>
+        <button type="button" class="key wide" id="revKey" aria-pressed="false">R · reversor</button>
+      </div>
+      <p class="hints"><kbd>W</kbd>/<kbd>↑</kbd> avança · <kbd>S</kbd>/<kbd>↓</kbd> recua · <kbd>1</kbd>–<kbd>4</kbd> posições · <kbd>R</kbd> reversor · <kbd>I</kbd> partida · <kbd>C</kbd> posição · <kbd>V</kbd> a bordo/no solo</p>
+    </section>
+  </main>
+
+  <aside class="controls" id="controls" aria-label="Parâmetros do motor"></aside>
+</div>
+
+<script src="src/jet-presets.js"></script>
+<script src="src/jet-dsp.js"></script>
+<script src="src/jet-app.js"></script>
+</body>
+</html>

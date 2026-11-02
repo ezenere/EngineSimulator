@@ -1,0 +1,25 @@
+/* Turbina: instrumentos de motor a jato sobre a base visual do Ronco. */
+#eicas { flex: 1; min-width: 0; width: 100%; height: 100%; }
+
+/* manete: fica onde foi deixada (não volta como o pedal) */
+.lever { width: 58px; flex-shrink: 0; position: relative; cursor: ns-resize; touch-action: none; }
+.lever-track { position: absolute; left: 8px; top: 10px; bottom: 10px; width: 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); overflow: hidden; }
+.lever-fill { position: absolute; inset: auto 0 0 0; height: 0%; background: linear-gradient(to top, var(--gold), color-mix(in srgb, var(--gold) 40%, var(--hot))); }
+.lever-marks { position: absolute; left: 24px; right: 0; top: 10px; bottom: 10px; pointer-events: none; }
+.lever-marks span { position: absolute; left: 0; transform: translateY(50%); font: 500 9.5px var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.lever-marks span::before { content: ""; display: inline-block; width: 6px; height: 1px; margin-right: 4px; vertical-align: middle; background: var(--faint); }
+.lever-marks span.ab { color: var(--hot); }
+.lever-knob { position: absolute; left: 2px; width: 24px; height: 14px; border-radius: 3px; background: var(--ink); border: 2px solid var(--bg); transform: translateY(50%); bottom: 10px; box-shadow: 0 1px 4px rgb(0 0 0 / 0.5); }
+.lever:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: var(--r); }
+
+#fan { width: 100%; height: 100%; min-height: 0; }
+.drive .key[aria-pressed="true"] { border-color: var(--hot); color: var(--hot); }
+.drive .key.at { border-color: var(--gold); color: var(--gold); }
+.key.wide { font-size: 12px; }
+.key:disabled { opacity: 0.32; cursor: not-allowed; }
+
+.obs-map { width: 100%; height: 190px; display: block; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); touch-action: none; }
+.obs-map.drag { cursor: crosshair; }
+.firing .ro-row { grid-template-columns: 104px minmax(0, 1fr); }
+.ro-row .v.warn { color: var(--hot); }
+.ro-row .v.ok { color: var(--gold); }
