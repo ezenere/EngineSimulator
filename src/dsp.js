@@ -263,11 +263,15 @@ function EngineDSPFactory() {
       const st = this.shiftTime;
       this.shiftT = this.gear === 0 || target === 0 ? 0.05 : Math.max(0.02, up ? 0.5 * st : 0.75 * st);
       this.shiftCut = up && this.thr > 0.5 && this.gear > 0;
+      // troca rápida (dupla embreagem, automático, quickshifter): a central corta a ignição
+      // e a borboleta fica aberta, então o turbo não despeja. Troca manual normal: o
+      // motorista tira o pé e a válvula de alívio solta a pressão.
+      this.ignCut = this.auto || this.shiftTime <= 0.2;
       this.shiftUp = up; this.sinceShift = 0;
       this.blip = !up && target > 0 && after > this.rpmAvg * 1.05;
       // automático (troca embreagem-a-embreagem): na subida a próxima marcha já vai
       // pegando enquanto a outra solta, então o motor é puxado para baixo e não dispara
-      this.clutch = this.auto && up && this.gear > 0 ? 0.6 : 0;
+      this.clutch = this.auto && up && this.gear > 0 ? 0.3 : 0;
       this.gear = target;
       this.shiftCool = Math.max(0.3, 1.5 * st + 0.2);
     }
@@ -568,9 +572,11 @@ function EngineDSPFactory() {
 
       let want = user;
       if (this.shifting && this.blip) want = rpm < this.vehOmega() * 9.55 * 1.02 ? 0.85 : 0;
-      if (this.shifting && this.shiftCut) want = 0;
+      if (this.shifting && this.shiftCut && !this.ignCut) want = 0;
       // câmbio automático corta torque na subida de marcha (sem isso o motor dispara no meio da troca)
-      else if (this.auto && this.shiftUp && this.gear > 1 && (this.shifting || (!this.locked && this.sinceShift < 0.8))) want = Math.min(want, 0.08);
+      // automático com o pé pela metade: reduz torque atrasando a ignição, borboleta aberta
+      // (e nas trocas rápidas, durante o escorregamento da embreagem, um pouco de atraso alisa a descida do giro)
+      this.shiftRetard = this.shiftUp && this.gear > 1 && this.ignCut && (this.shifting || (!this.locked && this.sinceShift < 0.8)) && !(this.shifting && this.shiftCut);
       this.sinceShift = (this.sinceShift || 0) + dtc;
       // 2-step: parado e de pé embaixo
       // como no carro de verdade: só segura com a embreagem pisada (ponto morto) ou o freio apertado
@@ -633,7 +639,7 @@ function EngineDSPFactory() {
       if (this.shifting) {
         this.shiftT -= dtc;
         if (this.shiftT <= 0) { this.shifting = false; this.shiftCut = false; this.blip = false; }
-      } else this.clutch = Math.min(1, this.clutch + dtc / Math.max(0.02, 0.5 * this.shiftTime));
+      } else this.clutch = Math.min(1, this.clutch + dtc / Math.max(this.shiftUp && this.gear > 1 ? 0.2 : 0.02, 0.5 * this.shiftTime));
       this.shiftCool -= dtc;
       this.denied = Math.max(0, (this.denied || 0) - dtc);
       if (this.auto && this.gear > 0 && !this.shifting && this.shiftCool <= 0) {
@@ -686,7 +692,7 @@ function EngineDSPFactory() {
         const cut = this.limiter || (this.shifting && this.shiftCut);
         const deg = (omega * dt) / DEG;
         const rf = clamp(rpmFrac, 0, 1.1);
-        const adv = 10 + 24 * rf + this.advTrim;
+        const adv = 10 + 24 * rf + this.advTrim - (this.shiftRetard ? 26 : 0);
         const aSp = 720 - adv;
         const burn = 42 + 26 * rf;
         const hwr = hw * Math.max(0.06, rpm / 3000);
@@ -838,7 +844,9 @@ function EngineDSPFactory() {
           const cap = this.locked
             ? this.Tmax * 2.6 * smooth(this.idle * 0.75, this.idle * 1.0, rpm)
             : moving
-              ? Math.max(coast, this.clutch * this.Tmax * 2.2 * smooth(this.idle * 0.6, this.idle * 0.95, rpm))
+              ? Math.max(coast, (this.ignCut && this.shiftUp && this.clutch > 0
+                ? 0.65 + 1.6 * this.clutch * this.clutch * (3 - 2 * this.clutch) // troca rápida: a embreagem nova já segura o motor desde o começo
+                : 2.2 * this.clutch * this.clutch * (3 - 2 * this.clutch)) * this.Tmax * smooth(this.idle * 0.6, this.idle * 0.95, rpm))
               : Math.max(coast, this.clutch * this.Tmax * 1.15 * smooth(this.idle * 1.05, launch, rpm) * smooth(0.02, 0.12, this.thr));
           Tcl = clamp(220 * slip, -cap, cap);
         } else this.locked = false;
