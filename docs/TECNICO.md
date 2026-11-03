@@ -40,7 +40,7 @@ AudioWorklet (DSP, 4 canais)
 
 - O DSP tenta carregar como AudioWorklet por URL `blob:` e depois `data:`. A segunda forma é necessária ao abrir pelo `file://`, onde a origem é nula. Se nenhuma funcionar, cai para `ScriptProcessorNode` na thread principal.
 - Cada ambiente (céu aberto, túnel, hangar…) tem uma resposta ao impulso gerada na hora. Ela soma uma cauda difusa, com decaimento exponencial que escurece com o tempo, a ecos discretos com atraso, ganho e espalhamento próprios: prédios, arquibancada, paredões do vale. Um som de fundo fraco (vento, trânsito, ventilação) é gerado dentro do DSP.
-- **Calibração de volume.** Ao montar um motor, a thread principal renderiza numa cópia do DSP, com escape e acessórios de referência e motor quente, 0,5 s em carga máxima a 55% da faixa vermelha e 0,8 s em marcha lenta, e calcula um ganho fixo como a **média geométrica** (pesada 60/40 para a carga) dos dois ganhos: o que levaria a carga ao alvo e o que levaria a lenta ao alvo, 23 dB abaixo. Só com a carga, um turbo abafado e um motor de corrida ficavam 30 dB apartados na lenta; com a média, a diferença cai pela metade (~12 dB entre os 65 carros). O turbo é calibrado com 40% da pressão máxima. Abafador, válvula, diâmetro e temperatura continuam mudando o volume de verdade, porque ficam fora dessa normalização.
+- **Calibração de volume.** Ao montar um motor, a thread principal renderiza numa cópia do DSP, com escape e acessórios de referência e motor quente, 0,5 s em carga máxima a 55% da faixa vermelha e 1,2 s em marcha lenta. O ganho fixo é o que leva a carga ao alvo; a lenta ganha um **reforço próprio** (o que falta para ela ficar 21 dB abaixo da carga, como nos motores reais), aplicado por rotação: inteiro na lenta e sumindo até metade da faixa vermelha. Na sonda de lenta o giro é travado, então a válvula de ar é ajustada até o torque médio zerar, que é onde a lenta de verdade se equilibra (sem isso a sonda ficava 4 dB mais alta que a lenta real). O turbo é calibrado com 40% da pressão máxima. Abafador, válvula, diâmetro e temperatura continuam mudando o volume de verdade, porque ficam fora dessa normalização. Na mesma passada mede-se a potência que o modelo entrega (três pontos em carga total) para a escala de torque descrita na dinâmica.
 
 ---
 
@@ -116,6 +116,8 @@ O escape é uma rede de tubos acústicos unidimensionais.
 
 Há também **propagação não linear**: a parte de alta pressão da onda anda mais rápido, `atraso efetivo = D·(1 − 0,28·p/p₀)`, e a frente do pulso vai se afiando quase até virar choque. Esse é o "rasgado" do escape em carga. (O coeficiente era 0,6; com a irradiação correta da ponteira, descrita abaixo, isso gerava um muro de agudo com centroide espectral em ~950 Hz, contra ~600 Hz nas gravações reais de um V8 acelerando.)
 
+**Entrada do pulso no tubo primário:** a pressão injetada é `Z·ṁ·(T/1650 K)`: impedância vezes vazão **volumétrica**, não mássica. O fator é fixado na abertura da válvula de escape com a temperatura do ciclo: um ciclo queimado em carga (~1650 K) entra inteiro; a lenta (~950 K) entra 5 dB mais baixa (a calibração repõe); um ciclo com a ignição ou o combustível cortados, ou de freio-motor (~350 K, gás 4× mais denso) entra 13 dB mais baixo. Sem isso o corte de giro soava 8 a 10 dB **mais alto** que o motor queimando, porque o cilindro frio empurra a mesma massa com o dobro da vazão mássica no fim do curso de escape. A área efetiva da válvula de escape satura cedo (`min(1, 2,5·sen²)`), como nos perfis reais; com a válvula "pontuda" o gás frio ficava preso e saía num pulso curto e agudo na hora de fechar.
+
 **Junções:** espalhamento por conservação de vazão entre tubos de admitâncias diferentes:
 
 $$P = \frac{2\sum Y_i\,p_i^{+}}{\sum Y_i}, \qquad p_i^{-} = P - p_i^{+}$$
@@ -161,7 +163,8 @@ Depois do abafador original a não linearidade do tubo é quase desligada. Com o
 ### Dinâmica: virabrequim, embreagem, câmbio e carro
 
 - **Virabrequim:** é integrado com o torque dos gases menos o atrito. O atrito é uma pressão média de atrito (FMEP) que cresce com o giro e aumenta 50% com o óleo frio.
-- **Carro:** massa proporcional à cilindrada; arrasto aerodinâmico, rolagem e freio. As relações de câmbio formam uma progressão geométrica que fecha nas marchas altas; o diferencial padrão é `3,55·(faixa vermelha/7000)`. Ambos são editáveis.
+- **Carro:** cada preset traz a ficha técnica: **massa** com motorista (`mass`), **potência** de pico (`power`, kW), **relações** de cada marcha e **diferencial** (`ratios`, `finalDrive`; nas motos o diferencial já inclui a redução primária e a coroa/pinhão), raio da roda (`wheelR`) e arrasto (`drag` = ½·ρ·Cd·A; rolagem 1,2% do peso, freio 0,9 g). Sem esses campos vale o chute antigo: massa pela cilindrada, progressão geométrica que fecha nas marchas altas e diferencial `3,55·(faixa vermelha/7000)`. Tudo editável no painel.
+- **Escala de torque:** o modelo termodinâmico entrega o torque que a cilindrada e a respiração dão (uns 92 N·m/L aspirado), o que deixava um Fusca com 1,5× a potência real e um F1 com metade. Com `power` definido, a calibração mede a potência do modelo e o torque dos gases é multiplicado pelo fator que leva a potência de pico à da ficha (o atrito fica de fora). O fator só entra acima de ~1,5× a lenta (inteiro a partir de 3×), para o controle de marcha lenta continuar com o ganho com que foi acertado. O som não muda: a escala age na integração do virabrequim e no torque mostrado.
 - **Embreagem automática:** é uma mola rígida (`220·patinação`) limitada por uma capacidade que depende da situação:
 
   | Situação | Capacidade |
@@ -190,15 +193,15 @@ Depois do abafador original a não linearidade do tubo é quase desligada. Com o
   - **Sem acelerar:** em todos os modos ele segura a marcha.
   - **Redução:** acontece ao desacelerar e no kickdown, e ao parar ele volta direto para a 1ª.
   - **Troca embreagem-a-embreagem:** a marcha nova já pega enquanto a outra solta, e o motor não dispara.
-- **Corte de giro (limitador):** cada carro tem o tipo, a faixa e o tempo mínimo de corte.
+- **Corte de giro (limitador):** cada carro tem o tipo, a faixa e o tempo mínimo de corte. O padrão de central moderna é faixa de 70 rpm com 70 ms de corte: dá o batido rápido em neutro (~10 Hz) e também em marcha (~5 Hz), como nas centrais reais. Com a faixa de 160 rpm e sem tempo mínimo de antes, em marcha o giro levava 0,6 s para cair a faixa inteira e o corte virava um vai-e-vem lento (~1,5 Hz).
 
   | Tipo | Como funciona | Som |
   |---|---|---|
   | Ignição | Corta a faísca acima da faixa vermelha e volta abaixo de `faixa vermelha − faixa`, respeitando o tempo mínimo de cada corte | Batido com estouros no escape |
   | Combustível | Igual, mas corta a injeção | Batido seco |
-  | Parcial | Corta uma fração das explosões em rodízio (um acumulador que dispara o corte quando passa de 1). A fração cresce com o quanto o giro passou do início da faixa | Giro parado no limite, picotado |
+  | Parcial | Corta uma fração das explosões em rodízio (um acumulador que dispara o corte quando passa de 1, com sorteio para não virar um padrão periódico, que soava como um zumbido parado). A fração cresce com o quanto o giro passou do início da faixa | Giro quase parado no limite (±100 rpm), picotado |
   | Borboleta | Controlador PI com amortecimento pela subida do giro, mirando 40 rpm abaixo da faixa vermelha, mais um atraso de ignição para tirar torque na hora. Os ganhos são altos porque em giro alto a borboleta só tira ar quando está quase fechada. Corte de combustível de segurança a +200 rpm | Liso |
-  | Sem corte | Acima da faixa vermelha as válvulas flutuam: falhas e perda de energia crescentes até ~8% acima | Motor falhando, sem batida |
+  | Sem corte | Acima da faixa vermelha as válvulas flutuam: falhas e perda de energia crescentes até ~12% acima (o motor se equilibra uns 7 a 9% acima da faixa) | Motor falhando, sem batida |
 
   Faixa grande com tempo mínimo longo dá um batido lento e fundo; faixa pequena com tempo curto, um batido rápido.
 - **2-step:**
@@ -359,7 +362,10 @@ O que foi medido nas simulações offline (Node) durante o desenvolvimento:
   | Simulado: Camaro em marcha lenta | −11 | −17 | −18 | −23 | 266 Hz |
 
   Em marcha lenta o simulado ainda tem um pouco mais de agudo que as gravações; esse agudo vem do som de fundo do ambiente e da mecânica, não do escape (o escape sozinho fica em −40 dB acima de 2,5 kHz).
-- **Volume entre carros:** a marcha lenta dos 65 carros fica numa faixa de ~12 dB (era 30 dB só com a calibração em carga).
+- **Volume entre carros:** a marcha lenta dos 68 veículos fica numa faixa de ~11 dB (desvio de 2 dB; era 30 dB só com a calibração em carga e 16 dB com a média geométrica).
+- **Corte de giro:** em neutro o corte por ignição/combustível bate a 8 a 14 Hz (média 10,5) com 65 a 80% do tempo cortado (em neutro só o atrito segura o giro, então a maior parte das explosões tem de ser cortada); em 3ª marcha, 2 a 10 Hz (média 5,4). Um ciclo cortado soa 3 a 9 dB abaixo de um ciclo queimado na mesma rotação, e segurar o giro no corte em neutro fica em média 5 dB abaixo da carga total a 90% da faixa (antes ficava 5 a 8 dB **acima**: o corte era uma parede de som mais alta que o motor em carga).
+- **Potência:** com a escala de torque, a potência medida em carga total bate com a ficha técnica (Camaro SS 339 kW, GT3 RS 392, F2004 642, Fusca 41, R1 148, Hayabusa 138); os 68 veículos continuam segurando a lenta a 20 °C e a −5 °C.
+- **Câmbio real:** com as relações da ficha, o Camaro SS gira 1400 rpm a 100 km/h em 6ª e o Fusca 3400 rpm em 4ª (134 km/h no corte); as motos de 1000 cc chegam a 155–170 km/h em 1ª.
 
 - **Doppler da rua:** ignição de 200 Hz a 30 m/s → 216/183 Hz, contra 219/184 Hz na teoria.
 - **Flat-6 contra gravações reais** de um 911 GT3 RS e de um 996 (Wikimedia Commons):
@@ -371,7 +377,7 @@ O que foi medido nas simulações offline (Node) durante o desenvolvimento:
 - **Tyler-Sofrin:** com 54 palhetas para 24 pás, o BPF fica 3 dB acima do ruído; com 30 palhetas, 40 dB acima.
 - **Estrondo sônico:** o cone chegou em 3,37 s, contra 3,38 s na teoria (Mach 1,5, 200 m).
 - **Marcha lenta:**
-  - os 65 carros seguram a lenta;
+  - os 68 veículos seguram a lenta;
   - partindo a −10 °C e a 90 °C, com uma acelerada no meio, nenhum apaga.
 - **Câmbio:**
   - depois de uma troca com o pé no fundo, a embreagem trava em ~0,3 s;
@@ -404,7 +410,9 @@ O que foi medido nas simulações offline (Node) durante o desenvolvimento:
 | `pops` | Estalos no escape (0–1) |
 | `limiter`, `limiterBand`, `limiterHold` | Tipo de corte (`'ign'`, `'fuel'`, `'partial'`, `'throttle'`, `'none'`), faixa (rpm) e tempo mínimo de cada corte (s) |
 | `gears`, `transmission`, `shiftTime`, `driveMode` | Marchas, câmbio, tempo de troca (s), modo do automático (`'track'`, `'sport'`, `'normal'`, `'eco'`, `'auto'`) |
-| `ratios`, `finalDrive` | Opcionais: relações de cada marcha e diferencial |
+| `ratios`, `finalDrive` | Relações de cada marcha e diferencial (nas motos, primária × coroa/pinhão) |
+| `power`, `mass` | Potência de pico (kW) e massa com motorista (kg): só mudam como o carro anda |
+| `wheelR`, `drag` | Raio da roda (m, padrão 0,33) e arrasto ½·ρ·Cd·A (padrão 0,42; motos ~0,3) |
 | `valve`, `pipeD`, `reso`, `twoStep`, `launchRpm` | Acessórios |
 
 A ordem de ignição precisa ser válida para o virabrequim. Ela é verificada por `EngineGeometry.build(preset).valid`.

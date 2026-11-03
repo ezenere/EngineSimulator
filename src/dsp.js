@@ -23,6 +23,7 @@ function EngineDSPFactory() {
   const DEG = Math.PI / 180;
   const SOUND_SPEED = 520; // gás de escape quente (m/s)
   const P0 = 101325, RGAS = 287, GAM = 1.33, T_MAN = 310, T_BACK = 850, T_WALL = 430;
+  const T_EXREF = 1650; // temperatura do gás na abertura da válvula de escape em carga total (referência da densidade)
   const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
   const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
 
@@ -246,7 +247,7 @@ function EngineDSPFactory() {
       this.pops = [];
       this.phW = 0; this.phT = 0; this.phS = 0;
       this.dcL = 0; this.dcR = 0; this.dcxL = 0; this.dcxR = 0;
-      this.lockOmega = false; this.cfgGain = 1; this.mk = 1; this.fade = 1; this.jetGain = 900; this.valveNoise = 0.07; this.tzLP = 0; this.tzK = 0.15; this.revCd = 0.15; this.varScale = 1; this.solverIt = 6; this.spread = 1; this.boxerAsym = 0.15; this.valveState = { v: 0 }; this.valveMode = 'closed'; this.valveAuto = false; this.twoStep = false; this.twoStepMode = 'off'; this.lcI = 0.12; this.launching = false; this.boxerPan = [1.0, 0.5, 0.22, 0.55];
+      this.lockOmega = false; this.cfgGain = 1; this.mkIdle = 1; this.tqScale = 1; this.tqS = 1; this.frMean = 0; this.rw = 0.33; this.kDrag = 0.42; this.roll = 165; this.brakeF = 13000; this.mk = 1; this.fade = 1; this.jetGain = 900; this.valveNoise = 0.07; this.tzLP = 0; this.tzK = 0.15; this.revCd = 0.15; this.varScale = 1; this.solverIt = 6; this.spread = 1; this.boxerAsym = 0.15; this.valveState = { v: 0 }; this.valveMode = 'closed'; this.valveAuto = false; this.twoStep = false; this.twoStepMode = 'off'; this.lcI = 0.12; this.launching = false; this.boxerPan = [1.0, 0.5, 0.22, 0.55];
       // temperatura do líquido de arrefecimento (°C); começa frio, como numa manhã qualquer
       this.coolant = 20; this.ambientT = 20; this.tempMode = 'real'; this.tempSet = 90; this.warm = 0;
       this.fanOn = false; this.fanSpin = 0; this.secAir = 0; this.catRetard = 0; this.idleTarget = 0; this.phFan = 0; this.phSA = 0;
@@ -279,7 +280,7 @@ function EngineDSPFactory() {
       if (target === this.gear) return;
       const up = target > this.gear;
       // proteção contra redução que estouraria o giro (como nos câmbios modernos)
-      const after = (this.v / 0.33) * this.ratios[target] * this.final * 9.549;
+      const after = (this.v / this.rw) * this.ratios[target] * this.final * 9.549;
       if (!up && target > 0 && after > this.redline * 1.02) { this.denied = 0.6; return; }
       this.shifting = true;
       // tempo de troca do carro: metade com a marcha em transição, metade soltando a embreagem
@@ -331,7 +332,7 @@ function EngineDSPFactory() {
       // estado termodinâmico por cilindro
       const pinit = this.pMan;
       this.p = new Float64Array(N); this.m = new Float64Array(N); this.Vprev = new Float64Array(N);
-      this.mEx = new Float64Array(N); this.mIn = new Float64Array(N);
+      this.mEx = new Float64Array(N); this.mIn = new Float64Array(N); this.densC = new Float64Array(N).fill(1);
       this.Q = new Float64Array(N); this.xb = new Float64Array(N); this.air = new Float64Array(N);
       this.armed = new Uint8Array(N); this.spk = new Float64Array(N);
       this.aPrev = new Float64Array(N);
@@ -356,7 +357,12 @@ function EngineDSPFactory() {
       }
       this.buildExhaust(cfg);
       this.buildFilters(cfg);
-      this.cfgGain = cfg.gain || (calibrate ? this.calibrate(cfg) : 1);
+      // (a interface calibra fora da thread de áudio e manda o resultado em cfg.gain/mkIdle/powerModel)
+      if (cfg.gain) { this.cfgGain = cfg.gain; this.mkIdle = cfg.mkIdle || 1; }
+      else if (calibrate) { const c = this.calibrate(cfg); this.cfgGain = c.gain; this.mkIdle = c.idle; }
+      else { this.cfgGain = 1; this.mkIdle = 1; }
+      if (cfg.powerModel) { this.powerModel = cfg.powerModel; this.tqPeakModel = cfg.tqPeakModel; this.frPeakModel = cfg.frPeakModel; this.tune(cfg); }
+      else if (calibrate && cfg.power && !cfg.gain) { const pm = this.measurePower(cfg); this.powerModel = pm.kw; this.tqPeakModel = pm.tq; this.frPeakModel = pm.fr; this.tune(cfg); }
       this.fade = 0;
       // trocou de carro com o motor ligado: o motor novo dá a partida do zero. Herdar giro,
       // marcha e o controle de marcha lenta "aprendido" no outro motor deixava a lenta
@@ -378,7 +384,19 @@ function EngineDSPFactory() {
       this.dispL = cfg.displacement;
       this.J = (0.05 + 0.045 * cfg.displacement) * cfg.inertia;
       this.Tmax = 95 * cfg.displacement * (this.turbo || this.blower ? 1 + 0.8 * cfg.boost : 1);
-      this.mass = clamp(850 + 160 * cfg.displacement, 950, 1900);
+      // carro: massa, raio da roda e arrasto da ficha técnica (ou um chute pela cilindrada)
+      this.mass = cfg.mass || clamp(850 + 160 * cfg.displacement, 950, 1900);
+      this.rw = cfg.wheelR || 0.33;
+      this.kDrag = cfg.drag ?? 0.42;           // ½·ρ·Cd·A (N por (m/s)²)
+      this.roll = 0.012 * this.mass * 9.81;      // rolagem
+      this.brakeF = 0.9 * this.mass * 9.81;      // freio: ~0,9 g
+      // torque escalado até a potência da ficha técnica (medida na calibração); o som não muda, só a dinâmica
+      // (a escala age no torque bruto dos gases; o atrito fica de fora, então ela é um pouco diferente da razão das potências)
+      if (cfg.power && this.powerModel) {
+        const r = cfg.power / this.powerModel, net = this.tqPeakModel, fr = this.frPeakModel || 0;
+        this.tqScale = clamp((r * net + fr) / (net + fr), 0.3, 3);
+      } else this.tqScale = 1;
+      if (this.tqPeakModel) this.Tmax = Math.max(this.Tmax, this.tqPeakModel * this.tqScale);
       this.redline = cfg.redline; this.idle = cfg.idle;
       this.final = cfg.finalDrive || defaultFinal(cfg.redline);
       this.cam = cfg.cam;
@@ -409,8 +427,9 @@ function EngineDSPFactory() {
       this.driveMode = cfg.driveMode || 'auto';
       // corte de giro: tipo, faixa (quanto o giro cai antes de voltar) e tempo mínimo de cada corte
       this.limType = cfg.limiter || 'ign';
-      this.limBand = clamp(cfg.limiterBand || 160, 30, 1000);
-      this.limHold = clamp(cfg.limiterHold || 0, 0, 0.5);
+      // (faixa pequena + ~70 ms de corte: batido rápido em neutro e em marcha, como nas centrais reais)
+      this.limBand = clamp(cfg.limiterBand || 70, 30, 1000);
+      this.limHold = clamp(cfg.limiterHold ?? 0.07, 0, 0.5);
     }
 
     volume(a) {
@@ -444,15 +463,40 @@ function EngineDSPFactory() {
       const ti = new EngineDSP(this.fs);
       ti.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false }, false);
       ti.state = 'run'; ti.lockOmega = true; ti.tempMode = 'fixed'; ti.tempSet = 90; ti.coolant = 90; ti.runT = 60;
-      ti.omega = (this.idle * TAU) / 60; ti.rpmAvg = this.idle; ti.thrTarget = 0; ti.thr = 0; ti.params.master = 0.02;
+      ti.omega = (this.idle * TAU) / 60; ti.rpmAvg = this.idle; ti.thrTarget = 0; ti.thr = 0; ti.params.master = 0.02; ti.dash = 0;
+      // com o giro travado o controle de lenta não tem o que corrigir; aqui a válvula de ar é ajustada até o
+      // torque médio ficar em zero, que é onde a lenta de verdade se equilibra (sem isso a sonda ficava ~4 dB
+      // mais alta que a lenta real e a lenta saía baixa demais)
       let acc2 = 0, cnt2 = 0;
-      for (let i = 0; i < 0.8 * this.fs; i += B) {
+      for (let i = 0; i < 1.2 * this.fs; i += B) {
         ti.process(L, R, B);
-        if (i > 0.4 * this.fs) for (let k = 0; k < B; k++) { acc2 += L[k] * L[k] + R[k] * R[k]; cnt2 += 2; }
+        ti.dash = 0; ti.iacI = clamp(ti.iacI - 5e-4 * ti.tqMean * (B / this.fs), 0, 0.05);
+        if (i > 0.8 * this.fs) for (let k = 0; k < B; k++) { acc2 += L[k] * L[k] + R[k] * R[k]; cnt2 += 2; }
       }
       const rmsIdle = Math.sqrt(acc2 / Math.max(1, cnt2)) / 0.01;
-      const gIdle = (target * 0.07) / Math.max(rmsIdle, 1e-6);
-      return clamp(Math.pow(gWot, 0.6) * Math.pow(gIdle, 0.4), 0.05, 40);
+      // lenta ~21 dB abaixo da carga total (motores reais: 20 a 25 dB entre a lenta e o corte em carga).
+      // O ganho é o da carga; a lenta ganha um reforço próprio, aplicado por rotação (ver `mk` no process)
+      const gIdle = (target * 0.09) / Math.max(rmsIdle, 1e-6);
+      const gain = clamp(gWot, 0.05, 40);
+      return { gain, idle: clamp(gIdle / gain, 1, 8) };
+    }
+
+    // Mede a potência que o modelo entrega em carga total (kW) e o torque de pico (N·m), para escalar
+    // a dinâmica até a ficha técnica do carro sem mexer no som.
+    measurePower(cfg) {
+      const t = new EngineDSP(this.fs);
+      t.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false, limiter: 'none', power: undefined }, false);
+      t.state = 'run'; t.lockOmega = true; t.tempMode = 'fixed'; t.tempSet = 90; t.coolant = 90; t.runT = 100;
+      t.thrTarget = 1; t.thr = 1; t.turboW = 1; t.boost = cfg.boost; t.maxBoost = cfg.boost; t.params.master = 0;
+      const B = 256, L = new Float32Array(B), R = new Float32Array(B);
+      let kw = 0, tq = 0, fr = 0;
+      for (const f of [0.6, 0.75, 0.9]) {
+        t.omega = (this.redline * f * TAU) / 60; t.rpmAvg = this.redline * f; t.tqMean = 0; t.frMean = 0;
+        for (let i = 0; i < 0.35 * this.fs; i += B) t.process(L, R, B);
+        const k = (t.tqMean * t.omega) / 1000;
+        if (k > kw) { kw = k; tq = t.tqMean; fr = t.frMean; }
+      }
+      return { kw: Math.max(kw, 1), tq: Math.max(tq, 1), fr: Math.max(fr, 0) };
     }
 
     buildExhaust(cfg) {
@@ -616,6 +660,9 @@ function EngineDSPFactory() {
       this.prevThrUser = user;
 
       this.runT = this.state === 'run' ? (this.runT || 0) + dtc : 0;
+      // escala de torque até a potência da ficha técnica: só sobre o torque dos gases (o atrito é o que é) e só
+      // acima da lenta, para o controle de marcha lenta continuar com o ganho com que foi acertado
+      this.tqS = this.tqScale === 1 ? 1 : 1 + (this.tqScale - 1) * smooth(this.idle * 1.5, this.idle * 3, rpm);
       // ---- temperatura do motor
       if (this.tempMode === 'fixed') this.coolant = this.tempSet;
       else {
@@ -807,7 +854,7 @@ function EngineDSPFactory() {
       }
     }
 
-    vehOmega() { return this.gear ? (this.v / 0.33) * this.ratios[this.gear] * this.final : 0; }
+    vehOmega() { return this.gear ? (this.v / this.rw) * this.ratios[this.gear] * this.final : 0; }
 
     process(outL, outR, n, sendL, sendR) {
       if (!this.cfg) { outL.fill(0); if (outR !== outL) outR.fill(0); if (sendL) { sendL.fill(0); sendR.fill(0); } return; }
@@ -874,9 +921,10 @@ function EngineDSPFactory() {
             this.spk[c] = a;
             let cutNow = cut;
             if (this.limiter && this.limType === 'partial' && !this.launching) {
-              // rodízio: acumula a fração de corte e corta a explosão quando passa de 1
+              // rodízio irregular: acumula a fração de corte (com sorteio, para não virar um padrão
+              // periódico que soa como um zumbido parado) e corta a explosão quando passa de 1
               cutNow = this.shifting && this.shiftCut;
-              this.lacc = (this.lacc || 0) + this.limFrac;
+              this.lacc = (this.lacc || 0) + this.limFrac * (0.4 + 1.2 * rng.next());
               if (this.lacc >= 1) { this.lacc -= 1; cutNow = true; }
             }
             const combust = (running || cranking) && !cutNow && !dfco;
@@ -885,8 +933,8 @@ function EngineDSPFactory() {
             const sigma = (0.025 + idleness * (0.015 + 0.06 * this.cam * this.cam)) * (1 + 0.9 * (1 - this.warm));
             // sem limitador (motor antigo): passando da faixa vermelha as válvulas flutuam,
             // a mistura não entra direito e o motor falha e perde força
-            const float = this.limType === 'none' ? clamp((this.rpmAvg - this.redline) / (0.08 * this.redline), 0, 1) : 0;
-            const misfire = rng.next() < this.cam * this.cam * 0.02 * idleness + 0.6 * float;
+            const float = this.limType === 'none' ? clamp((this.rpmAvg - this.redline) / (0.12 * this.redline), 0, 1) : 0;
+            const misfire = rng.next() < this.cam * this.cam * 0.02 * idleness + 0.5 * float;
             if (combust && !misfire) {
               this.Q[c] = Math.max(0, this.air[c]) * 2.6e6 * this.cylQ[c] * (1 - 0.7 * float) * (0.45 + 0.55 * this.fuelRamp) * clamp(1 + sigma * this.varScale * this.fuelVar * rng.gauss(), 0.3, 1.5);
               this.xb[c] = 0;
@@ -903,7 +951,7 @@ function EngineDSPFactory() {
                 else if (dfco) pr = 0.32 * (this.popWindow / 1.3);
                 if (rng.next() < pr * pl && this.pops.length < 10) {
                   const delay = ((evo + adv + 30) / Math.max(600, rpm * 6)) * fs + rng.next() * 0.006 * fs;
-                  this.pops.push({ d: delay | 0, t: 0, bank: this.cfg.bank[c], amp: (0.5 + 0.7 * rng.next()) * pl * 1.2e5 });
+                  this.pops.push({ d: delay | 0, t: 0, bank: this.cfg.bank[c], amp: (0.5 + 0.7 * rng.next()) * pl * 1.2e5 * (this.limiter ? 0.6 : 1) });
                 }
               }
             }
@@ -941,7 +989,7 @@ function EngineDSPFactory() {
           const run = runners[c];
           if (a > evo && a < evc) {
             const sv = Math.sin(Math.PI * (a - evo) / (evc - evo));
-            const A = this.AexMax * this.cylEx[c] * Math.min(1, 1.5 * sv * sv);
+            const A = this.AexMax * this.cylEx[c] * Math.min(1, 2.5 * sv * sv); // (área efetiva satura cedo: perfil "quadrado")
             mEx = this.exhaustFlow(A, p, T, P0 + 2 * run.in0, Zr);
           }
           // turbulência no vão da válvula: só no "estouro" da abertura, quando o gás sai
@@ -950,7 +998,18 @@ function EngineDSPFactory() {
           // O jato engasgado chia em alta frequência (rasgado); grave e médio continuam tonais.
           let turb = 0;
           if (mEx > 0) turb = this.valveNoise * clamp((p / (P0 + 2 * run.in0) - 1.25) / 1.2, 0, 1);
-          run.out0 = 0.985 * run.in0 + Zr * mEx * (1 + turb * hiN);
+          // a pressão no tubo é impedância × vazão volumétrica, não mássica: o gás de um cilindro cortado
+          // (ignição/combustível cortado, ~350 K) é 4× mais denso que o queimado (~1500 K) e empurra bem menos
+          // pela mesma massa. Sem isso o corte de giro soava 8 dB mais alto que o motor queimando.
+          // O fator é fixado na abertura da válvula (temperatura do ciclo), não amostra a amostra: assim um ciclo
+          // queimado mantém o timbre (o estouro inicial não fica mais agudo que o resto do curso) e só o ciclo
+          // cortado sai abafado.
+          // (referência = ciclo queimado em carga, ~1650 K: a amplitude no tubo em carga fica como foi acertada; a lenta
+          // sai a ~950 K (−5 dB, que a calibração repõe) e o ciclo cortado ou de freio-motor a ~350 K (piso −20 dB))
+          if (ap <= evo && a > evo) this.densC[c] = clamp(T / T_EXREF, 0.1, 1.3);
+          const dens = mEx > 0 ? this.densC[c] : 1;
+          // (o chiado do jato na válvula não entra na correção: é o escoamento sônico, não o empurrão do gás)
+          run.out0 = 0.985 * run.in0 + Zr * mEx * (dens + turb * hiN);
           this.mEx[c] = mEx;
 
           // ---- válvula de admissão
@@ -961,7 +1020,8 @@ function EngineDSPFactory() {
             mIn = flow(A, pMan, T_MAN, p, T);
           }
           mInSum += mIn;
-          intake += mIn;
+          // (o refluxo para o coletor na abertura da admissão chega abafado pelo plenum e pela borboleta)
+          intake += mIn > 0 ? mIn : 0.35 * mIn;
           this.air[c] += mIn * dt;
 
           // ---- 1ª lei para volume de controle aberto
@@ -1016,17 +1076,18 @@ function EngineDSPFactory() {
               : Math.max(coast, this.clutch * this.Tmax * 1.15 * smooth(this.idle * 1.05, launch, rpm) * smooth(0.02, 0.12, this.thr));
           Tcl = clamp(220 * slip, -cap, cap);
         } else this.locked = false;
-        const w = Math.max(0, omega + ((Tgas + Tst - Tfr - Tcl) / this.J) * dt);
+        const w = Math.max(0, omega + ((Tgas * this.tqS + Tst - Tfr - Tcl) / this.J) * dt);
         if (!this.lockOmega) this.omega = w;
         this.theta += deg; if (this.theta >= 720) this.theta -= 720;
         this.tqGas += (Tgas - this.tqGas) * 0.002;
-        this.tqMean += (Tgas - Tfr - this.tqMean) * 0.0004;
+        this.tqMean += (Tgas * this.tqS - Tfr - this.tqMean) * 0.0004;
+        this.frMean += (Tfr - this.frMean) * 0.0004;
         if (this.gear > 0) {
           const ratio = this.ratios[this.gear] * this.final;
-          const F = (Tcl * ratio) / 0.33 - 0.42 * this.v * this.v - (this.v > 0.05 ? 165 : 0) - this.brake * 13000 * (this.v > 0.05 ? 1 : 0);
+          const F = (Tcl * ratio) / this.rw - this.kDrag * this.v * this.v - (this.v > 0.05 ? this.roll : 0) - this.brake * this.brakeF * (this.v > 0.05 ? 1 : 0);
           this.v = Math.max(0, this.v + (F / this.mass) * dt);
         } else if (this.v > 0) {
-          this.v = Math.max(0, this.v - ((0.42 * this.v * this.v + 165 + this.brake * 13000) / this.mass) * dt);
+          this.v = Math.max(0, this.v - ((this.kDrag * this.v * this.v + this.roll + this.brake * this.brakeF) / this.mass) * dt);
         }
 
         // ---- rede acústica do escape
@@ -1161,7 +1222,9 @@ function EngineDSPFactory() {
         if (this.wR > 1e-4) { L += this.wR * this.roadL; R += this.wR * this.roadR; }
         // bloqueio DC + compensação de loudness por rotação + saturação suave
         // (leve: um motor real fica uns 25 dB mais alto da lenta ao corte; aqui comprimimos só ~5 dB disso)
-        this.mk += (Math.min(2, Math.pow(0.3 + 0.7 * Math.min(1, rpmFrac), -0.6)) - this.mk) * 0.0005;
+        // reforço da lenta medido na calibração, que some conforme o giro sobe (até metade da faixa)
+        const wIdle = 1 - smooth((this.idle / this.redline) * 1.15, 0.5, rpmFrac);
+        this.mk += (Math.pow(this.mkIdle || 1, wIdle) - this.mk) * 0.0005;
         if (this.fade < 1) this.fade = Math.min(1, this.fade + dt / 0.04);
         const gOut = P.master * 0.5 * this.cfgGain * this.mk * this.fade;
         this.dcL = L - this.dcxL + 0.9985 * this.dcL; this.dcxL = L;

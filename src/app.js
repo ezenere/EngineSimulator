@@ -31,7 +31,9 @@
     // calibra o volume aqui para não travar a thread de áudio
     const probe = new DSP(sr);
     probe.setConfig(cfg);
-    cfg.gain = probe.cfgGain;
+    cfg.gain = probe.cfgGain; cfg.mkIdle = probe.mkIdle;
+    // (e a potência que o modelo entrega, para a escala de torque até a ficha técnica)
+    if (probe.powerModel) { cfg.powerModel = probe.powerModel; cfg.tqPeakModel = probe.tqPeakModel; cfg.frPeakModel = probe.frPeakModel; }
     return cfg;
   }
 
@@ -364,19 +366,19 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
       { value: 'partial', label: 'Parcial', title: 'Corta só alguns cilindros em rodízio: o giro fica parado no limite, picotado (Porsche, Ferrari, F1)' },
       { value: 'throttle', label: 'Borboleta', title: 'A central fecha o acelerador: o giro só para de subir, liso (carro moderno de rua)' },
       { value: 'none', label: 'Sem corte', title: 'Motor antigo de distribuidor: passando do limite as válvulas flutuam e ele falha' },
-    ], lt, (v) => setSpec({ limiter: v, limiterBand: { ign: 160, fuel: 250, partial: 110, throttle: 300 }[v] ?? spec.limiterBand }, { structural: false }))));
+    ], lt, (v) => setSpec({ limiter: v, limiterBand: { ign: 70, fuel: 70, partial: 110, throttle: 300 }[v] ?? spec.limiterBand, limiterHold: v === 'ign' || v === 'fuel' ? 0.07 : 0 }, { structural: false }))));
     if (lt !== 'none') {
       const range = { ign: [50, 800], fuel: [50, 800], partial: [40, 400], throttle: [250, 800] }[lt];
       const help = { ign: 'quanto o giro cai antes de voltar', fuel: 'quanto o giro cai antes de voltar', partial: 'quão cedo começa a cortar', throttle: 'quão cedo começa a fechar' }[lt];
-      lim.append(slider('limiterBand', `Faixa do corte (${help})`, range[0], range[1], 10, clamp(spec.limiterBand || 160, range[0], range[1]),
+      lim.append(slider('limiterBand', `Faixa do corte (${help})`, range[0], range[1], 10, clamp(spec.limiterBand || 70, range[0], range[1]),
         (v) => `${v} rpm`, (v) => setSpec({ limiterBand: v }, { structural: false, render: false })));
     }
     if (lt === 'ign' || lt === 'fuel') {
-      lim.append(slider('limiterHold', 'Tempo mínimo de cada corte', 0, 0.2, 0.005, spec.limiterHold || 0,
+      lim.append(slider('limiterHold', 'Tempo mínimo de cada corte', 0, 0.2, 0.005, spec.limiterHold ?? 0.07,
         (v) => (v === 0 ? 'nenhum' : `${Math.round(v * 1000)} ms`), (v) => setSpec({ limiterHold: v }, { structural: false, render: false })));
     }
     lim.append(el('p', { class: 'note', text: {
-      ign: 'Faixa pequena e tempo curto: batido rápido ("brrrr"). Faixa grande e tempo longo: batido lento e fundo ("brap... brap"). Os estouros seguem o controle "Estalos no escape".',
+      ign: 'Faixa pequena com ~70 ms de corte: batido rápido ("brrrr"), em neutro e em marcha. Faixa grande e tempo longo: batido lento e fundo ("brap... brap"). Os estouros seguem o controle "Estalos no escape".',
       fuel: 'Faixa pequena e tempo curto: batido rápido. Faixa grande e tempo longo: batido lento e fundo. Seco, quase sem estouro.',
       partial: 'O giro fica praticamente parado na faixa vermelha, com um ronco picotado.',
       throttle: 'O giro para de subir perto da faixa vermelha, sem batida nem estouro.',
@@ -423,7 +425,8 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     // relações: número maior = marcha mais curta (mais força, menos velocidade)
     const ratios = currentRatios();
     const fin = spec.finalDrive || defaultFinal(spec.redline);
-    const vmax = (r) => Math.round(((spec.redline / 60) * 2 * Math.PI * 0.33 * 3.6) / (r * fin));
+    const rw = spec.wheelR || 0.33;
+    const vmax = (r) => Math.round(((spec.redline / 60) * 2 * Math.PI * rw * 3.6) / (r * fin));
     ratios.forEach((r, i) => {
       tr.append(slider(`ratio${i + 1}`, `${i + 1}ª marcha`, 0.4, 5.5, 0.01, r, (v) => `${v.toFixed(2)} : 1 · ${vmax(v)} km/h`, (v) => {
         const next = currentRatios(); next[i] = v;
@@ -432,6 +435,12 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     });
     tr.append(slider('final', 'Diferencial', 1.5, 12, 0.01, fin, (v) => `${v.toFixed(2)} : 1`, (v) => setSpec({ finalDrive: v }, { structural: false, render: false }), () => renderControls()));
     tr.append(el('div', { class: 'chips' }, [el('button', { type: 'button', class: 'chip', text: 'Escalonamento padrão', onclick: () => setSpec({ ratios: undefined, finalDrive: undefined }, { structural: false }) })]));
+    // o carro: massa e potência mudam só como ele anda (o som fica igual)
+    const massDef = Math.round(clamp(850 + 160 * spec.displacement, 950, 1900));
+    tr.append(slider('mass', 'Massa (com motorista)', 150, 2600, 10, spec.mass || massDef, (v) => `${v} kg`, (v) => setSpec({ mass: v }, { structural: false, render: false })));
+    tr.append(slider('power', 'Potência', 20, 1200, 5, spec.power || 0, (v) => (v ? `${v} kW · ${Math.round(v * 1.3596)} cv` : 'a do modelo (sem ajuste)'),
+      () => {}, (v) => setSpec({ power: v }, { structural: true })));
+    tr.append(el('p', { class: 'note', text: 'A potência escala o torque do modelo até a ficha técnica (recalibra ao soltar). Aparece no mostrador como N·m.' }));
     tr.append(el('p', { class: 'note', text: spec.transmission === 'auto'
       ? 'E engata o D a partir do neutro. Q e E continuam funcionando como trocas manuais.'
       : 'E sobe e Q reduz. As reduções fazem punta-tacco automático.' }));
@@ -588,7 +597,7 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     document.querySelectorAll('.preset').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.id === presetId)));
   }
   // cada carro vem com o próprio escape: acessórios que ele não define voltam ao padrão
-  const STOCK = { valve: 'none', pipeD: 2.5, reso: false, twoStep: 'off', launchRpm: undefined, fuel: 'efi', shiftTime: undefined, driveMode: 'auto', limiter: 'ign', limiterBand: 160, limiterHold: 0 };
+  const STOCK = { valve: 'none', pipeD: 2.5, reso: false, twoStep: 'off', launchRpm: undefined, fuel: 'efi', shiftTime: undefined, driveMode: 'auto', limiter: 'ign', limiterBand: 70, limiterHold: 0.07, power: undefined, mass: undefined, wheelR: undefined, drag: undefined, ratios: undefined, finalDrive: undefined };
   function loadPreset(p) {
     spec = { ...STOCK, ...p };
     pushConfig(true, true);
