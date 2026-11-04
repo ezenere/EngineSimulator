@@ -20,8 +20,43 @@ const f1 = (x: number, d = 1) => (Number.isFinite(x) ? x.toFixed(d) : String(x))
 const sg = (x: number, d = 1) => (x >= 0 ? '+' : '') + f1(x, d);
 const dentro = (x: number, a: number, b: number) => x >= a && x <= b;
 
-/** desvios conhecidos (nome da medida → por quê) */
-const DESVIOS: Record<string, string> = {};
+/** desvios conhecidos (nome da medida → por quê); TECNICO.md → Vapor */
+const DESVIOS: Record<string, string> = {
+  // caldeira
+  'apito aberto 20 s derruba a caldeira': 'O próprio VAPOR.md não fecha: o apito consome 0,3–0,6 kg/s (1.8) e k_cal = 1 bar/(10·E_max kg) (1.1) dá 1/60 bar/kg na K4s: 20 s × 0,48 kg/s = 9,6 kg = 0,16 bar. Os 0,6 bar pediriam 1,8 kg/s.',
+  'arrancada (300 t, corte 80%, regulador 0,6): queda em 30 s': 'Com o regulador em 0,6 a área é 25% da máxima (a lei de A_reg de 1.1) e o consumo fica em ~1·E_max; a tiragem sobe com o consumo e a evaporação segue com 60 s de inércia: 0,8 bar em 30 s (o alvo de 1–2 bar pede ≥ 1,5·E_max por 30 s).',
+  // níveis e composição
+  'locomotiva trabalhando a 15 m (K4s, 40 km/h, corte 40%): L_Aeq': 'A conta de 4.6 não fecha: L_W 124 dá 124 − 20·log 15 − 11 = 89,5 dB(A) em campo livre na condição de referência (a 4.6 escreve "128 → 100 a 15 m", e 128 − 23,5 − 11 = 93,5). A Cena mede a média das potências dos dois ouvidos (−3 dB da panorâmica de um ouvinte de lado) e a brita reflete pouco acima de 800 Hz.',
+  'locomotiva trabalhando a 15 m (UP 844, lwChuff 128, 4/s, corte 50%)': 'Ver a K4s a 15 m: 128 − 23,5 − 11 = 93,5 dB(A) em campo livre, menos os ~3 dB da média dos ouvidos (convenção dos testes da Cena) e a brita: 89 dB(A), a 1 dB da faixa.',
+  'apito a 30 m (lateral, solo de brita)': 'O apito aponta para a frente (eixo [1,0,0], −6 dB a 90° na tabela de 4.3) e a potência é normalizada pelo índice de diretividade: de lado, a 30 m, 145 − 29,5 − 11 − 6 + 4 = 102,5, menos a média dos ouvidos. Na frente, no eixo, daria ~106.',
+  'segurança a 10 m': 'A 10 m da lateral a válvula (no meio da caldeira, 4,7 m de altura) fica a 11,9 m: 140 − 21,5 − 11 = 107,5 dB(A) em campo livre, menos os ~3 dB da média dos ouvidos (o splDbA da Cena dá o mesmo, 104,4).',
+  'composição a 100 km/h, 12 vagões, 15 m: vagões contra a locomotiva': 'A conta de 3.5 (+14 dB de rolamento contra +4 do chuff) não conta o rolamento da própria locomotiva: 6 eixos (3 motrizes a 103 dB(A), 1.7) e o tênder de 8 eixos em 34 m, contra 4 eixos em 20 m num vagão; a 100 km/h a janela da locomotiva fica 9–10 dB acima da dos vagões só pelo rolamento.',
+  'nível por chuff em cruzeiro (corte 25%, 15/s) contra a referência': 'O release a corte 25% (3,3 bar abs) deixa o bico quase subsônico, e o ruído de mistura ∝ ṁ·M³ cai mais que o −4 de 4.6; a média por segundo fica −2 dB da referência (+5,7 da taxa).',
+  // geometrias
+  'Shay a 20 km/h: chuffs/s': 'A taxa é exata por construção (telemetria 30,2/s); a 30/s os chuffs dos 3 cilindros se fundem (p/v 3 dB) e a linha da envoltória sobra com 8 dB, e o detector pega a banda lateral da volta da manivela (5,2 Hz) em 31,1.',
+  'King: linha de 8/volta contra a de 4/volta': 'Cada batida dupla junta a ponta da tampa de um cilindro com a do lado da manivela do outro, e a angularidade da biela (r/l = 1/8,5) as afasta ~10° (14 ms a 2 voltas/s): a envoltória mostra as duas. A própria gravação da 6024 (Apêndice A) tem a linha de 19,04 Hz a −14 dB da de 9,56 Hz; o alvo de −20 dB é mais estrito que ela.',
+  'Big Boy a 52 km/h: linha de 8/volta (21.3 Hz) ao longo de 60 s': 'Com ε = 1% a fase entre os motores gira em 37 s, mas o bico e a chaminé comuns alisam os pares e a linha de 8/volta varia 7–8 dB (o alvo pede 10).',
+  // estacionárias
+  'Corliss: degrau de 50% de carga (50 → 100%)': 'A queda (−5,3%) não muda com o ganho do governador: é a caixa de válvulas reabastecendo pelo regulador (dimensionado para 1,5·E_max a 85% da caldeira, 1.1) que limita o torque no primeiro segundo.',
+  'Corliss: volta a ±1% depois do degrau': '4,8 s, 0,2 s abaixo da faixa de 2.1 (5–10 s), com o PI de 0,2/0,012.',
+  'Aveling em lenta: escapes por segundo': 'Com o governador fechando o regulador, a compressão das extremidades devolve vapor à caixa e a máquina (volante leve, sem carga) desce devagar até a lenta: aos 20 s ainda está a ~100 rpm.',
+  'Aveling em lenta: banda 400–1k': 'Na lenta, com a embreagem solta, não há engrenamento; o chuff pequeno tem o mesmo espectro da chaminé e do jato das locomotivas. A gravação (vídeo privado, dia aberto) tem +8 dB em 400–1k que o modelo não tem; falta o ruído de mecanismo da máquina parada.',
+  'Stanley: pico/vale do escape': '6,7 dB contra ≤ 4: o condensador alisa a envoltória em 5 Hz (2 polos) e sobra o pulso abafado da rede; falta o volume do abafador.',
+  // patinagem
+  'patinagem: chuffs/s no surto (de 4/s)': 'A roda sobe 3,3× em 1 s (dentro dos 3–5× de 1.7); 13,8 chuffs/s contra 15–20: o J das motrizes (20 kg·m² por t aderente, 1 840 kg·m² na K4s) e o torque que cai com a caixa.',
+  'patinagem: energia por chuff no fim do surto contra a arrancada com areia': 'Com o regulador cheio a caixa de válvulas fica em ~75% da caldeira durante o surto, e a abertura mais rápida do pórtico (o mesmo 20° em 1/3 do tempo) sobe o ruído de jato ∝ M³: cada chuff sai mais forte, não mais fraco. O 1.7 supõe a caixa caindo 30–50%.',
+  // taxa, forma e bandas
+  'linha de 2/volta relativa à de 4/volta, 10/s': 'A 10/s os chuffs se sobrepõem, a linha de 4/volta perde proeminência e a diferença sistemática entre os lados fica: −3,9 dB (a 3–7/s: −11 a −6).',
+  'decaimento a −10 dB, 9/s': '70 ms contra 52 ± 30%: a tiragem (∝ (ṁ·M)² médio) enche o vale e alonga a cauda.',
+  'pico/vale, 21.3/s de perto': '13 dB contra 9 ± 3 no Big Boy a 52 km/h: o vale ainda fica vazio entre as batidas dos dois motores.',
+  'decaimento a −10 dB a 1,4 chuff/s (844; esvaziamento, não a cinemática)': 'O ruído de mistura ∝ ṁ·M³ cai mais depressa que o esvaziamento (τ_bd 30 ms dá 2,5·τ_bd = 75 ms em ṁ, mas M³ some antes): 45 ms.',
+  'banda 1–2,5k no pico, de perto (K4s 4/s corte 70%)': '0,7 dB acima da tolerância, com o ruído de mistura (Strouhal 0,2·U/D ≈ 640 Hz) e o choque acertados para o centroide e as bandas de 2,5–12 kHz.',
+  'centroide vale/pico, de perto': 'O vale é a tiragem (200–1 500 Hz, 1.4) e fica mais escuro que o pico (0,77); nas gravações de perto o vale é mais claro (vazamentos e o jato residual), o que a tiragem larga dava mas estragava a forma e o escurecimento do corte curto.',
+  'banda 400–1k no pico a 25 m (844 a 36 km/h, pela Cena)': 'O alvo é a média de 3.3 (844, Big Boy, 6024). A 25 m, com a chaminé a 4,8 m e o ouvido a 1,6 m, o nulo do solo (Δr = 0,61 m) cai em 280 Hz, na banda de referência, e sobe as relativas; a gravação do próprio 844 nesse trecho (Apêndice A) dá +4,0 em 400–1k e +4,9 em 1–2,5k.',
+  'banda 1–2,5k no pico a 25 m (844 a 36 km/h, pela Cena)': 'Ver 400–1k a 25 m: a gravação do 844 dá +4,9.',
+  'pico/vale a 25 m, 6,3/s': 'A passagem é renderizada sem a reverberação nem o fundo (o vale das gravações a 20–30 m tem o campo reverberante e o vento): 13 dB contra 7–8.',
+  'CPU por amostra, bigboy em marcha (10 chuffs/s, auxiliares no automático) / Ronco (V8 em carga)': 'O Big Boy tem 16 extremidades (dois motores de 2 cilindros) e resolve o pórtico implícito de ~7 delas por amostra: 0,38 do Ronco (4% do tempo real no Node). A K4s e o 844 ficam em 0,27.',
+};
 
 // ------------------------------------------------------------------ peças comuns
 async function pecas() {
