@@ -71,6 +71,8 @@ export class EngineDSP implements DSPDeAudio {
   // ignição por compressão (src/engines/diesel/dsp.ts, DieselDSP): flag, ciclo e os ramos que a subclasse implementa
   declare cc: any; declare tempos: any; declare ciclo: any; declare tParede: any; declare fmepK: any; declare pmeCarga: any; declare rpmPartida: any;
   declare ccInjecao: any; declare ccValvulas: any; declare ccQueima: any; declare ccEscape: any; declare ccAdmissao: any; declare ccMecanica: any; declare ccTurbo: any;
+  // adaptador Motor da Cena (src/engines/ronco/motor.ts): só lê os canais antes da mistura; null no Ronco
+  declare tap: any;
 
   constructor(fs) {
     this.fs = fs; this.dt = 1 / fs;
@@ -107,6 +109,7 @@ export class EngineDSP implements DSPDeAudio {
     this.fanOn = false; this.fanSpin = 0; this.secAir = 0; this.catRetard = 0; this.idleTarget = 0; this.phFan = 0; this.phSA = 0;
     this.arcE = 0; this.arcG = 1; this.arcP = 0; // nivelador do modo arcade
     this.cc = false; this.tempos = 4; // gasolina; o DieselDSP põe cc = true e o ciclo do preset
+    this.tap = null;
   }
 
   message(m) {
@@ -1099,6 +1102,7 @@ export class EngineDSP implements DSPDeAudio {
         const rd = rads[i];
         const e = rd.emit;
         let x = this.radSh[i].run(this.radHP[i].run(e));
+        if (this.tap) this.tap.ponteira(i, e, x);
         // o chiado segue a velocidade instantânea do gás em cada pulso (∝ v²): é o "puf" de cada explosão saindo
         // pela ponteira, com silêncio entre elas. (Uma versão que usava a velocidade média do gás tirava esses pufs
         // e deixava o agudo de todos os carros abafado, como um fundo liso)
@@ -1106,6 +1110,7 @@ export class EngineDSP implements DSPDeAudio {
         this.jetEnv[i] += (vel - this.jetEnv[i]) * 0.15;
         const jv = this.jetEnv[i], nz = rng.bi();
         x += (this.jetF[i][0].run(nz) + 0.8 * this.jetF[i][1].run(nz)) * jv * jv * this.jetGain * P.air;
+        if (this.tap) this.tap.jato(i, x);
         exL += x * rd.panL; exR += x * rd.panR;
         const ib = this.itdB[i], dd = this.itdD[i]; ib[iw] = x;
         exLd += ib[(iw - dd[0]) & this.itdM] * rd.panL; exRd += ib[(iw - dd[1]) & this.itdM] * rd.panR;
@@ -1230,6 +1235,7 @@ export class EngineDSP implements DSPDeAudio {
       this.wE += (targetE - this.wE) * kw; this.wI += (targetI - this.wI) * kw; this.wB += (targetB - this.wB) * kw;
       this.wP += (targetP - this.wP) * kw; this.wR += (targetR - this.wR) * kw;
       inS *= P.intake; inP *= P.intake; inH *= P.intake; mech *= P.mech; vib *= P.mech;
+      if (this.tap) this.tap.gravar(s, exScale * P.exhaust, inP, inH, mech, vib, tur, sc, brk);
       let L = 0, R = 0;
       // o que sai do cofre (admissão, mecânica, compressor) depende de onde o motor está: dianteiro, chega à câmera
       // de trás de longe e com a carroceria no meio; central ou traseiro, a câmera fica colada nele e ouve o

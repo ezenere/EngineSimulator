@@ -49,6 +49,8 @@ export class JetDSP implements DSPDeAudio {
   declare sendR: any; declare spl: any; declare splAcc: any; declare splN: any; declare startAirF: any; declare starterAir: any; declare starterW: any; declare startT: any; declare state: any; declare sup: any;
   declare sync: any; declare T: any; declare telem: any; declare th: any; declare thrust100: any; declare tla: any; declare trim1: any; declare trim2: any; declare trimP: any; declare u: any;
   declare V: any; declare Vb: any; declare VcOut: any; declare vFly: any; declare Vj: any;
+  // adaptador Motor da Cena (src/engines/turbina/motor.ts): só lê os barramentos antes da propagação; null na Turbina
+  declare tap: any;
 
   constructor(fs) {
     this.fs = fs;
@@ -62,6 +64,7 @@ export class JetDSP implements DSPDeAudio {
     this.ambF = [new Biquad(), new Biquad(), new Biquad(), new Biquad()];
     this.gust = 0; this.ambPh = 0;
     this.sendL = 0; this.sendR = 0;
+    this.tap = null;
   }
 
   message(m) {
@@ -625,6 +628,7 @@ export class JetDSP implements DSPDeAudio {
           // pás nunca são idênticas: um pouco de 1ª e 2ª ordem do eixo
           const imb = 0.06 * sinr(pp) + 0.04 * sinr(2 * pp + 0.3);
           front += this.aProp * (v + imb) * de.prop;
+          if (this.tap) this.tap.helice(e, this.aProp * (v + imb) * de.prop);
         }
         bi[g * 2] += front; bi[g * 2 + 1] += rear;
       }
@@ -665,6 +669,7 @@ export class JetDSP implements DSPDeAudio {
         if (this.prop && this.aPbb > 1e-4) front += s.pbb.run(rng.bi()) * this.aPbb * this.nPbb * d.prop;
         bi[g * 2] += front * nn; bi[g * 2 + 1] += rear * nn;
       }
+      if (this.tap) this.tap.gravar(i, bi);
       // ---- propagação de cada barramento até o ouvinte
       let L = 0, R = 0, SL = 0, SR = 0;
       const prog = (63 - this.ctrl) / 64;
