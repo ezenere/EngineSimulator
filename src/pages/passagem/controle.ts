@@ -190,6 +190,7 @@ export class ControlePassagem {
     this.presetId = null;
     this.pendCena = true;
     if (estrutural || lado0 !== this.traj.sentido) { this.mandarCena(false); this.avisar('painel', 'presets'); }
+    else this.avisar('ouvinte', 'presets');   // sliders e placa acompanham o arrasto
   }
   setV(kmh: number) { this.vKmh = kmh; this.presetId = null; if (this.andando) this.mandarComando(); this.avisar('presets'); }
   setColetivo(c: number) { this.coletivo = c; this.mandarComando(); }
@@ -431,6 +432,8 @@ export class ControlePassagem {
     const alvo = e.target as HTMLElement | null;
     if (alvo && (alvo.tagName === 'INPUT' && (alvo as HTMLInputElement).type !== 'range' || alvo.tagName === 'SELECT' || alvo.tagName === 'TEXTAREA')) return;
     if (e.repeat) return;
+    // num botão em foco o Espaço já é o clique dele
+    if (e.code === 'Space' && alvo?.tagName === 'BUTTON') return;
     if (e.code === 'Space') { e.preventDefault(); if (this.andando) this.parar(); else this.disparar(); }
     else if (e.code === 'KeyR') this.setRepetir(!this.repetir);
     else if (e.code === 'KeyG') this.setModo(this.ouv.modo === 'fixo' ? 'gimbal' : 'fixo');
