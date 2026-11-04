@@ -1,0 +1,387 @@
+// A Cena (CENA.md 1.5 e 2): dona do tempo de propagação. Lê os canais mono que o portador preencheu
+// (Pa a refDist de cada fonte), guarda o histórico de poses do corpo, resolve o tempo de emissão de
+// cada fonte e entrega o estéreo direto (binaural) e o envio para a reverberação do ambiente, em escala
+// absoluta: 0 dBFS ≙ 124 dB SPL (decisão 1.5). O `tanh` e o `master` ficam no DSP do worklet (dsp-cena.ts).
+//
+// Campo próximo (não passa pelo anel): onda de nariz/cauda, onda de compressão do túnel, vento induzido
+// e do pistão, ronco estrutural da ponte, som de fundo. A pressão inteira vai para a telemetria; ao
+// alto-falante só o resíduo acima de 20 Hz.
+import type { Ambiente, Trajetoria, Ouvinte, Cena, TelemetriaCena, Vec3, FonteSonora, LocalOuvinte } from './tipos';
+import type { Portador } from '../carriers/tipos';
+import { BLOCO_CONTROLE, PA_FS, P_REF, RAMPA } from './constantes';
+import { Propagador, GeoOuvinte, type RegrasLocal } from './propagador';
+import { Via, Historico, PontoVia } from './trajetoria';
+import { SOLOS } from './solo';
+import { expoenteEnvio } from './ambientes';
+import { Bq, k1, PonderacaoA } from './filtros';
+import { ondaNariz, OndaTunel, RuidoVento, ventoInduzido, ventoPistao } from './pressao';
+import { FundoAmbiente } from './fundo';
+import { RNG } from '../acoustics/rng';
+
+/** pesos do cofre por tipo de fonte (3.3; os mesmos do `bay` do Ronco) */
+const PESO_COFRE: Partial<Record<FonteSonora['tipo'], number>> = { admissao: 1.0, mecanica: 0.7, compressor: 0.8 };
+
+/** ronco estrutural da ponte: ganho calibrado para +5 dB em 31–125 Hz na passagem do trem de validação */
+const K_PONTE = 0.042;
+
+export interface OpcoesCena { ur?: number; blocoMax?: number; /** desliga a sombra do corpo (diagnóstico) */ semSombra?: boolean }
+
+export class CenaPassagem implements Cena {
+  fs = 48000;
+  amb!: Ambiente; traj!: Trajetoria; ouv!: Ouvinte;
+  ur = 60;
+  via = new Via();
+  hist!: Historico;
+  prop!: Propagador;
+  geo = new GeoOuvinte();
+  pv = new PontoVia();
+  portador: Portador | null = null;
+  fontesP: readonly FonteSonora[] = [];
+  amostra = 0;               // índice da primeira amostra do próximo bloco
+  local: LocalOuvinte = 'fora';
+  // rampas de 20 ms dos parâmetros geométricos (atualizar)
+  lateral = 3; lateralAlvo = 3; altitude = 0; altitudeAlvo = 0;
+  pos: [number, number, number] = [0, 0, 1.6]; posAlvo: [number, number, number] = [0, 0, 1.6];
+  gim = { az: 90, el: 0, r: 5 }; gimAlvo = { az: 90, el: 0, r: 5 };
+  passoRampa = 1;
+  soloG = 0; soloGAlvo = 0;
+  // campo próximo
+  tunel = new OndaTunel();
+  vento: RuidoVento;
+  fundo: FundoAmbiente;
+  hpP: Bq[] = [new Bq(), new Bq()];
+  pAnt = 0;
+  narizAnt = NaN;
+  // ponte
+  ponteR = new RNG(0xb41d9e); ponteF: Bq[] = [new Bq(), new Bq(), new Bq()]; ponteG = 0; ponteGAlvo = 0;
+  xTruques: number[] = [];
+  // local: cabine (lei da massa) e cofre
+  cabK1 = 1; cabK2 = 1; cabPk: Bq[] = [new Bq(), new Bq()]; cabS = new Float64Array(4);
+  cofreK = 1; cofreS = new Float64Array(2);
+  // medidores
+  pa: PonderacaoA[]; eA = 0; eZ = 0; kMed = 1;
+  // buffers
+  bL: Float64Array; bR: Float64Array;
+  tele: TelemetriaCena = { fontes: [], corpo: { s: 0, v: 0, pose: [0, 0, 0], rumo: 0 }, ouvinte: [0, 0, 0], pressaoPa: 0, ventoMs: 0, splDbA: 0, splDb: 0 };
+  ventoU = 0;
+
+  semSombra = false;
+  constructor(op: OpcoesCena = {}) {
+    if (op.ur) this.ur = op.ur;
+    this.semSombra = !!op.semSombra;
+    const bm = op.blocoMax ?? 4096;
+    this.bL = new Float64Array(bm); this.bR = new Float64Array(bm);
+    this.vento = new RuidoVento(48000);
+    this.fundo = new FundoAmbiente(48000);
+    this.pa = [new PonderacaoA(48000), new PonderacaoA(48000)];
+  }
+
+  configurar(amb: Ambiente, traj: Trajetoria, ouv: Ouvinte, fs: number) {
+    this.fs = fs;
+    this.prop = new Propagador(fs, this.bL.length);
+    this.prop.ur = this.ur;
+    this.vento = new RuidoVento(fs);
+    this.fundo = new FundoAmbiente(fs);
+    this.pa = [new PonderacaoA(fs), new PonderacaoA(fs)];
+    this.kMed = k1(fs, 1 / (2 * Math.PI * 0.125));   // constante 'F' (125 ms)
+    this.hpP[0].hp(fs, 20, 0.7071); this.hpP[1].hp(fs, 20, 0.7071);
+    this.ponteF[0].hp(fs, 31, 0.7071); this.ponteF[1].lp(fs, 125, 0.7071); this.ponteF[2].lp(fs, 125, 0.7071);
+    this.passoRampa = BLOCO_CONTROLE / (RAMPA * fs);
+    this.cofreK = k1(fs, 900);
+    this.amb = amb; this.traj = traj; this.ouv = ouv;
+    this.lateral = this.lateralAlvo = traj.lateral; this.altitude = this.altitudeAlvo = traj.altitude;
+    this.pos = [...ouv.pos] as [number, number, number]; this.posAlvo = [...ouv.pos] as [number, number, number];
+    this.gim = { ...ouv.gimbal }; this.gimAlvo = { ...ouv.gimbal };
+    this.via.configurar(traj);
+    this.aplicarAmbiente(amb, true);
+    this.definirAlvos(true);
+    this.portador = null;
+    this.amostra = 0;
+  }
+
+  /** umidade relativa (%) da absorção do ar (2.3); padrão 60 */
+  definirUmidade(ur: number) { this.ur = ur; if (this.prop) this.prop.ur = ur; }
+
+  atualizar(p: Partial<{ amb: Ambiente; traj: Trajetoria; ouv: Ouvinte }>) {
+    if (p.traj) {
+      const t = p.traj;
+      // tipo, comprimento, raio e sentido mudam a via inteira: reinicia o histórico (o corpo "reaparece")
+      if (t.tipo !== this.traj.tipo || t.comprimento !== this.traj.comprimento || t.raioCurva !== this.traj.raioCurva || t.sentido !== this.traj.sentido) {
+        this.via.configurar(t);
+        if (this.portador) this.hist.reiniciar(this.amostra / this.fs, this.portador.cinematica.s, this.portador.cinematica.v);
+      }
+      this.lateralAlvo = t.lateral; this.altitudeAlvo = t.altitude;
+      this.traj = t;
+    }
+    if (p.ouv) {
+      this.posAlvo = [...p.ouv.pos] as [number, number, number];
+      this.gimAlvo = { ...p.ouv.gimbal };
+      this.ouv = p.ouv;
+      if (this.portador) this.aplicarLocal();
+    }
+    if (p.amb) this.aplicarAmbiente(p.amb, false);
+    this.definirAlvos(false);
+  }
+
+  private aplicarAmbiente(amb: Ambiente, agora: boolean) {
+    this.amb = amb;
+    const s = SOLOS[amb.solo.tipo];
+    this.soloGAlvo = s.ganho;
+    if (agora) this.soloG = s.ganho;
+    if (this.prop) {
+      this.prop.definirSolo(this.soloG, s.fc);
+      this.prop.soloLargura = amb.id === 'ponte' ? 3.7 : Infinity;   // tabuleiro até 3 m do trilho (+ meia bitola)
+      this.prop.expEnvio = expoenteEnvio(amb);
+    }
+    this.fundo.definir(amb.fundo);
+    if (!amb.tunel) this.tunel.zerar();
+  }
+
+  /** prepara os anéis para o portador (aloca; acontece quando o portador muda) */
+  preparar(portador: Portador) {
+    this.portador = portador;
+    this.fontesP = portador.fontes();
+    const c = portador.cinematica;
+    const dm = this.via.distMax(this.traj.lateral + 50, this.traj.altitude) + portador.corpo.comprimento;
+    this.hist = new Historico(dm / 343 + 0.5, BLOCO_CONTROLE / this.fs);
+    this.hist.reiniciar(this.amostra / this.fs, c.s, c.v);
+    this.prop.preparar(this.fontesP, portador.corpo, this.via, this.hist, dm);
+    this.prop.alt = this.altitude;
+    this.prop.definirSolo(this.soloG, SOLOS[this.amb.solo.tipo].fc);
+    this.prop.soloLargura = this.amb.id === 'ponte' ? 3.7 : Infinity;
+    this.prop.expEnvio = expoenteEnvio(this.amb);
+    this.xTruques = this.fontesP.filter((f) => f.tipo === 'rolamento').map((f) => f.pos[0]);
+    this.tele.fontes = this.prop.fontes.map((es) => ({ id: es.f.id, posEmitida: [0, 0, 0] as Vec3, r: 0, thetaEmissao: 0, ganhoDb: -120, atrasoMs: 0 }));
+    this.narizAnt = NaN;
+    this.tunel.zerar();
+    this.aplicarLocal();
+  }
+
+  /** decide o local do ouvinte e as regras de cada fonte (3.3) */
+  private aplicarLocal() {
+    const o = this.ouv;
+    let local: LocalOuvinte = o.local === 'auto' ? 'fora' : o.local;
+    if (o.local === 'auto' && o.modo === 'gimbal' && this.portador) {
+      const b = this.posGimbalCorpo();
+      const corpo = this.portador.corpo;
+      let frente = corpo.comprimento / 2;
+      for (const s of corpo.segmentos) {
+        if (b[0] <= frente && b[0] >= frente - s.comprimento && Math.abs(b[1]) < s.largura / 2 && b[2] > s.zPiso && b[2] < s.altura) local = 'cabine';
+        frente -= s.comprimento + s.vao;
+      }
+    }
+    this.local = local;
+    const alvo = o.gimbal.alvo;
+    let r: RegrasLocal;
+    if (local === 'fora') r = { diretividade: true, sombra: !this.semSombra, solo: true, binaural: o.binaural, rota: null, envio: 1 };
+    else if (local === 'cabine') {
+      r = { diretividade: false, sombra: false, solo: false, binaural: o.binaural, rota: () => ({ bus: 1, peso: 1 }), envio: 0.25 };
+      const ms = this.portador?.corpo.massaSuperficial ?? 25, fc = this.portador?.corpo.fCabine ?? 45;
+      const f1 = 891 / ms;
+      this.cabK1 = k1(this.fs, f1); this.cabK2 = k1(this.fs, 2.6 * f1);
+      this.cabPk[0].peak(this.fs, fc, 1.1, 7); this.cabPk[1].peak(this.fs, fc, 1.1, 7);
+    } else if (local === 'cofre') {
+      r = { diretividade: false, sombra: false, solo: false, binaural: o.binaural, envio: 0.5,
+        rota: (f) => (f.dentro ? { bus: 0, peso: PESO_COFRE[f.tipo] ?? 0.8 } : { bus: 1, peso: 0.55 }) };
+    } else {
+      r = { diretividade: true, sombra: false, solo: false, binaural: o.binaural, envio: 0.5,
+        rota: (f) => ({ bus: 0, peso: f.id === alvo ? 1 : 0.1 }) };
+    }
+    this.prop.aplicarRegras(r);
+  }
+
+  /** posição do ouvinte no gimbal, no referencial do corpo */
+  private posGimbalCorpo(): [number, number, number] {
+    const g = this.gim, D = Math.PI / 180;
+    let ax = 0, ay = 0, az = (this.portador?.corpo.segmentos[0]?.altura ?? 2) / 2;
+    if (this.ouv.gimbal.alvo !== 'corpo') {
+      const f = this.fontesP.find((x) => x.id === this.ouv.gimbal.alvo);
+      if (f) { ax = f.pos[0]; ay = f.pos[1]; az = f.pos[2]; }
+    }
+    const el = Math.max(-20, Math.min(89, g.el)) * D, a = g.az * D, r = Math.max(0.3, Math.min(300, g.r));
+    return [ax + r * Math.cos(el) * Math.cos(a), ay + r * Math.cos(el) * Math.sin(a), az + r * Math.sin(el)];
+  }
+  private alvoCorpo(): [number, number, number] {
+    let ax = 0, ay = 0, az = (this.portador?.corpo.segmentos[0]?.altura ?? 2) / 2;
+    if (this.ouv.gimbal.alvo !== 'corpo') {
+      const f = this.fontesP.find((x) => x.id === this.ouv.gimbal.alvo);
+      if (f) { ax = f.pos[0]; ay = f.pos[1]; az = f.pos[2]; }
+    }
+    return [ax, ay, az];
+  }
+
+  /** geometria do ouvinte no instante em que o corpo está em s (com velocidade v) */
+  private geometria(s: number, v: number) {
+    const G = this.geo, largura = this.portador?.corpo.segmentos[0]?.largura ?? 2;
+    if (this.ouv.modo === 'fixo') {
+      G.x = this.pos[0]; G.y = this.via.yOuvinte - (this.lateral + largura / 2); G.z = Math.max(0.2, this.pos[2]);
+      G.vx = 0; G.vy = 0; G.vz = 0; G.fx = 0; G.fy = 1; G.lx = -1; G.ly = 0;
+      return;
+    }
+    const b = this.posGimbalCorpo(), p = this.via.ponto(s + b[0], this.pv);
+    G.x = p.x + b[1] * p.nx; G.y = p.y + b[1] * p.ny; G.z = Math.max(0.2, this.altitude + b[2]);
+    G.vx = v * p.tx; G.vy = v * p.ty; G.vz = 0;
+    const a = this.alvoCorpo(), q = this.via.ponto(s + a[0], this.pv);
+    const axw = q.x + a[1] * q.nx, ayw = q.y + a[1] * q.ny;
+    let fx = axw - G.x, fy = ayw - G.y; const nf = Math.hypot(fx, fy);
+    if (nf < 1e-3) { fx = q.tx; fy = q.ty; } else { fx /= nf; fy /= nf; }
+    G.fx = fx; G.fy = fy; G.lx = -fy; G.ly = fx;
+  }
+
+  // parâmetros com rampa: 0 lateral, 1 altitude, 2–4 pos, 5 az, 6 el, 7 r, 8 ganho do solo
+  rCur = new Float64Array(9); rAlvo = new Float64Array(9); rPasso = new Float64Array(9);
+  private definirAlvos(agora: boolean) {
+    const a = this.rAlvo;
+    a[0] = this.lateralAlvo; a[1] = this.altitudeAlvo; a[2] = this.posAlvo[0]; a[3] = this.posAlvo[1]; a[4] = this.posAlvo[2];
+    a[5] = this.gimAlvo.az; a[6] = this.gimAlvo.el; a[7] = this.gimAlvo.r; a[8] = this.soloGAlvo;
+    for (let i = 0; i < 9; i++) {
+      if (agora) this.rCur[i] = a[i];
+      this.rPasso[i] = Math.abs(a[i] - this.rCur[i]) * this.passoRampa;   // chega em 20 ms
+    }
+  }
+  /** avança as rampas de 20 ms um bloco de controle (sem alocação) */
+  private rampas() {
+    const c = this.rCur, a = this.rAlvo, st = this.rPasso;
+    for (let i = 0; i < 9; i++) {
+      const d = a[i] - c[i];
+      if (d !== 0) c[i] = Math.abs(d) <= st[i] ? a[i] : c[i] + (d > 0 ? st[i] : -st[i]);
+    }
+    this.lateral = c[0]; this.altitude = c[1]; this.pos[0] = c[2]; this.pos[1] = c[3]; this.pos[2] = c[4];
+    this.gim.az = c[5]; this.gim.el = c[6]; this.gim.r = c[7]; this.soloG = c[8];
+    this.prop.alt = this.altitude;
+  }
+
+  processar(portador: Portador, canais: Float32Array[], outL: Float32Array, outR: Float32Array, sendL: Float32Array, sendR: Float32Array, n: number) {
+    if (portador !== this.portador || portador.fontes() !== this.fontesP) this.preparar(portador);
+    const P = this.prop, fs = this.fs, c = portador.cinematica;
+    const T = this.amostra;
+    P.zerarAcumuladores(n);
+    P.escrever(canais, n);
+    const bL = this.bL, bR = this.bR;
+    bL.fill(0, 0, n); bR.fill(0, 0, n);
+    const L = portador.corpo.comprimento, largura = portador.corpo.segmentos[0]?.largura ?? 2;
+    const fixo = this.ouv.modo === 'fixo' && this.local === 'fora';
+    const sO = this.via.abscissaDe(this.pos[0]);
+    const tFim = (T + n) / fs;
+    let ini = 0;
+    while (ini < n) {
+      const N = Math.min(BLOCO_CONTROLE, n - ini);
+      this.rampas();
+      if (this.soloG !== P.soloGanho) P.definirSolo(this.soloG, SOLOS[this.amb.solo.tipo].fc);
+      // pose do corpo no fim do trecho (extrapolada do estado do portador no fim do bloco)
+      const tj = (T + ini + N) / fs, dtj = tFim - tj;
+      const sj = c.s - c.v * dtj + 0.5 * c.a * dtj * dtj, vj = c.v - c.a * dtj;
+      this.hist.empurrar(sj, vj);
+      this.geometria(sj, vj);
+      P.trecho(ini, N, tj, this.geo);
+      // campo próximo: pressão e vento, no fim do trecho; a pressão é interpolada por amostra
+      let p = 0, u = 0;
+      if (fixo) {
+        const xiN = this.reduzir(sj + L / 2 - sO), xiC = xiN - L;
+        const d = this.lateral;
+        p = ondaNariz(xiN, xiC, vj, d, portador.corpo.cpNariz, portador.corpo.nariz || 1, portador.corpo.cauda || 1);
+        // vento induzido (2.8): sobe ao longo do corpo, esteira de 3 s depois da cauda
+        let w = 0;
+        if (xiN >= 0 && xiN <= L) w = xiN / L;
+        else if (xiN > L && vj > 0.1) w = Math.exp(-(xiN - L) / (vj * 3));
+        const uo = ventoInduzido(vj, d) * w;
+        let up = 0;
+        const tun = this.amb.tunel;
+        if (tun) {
+          const nariz = sj + L / 2;
+          if (this.tunel.tEntrada < 0 && !isNaN(this.narizAnt) && this.narizAnt < tun.xEntrada && nariz >= tun.xEntrada && vj > 0) {
+            const tc = tj - (nariz - tun.xEntrada) / vj;
+            this.tunel.entrar(tc, vj, portador.corpo.areaFrontal, tun.area, portador.corpo.nariz || 10, sO - tun.xEntrada, tun.comprimento);
+          }
+          this.narizAnt = nariz;
+          p += this.tunel.pressao(tj);
+          if (this.tunel.tEntrada >= 0) {
+            const ua = ventoPistao(vj, this.tunel.beta);
+            const tch = this.tunel.tEntrada + this.tunel.chegada();
+            if (xiN < 0) up = tj >= tch ? this.tunel.uFrente : 0;
+            else if (xiN <= L) up = ua;
+            else up = ua * Math.exp(-(xiN - L) / (Math.max(vj, 0.1) * 3));
+          }
+        }
+        u = Math.sqrt(uo * uo + up * up);
+        // ponte: ronco estrutural pelos truques sobre o tabuleiro perto do ouvinte
+        if (this.amb.id === 'ponte') {
+          let s = 0;
+          for (const x of this.xTruques) { const xi = (sj + x - sO) / 15; s += 1 / (1 + xi * xi); }
+          this.ponteGAlvo = K_PONTE * s * Math.pow(Math.max(0, vj) / (300 / 3.6), 1.5);
+        } else this.ponteGAlvo = 0;
+      }
+      // resíduo > 20 Hz da pressão no alto-falante (mono, os dois ouvidos)
+      const p0 = this.pAnt, dp = (p - p0) / N;
+      let pp = p0;
+      const hp0 = this.hpP[0], hp1 = this.hpP[1];
+      let pg = this.ponteG; const dpg = (this.ponteGAlvo - pg) / N;
+      const pf = this.ponteF, pr = this.ponteR;
+      for (let k = 0; k < N; k++) {
+        pp += dp;
+        let x = hp1.run(hp0.run(pp));
+        if (pg > 0 || dpg !== 0) { x += pg * pf[2].run(pf[1].run(pf[0].run(pr.bi()))); pg += dpg; }
+        bL[ini + k] += x; bR[ini + k] += x;
+      }
+      this.ponteG = this.ponteGAlvo;
+      this.pAnt = p;
+      this.tele.pressaoPa = p;
+      this.ventoU = u;
+      this.vento.uAlvo = u;
+      ini += N;
+    }
+    P.avancar(n);
+    // vento e fundo
+    this.vento.somar(bL, bR, n);
+    this.fundo.somar(bL, bR, n);
+    // barramentos do local
+    const a0L = P.accL[0], a0R = P.accR[0], a1L = P.accL[1], a1R = P.accR[1], cs = this.cabS, cf = this.cofreS;
+    const g = 1 / PA_FS;
+    const pa0 = this.pa[0], pa1 = this.pa[1], km = this.kMed;
+    let eA = this.eA, eZ = this.eZ;
+    for (let k = 0; k < n; k++) {
+      let l = a0L[k] + bL[k], r = a0R[k] + bR[k];
+      if (this.local === 'cabine') {
+        cs[0] += this.cabK1 * (a1L[k] - cs[0]); cs[1] += this.cabK2 * (cs[0] - cs[1]);
+        cs[2] += this.cabK1 * (a1R[k] - cs[2]); cs[3] += this.cabK2 * (cs[2] - cs[3]);
+        l += this.cabPk[0].run(cs[1]); r += this.cabPk[1].run(cs[3]);
+      } else if (this.local === 'cofre') {
+        cf[0] += this.cofreK * (a1L[k] - cf[0]); cf[1] += this.cofreK * (a1R[k] - cf[1]);
+        l += cf[0]; r += cf[1];
+      } else { l += a1L[k]; r += a1R[k]; }
+      outL[k] = l * g; outR[k] = r * g;
+      sendL[k] = P.envL[k] * g; sendR[k] = P.envR[k] * g;
+      const al = pa0.run(l), ar = pa1.run(r);
+      eA += km * (0.5 * (al * al + ar * ar) - eA);
+      eZ += km * (0.5 * (l * l + r * r) - eZ);
+    }
+    this.eA = eA; this.eZ = eZ;
+    this.amostra += n;
+    this.atualizarTelemetria(portador);
+  }
+
+  private reduzir(x: number) {
+    if (this.via.tipo !== 'reta') { const Lv = this.via.comp; let u = x % Lv; if (u > Lv / 2) u -= Lv; if (u < -Lv / 2) u += Lv; return u; }
+    const Lv = this.via.comp; let u = (x + Lv / 2) % Lv; if (u < 0) u += Lv; return u - Lv / 2;
+  }
+
+  private atualizarTelemetria(portador: Portador) {
+    const t = this.tele, F = this.prop.fontes;
+    for (let i = 0; i < F.length; i++) {
+      const es = F[i], o = t.fontes[i] as unknown as { posEmitida: number[]; r: number; thetaEmissao: number; ganhoDb: number; atrasoMs: number };
+      o.posEmitida[0] = es.ex; o.posEmitida[1] = es.ey; o.posEmitida[2] = es.ez;
+      o.r = es.r; o.thetaEmissao = es.theta; o.ganhoDb = es.ganhoDb; o.atrasoMs = es.atrasoMs;
+    }
+    const c = portador.cinematica, p = this.via.ponto(c.s, this.pv);
+    const pose = t.corpo.pose as unknown as number[];
+    pose[0] = p.x; pose[1] = p.y; pose[2] = this.altitude;
+    t.corpo.s = c.s; t.corpo.v = c.v; t.corpo.rumo = Math.atan2(p.ty, p.tx);
+    (c as { rumo: number }).rumo = t.corpo.rumo;
+    const ov = t.ouvinte as unknown as number[]; ov[0] = this.geo.x; ov[1] = this.geo.y; ov[2] = this.geo.z;
+    t.ventoMs = this.ventoU;
+    t.splDbA = 10 * Math.log10(this.eA / (P_REF * P_REF) + 1e-30);
+    t.splDb = 10 * Math.log10(this.eZ / (P_REF * P_REF) + 1e-30);
+  }
+
+  telemetria(): TelemetriaCena { return this.tele; }
+}
