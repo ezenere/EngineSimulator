@@ -1,7 +1,8 @@
 // Teste da página do Radial num navegador headless de verdade (o padrão de tools/diesel-navegador.mjs: CDP no
-// Chromium, WebDriver BiDi no Firefox). Partida direta com a contagem de pás e os magnetos na 9ª, manete, manete de
-// passo, magnetos (M), mistura ([ ]), ambiente e microfone, arranque de inércia (energizar → engatar) e corte da mistura
-// no DC-3, ordem decorrente do R-4360, câmbio do Sherman; confere telemetria, som na saída, worklet e console.
+// Chromium, WebDriver BiDi no Firefox). Partida direta com a contagem de pás e os magnetos na 9ª, manete de potência (a
+// da Turbina: fica onde foi deixada; W/S seguradas, 1–4, PageUp/PageDown, arrasto), manete de passo, magnetos (M),
+// mistura ([ ]), ambiente e microfone, arranque de inércia (energizar → engatar) e corte da mistura no DC-3, ordem
+// decorrente do R-4360, pedal e câmbio do Sherman; confere telemetria, som na saída, worklet e console.
 //
 //   node tools/radial-navegador.mjs [url da radial.html] [chromium|firefox] [porta]
 //   sem url: serve o dist/ em http://127.0.0.1:<porta+1>/data/engine/ (rode npm run build antes)
@@ -67,6 +68,8 @@ async function abrirChromium() {
   return {
     ir: async (u) => { await cmd('Page.navigate', { url: u }); },
     ev: async (e) => { const r = await cmd('Runtime.evaluate', { expression: e, awaitPromise: true, returnByValue: true, userGesture: true }); if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text); return r.result?.result?.value; },
+    // botão do mouse de verdade (pointerdown/pointerup com o id do ponteiro do navegador)
+    mouse: async (tipo, x, y) => { await cmd('Input.dispatchMouseEvent', { type: tipo === 'down' ? 'mousePressed' : 'mouseReleased', x, y, button: 'left', clickCount: 1 }); },
     foto: async (arq) => { const r = await cmd('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(arq, Buffer.from(r.result.data, 'base64')); },
     fechar: () => { ws.close(); proc.kill(); },
   };
@@ -96,6 +99,9 @@ async function abrirFirefox() {
       const v = r.result?.result?.value;
       return v === undefined ? undefined : JSON.parse(v);
     },
+    mouse: async (tipo, x, y) => {
+      await cmd('input.performActions', { context: ctx, actions: [{ type: 'pointer', id: 'mouse', parameters: { pointerType: 'mouse' }, actions: tipo === 'down' ? [{ type: 'pointerMove', x: Math.round(x), y: Math.round(y) }, { type: 'pointerDown', button: 0 }] : [{ type: 'pointerUp', button: 0 }] }] });
+    },
     foto: async () => {},
     fechar: () => { ws.close(); proc.kill(); },
   };
@@ -111,6 +117,8 @@ const texto = (sel) => ev(`document.querySelector(${JSON.stringify(sel)})?.textC
 const tele = () => ev(`(() => { const k = window.__radial; const t = k.tele; return { rpm: t.rpm, state: t.state, fase: t.fase, pas: t.pas, magnetos: t.magnetos, mistura: t.mistura, apito: t.apito, rpmHelice: t.rpmHelice, bpf: t.bpf, beta: t.beta, gear: t.gear, kmh: t.kmh, modo: k.audio?.modo, sr: k.audio?.ctx.sampleRate, estadoCtx: k.audio?.ctx.state, idade: performance.now() - (t.t || 0) }; })()`);
 const rms = () => ev(`(() => { const an = window.__radial.audio?.analyser; if (!an) return -999; const x = new Float32Array(an.fftSize); an.getFloatTimeDomainData(x); let s = 0; for (const v of x) s += v * v; return 10 * Math.log10(s / x.length + 1e-20); })()`);
 const deslizar = (id, v) => ev(`(() => { const r = document.getElementById(${JSON.stringify(id)}); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(r, String(${v})); r.dispatchEvent(new Event('input', { bubbles: true })); r.dispatchEvent(new Event('change', { bubbles: true })); return r.closest('.field').querySelector('output').textContent; })()`);
+const manete = () => ev(`(() => { const l = document.getElementById('lever'); return l ? +l.getAttribute('aria-valuenow') : null; })()`);
+const thrTele = () => ev(`window.__radial.tele.thr`);
 const esperaAte = async (f, ms = 8000) => { const t0 = Date.now(); let v; while (Date.now() - t0 < ms) { v = await f(); if (v) return v; await espera(250); } return v; };
 
 try {
@@ -124,6 +132,9 @@ try {
   confere(ini.secoes.join(',') === esperadas, 'seções do painel', ini.secoes.join(','));
   confere(ini.sliders >= 20, 'sliders no painel', String(ini.sliders));
   confere(ini.botao.includes('Girar'), 'botão de partida: Girar (arranque direto)', ini.botao);
+  const lev = await ev(`({ lever: !!document.getElementById('lever'), pedal: !!document.getElementById('pedal'), marcas: [...document.querySelectorAll('#leverMarks span')].map((s) => s.textContent), posicoes: [...document.querySelectorAll('#detents button')].map((b) => b.textContent), rotulo: document.getElementById('lever')?.getAttribute('aria-label') })`);
+  confere(lev.lever && !lev.pedal && lev.rotulo === 'Manete de potência', 'avião: manete de potência (a da Turbina) no lugar do pedal', JSON.stringify(lev));
+  confere(lev.marcas.join(',') === 'lenta,cruzeiro,subida,deco' && lev.posicoes.join('|') === '1 · lenta|2 · cruzeiro|3 · subida|4 · decolagem', 'marcas e posições da manete', `${lev.marcas.join(',')} · ${lev.posicoes.join('|')}`);
 
   // partida direta: gira, conta as pás, os magnetos ligam na 9ª e pega
   await clicar('.bar .ignition');
@@ -141,19 +152,47 @@ try {
   const lenta = await rms();
   confere(lenta > -60, 'som na saída em lenta', `${lenta.toFixed(1)} dBFS`);
 
-  // manete: sobe o giro (passo mínimo até o governador)
+  // manete de potência: W segurado a leva aos poucos e, solto, ela fica onde está (não volta como o pedal)
   await tecla('KeyW');
-  await espera(4000);
+  await espera(1000);
+  await tecla('KeyW', 'keyup');
+  const m1 = await manete();
+  await espera(800);
+  const m1b = await manete();
+  confere(m1 > 20 && m1 < 90 && m1b === m1, 'W segurado avança a manete aos poucos e ela fica onde foi solta', `${m1}% → ${m1b}% depois de soltar`);
+  confere(Math.abs((await thrTele()) - m1 / 100) < 0.03, 'a manete manda o acelerador ao DSP', `${(await thrTele())?.toFixed(2)} vs ${m1}%`);
+  // tecla 4: decolagem (passo mínimo até o governador)
+  await tecla('Digit4');
+  await espera(300);
+  confere((await manete()) === 100 && (await ev(`document.querySelector('#detents [data-manete="1"]').classList.contains('at')`)), 'tecla 4 → manete em decolagem (100%), posição marcada', String(await manete()));
+  await espera(3500);
   t = await tele();
   const alto = await rms();
-  confere(t.rpm > 1500, 'W: manete toda, o giro sobe', `${Math.round(t.rpm)} rpm · β ${(t.beta * 57.3).toFixed(1)}°`);
+  confere(t.rpm > 1500, 'manete toda: o giro sobe', `${Math.round(t.rpm)} rpm · β ${(t.beta * 57.3).toFixed(1)}°`);
   confere(alto > lenta + 3, 'em carga soa mais alto', `${alto.toFixed(1)} vs ${lenta.toFixed(1)} dBFS`);
   // manete de passo
   await tecla('Comma'); await tecla('Comma'); await tecla('Comma');
   await espera(300);
   confere((await ev(`window.__radial.estado.av.rpmAlvo`)) < 0.9, ', baixa a manete de passo', String(await ev(`window.__radial.estado.av.rpmAlvo`)));
-  await tecla('KeyW', 'keyup');
+  // S segurado recua; PageUp com o foco na manete sobe um passo; arrasto com o ponteiro
+  await tecla('KeyS');
+  await espera(600);
+  await tecla('KeyS', 'keyup');
+  const m2 = await manete();
+  confere(m2 < 100 && m2 > 50, 'S segurado recua a manete', `${m2}%`);
+  await ev(`(() => { const l = document.getElementById('lever'); l.focus(); l.dispatchEvent(new KeyboardEvent('keydown', { code: 'PageUp', bubbles: true })); return true; })()`);
+  await espera(200);
+  confere((await manete()) === Math.min(100, m2 + 10), 'PageUp na manete: +10%', `${m2}% → ${await manete()}%`);
+  const tr = await ev(`(() => { const r = document.querySelector('#lever .lever-track').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height * 0.75 }; })()`);
+  await b.mouse('down', tr.x, tr.y);
+  await espera(150);
+  await b.mouse('up', tr.x, tr.y);
+  await espera(400);
+  const m3 = await manete();
+  confere(m3 >= 22 && m3 <= 28, 'manete arrastada com o ponteiro a 1/4 do curso fica lá', `${m3}%`);
+  await clicar('#detents [data-manete="0"]');
   await espera(2500);
+  confere((await manete()) === 0, 'botão 1 · lenta leva a manete à lenta', String(await manete()));
 
   // magnetos (M) e mistura ([ ])
   await tecla('KeyM');
@@ -202,6 +241,8 @@ try {
   await clicar('.fam:nth-child(4)');
   await clicar('.preset[data-id=r975]');
   await espera(1200);
+  const lt = await ev(`({ lever: !!document.getElementById('lever'), pedal: !!document.getElementById('pedal') })`);
+  confere(!lt.lever && lt.pedal, 'Sherman: pedal (não a manete)', JSON.stringify(lt));
   await clicar('.bar .ignition');
   t = await esperaAte(async () => { const x = await tele(); return x.state === 'run' ? x : null; }, 12000);
   confere(!!t, 'Sherman pegou', t ? `${Math.round(t.rpm)} rpm` : '');
@@ -209,6 +250,15 @@ try {
   await espera(600);
   confere(/^1$/.test(await texto('#gearRead')), 'E engata a 1ª no tanque', await texto('#gearRead'));
   await tecla('KeyQ');
+  await espera(300);
+  // pedal: acelera enquanto W está apertado e volta a zero ao soltar
+  await tecla('KeyW');
+  await espera(400);
+  const pw = await ev(`document.getElementById('pedalFill').style.height`);
+  await tecla('KeyW', 'keyup');
+  await espera(300);
+  const ps = await ev(`document.getElementById('pedalFill').style.height`);
+  confere(pw === '100%' && ps === '0%', 'Sherman: W no pedal, volta a zero ao soltar', `${pw} → ${ps}`);
 
   // I desliga
   await tecla('KeyI');
