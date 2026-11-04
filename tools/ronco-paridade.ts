@@ -28,6 +28,7 @@ import { fileURLToPath } from 'node:url';
 import * as G from '../src/engines/ronco/geometria';
 import { PRESETS, ACESSORIOS_PADRAO } from '../src/engines/ronco/presets';
 import { EngineDSP, gearRatios, defaultFinal } from '../src/engines/ronco/dsp';
+import { configCalibrada } from '../src/engines/ronco/config';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const req = createRequire(import.meta.url);
@@ -181,18 +182,6 @@ function tocar(d: any, eventos: [number, (() => void) | null][]) {
   return [L, R, sL, sR];
 }
 
-// a configuração como a página manda: geometria + sonda de calibração fora da thread de áudio
-function configDaPagina(spec: any) {
-  const e = G.build(spec);
-  const cfg: any = { ...spec, N: e.N, fire: e.fire, bank: e.bank, banks: e.banks, axis: e.axis, z: e.z, tdcRel: e.tdcRel, runners: e.runners };
-  if (cfg.banks === 1 && (cfg.routing === 'xpipe' || cfg.routing === 'hpipe')) cfg.routing = 'dual';
-  const sonda = new EngineDSP(48000);
-  sonda.setConfig(cfg);
-  cfg.gain = sonda.cfgGain; cfg.mkIdle = sonda.mkIdle;
-  if (sonda.powerModel) { cfg.powerModel = sonda.powerModel; cfg.tqPeakModel = sonda.tqPeakModel; cfg.frPeakModel = sonda.frPeakModel; }
-  return cfg;
-}
-
 function conferirDist() {
   const pasta = path.join(RAIZ, 'dist', 'assets');
   const arq = fs.existsSync(pasta) && fs.readdirSync(pasta).find((f) => /^processador-ronco-.*\.js$/.test(f));
@@ -210,7 +199,7 @@ function conferirDist() {
   const ids = ['muscle', 'fusca', 'evo', 'v10f1', 'h2', 'gt500'];
   for (const id of ids) {
     const spec = { ...ACESSORIOS_PADRAO, ...PRESETS.find((p) => p.id === id) };
-    const cfg = configDaPagina(spec);
+    const cfg = configCalibrada(spec, 48000);
     const proc = new P();
     // mensagens pela porta, como a página manda (params, config, temperatura, ignição, acelerador)
     const msg = (m: any) => proc.port.onmessage({ data: JSON.parse(JSON.stringify(m)) });
@@ -221,7 +210,9 @@ function conferirDist() {
     const a = tocar(proc.d, evs(msg));
     const b = tocar(ref, evs((m) => ref.message(JSON.parse(JSON.stringify(m)))));
     const ok = a.every((x, c) => x.every((v, i) => Object.is(v, b[c][i])));
-    if (ok) iguais++; else falha(`bundle ${arq}: ${id} difere do DSP em TypeScript`);
+    // (e tocou de verdade: dois silêncios também seriam iguais)
+    const pico = a[0].reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+    if (ok && pico > 0.01) iguais++; else falha(`bundle ${arq}: ${id} ${ok ? `não tocou (pico ${pico})` : 'difere do DSP em TypeScript'}`);
   }
   console.log(`bundle do worklet (${arq}): ${iguais}/${ids.length} presets idênticos ao DSP em TypeScript (4 canais, com a calibração da página)`);
 }
