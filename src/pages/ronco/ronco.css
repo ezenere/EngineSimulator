@@ -1,4 +1,0 @@
-/* Página do Ronco. O React monta a página dentro de <div id="raiz">: ele precisa da altura toda,
-   como o <body> do index.html legado, senão a grade de .app (height: 100%) encolhe e os
-   instrumentos somem. (Correção que caberia em src/ui/estilo.css, para todas as páginas.) */
-#raiz { height: 100%; }

@@ -119,8 +119,7 @@ export class ControleRonco {
   // troca o ambiente: params do DSP (som de fundo, comprimento da volta) e acústica da cadeia
   setEnvironment(kind: string) {
     this.mudar({ params: { ...this.params, env: kind } }, true);
-    this.enviarParams();
-    this.audio?.setAmbiente(kind); // (resposta ao impulso + acústica do ouvinte)
+    this.audio?.setAmbienteEParams(kind, this.params); // params, resposta ao impulso e acústica do ouvinte
   }
 
   setParams(p: Partial<ParamsRonco>, render = false) {

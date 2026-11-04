@@ -86,10 +86,8 @@ export class ControleTurbina {
   setEnvironment(kind: string) {
     this.environment = kind;
     this.params.env = kind;
-    this.audio?.send({ type: 'params', params: this.params });
-    if (!this.audio) return;
-    // a CadeiaDeAudio troca a resposta ao impulso e reaplica a acústica do ouvinte
-    this.audio.setAmbiente(kind);
+    // params, resposta ao impulso e acústica do ouvinte
+    this.audio?.setAmbienteEParams(kind, this.params);
   }
 
   // A bordo o lugar lá fora chega abafado pela fuselagem (perfil da Turbina na CadeiaDeAudio).

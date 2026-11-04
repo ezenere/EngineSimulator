@@ -115,6 +115,12 @@ export class CadeiaDeAudio {
     this.aplicarOuvinte(this.ouvinte);
   }
 
+  // setEnvironment(): manda os params do DSP (ex.: env novo) e depois troca a resposta ao impulso
+  setAmbienteEParams(kind: string, params: unknown) {
+    this.send({ type: 'params', params });
+    this.setAmbiente(kind);
+  }
+
   // applyListenerAcoustics: corte e ganho do ambiente conforme onde está o ouvinte
   aplicarOuvinte(ouvinte: string) {
     this.ouvinte = ouvinte;

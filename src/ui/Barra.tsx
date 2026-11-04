@@ -13,9 +13,9 @@ export function Barra({ logo, placa, children }: { logo: string; placa?: ReactNo
   );
 }
 
-export function BotaoIgnicao({ ligado, rotulo, aoClicar }: { ligado: boolean; rotulo: string; aoClicar: () => void }) {
+export function BotaoIgnicao({ id, ligado, rotulo, aoClicar }: { id?: string; ligado: boolean; rotulo: string; aoClicar: () => void }) {
   return (
-    <button className="ignition" type="button" aria-pressed={ligado} onClick={aoClicar}>
+    <button id={id} className="ignition" type="button" aria-pressed={ligado} onClick={aoClicar}>
       <span className="dot" /><span>{rotulo}</span>
     </button>
   );

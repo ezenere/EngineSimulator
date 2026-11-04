@@ -61,7 +61,7 @@ function Interior({ k, e }: { k: ControleRonco; e: EstadoRonco }) {
   return (
     <div className="app">
       <Barra logo="Ronco" placa={placa(e)}>
-        <BotaoIgnicao ligado={e.ignicao} rotulo={e.ignicao ? 'Desligar' : 'Ligar motor'} aoClicar={ligar} />
+        <BotaoIgnicao id="ignition" ligado={e.ignicao} rotulo={e.ignicao ? 'Desligar' : 'Ligar motor'} aoClicar={ligar} />
       </Barra>
 
       <nav className="presets" id="presets" aria-label="Motores prontos">
