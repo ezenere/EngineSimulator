@@ -12,6 +12,7 @@ qualquer veículo, antigo ou novo.
 - [Armadilhas](#armadilhas)
 - [Do achado ao modelo](#do-achado-ao-modelo)
 - [Caso completo: o Fusca](#caso-completo-o-fusca)
+- [Caso: o Mustang](#caso-o-mustang)
 - [Ferramentas](#ferramentas)
 - [O que olhar em cada tipo de veículo](#o-que-olhar-em-cada-tipo-de-veículo)
 
@@ -48,6 +49,7 @@ Estes erros aconteceram na sessão que gerou este método. Cada um virou uma reg
 | Estalos de válvula como ressonâncias estreitas (Q 30–50) | "Despertador no fundo" | Ressonância estreita batida 240 vezes por segundo vira um tom | Não usar ressonância estreita para ruído de impacto |
 | Diâmetro de escape menor no Fusca para soprar mais | O som tonal do motor mudou (−6 a −9 dB, outras ordens) | — | Mudar só a peça que o fenômeno envolve (a ponteira virou um campo próprio) |
 | Hipótese do chiado do carburador para o agudo do Fusca | Não foi implementada: o auditor refutou | — | Auditoria independente antes de implementar |
+| Comparar o Mustang a 2027 rpm tomando a linha mais forte do grave (135 Hz) pela ignição | Hipótese errada de "estouros aleatórios" e ordens do grave sem sentido | A linha mais forte era o 13º harmônico do ciclo; a lenta real era ~1250 rpm | Confirmar a rotação dobrando o sinal em N períodos da linha mais forte (ver Armadilhas) |
 
 ## Passo a passo
 
@@ -118,7 +120,7 @@ O que o auditor fez, em ordem:
 | Técnica | Parâmetros | O que revela |
 |---|---|---|
 | Linha do tempo | RMS em 60–150 / 150–400 / 400–1k / 1–2k / 2–8k / 8–16k Hz a cada 0,25 s; ignição por segundo | Trechos estáveis, motor desligado, afastamento, fade |
-| Rotação | Picos < 600 Hz de uma FFT longa, autocorrelação do log-espectro nos espaçamentos candidatos, confirmação dobrando no ângulo | Ciclo × volta × ignição |
+| Rotação | Picos < 600 Hz de uma FFT longa, autocorrelação do log-espectro nos espaçamentos candidatos, confirmação dobrando no ângulo; fase da linha mais forte dividida por N = 2…32 e fração periódica do grave em cada N | Ciclo × volta × ignição; o N certo salta (0,95 contra ~0,35) |
 | Fase da ignição | Passa-faixa ±10% na ignição, fase de Hilbert desenrolada, reamostragem em grade de ângulo (64 amostras por ignição), janelas de 2 s quando o giro varia | Base para tudo que é por cilindro |
 | PSD e terços de oitava | Welch com 8192 pontos; nível médio por terço de oitava em dB relativo à média de 150–400 Hz; também os absolutos até 24 kHz | Forma do espectro e corte do codec |
 | Modulação da envoltória | Passa-faixa → |Hilbert| → passa-baixa 600 Hz → Welch com 1 Hz de resolução; nível nas ordens 0,5 / 1 / 1,5 / ignição | Qual ritmo do motor pulsa o agudo |
@@ -152,6 +154,17 @@ Ruído estacionário passado pela mesma cadeia dá desvio/média ≈ 0,21 (2–8
 - **O regime muda o ritmo:** no Fusca, a 2000 rpm instável dominava a volta e a 1407 rpm estável dominava a ignição.
 - **"Quieto" não é "desligado"** enquanto o espectro mostrar linhas harmônicas.
 - **Espectro médio esconde o caráter.** Meça também a envoltória e a aspereza.
+- **A linha mais forte não é a ignição.** O escape pode reforçar qualquer harmônico do ciclo. No Mustang a linha de
+  135 Hz era o 13º harmônico (ordem 6,5) e a comparação foi feita a 2027 rpm em vez de ~1250. O que denunciou: os
+  estalos se repetiam a cada 13,00 períodos dessa linha mesmo com o giro variando. Antes de tudo, dobre o sinal em N
+  períodos da linha mais forte (N = 2…32): só o N do ciclo verdadeiro (e múltiplos) dá fração periódica alta no grave.
+  No pente harmônico, fique com o menor f0 que explica as linhas quase tão bem quanto o melhor.
+- **Som de ambiente na renderização:** o ambiente enche o agudo com ruído liso e esconde a falta de agudo do motor (no
+  Mustang a 1250 rpm, tudo acima de 4 kHz era o ambiente). Compare o motor sozinho: `PARAMS='{"ambSound":false}'`.
+- **Celular junto de uma ponteira:** ouve uma bancada (no Mustang, só uma bancada acima de 4 kHz). O ouvinte externo
+  do simulador fica entre as duas ponteiras e soma as bancadas; compare com um canal só.
+- **Giro travado abaixo de 5% de pedal:** o controle de lenta continua agindo e, com o giro acima da lenta, vai
+  fechando o ar (o coletor do Mustang caía de 0,26 para 0,11 bar em 12 s). O `render.js` congela o integrador.
 - **O banco de testes não inclui o navegador.** Reverberação, compressor e equalizador do `app.js` ficam de fora.
 - **Calibração:** o que deve mudar o volume de verdade (abafador, vazamento) fica fora de `calibrate()`. Senão o
   ganho do motor inteiro muda e a comparação engana.
@@ -221,36 +234,118 @@ acelerada, instável) e 44–54 s a ~1407 rpm (estável).
 | Real | −6 / −9 / −11 / −18 | −8 / −12 / −13 / −20 |
 | Antes | −17 / −26 / −29 / −34 | — |
 | Agora | −9 / −10 / −14 / −20 | −9 / −11 / −14 / −20 |
+| Depois do Mustang | −10 / −11 / −15 / −21 | −6 / −7 / −10 / −16 |
 
 A profundidade da envoltória do agudo ficou em 0,35 contra 0,35 do real (a 2000 rpm). Na lenta, o motor solto agora
 oscila ±46 rpm (antes ±15).
 
+A revisão do Mustang (abaixo) mudou a pressão no fim da queima em carga leve, e o Fusca foi reajustado depois dela
+(linha "Depois do Mustang"): vazamento do escape +1,7 dB e variação do carburador menor (4% na força e ±10% no ritmo
+da queima, antes 18% e ±35%), porque o pulso agora amplifica a variação. A variação entre explosões ficou em 0,17 a
+1400 rpm (real 0,16), 0,18 a 2000 rpm (real 0,33) e 0,25 na lenta solta (antes 0,13). As duas rotações puxam para
+lados opostos: o real fica mais brilhante a 2000 rpm, o simulado a 1400.
+
 **O que ficou em aberto:**
 
 - **O agudo inchando uma vez por ciclo** (16 Hz a 2000 rpm). Ele vem da desigualdade entre cilindros e da queima
-  irregular do motor real: variação de 0,33 entre explosões, contra ~0,07–0,14 no simulado.
-- **A pressão no cilindro na abertura do escape em carga leve** é ~0,9–1,0 bar no modelo; num motor real fica em
-  ~1,5–2 bar. Causa provável: perda de calor pelas paredes alta demais (~45% da energia da queima em carga leve;
-  o real é ~25–35%). Mexer nisso muda todos os carros e pede a própria revisão.
+  irregular do motor real: variação de 0,33 entre explosões a 2000 rpm, contra 0,18 no simulado.
 - **Acima de 12 kHz** o simulado fica 8–12 dB abaixo, justamente onde a medida do celular é menos confiável.
 
-## Caso em andamento: o Mustang
+## Caso: o Mustang
 
-Gravação de celular de um Mustang GT segurando ~2027 rpm em neutro (24–50 s), comparada com o preset no modo de
-escape Esportivo:
+**Queixa:** falta o "semi-estalo a cada ciclo" que vem do escape, atrás e embaixo; som abafado, pior em giro baixo.
 
-- Espectro: o simulado acompanha o real de ~100 Hz a ~4 kHz (1 kHz −19 contra −23; 2 kHz −39 contra −30; 4 kHz −51
-  contra −47, em terços de oitava relativos a 150–400 Hz). Acima de 5 kHz o real tem um platô liso que parece piso do
-  celular e do ambiente.
-- Ordens do grave (relativas à ignição): real 1,5 −3, 2,5 −5, 3,5 −2, 2 −12, 3 −11; simulado 1,5 −13, 2,5 −11, 3 +7,
-  3,5 +4, 5 +2. Faltam as ordens do padrão de cada bancada (o "galope" do V8 cruzado) e sobram as 3, 3,5 e 5, que um trem
-  de pulsos uniforme por bancada não teria (ver a DFT do padrão de bancada em "O que olhar").
-- O agudo de 2–8 kHz do real é feito de estalos curtos e esparsos: curtose 17 mesmo depois do codec, desvio/média da
-  envoltória 0,78, sem cilindro fixo e com variação grande de ciclo a ciclo (0,5). O simulado tem curtose 4. Hipótese
-  ainda não auditada: pequenos estouros aleatórios no escape aberto em carga leve. A alternativa, um tique mecânico
-  como a bomba de alta pressão da injeção direta, seria presa à fase do comando e igual a cada ciclo, o que não se vê.
-- Na comparação apareceu um erro de regra: o modo Esportivo fechava a válvula com o pedal em ~5% em ponto morto. Agora
-  ele só fecha rodando leve em marcha.
+**Gravação:** vídeo do YouTube (Opus) de um Mustang GT, celular atrás do carro, na altura do escape. 0–21 s são
+aceleradas com cortes de cena. 21–52 s são uma lenta estável a ~1248 rpm (±0,9%), provavelmente a lenta acelerada da
+partida a frio: um carro de lenta 700 rpm segurado 30 s nessa rotação, com o agudo subindo 4,5–5 dB em 20 s e o grave
+parado. Ela só serve de referência para o estado frio; para o motor quente falta uma gravação.
+
+**O erro de rotação:** a primeira comparação foi feita a 2027 rpm (ver Armadilhas). Tudo o que saiu dela caiu, inclusive
+a hipótese de "pequenos estouros aleatórios no escape em carga leve".
+
+**O que o real tem (21–52 s, 289 ciclos):**
+
+- O agudo de 2–20 kHz é o escape de uma bancada só: 4 rajadas por ciclo com o espaçamento de uma bancada do V8 cruzado
+  (90, 180, 270, 180°). Um cilindro domina (5,7× a média em 4–16 kHz; 2,3× o segundo).
+- Cada rajada dura 3,5–4 ms, sobe em ~2 ms e chega ao pico 2,1–2,6 ms depois da frente do pulso grave do próprio
+  cilindro. A força acompanha o pulso do cilindro (correlação +0,69; ±10% no grave dá ±36% no agudo) e varia pouco de
+  ciclo a ciclo (0,28–0,36). É o "semi-estalo a cada ciclo": o jato da abertura do escape.
+- Fração periódica no ciclo: 0,59 (4–8 kHz) e 0,69 (8–16 kHz). Curtose de 2–8 kHz: 12.
+- Em 1–2 kHz há 8 picos por ciclo (as duas bancadas); acima de 4 kHz, só os 4 da bancada do lado do celular.
+- Descartados: estouros aleatórios (o real é todo ciclo, preso à grade), bicos da injeção direta (8 por ciclo, iguais),
+  bomba de alta pressão (espaçamento regular), trem de válvulas, codec, vento.
+- Ordens do grave relativas à ignição: 2,5 +2, 3,5 −8, 5 +1, 6 +4. É o padrão de uma bancada vista de perto.
+
+**O que o simulador tinha (1250 rpm, só o motor):** 20–50 dB a menos que o real acima de 4 kHz (8 kHz −82 contra −50;
+16 kHz −110 contra −58, relativos a 150–400 Hz). O agudo que se ouvia ali era o som de ambiente. Em carga leve não
+existia o estouro da abertura do escape: a pressão no cilindro na abertura ficava em 0,73 bar quente e 1,05 bar a frio,
+contra ~1,2–1,6 e ~2–2,8 bar estimados para o motor real. Causas, em ordem de peso:
+
+1. Queima rápida demais em lenta: 10–90% em 21°, contra 40–60° num motor real com os gases residuais da lenta. O motor
+   simulado é eficiente demais, pede pouco ar e a pressão no fim da expansão fica baixa.
+2. A centelha não cai depois do ponto morto superior: o atraso de aquecimento do catalisador além do avanço base é
+   ignorado sem aviso, então o estado de partida a frio do carro real não é representável.
+3. Perda de calor pelas paredes de 37% do calor da queima em lenta (real 25–35%) e de 11% em carga (real 15–25%): não
+   depende da pressão.
+4. O ruído do jato na válvula tem limiar (razão de pressões 1,3) e um fator de velocidade do pistão. Um jato não tem
+   limiar, e a velocidade dele é dada pela razão de pressões, não pelo pistão.
+
+**Teste do auditor numa cópia do DSP:** queima mais lenta abaixo de 0,6 bar no coletor, perda de calor ×0,6, centelha
+depois do ponto morto com 25° de atraso a frio e ruído do jato ∝ Mach³.
+
+- Na abertura do escape: 1,28 bar quente e 2,47 bar frio.
+- Terços de oitava de 2,5–5 kHz a ±2,5 dB do real (antes, −12 a −20 dB), com as rajadas presas ao ciclo e a variação
+  ciclo a ciclo certa.
+- Falta: o domínio de um cilindro, a duração da rajada e o nível acima de 8 kHz (−6 a −18 dB) e em 0,5–2 kHz (−5 a −12 dB).
+- Efeitos colaterais: +3,5 a +5,5 dB em 1,6–8 kHz a 2500 rpm com 30% de pedal; +2,4 a +3,4 dB em 1–3 kHz em plena carga.
+  O Fusca regride (1–8 kHz, 3–5 dB abaixo das metas) e precisa de reajuste do vazamento do escape e da variação do
+  carburador.
+
+**Bancadas:** com o X do preset, o simulado tem a ordem 2,5 em −24 dB mesmo num canal só. Com H (acoplamento 0,2–0,35)
+e o ouvinte numa ponteira, fica em −11 a −18 dB. Falta confirmar se o carro da gravação tem X ou H.
+
+**Metas** (frio, 1200–1250 rpm, válvula aberta, só o motor, um canal):
+
+- Terços de oitava relativos a 150–400 Hz: 1k −23,5 e 2k −30,6 (±3); 2,5k −42, 3,2k −44, 4k −47, 5k −49, 6,3k −47 e
+  8k −50 (±5); 10–16k −52 a −58 (±6–8).
+- Fração periódica no ciclo: 0,55–0,75 (4–8 kHz), 0,65–0,80 (8–16 kHz), 0,40–0,55 (1–2 kHz).
+- Rajadas: 4 por ciclo, espaçadas (90, 180, 270, 180°) ±15°; a maior 4–6× a média, as outras 1,3–2,5×; largura a meia
+  altura 2,5–4 ms; pico 1,5–3 ms depois da frente do pulso grave; variação ciclo a ciclo 0,25–0,40.
+- Envoltória de 2–8 kHz: desvio/média 0,7–0,9, p95 2,4, curtose ≥ 10.
+- Ordens do grave (um canal): 2,5 ≥ −6, 3,5 ≥ −12, 5 e 6 de 0 a +4 relativas à ignição.
+- Quente a 1250 rpm: 1,2–1,5 bar na abertura do escape (metas de som pendentes de uma gravação com o motor quente).
+
+**O que foi implementado** (`TECNICO.md`): a queima mais lenta no vácuo, a centelha depois do ponto morto com 25° de
+atraso a frio e a lei do jato sem limiar, como no teste do auditor. Duas diferenças:
+
+- A perda de calor não caiu por igual (×0,6): passou a depender da pressão, `(p_col/p₀)^0,4`. Por igual, ela caía
+  também em carga, onde já estava abaixo do real, e a plena carga ganhava +3 a +3,7 dB em 1,6–2 kHz. Assim a lenta
+  fica como no teste e a plena carga não muda.
+- O ganho do jato desceu de 0,07 para 0,05, para que o meio pé (2500 rpm, 30%) não subisse mais de ~2 dB.
+
+**Resultado** (lenta fria, 1190–1250 rpm, um canal contra um canal da gravação):
+
+| | 2,5k | 4k | 6,3k | 8k | 16k | Fração periódica 4–8k / 8–16k | Curtose 2–8k |
+|---|---|---|---|---|---|---|---|
+| Real | −37 | −44 | −45 | −48 | −57 | 0,74 / 0,81 | 12,8 |
+| Antes | −46 | −58 | −69 | −78 | −94 | 0,62 / 0,67 (cliques) | 4,2 |
+| Agora | −45 | −49 | −55 | −59 | −78 | 0,73 / 0,82 | 5,8 |
+
+Efeitos colaterais: 2500 rpm com 30% de pedal, até +2,2 dB em 3–5 kHz; plena carga a 4000 rpm, de −1,2 a +0,1 dB;
+lenta quente, +5 a +8 dB acima de 8 kHz; calibração do Mustang igual (ganho 0,625). Na lenta quente a pressão na
+abertura do escape ficou em 1,21 bar e a variação entre explosões em 0,17 (antes 0,11, com a de ciclo a ciclo igual).
+
+**Pendente:**
+
+- O agudo ainda fica 6–11 dB abaixo em 2,5–8 kHz e 14–22 dB acima de 10 kHz.
+- Falta o cilindro dominante: no real um estalo é 2,3× o segundo; no simulado os 4 da bancada são parecidos.
+- 0,5–2 kHz fica 5–12 dB abaixo (abafador esportivo e caminho da válvula, outro assunto).
+- O padrão de bancada no grave (ordem 2,5) depende de X ou H. O carro é um GT 2025–26 (S650), e as fontes não confirmam
+  qual dos dois vem de fábrica (um blog de loja diz X com ressonadores). O preset segue com X.
+- Uma gravação com o motor quente, para as metas do estado quente.
+
+Outro achado da primeira comparação continua valendo: o modo Esportivo fechava a válvula com o pedal em ~5% em ponto
+morto. Agora ele só fecha rodando leve em marcha.
 
 ## Ferramentas
 
@@ -264,7 +359,7 @@ python3 -m venv /tmp/venv-som && /tmp/venv-som/bin/pip install numpy scipy matpl
 | Arquivo | O que faz |
 |---|---|
 | `harness.js` | Monta um preset como o `app.js` faz (geometria e calibração) e renderiza roteiros de pedal, marcha e ignição. `use(arquivo)` troca o `dsp.js` |
-| `render.js` | Renderiza um preset segurando uma rotação em neutro e grava `.f32`. `DSP=` aponta outra versão do DSP |
+| `render.js` | Renderiza um preset segurando uma rotação em neutro e grava `.f32`. `DSP=` aponta outra versão do DSP; `PARAMS=` muda escuta e mixagem (ex.: sem ambiente) |
 | `regressao.js` | Todos os presets: partida a frio, lenta, acelerada, desaceleração, em marcha e arcade. Só imprime falhas |
 | `comparar.py` | Figura: PSD normalizada, espectrogramas, modulação do agudo e dois ciclos de forma de onda |
 | `tercos.py` | Terços de oitava relativos a 150–400 Hz e profundidade da envoltória do agudo |

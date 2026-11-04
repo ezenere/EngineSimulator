@@ -603,6 +603,24 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
       ad.append(slider('boost', 'Pressão máxima', 0.3, 2.5, 0.05, spec.boost || 1, (v) => `${v.toFixed(2)} bar`,
         (v) => setSpec({ boost: v }, { structural: false, render: false })));
     }
+    if (spec.aspiration === 'super') {
+      // o uivo é a pulsação da descarga a cada passagem de lóbulo (ou de pá): giro × polia × passagens por volta
+      const scType = spec.scType || 'screw', scNote = el('p', { class: 'note' });
+      const order = () => (spec.scRatio || 2.4) * (spec.scLobes || 6) * (scType === 'roots' ? 2 : 1);
+      const showOrder = () => { scNote.textContent = `O uivo fica em ${order().toFixed(1)}× o giro: ${Math.round(order() * spec.redline / 60)} Hz na faixa vermelha, mais os harmônicos.`; };
+      ad.append(field('Tipo do compressor', chipGroup('scType', [
+        { value: 'roots', label: 'Roots', title: 'Dois rotores de lóbulos sem compressão interna: cada bolsão abre de uma vez na descarga, uivo áspero' },
+        { value: 'screw', label: 'Duplo parafuso', title: 'Rotores helicoidais com compressão interna: uivo mais limpo e agudo' },
+        { value: 'centrifugal', label: 'Centrífugo', title: 'Rotor de pás em rotação muito alta: assobio quase sem pulsação' },
+      ], scType, (v) => setSpec({ scType: v }, { structural: false }))));
+      ad.append(slider('scRatio', 'Relação da polia', 1, 12, 0.01, spec.scRatio || 2.4, (v) => `${v.toFixed(2)}:1`,
+        (v) => { setSpec({ scRatio: v }, { structural: false, render: false }); showOrder(); }));
+      ad.append(slider('scLobes', scType === 'centrifugal' ? 'Pás do rotor' : scType === 'roots' ? 'Lóbulos de cada rotor' : 'Lóbulos do rotor da correia', 2, 12, 1, spec.scLobes || 6, (v) => `${v}`,
+        (v) => { setSpec({ scLobes: v }, { structural: false, render: false }); showOrder(); }));
+      ad.append(slider('scWhine', 'Volume do uivo', -30, 12, 1, spec.scWhine ?? 0, (v) => `${v > 0 ? '+' : ''}${v} dB`,
+        (v) => setSpec({ scWhine: v }, { structural: false, render: false })));
+      showOrder(); ad.append(scNote);
+    }
     ad.append(field('Alimentação', chipGroup('fuel', [
       { value: 'efi', label: 'Injeção' },
       { value: 'carb', label: 'Carburador', title: 'A mistura se divide mal pelo coletor: cada cilindro queima um pouco diferente e o motor "galopa"' },
@@ -668,7 +686,7 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     document.querySelectorAll('.preset').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.id === presetId)));
   }
   // cada carro vem com o próprio escape: acessórios que ele não define voltam ao padrão
-  const STOCK = { valve: 'none', pipeD: 2.5, reso: false, twoStep: 'off', launchRpm: undefined, fuel: 'efi', shiftTime: undefined, driveMode: 'auto', limiter: 'ign', limiterBand: 70, limiterHold: 0.07, power: undefined, mass: undefined, wheelR: undefined, drag: undefined, ratios: undefined, finalDrive: undefined, overrun: 'cut', cat: true, tipD: undefined, cooling: 'water', engine: undefined, breakout: 'sealed', compression: undefined };
+  const STOCK = { valve: 'none', pipeD: 2.5, reso: false, twoStep: 'off', launchRpm: undefined, fuel: 'efi', shiftTime: undefined, driveMode: 'auto', limiter: 'ign', limiterBand: 70, limiterHold: 0.07, power: undefined, mass: undefined, wheelR: undefined, drag: undefined, ratios: undefined, finalDrive: undefined, overrun: 'cut', cat: true, tipD: undefined, cooling: 'water', engine: undefined, breakout: 'sealed', compression: undefined, scType: undefined, scRatio: undefined, scLobes: undefined, scWhine: undefined };
   function loadPreset(p) {
     spec = { ...STOCK, ...p };
     pushConfig(true, true);

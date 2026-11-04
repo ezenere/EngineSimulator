@@ -70,7 +70,7 @@
       valve: 'sport', pipeD: 3, ...veh(343, 1750, [4.70, 2.99, 2.15, 1.80, 1.52, 1.28, 1.00, 0.85, 0.69, 0.64], 3.55, 0.35) }),
     car('gt500', 'muscle', 'Shelby GT500', '5.2 V8 com compressor', V8X, {
       order: '1-8-7-2-6-5-4-3', displacement: 5.2, redline: 7500, idle: 750, cam: 0.45, inertia: 0.9,
-      header: 'equal', routing: 'xpipe', muffler: 'sport', pipeLen: 3.0, ...blower(0.83), intake: 'sport', overrun: 'cut', cat: true, ...DBW, gears: 7, transmission: 'auto', shiftTime: 0.12,
+      header: 'equal', routing: 'xpipe', muffler: 'sport', pipeLen: 3.0, ...blower(0.83), scType: 'roots', scRatio: 2.4, scLobes: 4, scWhine: -9, intake: 'sport', overrun: 'cut', cat: true, ...DBW, gears: 7, transmission: 'auto', shiftTime: 0.12,
       valve: 'auto', pipeD: 3, ...veh(567, 1900, [3.75, 2.44, 1.68, 1.26, 1.00, 0.85, 0.78], 3.73, 0.345) }),
     car('gt350', 'muscle', 'Shelby GT350', '5.2 V8 Voodoo · flat-plane 8250 rpm', V8F, {
       displacement: 5.2, redline: 8250, idle: 800, cam: 0.45, inertia: 0.75,
@@ -78,7 +78,7 @@
       valve: 'auto', pipeD: 3, ...veh(392, 1710, [3.24, 2.26, 1.63, 1.26, 1.00, 0.63], 3.73, 0.345, 0.5) }),
     car('hellcat', 'muscle', 'Dodge Challenger Hellcat', '6.2 HEMI com compressor', V8X, {
       displacement: 6.2, redline: 6200, idle: 650, cam: 0.45, inertia: 1.25,
-      header: 'unequal', routing: 'dual', muffler: 'sport', pipeLen: 3.2, ...blower(0.8), intake: 'sport', overrun: 'cut', cat: true, ...DBW, gears: 8, transmission: 'auto', shiftTime: 0.3,
+      header: 'unequal', routing: 'dual', muffler: 'sport', pipeLen: 3.2, ...blower(0.8), scType: 'screw', scRatio: 2.36, scLobes: 5, scWhine: 0, intake: 'sport', overrun: 'cut', cat: true, ...DBW, gears: 8, transmission: 'auto', shiftTime: 0.3,
       valve: 'auto', pipeD: 3, ...veh(527, 2050, [4.71, 3.14, 2.10, 1.67, 1.29, 1.00, 0.84, 0.67], 2.62, 0.35, 0.55) }),
     car('corvette', 'muscle', 'Corvette Z06 C6', '7.0 V8 LS7 · 7100 rpm', V8X, {
       order: '1-8-7-2-6-5-4-3', displacement: 7.0, redline: 7100, idle: 750, cam: 0.5, inertia: 0.95,
@@ -318,7 +318,7 @@
       ...moto(149, 282, [2.60, 2.16, 1.79, 1.56, 1.39, 1.26], 3.86) }),
     car('h2', 'moto', 'Kawasaki Ninja H2', '1.0 4 em linha com compressor', { layout: 'inline', cylinders: 4, crank: 'flat', order: '1-2-4-3' }, {
       displacement: 1.0, redline: 14000, idle: 1200, cam: 0.4, inertia: 0.4,
-      header: 'equal', routing: 'single', muffler: 'sport', pipeLen: 1.3, ...blower(1.0), intake: 'airbox', overrun: 'cut', cat: true, ...MOTO('ign'), gears: 6, transmission: 'manual', shiftTime: 0.07,
+      header: 'equal', routing: 'single', muffler: 'sport', pipeLen: 1.3, ...blower(1.0), scType: 'centrifugal', scRatio: 9.2, scLobes: 6, scWhine: -10, intake: 'airbox', overrun: 'cut', cat: true, ...MOTO('ign'), gears: 6, transmission: 'manual', shiftTime: 0.07,
       ...moto(170, 313, [3.19, 2.53, 2.05, 1.73, 1.50, 1.35], 3.79, 0.32, 0.3) }),
     car('hayabusa', 'moto', 'Suzuki Hayabusa', '1.34 4 em linha · 11.000 rpm', { layout: 'inline', cylinders: 4, crank: 'flat', order: '1-2-4-3' }, {
       displacement: 1.34, redline: 11000, idle: 1100, cam: 0.35, inertia: 0.45,
