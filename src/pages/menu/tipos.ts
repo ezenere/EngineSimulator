@@ -26,7 +26,7 @@ export const TIPOS: TipoDeMotor[] = [
   { id: 'vapor', nome: 'Vapor',
     descricao: 'Sopro do escape, regulador, bielas e apito.',
     exemplos: 'Locomotivas, máquinas estacionárias, Stanley, barcos' },
-  { id: 'eletrico', nome: 'Elétrico',
+  { id: 'eletrico', nome: 'Elétrico', pagina: './eletrico.html',
     descricao: 'Ranhuras, PWM e redução.',
     exemplos: 'Carros elétricos, metrô, Taurus, trem-bala, bonde, drones' },
   { id: 'testes', nome: 'Passagem e modo de testes', pagina: './passagem.html',

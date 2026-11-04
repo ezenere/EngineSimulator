@@ -7,7 +7,8 @@ Simuladores de som de motor que rodam direto no navegador. O site começa num me
 - **Diesel**, picapes, caminhões, geradores e locomotivas: https://ezenere.com/data/engine/diesel.html
 - **Radial**, motores em estrela de avião (Corsair, P-47, DC-3, T-6, Yak-52, R-4360), helicóptero S-55, Sherman, Monaco-Trossi e Megola: https://ezenere.com/data/engine/radial.html
 - **Passagem**, qualquer coisa passando por você (trem-bala, carro na rua, picape diesel, locomotiva, turboélice, jato, helicóptero R44, Corsair, Yak-52, Sherman) com o ouvinte livre em 3D: https://ezenere.com/data/engine/passagem.html
-- **Em construção:** rotativos (Wankel), vapor e elétrico.
+- **Elétrico**, carros elétricos, metrôs e trens (o do-re-mi do Taurus), trem-bala, bonde, trólebus, ferramentas e drone: https://ezenere.com/data/engine/eletrico.html
+- **Em construção:** rotativos (Wankel) e vapor.
 
 ![Ronco com uma Ferrari 458 no corte de giro](docs/ronco.png)
 
@@ -60,6 +61,12 @@ Motores em estrela: o R-2800 do Corsair e do P-47, o R-1830 do DC-3, o R-1820 do
 
 **Teclas:** `I` partida (energizar, engatar, magnetos) · `W` manete · `M` magnetos · `[` e `]` mistura · `,` e `.` manete de passo · `C` muda o microfone.
 
+## Elétrico (motores elétricos)
+
+Carros (Tesla Model 3, Nissan Leaf, BYD Dolphin, Fórmula E), trens e metrôs (o Siemens Taurus que sobe a escala "do-re-mi" ao partir, Vectron, CPTM 9500 e 9000, Metrô de São Paulo, Shinkansen N700, TGV), bonde e trólebus, furadeira e liquidificador, o drone DJI Mavic e um motor industrial de 11 kW. O som sai das forças magnéticas na carcaça, do inversor (a portadora e as bandas laterais, as "marchas" do modo síncrono), da redução, dos ventiladores, das escovas e das hélices; nos carros, pneus e vento entram junto. Você acelera, regenera, troca o modo de modulação, liga o som de aviso (AVAS), põe carga, trava a velocidade num dinamômetro e escolhe onde ouvir (fora, na cabine, junto ao motor ou livre). O espectro mostra cada linha com o nome dela.
+
+**Teclas:** `Espaço` liga e desliga · `↑` e `↓` acelerador · `R` regeneração (segure) · `M` modo de modulação.
+
 ## Dicas
 
 - Use fone de ouvido: o som tem esquerda e direita, e com a câmera atrás do carro ele soa fora da cabeça, como se o carro estivesse ali.
@@ -87,7 +94,7 @@ O projeto usa [Vite](https://vite.dev/), TypeScript e React. O React fica só na
 - `npm run preview`: serve o `dist/` gerado, para testar o build antes de publicar.
 - `npx tsx tools/render.ts ronco mustang rev saida/`: renderiza um cenário para WAV sem navegador; `npx tsx tools/compare-wav.ts a.wav b.wav` compara dois WAVs amostra a amostra. Detalhes no começo de cada arquivo em `tools/`.
 
-Páginas: `index.html` (menu), `ronco.html`, `turbina.html`, `diesel.html`, `radial.html` e `passagem.html`, com o código em `src/pages/`. A estrutura das pastas está em [`docs/TECNICO.md`](docs/TECNICO.md).
+Páginas: `index.html` (menu), `ronco.html`, `turbina.html`, `diesel.html`, `radial.html`, `eletrico.html` e `passagem.html`, com o código em `src/pages/`. A estrutura das pastas está em [`docs/TECNICO.md`](docs/TECNICO.md).
 
 ## Quer saber como funciona por dentro?
 
