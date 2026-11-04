@@ -23,7 +23,9 @@ O site é compilado com Vite (TypeScript + React) e publicado como páginas est�
 |---|---|
 | `index.html`, `src/pages/menu/` | Menu de tipos de motor (porta de entrada do site) |
 | `ronco.html`, `src/pages/ronco/` | Página do Ronco (por enquanto, casca com a navegação de presets e a prova do worklet) |
-| `turbina.html`, `src/pages/turbina/` | Página da Turbina (idem) |
+| `turbina.html`, `src/pages/turbina/` | Página da Turbina, migrada de `jato.html` + `jet-app.js`: `controle.ts` (estado e mensagens para o DSP, fora do React), `Painel.tsx` (controles), `Turbina.tsx` (barra, presets, manete, instrumentos, laço de desenho), `desenho.ts` (EICAS, fan, osciloscópio, mapa e leituras em canvas) |
+| `src/engines/turbina/` | DSP da Turbina em TypeScript: `dsp.ts` (`JetDSP`), `presets.ts` (os aviões, tipo `PresetTurbina`), `constantes.ts` (tabela de seno, diretividade, volta da passagem); o worklet é `src/worklet/processador-turbina.ts` (`turbina-engine`) |
+| `tools/turbina-paridade.ts`, `tools/turbina-testa-navegador.mjs` | Prova de som idêntico ao legado (todos os aviões) e teste da página no Chromium e no Firefox headless |
 | `src/pages/comum/` | Casca comum das páginas durante a migração e leitura dos presets legados |
 | `src/ui/` | Componentes React compartilhados (`Slider`, `ChipGroup`, `Field`, `Section`, `FamilyNav`, `PresetNav`, `Barra`) e os estilos (`estilo.css`, ex-`style.css`; `turbina.css`, ex-`jet.css`) |
 | `src/ui/audio/` | `AudioShell` (contexto React) e `CadeiaDeAudio`: AudioContext, carga do worklet e a cadeia compressor → EQ → seco/molhado → ambiente → analisador; ambientes e respostas ao impulso; perfis de Ronco e Turbina |
@@ -36,10 +38,10 @@ O site é compilado com Vite (TypeScript + React) e publicado como páginas est�
 | `src/presets.js` | Os carros e motos (um preset por modelo, agrupados em famílias) |
 | `src/dsp.js` | Toda a síntese do Ronco: termodinâmica, escapamento, câmbio, temperatura, ouvinte |
 | `src/app.js`, `style.css` | Interface do Ronco: painel, mostradores, teclado, acústica do ambiente (a página `index.html` que a carregava virou o menu; a versão completa está em `master`) |
-| `jato.html`, `jet.css` | Página da Turbina legada (abre no `npm run dev`, mas não entra no `dist/`) |
-| `src/jet-presets.js` | Os aviões |
-| `src/jet-dsp.js` | Toda a síntese da Turbina |
-| `src/jet-app.js` | Interface da Turbina |
+| `jato.html`, `jet.css` | Página da Turbina legada (abre no `npm run dev`, mas não entra no `dist/`; já migrada, fica como referência até o fim da etapa) |
+| `src/jet-presets.js` | Os aviões (migrados para `src/engines/turbina/presets.ts`) |
+| `src/jet-dsp.js` | Toda a síntese da Turbina (migrada para `src/engines/turbina/dsp.ts`) |
+| `src/jet-app.js` | Interface da Turbina (migrada para `src/pages/turbina/`) |
 
 Os arquivos `*-dsp.js` legados ficam dentro de uma função-fábrica (`EngineDSPFactory`, `JetDSPFactory`) para poderem ser convertidos em texto com `toString()` e injetados num AudioWorklet. A mesma classe roda no Node, o que permite testar o som sem navegador. No código novo o truque acaba: o DSP é um módulo TypeScript comum, compilado num bundle próprio para o worklet (abaixo).
 
@@ -83,6 +85,10 @@ await ctx.audioWorklet.addModule(urlTom);
 - `npx tsx tools/render.ts ronco <presets|all> <idle|cold|rev|wot|sweep> <pasta> [ouvinte]` e `npx tsx tools/render.ts turbina <presets|all> <start|takeoff|flyby> <pasta> [ouvinte]` renderizam para WAV float 32 (`--pcm16` para 16 bits) e JSON de telemetria. `DSP=<arquivo>` troca o DSP: um legado CommonJS (ex.: `git show master:src/dsp.js > /tmp/dsp.master.js`) ou um módulo TS que exporte `EngineDSP`/`JetDSP`. `PRESETS=` e `GEOMETRY=` fazem o mesmo para presets e geometria. Os cenários e o laço (eventos no início de cada bloco de 128 amostras, telemetria depois do bloco) são os de `render.js`/`jetrender.js`; com `--pcm16` a saída é idêntica à desses harnesses (WAV conferido nos 68 carros em `rev`; WAV e JSON, byte a byte, em Mustang, Fusca e F1 V8 em `wot` e 737 e F-16 em `flyby`). Os acessórios padrão são o `STOCK` completo do `loadPreset()` de `app.js`.
 - `npx tsx tools/compare-wav.ts <a> <b> [--limite -90]` compara dois WAVs (ou duas pastas, por nome): diz se são idênticos e dá o erro máximo e RMS em dBFS e onde está a primeira diferença. Sai com código 0 se idênticos (ou abaixo do limite).
 - `npx tsx tools/acoustics-paridade.ts` recompila as fábricas legadas com um `return` que expõe as classes internas e passa as mesmas entradas pelos blocos de `src/acoustics/` e pelos legados, comparando bit a bit (RNG, utilitários, Biquad de cada tipo, Ψ e vazão, rede de guias de onda com cada abafador).
+
+### Paridade da Turbina
+
+`npx tsx tools/turbina-paridade.ts [ids] [--legado <ref>] [--sem-render]` (alguns minutos com os 34 aviões) tira `src/jet-dsp.js` e `src/jet-presets.js` de `git show master:` (ou de `<ref>`), confere os presets objeto a objeto, roda `tools/render.ts` com `DSP=`/`PRESETS=` do legado e do migrado em `start`, `takeoff` e `flyby` e compara com `tools/compare-wav.ts` (e os JSON byte a byte), e depois põe os dois DSPs lado a lado em cenários extras: estrondo sônico, rasante supersônico, a bordo com reversor, solo com `tune` e corte, reconfiguração, 44,1 kHz e bloco de 1024, nos 4 canais e em cada mensagem de telemetria. Sai com código ≠ 0 se algo não for idêntico. A página é testada com `node tools/turbina-testa-navegador.mjs <url>/turbina.html [--firefox] [--reserva]` (partida, manete, pós-combustão, reversor, passagem com estrondo, troca de avião e de ambiente, mensagens para o worklet, console).
 
 ## Caminho do áudio no navegador
 
