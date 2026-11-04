@@ -15,6 +15,7 @@ export function ProvaDoWorklet({ ambientes, telemetria }: {
   const [f, setF] = useState(220);
   const [amp, setAmp] = useState(0.2);
   const [amb, setAmb] = useState(Object.keys(ambientes)[0]);
+  const [solto, setSolto] = useState(220); // último valor em que o slider foi solto (evento change)
   const [leitura, setLeitura] = useState({ f: 0, t: 0, rms: -Infinity });
 
   async function alternar() {
@@ -50,14 +51,14 @@ export function ProvaDoWorklet({ ambientes, telemetria }: {
         </button>
       </div>
       <Slider id="provaF" rotulo="Frequência" min={55} max={880} passo={1} valor={f} formatar={hz}
-        aoMudar={(v) => { setF(v); audio?.send({ type: 'tom', f: v }); }} />
+        aoMudar={(v) => { setF(v); audio?.send({ type: 'tom', f: v }); }} aoSoltar={setSolto} />
       <Slider id="provaAmp" rotulo="Volume" min={0} max={0.5} passo={0.01} valor={amp} formatar={pct}
         aoMudar={(v) => { setAmp(v); audio?.send({ type: 'tom', amp: v }); }} />
       <Field rotulo="Ambiente">
         <ChipGroup id="provaAmb" opcoes={Object.entries(ambientes).map(([k, v]) => ({ valor: k, rotulo: v.name }))} atual={amb}
           aoEscolher={(k) => { setAmb(k); audio?.setAmbiente(k); }} />
       </Field>
-      <div className="status" id="provaStatus" data-estado={estado} data-modo={audio?.modo ?? ''} data-f={leitura.f.toFixed(1)} data-rms={leitura.rms.toFixed(1)}>
+      <div className="status" id="provaStatus" data-estado={estado} data-modo={audio?.modo ?? ''} data-f={leitura.f.toFixed(1)} data-solto={solto} data-rms={leitura.rms.toFixed(1)}>
         <div className="ro-row"><span className="k">Áudio</span><span className="v mono">{estado}{audio ? ` · ${audio.modo} · ${audio.ctx.sampleRate} Hz` : ''}</span></div>
         <div className="ro-row"><span className="k">Worklet</span><span className="v mono">{audio ? `${leitura.f.toFixed(1)} Hz · ${leitura.t.toFixed(1)} s` : '—'}</span></div>
         <div className="ro-row"><span className="k">Saída</span><span className="v mono">{audio && Number.isFinite(leitura.rms) ? `${leitura.rms.toFixed(1)} dBFS` : '—'}</span></div>
