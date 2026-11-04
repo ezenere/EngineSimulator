@@ -62,13 +62,18 @@ export function picoEm(x: ArrayLike<number>, sr: number, t: number, jan: number,
   return ((kb + d) * sr) / nfft;
 }
 
-/** energia por banda num trecho (média de quadros de 4096 com sobreposição de 75%), como analyze.py */
-export function bandas(x: ArrayLike<number>, sr: number, ini: number, fim: number, faixas: readonly (readonly [number, number])[]) {
+/**
+ * Energia por banda num trecho (média de quadros de 4096 com sobreposição de 75%), como analyze.py.
+ * Com mais de um canal, soma as potências (ouvidos): a soma mono de um sinal binaural cancela onde o ITD
+ * dá meia volta de fase (0,65 ms → 770 Hz).
+ */
+export function bandas(x: ArrayLike<number> | ArrayLike<number>[], sr: number, ini: number, fim: number, faixas: readonly (readonly [number, number])[]) {
+  const canais = Array.isArray(x) ? (x as ArrayLike<number>[]) : [x as ArrayLike<number>];
   const nseg = 4096, hop = 1024;
   const acc = new Float64Array(nseg / 2);
   let q = 0;
-  for (let i = ini; i + nseg <= fim; i += hop) { const P = espectro(x, i, nseg, nseg); for (let k = 0; k < P.length; k++) acc[k] += P[k]; q++; }
-  if (!q) { const P = espectro(x, ini, Math.max(64, fim - ini), nseg); for (let k = 0; k < P.length; k++) acc[k] += P[k]; q = 1; }
+  for (const c of canais) for (let i = ini; i + nseg <= fim; i += hop) { const P = espectro(c, i, nseg, nseg); for (let k = 0; k < P.length; k++) acc[k] += P[k]; q++; }
+  if (!q) for (const c of canais) { const P = espectro(c, ini, Math.max(64, fim - ini), nseg); for (let k = 0; k < P.length; k++) acc[k] += P[k]; q++; }
   return faixas.map(([a, b]) => {
     let s = 0;
     for (let k = 0; k < acc.length; k++) { const f = (k * sr) / nseg; if (f >= a && f < b) s += acc[k]; }
@@ -79,13 +84,14 @@ export function bandas(x: ArrayLike<number>, sr: number, ini: number, fim: numbe
 export const FAIXAS_PROJETO: readonly (readonly [number, number])[] = [[60, 150], [150, 400], [400, 1000], [1000, 2500], [2500, 6000], [6000, 12000]];
 
 /** dB relativos à banda 150–400 Hz (tabela do projeto) e o centroide */
-export function balanco(x: ArrayLike<number>, sr: number, ini: number, fim: number) {
-  const e = bandas(x, sr, ini, fim, FAIXAS_PROJETO);
+export function balanco(x: ArrayLike<number> | ArrayLike<number>[], sr: number, ini: number, fim: number) {
+  const canais = Array.isArray(x) ? (x as ArrayLike<number>[]) : [x as ArrayLike<number>];
+  const e = bandas(canais, sr, ini, fim, FAIXAS_PROJETO);
   const ref = e[1];
   const rel = e.map((v) => 10 * Math.log10(v / ref + 1e-30));
   // centroide
   const nseg = 4096; let num = 0, den = 0;
-  for (let i = ini; i + nseg <= fim; i += 2048) { const P = espectro(x, i, nseg, nseg); for (let k = 1; k < P.length; k++) { const f = (k * sr) / nseg; if (f > 20) { num += f * P[k]; den += P[k]; } } }
+  for (const c of canais) for (let i = ini; i + nseg <= fim; i += 2048) { const P = espectro(c, i, nseg, nseg); for (let k = 1; k < P.length; k++) { const f = (k * sr) / nseg; if (f > 20) { num += f * P[k]; den += P[k]; } } }
   return { rel, centroide: num / (den || 1) };
 }
 
@@ -113,6 +119,12 @@ export function leq(L: Float32Array, R: Float32Array, sr: number, escala: number
     if (i >= ini) e += 0.5 * (l * l + r * r);
   }
   return 10 * Math.log10(e / (fim - ini) / 4e-10 + 1e-30);
+}
+
+/** envoltória dos dois ouvidos (média das potências), em dB */
+export function envoltoriaEst(L: ArrayLike<number>, R: ArrayLike<number>, sr: number, fa: number, fb: number, jan = 0.02, passo = 0.005) {
+  const a = envoltoria(L, sr, fa, fb, jan, passo), b = envoltoria(R, sr, fa, fb, jan, passo);
+  return a.map((x, i) => 10 * Math.log10(0.5 * (Math.pow(10, x / 10) + Math.pow(10, b[i] / 10))));
 }
 
 /** envoltória RMS (dB) de janelas de `jan` s numa banda [fa, fb], uma amostra a cada `passo` s */

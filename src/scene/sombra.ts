@@ -60,14 +60,16 @@ export class CalculoSombra {
     const dx2 = dx * dx, direto = Math.sqrt(dx2 + D2);
     const temBaixo = zPiso >= 0.05;
     if (!this.cruza(ys, zs, yo, zo, -hw, hw, zPiso, altura)) {
-      // iluminado: δ < 0 medido pelo canto mais próximo da linha de visada
+      // iluminado: δ < 0 medido pelo canto mais próximo da linha de visada, na SEÇÃO (2D). Com o
+      // desdobramento 3D o δ de qualquer canto encolhe com Δx e uma fonte na face, vista de longe ao
+      // longo da via, ganharia uma atenuação de borda que não existe (a borda não está no caminho).
       let melhor = Infinity;
       for (let k = 0; k < 4; k++) {
         const cy = k & 1 ? hw : -hw, cz = k & 2 ? altura : zPiso;
         if (!temBaixo && !(k & 2)) continue;
         const p = Math.hypot(cy - ys, cz - zs) + Math.hypot(yo - cy, zo - cz);
-        const d3 = Math.sqrt(dx2 + p * p) - direto;
-        if (d3 < melhor) melhor = d3;
+        const d2 = p - D;
+        if (d2 < melhor) melhor = d2;
       }
       if (!isFinite(melhor)) return;
       this.delta = -melhor;

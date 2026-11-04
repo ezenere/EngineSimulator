@@ -18,7 +18,7 @@ const sem = { vento: 0, ventilacao: 0, murmurio: 0 };
 export const AMBIENTES_PASSAGEM: Record<'ceu' | 'corte' | 'estacao' | 'tunel' | 'ponte', Ambiente> = {
   ceu: {
     id: 'ceu', solo: { tipo: 'brita' },
-    reverb: { len: 0.8, tau: 0.08, diff: 0.35, wet: 0.05, dry: 1, echoes: [], rt60: [0.6, 0.4, 0.3, 0.2] },
+    reverb: { len: 0.8, tau: 0.08, diff: 0.35, wet: 0.005, dry: 1, echoes: [], rt60: [0.6, 0.4, 0.3, 0.2] },
     fundo: { ...sem, vento: 38 },
   },
   corte: {
@@ -49,10 +49,12 @@ export const AMBIENTES_PASSAGEM: Record<'ceu' | 'corte' | 'estacao' | 'tunel' | 
 };
 
 /**
- * Expoente da distância no envio (1/r^e). Ao ar livre o envio cai com 1/√r (o roadS do Ronco); num
- * túnel o som é guiado e o campo reverberante quase não depende de onde está a fonte (e pequeno).
+ * Expoente da distância no envio (1/r^e). Ao ar livre o envio cai com 1/√r (o roadS do Ronco). No túnel
+ * vale 0,8, ajustado com o ganho do molhado (wet 4, razão de potência reverberante/envio) para os dois
+ * alvos de 2.10 ao mesmo tempo: +7 dB no L_Aeq,tp sobre o céu aberto e o nível com o nariz a 100 m só
+ * 10–12 dB abaixo do pico (com 0,5 o campo reverberante sobe cedo demais; com 1,0, tarde demais).
  */
-export function expoenteEnvio(amb: Ambiente) { return amb.id === 'tunel' ? 0.15 : amb.id === 'estacao' ? 0.35 : 0.5; }
+export function expoenteEnvio(amb: Ambiente) { return amb.id === 'tunel' ? 0.8 : 0.5; }
 
 /** RT60 efetivo: no túnel com brita o RT cai à metade (2.10). */
 export function rt60Efetivo(amb: Ambiente): readonly [number, number, number, number] {

@@ -11,13 +11,17 @@
 //   vao.k ×(N−1), 119, n 6 · pantografo.k ×2, 125 (115 carenado), n 6, z 5
 //   nariz / cauda (aero, pico 300 Hz) 119, n 6, mais as fontes 'pressao' (campo próximo, calculado pela Cena)
 //
-// Diretividade: o CENA.md não dá tabela para essas fontes. O rolamento usa um dipolo lateral brando
-// (eixo y, −4 dB ao longo da via; a roda vibra na direção do eixo do rodeiro); as aerodinâmicas são
-// omnidirecionais. expConv: rolamento 2 (monopolo), aero/vão/pantógrafo 3 (dipolo), como em 2.1.
+// Diretividade: o CENA.md não dá tabela para essas fontes. O rolamento é um dipolo lateral (eixo y,
+// cos θ limitado a −20 dB ao longo da via: a roda vibra na direção do eixo do rodeiro); as fontes
+// aerodinâmicas (camada limite na face, boca do vão, cavidade do truque, nariz, braços do pantógrafo)
+// são dipolos normais à face, mais brandos (−6 dB ao longo da via). Com fontes omnidirecionais e a
+// amplificação convectiva de dipolo (+8,7 dB chegando a 350 km/h) o trem chegando a 100 m ficava só
+// 16 dB abaixo do pico (alvo 23 ± 4). expConv: rolamento 2 (monopolo), aero/vão/pantógrafo 3 (dipolo), 2.1.
 import type { FonteSonora, Diretividade, Vec3, TipoFonte } from '../scene/tipos';
 import type { Portador, Corpo, Cinematica, ComandoPortador, TelemetriaPortador, Motor, FamiliaMotor, Segmento } from './tipos';
 import { COMPAT, validarCompat } from './compat';
 import { FonteRuido, FonteRolamento, FonteAero, FonteVao, FontePantografo, FonteTom } from './ruido';
+import { fatorPotenciaDir } from '../scene/filtros';
 
 export interface ConfigTrem {
   N: number;                  // vagões
@@ -61,7 +65,7 @@ const OMNI: Diretividade['tabela'] = [0, 0, 0, 0, 0, 0, 0];
 /** roda: a vibração axial do rodeiro irradia como dipolo lateral (cos θ, limitado a −20 dB ao longo da via) */
 const DIP_LATERAL: Diretividade['tabela'] = [0, -1.2, -6, -20, -6, -1.2, 0];
 /** fontes de parede (camada limite na face, boca do vão, cavidade do truque): dipolo normal à face */
-const DIP_FACE: Diretividade['tabela'] = [0, -1, -3, -6, -3, -1, 0];
+const DIP_FACE: Diretividade['tabela'] = [0, -1, -4, -10, -4, -1, 0];
 
 export class Trem implements Portador {
   readonly tipo = 'trem' as const;
@@ -127,13 +131,13 @@ export class Trem implements Portador {
     // pantógrafos
     c.pantografos.forEach((p, k) => {
       if (p < 1 || p > c.N) return;
-      lista.push({ id: `pantografo.${k}`, tipo: 'pantografo', pos: [xf(p - 1) - lc / 2, 0, 5.0], dir: d(OMNI, [1, 0, 0], 3), refDist: R, dentro: false });
+      lista.push({ id: `pantografo.${k}`, tipo: 'pantografo', pos: [xf(p - 1) - lc / 2, 0, 5.0], dir: d(DIP_FACE, [0, 1, 0], 3), refDist: R, dentro: false });
       ger.push(new FontePantografo(fs, { lw: c.carenagem ? LW_TREM.pantografoCarenado : LW_TREM.pantografo, n: 6, vRef: vr, refDist: R }, prox()));
     });
     // nariz e cauda: aero (pico 300 Hz) e pressão (campo próximo)
-    lista.push({ id: 'nariz', tipo: 'aero', pos: [L / 2, 0, 1.8], dir: d(OMNI, [1, 0, 0], 3), refDist: R, dentro: false });
+    lista.push({ id: 'nariz', tipo: 'aero', pos: [L / 2, 0, 1.8], dir: d(DIP_FACE, [0, 1, 0], 3), refDist: R, dentro: false });
     ger.push(new FonteAero(fs, { lw: LW_TREM.narizCauda, n: 6, vRef: vr, refDist: R }, prox(), 300));
-    lista.push({ id: 'cauda', tipo: 'aero', pos: [-L / 2, 0, 1.8], dir: d(OMNI, [1, 0, 0], 3), refDist: R, dentro: false });
+    lista.push({ id: 'cauda', tipo: 'aero', pos: [-L / 2, 0, 1.8], dir: d(DIP_FACE, [0, 1, 0], 3), refDist: R, dentro: false });
     ger.push(new FonteAero(fs, { lw: LW_TREM.narizCauda, n: 6, vRef: vr, refDist: R }, prox(), 300));
     lista.push({ id: 'pressao.nariz', tipo: 'pressao', pos: [L / 2, 0, 1.8], dir: d(OMNI, [1, 0, 0], 0), refDist: R, dentro: false });
     ger.push(null);
@@ -145,7 +149,8 @@ export class Trem implements Portador {
       lista.push({ id: 'tom', tipo: 'mecanica', pos: [L / 2, c.ladoOuvinte * (c.largura / 2 + 0.01), c.tom.z ?? 1.6], dir: d(OMNI, [1, 0, 0], c.tom.expConv ?? 2), refDist: R, dentro: false });
       ger.push(new FonteTom(fs, c.tom.f, pa));
     }
-    for (const g of ger) if (g instanceof FonteRuido) g.calibrar();
+    // L_W é potência: a fonte com diretividade sobe no eixo pelo índice de diretividade
+    ger.forEach((g, i) => { if (g instanceof FonteRuido) { g.calibrar(); g.gCal /= Math.sqrt(fatorPotenciaDir(lista[i].dir.tabela)); } });
     this.lista = lista; this.geradores = ger;
   }
 

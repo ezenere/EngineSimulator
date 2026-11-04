@@ -113,3 +113,15 @@ export function rmsCadeia(fs: number, cadeia: readonly Bq[], vari = 1 / 3, ponde
   }
   return Math.sqrt((p * vari) / (fs / 2));
 }
+
+/**
+ * Fator de potência de uma diretividade de eixo simétrico: média de 10^(D(θ)/10) sobre a esfera,
+ * (1/2)∫D²(θ)·sinθ dθ. Uma fonte calibrada em potência sonora (L_W) tem de ser multiplicada por
+ * 1/√(fator) para irradiar a potência certa: no eixo ela fica acima do nível omnidirecional pelo índice
+ * de diretividade (dipolo cos²: fator 1/3, +4,8 dB).
+ */
+export function fatorPotenciaDir(tab: readonly number[]) {
+  let s = 0; const n = 360;
+  for (let i = 0; i < n; i++) { const th = ((i + 0.5) / n) * Math.PI; s += Math.pow(10, dirDb(tab, (th * 180) / Math.PI) / 10) * Math.sin(th); }
+  return (s * (Math.PI / n)) / 2;
+}

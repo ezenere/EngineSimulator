@@ -206,7 +206,9 @@ export class Propagador {
           // envio: 1/√r como o roadS do Ronco (1,2/√r com a fonte a 5 m); sem a diretividade (o campo
           // reverberante recebe a potência irradiada em todas as direções). Em ambientes que guiam o som
           // (túnel) o expoente da distância é menor: `expEnvio`.
-          es.gsAlvo = R.envio * conv * (es.refDist / 5) * 1.2 * Math.pow(Math.max(rs.r, 3), -this.expEnvio) * Math.pow(3, this.expEnvio - 0.5);
+          // (o envio é tirado do sinal já com o ganho direto g = conv·D·refDist/r, então aqui vai a razão)
+          const gEnvio = conv * (es.refDist / 5) * 1.2 * Math.pow(Math.max(rs.r, 3), -this.expEnvio) * Math.pow(3, this.expEnvio - 0.5);
+          es.gsAlvo = g > 1e-12 ? (R.envio * gEnvio) / g : 0;
           // cabeça: direção de chegada = ouvinte → ponto de emissão
           const dx = -rs.ux, dy = -rs.uy;
           const lat = dx * O.lx + dy * O.ly, fr = dx * O.fx + dy * O.fy;   // seno lateral (com elevação) e frente
