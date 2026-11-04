@@ -14,16 +14,20 @@
     "paridade:turbina": "tsx tools/turbina-paridade.ts",
     "paridade:acoustics": "tsx tools/acoustics-paridade.ts",
     "navegador:ronco": "node tools/ronco-navegador.mjs",
-    "navegador:turbina": "node tools/turbina-testa-navegador.mjs"
+    "navegador:turbina": "node tools/turbina-testa-navegador.mjs",
+    "navegador:passagem": "node tools/passagem-navegador.mjs",
+    "teste:cena": "tsx tools/cena/valida.ts"
   },
   "dependencies": {
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "three": "^0.187.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.187.0",
     "@vitejs/plugin-react": "^6.2.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
