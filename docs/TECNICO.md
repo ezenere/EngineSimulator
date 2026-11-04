@@ -3,6 +3,7 @@
 Este documento explica a física e o processamento de áudio por trás dos dois simuladores. É para quem quer entender por que cada som sai do jeito que sai, ou mexer no código. Nada aqui é gravação nem amostra: todo o som é sintetizado amostra a amostra, a 48 kHz, a partir de modelos físicos simplificados.
 
 - [Estrutura do projeto](#estrutura-do-projeto)
+- [Build: Vite, TypeScript e React](#build-vite-typescript-e-react)
 - [Caminho do áudio no navegador](#caminho-do-áudio-no-navegador)
 - [Ronco: motor de pistão](#ronco-motor-de-pistão)
 - [Turbina: motor a jato](#turbina-motor-a-jato)
@@ -16,20 +17,72 @@ Para revisar o som de um veículo contra uma gravação real, siga o método de 
 
 ## Estrutura do projeto
 
-| Arquivo | O que faz |
+O site é compilado com Vite (TypeScript + React) e publicado como páginas estáticas. Durante a reestruturação (branch `reestruturacao`) o código legado continua no lugar e é a referência do som; as páginas novas vão recebendo o que for migrado.
+
+| Arquivo ou pasta | O que faz |
 |---|---|
-| `index.html`, `style.css` | Página do Ronco |
+| `index.html`, `src/pages/menu/` | Menu de tipos de motor (porta de entrada do site) |
+| `ronco.html`, `src/pages/ronco/` | Página do Ronco (por enquanto, casca com a navegação de presets e a prova do worklet) |
+| `turbina.html`, `src/pages/turbina/` | Página da Turbina (idem) |
+| `src/pages/comum/` | Casca comum das páginas durante a migração e leitura dos presets legados |
+| `src/ui/` | Componentes React compartilhados (`Slider`, `ChipGroup`, `Field`, `Section`, `FamilyNav`, `PresetNav`, `Barra`) e os estilos (`estilo.css`, ex-`style.css`; `turbina.css`, ex-`jet.css`) |
+| `src/ui/audio/` | `AudioShell` (contexto React) e `CadeiaDeAudio`: AudioContext, carga do worklet e a cadeia compressor → EQ → seco/molhado → ambiente → analisador; ambientes e respostas ao impulso; perfis de Ronco e Turbina |
+| `src/acoustics/` | Blocos de acústica compartilhados: `RNG`, `Biquad`/`BiquadComPiso`, guias de onda (`Line`, `Junction`, `TwoPort`, `Radiator`, `Cutout`, `ClosedEnd`), escoamento compressível, constantes físicas |
+| `src/worklet/` | Pipeline do AudioWorklet: `registrar.ts` (envolve um DSP num `AudioWorkletProcessor`), `tipos.ts` (contrato do DSP), `processador-*.ts` (pontos de entrada) e o DSP de prova `tom.ts` |
+| `tools/render.ts`, `tools/compare-wav.ts`, `tools/acoustics-paridade.ts` | Renderização offline para WAV, comparação amostra a amostra e conferência bit a bit do `acoustics/` contra o legado |
+| `tools/analise-som/` | Banco de testes em Node e análise em Python para comparar o som com gravações reais (ver `docs/REVISAO-DE-SOM.md`) |
+| **Legado** (até a migração): | |
 | `src/geometry.js` | Geometria do motor: virabrequins, ordem de ignição, intervalos, balanceamento |
 | `src/presets.js` | Os carros e motos (um preset por modelo, agrupados em famílias) |
 | `src/dsp.js` | Toda a síntese do Ronco: termodinâmica, escapamento, câmbio, temperatura, ouvinte |
-| `src/app.js` | Interface do Ronco: painel, mostradores, teclado, acústica do ambiente |
-| `jato.html`, `jet.css` | Página da Turbina |
+| `src/app.js`, `style.css` | Interface do Ronco: painel, mostradores, teclado, acústica do ambiente (a página `index.html` que a carregava virou o menu; a versão completa está em `master`) |
+| `jato.html`, `jet.css` | Página da Turbina legada (abre no `npm run dev`, mas não entra no `dist/`) |
 | `src/jet-presets.js` | Os aviões |
 | `src/jet-dsp.js` | Toda a síntese da Turbina |
 | `src/jet-app.js` | Interface da Turbina |
-| `tools/analise-som/` | Banco de testes em Node e análise em Python para comparar o som com gravações reais (ver `docs/REVISAO-DE-SOM.md`) |
 
-Não há dependências nem etapa de build. Os arquivos `*-dsp.js` ficam dentro de uma função-fábrica (`EngineDSPFactory`, `JetDSPFactory`) para poderem ser convertidos em texto com `toString()` e injetados num AudioWorklet. A mesma classe roda no Node, o que permite testar o som sem navegador.
+Os arquivos `*-dsp.js` legados ficam dentro de uma função-fábrica (`EngineDSPFactory`, `JetDSPFactory`) para poderem ser convertidos em texto com `toString()` e injetados num AudioWorklet. A mesma classe roda no Node, o que permite testar o som sem navegador. No código novo o truque acaba: o DSP é um módulo TypeScript comum, compilado num bundle próprio para o worklet (abaixo).
+
+## Build: Vite, TypeScript e React
+
+- `npm run dev` serve o projeto com recarga automática; `npm run build` confere os tipos (`tsc` com `tsconfig.json`, código do navegador, e `tsconfig.node.json`, ferramentas e DSP, sem tipos do DOM) e gera `dist/`; `npm run preview` serve o `dist/`.
+- **Multi-página:** as entradas estão em `vite.config.mts` (`build.rolldownOptions.input`: `index.html`, `ronco.html`, `turbina.html`). Uma página nova (`radial.html`…) é um HTML na raiz com `<script type="module" src="./src/pages/<nome>/main.tsx">` e uma linha a mais nessa lista.
+- **`base: './'`:** todos os caminhos do `dist/` são relativos, então o site funciona em `ezenere.com/data/engine/` (ou qualquer subpasta) sem reconfigurar. Foi testado servindo o `dist/` em `/data/engine/`. Abrir o HTML pelo `file://` não funciona (módulos ES exigem http).
+- **Por que não `"type": "module"` no `package.json`:** as ferramentas antigas em `tools/analise-som/` e os arquivos legados de `src/` são CommonJS (`require`, `module.exports`) e deixariam de carregar. A configuração do Vite é `.mts` para ser ESM mesmo assim. O `tsx` roda os `.ts` de `tools/` como CommonJS; eles usam `createRequire(import.meta.url)` e `import.meta.url`, que funcionam nos dois modos.
+- **TypeScript:** `strict: false`, e os campos das classes copiadas do legado são declarados com `declare` (não geram código; a classe compilada fica igual à original). TypeScript 7, React 19, Vite 8 (Rolldown).
+
+### AudioWorklet em TypeScript
+
+O processador é importado pela página com o sufixo `?worker&url` do Vite:
+
+```ts
+import urlTom from '../../worklet/processador-tom.ts?worker&url';
+await ctx.audioWorklet.addModule(urlTom);
+```
+
+- **No build**, o Vite compila `processador-tom.ts` e tudo o que ele importa (DSP, `acoustics/`) num bundle separado, `dist/assets/processador-tom-<hash>.js`, formato ES (`worker.format: 'es'`), e a página recebe a URL como `new URL('processador-tom-<hash>.js', import.meta.url)`, relativa ao próprio chunk (por isso funciona em qualquer subpasta). O bundle do worklet **não é minificado** (`worker.rolldownOptions.output.minify: false`), para o código do DSP no navegador ser o mesmo, linha a linha, que roda no Node. (O Rolldown ainda dobra constantes, como `1 - 0.985` → `0.015000000000000013`, que dá o mesmo double.)
+- **No dev**, a URL aponta para o próprio `.ts` (`/src/worklet/processador-tom.ts?worker_file&type=module`); o Vite o transforma em módulo ES e os `import` dele são carregados pelo worklet como módulos. O Vite injeta `import "/@vite/env"` no topo, que só mexe em `globalThis` e funciona no escopo do worklet.
+- O plugin do React exclui `src/worklet/`, `src/acoustics/` e `src/engines/`: o React Refresh injetaria código que usa `window`, que não existe no worklet.
+- **Regra do DSP:** não usa nada do navegador nem o `sampleRate` global; recebe a taxa no construtor. Só `src/worklet/registrar.ts` toca nos globais do worklet:
+
+  ```ts
+  // src/worklet/processador-ronco.ts (na migração)
+  registrarProcessador('ronco-engine', (fs) => new EngineDSP(fs));
+  ```
+
+  O contrato (`src/worklet/tipos.ts`) é o mesmo do `EngineDSP`/`JetDSP`: `process(L, R, n, envioL?, envioR?)`, `message(m)`, `post(m)`.
+- **Reserva:** se o worklet não carregar, `CadeiaDeAudio` roda o mesmo DSP num `ScriptProcessorNode` na thread principal, se a página passar `criarDspLocal`.
+- **Verificado** com Chromium e Firefox headless, em `npm run dev`, `npm run preview` e com o `dist/` servido em `/data/engine/`: o tom toca pelo worklet (modo `worklet`, não a reserva), a telemetria volta pela porta, troca de frequência e de ambiente funcionam, sem erros no console.
+
+### Cadeia de áudio e `AudioShell`
+
+`src/ui/audio/cadeia.ts` reproduz `initAudio()` e `applyListenerAcoustics()` dos apps legados. As diferenças entre Ronco e Turbina ficam num perfil (`PERFIL_RONCO`, `PERFIL_TURBINA` em `perfis.ts`): compressor, EQ de 3 bandas (só o Ronco), corte inicial do envio, ganho de saída, tamanho da FFT, ambientes e a regra de abafamento por posição do ouvinte. `AudioShell` é o contexto React que cria a cadeia no primeiro `iniciar()` (o navegador só libera o áudio depois de um gesto) e a entrega por `useAudioShell()`. A telemetria chega no callback `aoMensagem`, fora do estado do React: guarde num `ref` e desenhe no `requestAnimationFrame`. Os parâmetros do DSP (`params`, `config`, `input`) continuam sendo mandados pela página com `audio.send(...)`, na mesma ordem do legado.
+
+### Ferramentas de verificação
+
+- `npx tsx tools/render.ts ronco <presets|all> <idle|cold|rev|wot|sweep> <pasta> [ouvinte]` e `npx tsx tools/render.ts turbina <presets|all> <start|takeoff|flyby> <pasta> [ouvinte]` renderizam para WAV float 32 (`--pcm16` para 16 bits) e JSON de telemetria. `DSP=<arquivo>` troca o DSP: um legado CommonJS (ex.: `git show master:src/dsp.js > /tmp/dsp.master.js`) ou um módulo TS que exporte `EngineDSP`/`JetDSP`. `PRESETS=` e `GEOMETRY=` fazem o mesmo para presets e geometria. Os cenários e o laço (eventos no início de cada bloco de 128 amostras, telemetria depois do bloco) são os de `render.js`/`jetrender.js`; com `--pcm16` a saída é idêntica à desses harnesses (WAV conferido nos 68 carros em `rev`; WAV e JSON, byte a byte, em Mustang, Fusca e F1 V8 em `wot` e 737 e F-16 em `flyby`). Os acessórios padrão são o `STOCK` completo do `loadPreset()` de `app.js`.
+- `npx tsx tools/compare-wav.ts <a> <b> [--limite -90]` compara dois WAVs (ou duas pastas, por nome): diz se são idênticos e dá o erro máximo e RMS em dBFS e onde está a primeira diferença. Sai com código 0 se idênticos (ou abaixo do limite).
+- `npx tsx tools/acoustics-paridade.ts` recompila as fábricas legadas com um `return` que expõe as classes internas e passa as mesmas entradas pelos blocos de `src/acoustics/` e pelos legados, comparando bit a bit (RNG, utilitários, Biquad de cada tipo, Ψ e vazão, rede de guias de onda com cada abafador).
 
 ## Caminho do áudio no navegador
 
@@ -41,7 +94,7 @@ AudioWorklet (DSP, 4 canais)
                               DynamicsCompressor → EQ de 3 bandas → ganho → Analyser → saída
 ```
 
-- O DSP tenta carregar como AudioWorklet por URL `blob:` e depois `data:`. A segunda forma é necessária ao abrir pelo `file://`, onde a origem é nula. Se nenhuma funcionar, cai para `ScriptProcessorNode` na thread principal.
+- No legado, o DSP tenta carregar como AudioWorklet por URL `blob:` e depois `data:` (a segunda forma era necessária ao abrir pelo `file://`, onde a origem é nula); se nenhuma funcionar, cai para `ScriptProcessorNode` na thread principal. No código novo o worklet é um arquivo do build (ver [AudioWorklet em TypeScript](#audioworklet-em-typescript)), com a mesma reserva.
 - Cada ambiente (céu aberto, túnel, hangar…) tem uma resposta ao impulso gerada na hora. Ela soma uma cauda difusa, com decaimento exponencial que escurece com o tempo, a ecos discretos com atraso, ganho e espalhamento próprios: prédios, arquibancada, paredões do vale. Um som de fundo fraco (vento, trânsito, ventilação, arquibancada) é gerado dentro do DSP. A ventilação do túnel e da garagem é ruído de banda estreita na passagem das pás (100 e 120 Hz, Q ≈ 7) e no dobro (Q ≈ 9), independente em cada ouvido; era um seno parado, que soava como tom de teste por baixo de tudo e ficava uns 8 dB mais alto. "Som de fundo do ambiente" desliga esse fundo e mantém a acústica do lugar.
 - **Calibração de volume.** Ao montar um motor, a thread principal renderiza numa cópia do DSP, com escape e acessórios de referência e motor quente, 0,5 s em carga máxima a 55% da faixa vermelha e 1,2 s em marcha lenta. O ganho fixo é o que leva a carga ao alvo; a lenta ganha um **reforço próprio** (o que falta para ela ficar 21 dB abaixo da carga, como nos motores reais), aplicado por rotação: inteiro na lenta e sumindo até metade da faixa vermelha. Na sonda de lenta o giro é travado, então a válvula de ar é ajustada até o torque médio zerar, que é onde a lenta de verdade se equilibra (sem isso a sonda ficava 4 dB mais alta que a lenta real). O turbo é calibrado com 40% da pressão máxima. Abafador, válvula, diâmetro e temperatura continuam mudando o volume de verdade, porque ficam fora dessa normalização. Na mesma passada mede-se a potência que o modelo entrega (três pontos em carga total) para a escala de torque descrita na dinâmica.
 - **Modo arcade** ("Volume do motor"): um nivelador cujo detector lê o escape na fonte, antes do ouvinte, para a distância na rua e a cabine continuarem valendo. RMS de ~50 ms; abaixo do nível de carga total da calibração ele sobe o ganho na razão 1:2, até +10 dB, e acima não mexe: a lenta sobe metade do que falta, sem igualar ao giro alto. O ganho desce em ~15 ms e sobe em ~300 ms, para não "bombear" no corte de giro, e um detector de pico (ataque na hora, soltura de ~140 ms) impede que o reforço leve um estouro além do teto. Diferença entre lenta e carga total: Camaro 18 → 10 dB, Fusca 13 → 7, F1 V8 23 → 13. (Uma primeira versão, 1:5 até +16 dB, deixava a lenta quase no nível do giro alto.)

@@ -1,9 +1,10 @@
 # Ronco e Turbina
 
-Dois simuladores de som de motor que rodam direto no navegador.
+Simuladores de som de motor que rodam direto no navegador. O site começa num menu com os tipos de motor: https://ezenere.com/data/engine/
 
-- **Ronco**, motores de carro e moto: https://ezenere.com/data/engine/index.html
-- **Turbina**, motores de avião: https://ezenere.com/data/engine/jato.html
+- **Ronco**, motores de carro e moto: https://ezenere.com/data/engine/ronco.html
+- **Turbina**, motores de avião: https://ezenere.com/data/engine/turbina.html
+- **Em construção:** radial, rotativos (Wankel), diesel, vapor, elétrico e um modo de passagem e testes, com o ouvinte livre em 3D.
 
 ![Ronco com uma Ferrari 458 no corte de giro](docs/ronco.png)
 
@@ -58,7 +59,26 @@ Também dá para pôr pós-combustão em qualquer jato, usar reversor e trocar p
 
 ## Rodar no seu computador
 
-Baixe esta pasta e abra o arquivo `index.html` (carros) ou `jato.html` (aviões) no navegador. Não precisa instalar nada.
+Precisa do [Node.js](https://nodejs.org/) (versão 22 ou mais nova). Na pasta do projeto:
+
+```sh
+npm install
+npm run dev
+```
+
+e abra o endereço que aparecer (algo como `http://localhost:5173/`). Abrir os arquivos `.html` direto do disco não funciona mais: as páginas são compiladas.
+
+## Desenvolvimento
+
+O projeto usa [Vite](https://vite.dev/), TypeScript e React. O React fica só na interface; o som é gerado num AudioWorklet, fora dele.
+
+- `npm install`: instala as dependências (uma vez).
+- `npm run dev`: servidor local com recarga automática.
+- `npm run build`: confere os tipos e gera o site estático em `dist/`. É o conteúdo de `dist/` que vai para `ezenere.com/data/engine/`; os caminhos são relativos, então ele funciona em qualquer pasta.
+- `npm run preview`: serve o `dist/` gerado, para testar o build antes de publicar.
+- `npx tsx tools/render.ts ronco mustang rev saida/`: renderiza um cenário para WAV sem navegador; `npx tsx tools/compare-wav.ts a.wav b.wav` compara dois WAVs amostra a amostra. Detalhes no começo de cada arquivo em `tools/`.
+
+Páginas: `index.html` (menu), `ronco.html` e `turbina.html`, com o código em `src/pages/`. A estrutura das pastas está em [`docs/TECNICO.md`](docs/TECNICO.md).
 
 ## Quer saber como funciona por dentro?
 
