@@ -42,7 +42,7 @@ function Conteudo({ c }: { c: ControlePassagem }) {
               titulo: prontos.includes(f) ? '' : MOTORES_PRONTOS.includes(f) ? 'Sem preset deste motor neste portador (só onde foi usado de verdade)' : `Espera o ${ESPERA_MOTOR[f] ?? 'adaptador'}` }))} />
         </Field>
         <p className="note">{trem ? `Sem motor próprio na etapa 1 (o elétrico entra na etapa 6): o som é do trem andando. ${c.fontes.filter((f) => f.tipo !== 'pressao').length} fontes com propagação.`
-          : c.portador === 'rotor' ? 'Rotor sem motor: Nr imposto (408 rpm), o coletivo muda a tração e o tapa das pás. O pistão de aviação (Lycoming do R44) e o turboeixo ainda não existem.'
+          : c.portador === 'rotor' ? (c.motor === 'nenhum' ? 'Rotor sem motor: Nr imposto (408 rpm), o coletivo muda a tração e o tapa das pás.' : 'Rotor com motor a pistão (Lycoming dos Robinson, Franklin do Bell 47, R-1340 do S-55): o governador do rotor mexe na borboleta e segura o Nr; o coletivo pede potência. O turboeixo ainda não existe.')
           : `${c.fontes.filter((f) => f.tipo !== 'pressao').length} fontes: as do motor (canais do DSP da família, em Pa a ${c.fontes[0] ? fmt(c.fontes[0].refDist) : '—'} m) e as do portador.`}</p>
       </Section>
 

@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react';
 import { AudioShell, Barra, BotaoIgnicao, FamilyNav, PresetNav, PERFIL_RONCO, useAudioShell } from '../../ui';
 import { EngineDSP } from '../../engines/ronco/dsp';
-import { PRESETS } from '../../engines/ronco/presets';
+import { PRESETS_PAGINA as PRESETS } from '../../engines/ronco/presets';
 import urlRonco from '../../worklet/processador-ronco.ts?worker&url';
 import { ControleRonco, familyFor, type EstadoRonco } from './controle';
 import { Mostradores } from './mostradores';
@@ -61,7 +61,7 @@ function Interior({ k, e }: { k: ControleRonco; e: EstadoRonco }) {
   return (
     <div className="app">
       <Barra logo="Ronco" placa={placa(e)}>
-        <BotaoIgnicao id="ignition" ligado={e.ignicao} rotulo={e.ignicao ? 'Desligar' : 'Ligar motor'} aoClicar={ligar} />
+        <BotaoIgnicao id="ignition" ligado={e.ignicao} rotulo={e.ignicao ? 'Desligar' : e.spec.aviation ? 'Magnetos + partida' : 'Ligar motor'} aoClicar={ligar} />
       </Barra>
 
       <nav className="presets" id="presets" aria-label="Motores prontos">

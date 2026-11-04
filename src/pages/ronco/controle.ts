@@ -10,6 +10,7 @@ import { PRESETS, ACESSORIOS_PADRAO, type PresetRonco } from '../../engines/ronc
 import { gearRatios } from '../../engines/ronco/dsp';
 import { configCalibrada } from '../../engines/ronco/config';
 import type { CadeiaDeAudio, Equalizacao } from '../../ui';
+import { AV_PADRAO, proximoMagneto, type EstadoAv } from '../comum/Aviacao';
 
 export type Spec = PresetRonco & Record<string, any>;
 
@@ -29,6 +30,8 @@ export type EstadoRonco = {
   observer: 'car' | 'road';
   carMic: string;
   ignicao: boolean;
+  // aviação (RADIAL.md 7.2): magnetos, mistura, manete de passo, coletivo e embreagem do rotor
+  av: EstadoAv;
   // conta as vezes em que o legado chamaria renderControls(): campos com estado próprio (a ordem
   // de ignição digitada) voltam ao valor da especificação quando ela muda
   rev: number;
@@ -74,7 +77,7 @@ export class ControleRonco {
     this.estado = {
       spec, motor: build(spec), presetId: PRESETS[0].id, familia: PRESETS[0].family,
       params: { listener: 'ext', env: 'open', roadDist: 6, exhaust: 1, intake: 1, mech: 1, master: 0.8, fanSound: true, saSound: true, ambSound: true, dynamics: 'real', air: 1 },
-      eq: { lo: 0, mid: 0, hi: 0 }, tempMode: 'real', observer: 'car', carMic: 'ext', ignicao: false, rev: 0,
+      eq: { lo: 0, mid: 0, hi: 0 }, tempMode: 'real', observer: 'car', carMic: 'ext', ignicao: false, av: { ...AV_PADRAO }, rev: 0,
     };
   }
 
@@ -109,6 +112,7 @@ export class ControleRonco {
         this.enviarParams();
         a.send({ type: 'config', cfg: configCalibrada(this.spec, a.ctx.sampleRate) });
         this.enviarParams();
+        this.enviarAv();
         a.send({ type: 'input', temp: { mode: this.estado.tempMode } });
         return a;
       })().catch((e) => { this.iniciando = null; throw e; });
@@ -152,7 +156,7 @@ export class ControleRonco {
     if (structural) {
       clearTimeout(this.rebuildTimer);
       // carro novo com o motor ligado: ele dá a partida do zero
-      this.rebuildTimer = setTimeout(() => audio.send({ type: 'config', cfg: { ...configCalibrada(this.spec, audio.ctx.sampleRate), fresh } }), 60);
+      this.rebuildTimer = setTimeout(() => { audio.send({ type: 'config', cfg: { ...configCalibrada(this.spec, audio.ctx.sampleRate), fresh } }); this.enviarAv(); }, 60);
     } else {
       audio.send({ type: 'tune', cfg: { ...this.spec } });
     }
@@ -180,7 +184,8 @@ export class ControleRonco {
   loadPreset(p: PresetRonco) {
     // cada carro vem com o próprio escape: acessórios que ele não define voltam ao padrão
     const spec = { ...ACESSORIOS_PADRAO, ...p } as Spec;
-    this.mudar({ spec, motor: build(spec), presetId: p.id }, true);
+    const av = { ...AV_PADRAO, magnetos: p.magnetosPadrao || 'ambos', mistura: p.misturaPadrao ?? 0.8 };
+    this.mudar({ spec, motor: build(spec), presetId: p.id, av }, true);
     this.pushConfig(true, true);
   }
 
@@ -248,7 +253,13 @@ export class ControleRonco {
   }
   toggleIgnition() { this.ignitionAt = performance.now(); return this.setIgnition(!this.estado.ignicao); }
 
-  shift(dir: number) { this.audio?.send({ type: 'input', shift: dir }); }
+  shift(dir: number) { if (!this.spec.aviation) this.audio?.send({ type: 'input', shift: dir }); }
+
+  // ---------------------------------------------------------------- aviação (RADIAL.md 7.2)
+  private enviarAv() { if (this.spec.aviation) this.audio?.send({ type: 'av', ...this.estado.av }); }
+  setAv(p: Partial<EstadoAv>) { this.mudar({ av: { ...this.estado.av, ...p } }, true); this.audio?.send({ type: 'av', ...p }); }
+  cycleMagnetos() { if (this.spec.aviation) this.setAv({ magnetos: proximoMagneto(this.estado.av.magnetos) }); }
+  stepMistura(d: number) { if (this.spec.aviation) this.setAv({ mistura: Math.min(1, Math.max(0, Math.round((this.estado.av.mistura + d) * 100) / 100)) }); }
 
   aoTelemetria = (m: any) => {
     if (m.type !== 'telemetry') return;

@@ -7,6 +7,7 @@ import { ChipGroup, Field, Section, Slider, AMBIENTES_RONCO, type OpcaoChip } fr
 import { LAYOUTS, parseOrder, randomValidOrder } from '../../engines/ronco/geometria';
 import { defaultFinal } from '../../engines/ronco/dsp';
 import { DRIVE_MODES, familyFor, type ControleRonco, type EstadoRonco } from './controle';
+import { MagnetosEMistura, PartidaAv, HeliceAv, RotorAv } from '../comum/Aviacao';
 
 const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
 const br = (v: number) => v.toLocaleString('pt-BR');
@@ -23,9 +24,13 @@ export function Painel({ k }: { k: ControleRonco }) {
       <Escuta k={k} e={e} />
       <Motor k={k} e={e} />
       <Caracteristicas k={k} e={e} />
-      <CorteDeGiro k={k} e={e} />
+      {/* aviação (RADIAL.md 7.2): o corte de giro vira magnetos e mistura, a transmissão some, aparecem partida e hélice/rotor */}
+      {e.spec.aviation ? <MagnetosEMistura av={e.av} aoMudar={(p) => k.setAv(p)} /> : <CorteDeGiro k={k} e={e} />}
+      {e.spec.aviation && <PartidaAv tipo={e.spec.partida || 'direta'} av={e.av} aoMudar={(p) => k.setAv(p)} />}
+      {e.spec.aviation && e.spec.helice && <HeliceAv passoFixo={!!e.spec.helice.passoFixo} av={e.av} aoMudar={(p) => k.setAv(p)} />}
+      {e.spec.aviation && e.spec.rotor && <RotorAv av={e.av} aoMudar={(p) => k.setAv(p)} />}
       <Temperatura k={k} e={e} />
-      <Transmissao k={k} e={e} />
+      {!e.spec.aviation && <Transmissao k={k} e={e} />}
       <Escapamento k={k} e={e} />
       <Acessorios k={k} e={e} />
       <Estalos k={k} e={e} />

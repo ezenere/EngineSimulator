@@ -24,6 +24,7 @@ export default defineConfig({
         turbina: resolve(raiz, 'turbina.html'),
         passagem: resolve(raiz, 'passagem.html'),
         diesel: resolve(raiz, 'diesel.html'),
+        radial: resolve(raiz, 'radial.html'),
       },
     },
   },
