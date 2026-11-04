@@ -450,7 +450,12 @@ export class RotativoDSP extends EngineDSP {
     });
     this.jetF = rads.map(() => [new Biquad().bp(fs, 450, 0.5), new Biquad().bp(fs, 1400, 0.6)]);
     this.jetEnv = rads.map(() => 0);
-    const td = clamp(Dout / 63.5, 0.4, 2.4); this.tipA = td * td;
+    // ponteira do ruído de jato (o `tipA` do Ronco): uma peça própria (`escape.ponteira`, como a `tipD` do Ronco depois da
+    // revisão do Fusca), com a área relativa a 2,5" e os limites do Ronco (0,5–1,6). Antes ela seguia o Ø da saída com
+    // limite 0,4: no Ø mínimo (25 mm) o jato subia 39× (∝ 1/área²) enquanto o tubo fino tirava ~30 dB do tom, e o jato
+    // virava 80–90% do nível abaixo de 1 kHz ("só som de ar"). O tubo fino já baixa a vazão na boca (o abafador é uma
+    // fonte de pressão): a velocidade do gás que o jato lê não cresce de novo com 1/área
+    const td = clamp((e.ponteira ?? Dout) / 63.5, 0.5, 1.6); this.tipA = td * td;
   }
 
   buildFilters(cfg) {

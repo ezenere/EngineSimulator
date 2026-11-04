@@ -281,8 +281,10 @@ function Escapamento({ k, e }: P) {
             atual={s.muffler} aoEscolher={(v) => k.setSpec({ muffler: v })} />
         </Field>
       )}
-      <Slider id="Dsaida" rotulo="Ø da saída" min={25} max={130} passo={1} valor={esc.saidas[0]?.D ?? 63.5} formatar={(v) => `${v} mm`}
+      <Slider id="Dsaida" rotulo="Ø da saída" min={20} max={130} passo={1} valor={esc.saidas[0]?.D ?? 63.5} formatar={(v) => `${v} mm`}
         aoSoltar={(v) => k.setEscape({ saidas: esc.saidas.map((x) => ({ ...x, D: v })) })} />
+      <Slider id="Dtip" rotulo="Ponteira (jato)" min={20} max={130} passo={1} valor={esc.ponteira ?? esc.saidas[0]?.D ?? 63.5} formatar={(v) => `${v} mm`}
+        aoSoltar={(v) => k.setEscape({ ponteira: v })} />
       {esc.tipo !== 'megafone' && (
         <Field rotulo="Saídas">
           <ChipGroup id="saidas" classe="num" opcoes={[1, 2].map((n) => ({ valor: n, rotulo: String(n) }))} atual={saidas}

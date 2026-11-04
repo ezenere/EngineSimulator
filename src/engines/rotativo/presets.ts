@@ -27,6 +27,9 @@ export type EscapeRotativo = {
   megafone?: { L: number; Dboca: number };
   /** saídas: comprimento até a boca (m), diâmetro (mm), lado (°: 0 = esquerda … 180 = direita, como o pan) */
   saidas: { L: number; D: number; phi: number }[];
+  /** ponteira (mm): a peça da ponta onde o gás acelera e chia (o ruído de jato, como a `tipD` do Ronco); sem ela, o Ø da
+   *  boca. Separada do Ø da saída (que muda o tubo e a irradiação do tom), a lição do Fusca no REVISAO-DE-SOM.md */
+  ponteira?: number;
 };
 
 export type PalhetasPreset = {
