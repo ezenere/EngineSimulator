@@ -1,4 +1,4 @@
-# Ronco, Turbina, Diesel e Radial
+# Ronco, Turbina, Diesel, Radial e Rotativos
 
 Simuladores de som de motor que rodam direto no navegador. O site começa num menu com os tipos de motor: https://ezenere.com/data/engine/
 
@@ -6,8 +6,9 @@ Simuladores de som de motor que rodam direto no navegador. O site começa num me
 - **Turbina**, motores de avião: https://ezenere.com/data/engine/turbina.html
 - **Diesel**, picapes, caminhões, geradores e locomotivas: https://ezenere.com/data/engine/diesel.html
 - **Radial**, motores em estrela de avião (Corsair, P-47, DC-3, T-6, Yak-52, R-4360), helicóptero S-55, Sherman, Monaco-Trossi e Megola: https://ezenere.com/data/engine/radial.html
+- **Rotativos**, Wankel (RX-7, RX-8, Cosmo 20B, 787B de Le Mans, NSU Ro80, Norton, motores de avião e de drone), o X-Engine e o motor de palhetas: https://ezenere.com/data/engine/rotativo.html
 - **Passagem**, qualquer coisa passando por você (trem-bala, carro na rua, picape diesel, locomotiva, turboélice, jato, helicóptero R44, Corsair, Yak-52, Sherman) com o ouvinte livre em 3D: https://ezenere.com/data/engine/passagem.html
-- **Em construção:** rotativos (Wankel), vapor e elétrico.
+- **Em construção:** vapor e elétrico.
 
 ![Ronco com uma Ferrari 458 no corte de giro](docs/ronco.png)
 
@@ -60,6 +61,12 @@ Motores em estrela: o R-2800 do Corsair e do P-47, o R-1830 do DC-3, o R-1820 do
 
 **Teclas:** `I` partida (energizar, engatar, magnetos) · `W` manete · `M` magnetos · `[` e `]` mistura · `,` e `.` manete de passo · `C` muda o microfone.
 
+## Rotativos (Wankel, X-Engine e palhetas)
+
+O motor Wankel não tem pistão nem válvula: um rotor triangular gira dentro de uma carcaça em forma de 8 e forma três câmaras que queimam uma vez a cada três voltas do eixo. As janelas na carcaça abrem de uma vez quando a ponta do rotor passa por elas, e é isso, mais o combustível que ainda queima no escape, que faz o "brap-brap" do rotativo. Tem os Mazda de rua (RX-7 FD biturbo sequencial, RX-7 FC, RX-3, RX-8 Renesis), o Cosmo de 3 rotores, o 787B de 4 rotores que ganhou Le Mans (lenta caçando e estalando), o NSU Ro80, a moto Norton, o Cosmo 110S, motores de avião (Mistral, MidWest) e de drone (Austro AE50R no helicóptero Camcopter, UEL AR741 no RQ-7 Shadow), o X-Engine da LiquidPiston (aproximação) e o motor de ar comprimido de palhetas de uma retífica ou do arranque a ar de um diesel (aproximação). No painel dá para trocar o número de rotores, o tamanho da câmara, as janelas (lateral, bridge, periférica), as velas, tirar o pré-silencioso e ligar ou desligar o turbo sequencial.
+
+**Teclas:** `I` liga · `W` acelera (nas palhetas, o gatilho) · `Q` e `E` câmbio · `S` freio · `C` muda o microfone · `B` válvula do escape · `M` magnetos (aviação) · `[` e `]` carga da ferramenta (palhetas).
+
 ## Dicas
 
 - Use fone de ouvido: o som tem esquerda e direita, e com a câmera atrás do carro ele soa fora da cabeça, como se o carro estivesse ali.
@@ -87,7 +94,7 @@ O projeto usa [Vite](https://vite.dev/), TypeScript e React. O React fica só na
 - `npm run preview`: serve o `dist/` gerado, para testar o build antes de publicar.
 - `npx tsx tools/render.ts ronco mustang rev saida/`: renderiza um cenário para WAV sem navegador; `npx tsx tools/compare-wav.ts a.wav b.wav` compara dois WAVs amostra a amostra. Detalhes no começo de cada arquivo em `tools/`.
 
-Páginas: `index.html` (menu), `ronco.html`, `turbina.html`, `diesel.html`, `radial.html` e `passagem.html`, com o código em `src/pages/`. A estrutura das pastas está em [`docs/TECNICO.md`](docs/TECNICO.md).
+Páginas: `index.html` (menu), `ronco.html`, `turbina.html`, `diesel.html`, `radial.html`, `rotativo.html` e `passagem.html`, com o código em `src/pages/`. A estrutura das pastas está em [`docs/TECNICO.md`](docs/TECNICO.md).
 
 ## Quer saber como funciona por dentro?
 

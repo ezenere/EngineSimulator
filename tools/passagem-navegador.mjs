@@ -146,8 +146,8 @@ const est = await ev(`({
   placa: document.getElementById('plate')?.textContent,
 })`);
 console.log('estrutura:', JSON.stringify(est));
-// (18: os 13 da etapa 1 e 2 e os 5 da etapa 3, radiais e aviação a pistão)
-confere(est.presets.length === 18 && !est.presets.some((p) => p.endsWith('(d)')), 'presets: 18, todos habilitados (os com motor pelos adaptadores)', est.presets);
+// (21: os 13 da etapa 1 e 2, os 5 da etapa 3, radiais e aviação a pistão, e os 3 da etapa 4, rotativos)
+confere(est.presets.length === 21 && !est.presets.some((p) => p.endsWith('(d)')), 'presets: 21, todos habilitados (os com motor pelos adaptadores)', est.presets);
 confere(est.portadores.join() === 'Trem,Helicóptero,Carro,Avião de hélice,Gerador,Locomotiva,Avião a jato', 'portadores pela tabela de compatibilidade e os adaptadores', est.portadores);
 confere(JSON.stringify(est.secoes) === JSON.stringify(['Portador', 'Passagem', 'Ambiente', 'Trajetória', 'Ouvinte', 'Trem', 'Ar', 'Escuta', 'Modo de testes']), 'seções do painel', est.secoes);
 confere(['vKmh', 'x0', 'rtFator', 'tunelArea', 'tunelComp', 'tunelBoca', 'comprimento', 'lateral', 'altitude', 'ouvX', 'ouvZ', 'N', 'Lc', 'vao', 'truque', 'lNariz', 'ur', 'temperatura', 'master'].every((s) => est.sliders.includes(s)), 'parâmetros livres do modo de testes', est.sliders.length);
@@ -293,6 +293,23 @@ while (Date.now() - tc0 < 9000) {
 }
 confere(Math.abs(vC - 30) < 0.5 && marchaC === 3 && rpmC > 3500 && rpmC < 4500, 'carro a 108 km/h em 3ª com o motor preso às rodas', { v: vC, marcha: marchaC, rpm: Math.round(rpmC) });
 confere(maxC > 80 && maxC < 100, 'nível no ouvido na passagem do carro (direto + reverberação)', `${maxC.toFixed(1)} dB(A)`);
+await clicar('#ignicao');
+if (await ev(`${P}.andando`)) await clicar('#ignicao');
+// ---- RX-7 FD na rua (rotativo adaptado, etapa 4): 3ª, pé no fundo, 100 km/h
+await clicar('.preset[data-id="rx7-rua"]');
+await espera(800);
+const portR = (await ultimos('portador')).at(-1);
+confereMsg(portR?.tipo === 'carro' && portR.motor?.familia === 'rotativo' && portR.motor.cfg.id === 'rx7fd' && portR.motor.cfg.kAbs > 0, 'carro montado com o Wankel do RX-7 calibrado na página (kAbs)', portR && { tipo: portR.tipo, motor: portR.motor?.familia, id: portR.motor?.cfg.id, kAbs: portR.motor?.cfg.kAbs });
+await clicar('#ignicao');
+let maxR = -1e9, rpmR = 0;
+const tr0 = Date.now();
+while (Date.now() - tr0 < 8000) {
+  const r = await ev(`(() => { const t = ${P}.tele; const m = window.__passagem.med; return t && { dBA: m.dBA, rpm: t.portador.rpm }; })()`);
+  if (r) { if (Number.isFinite(r.dBA)) maxR = Math.max(maxR, r.dBA); rpmR = Math.max(rpmR, r.rpm || 0); }
+  await espera(60);
+}
+confere(rpmR > 4300 && rpmR < 5300, 'RX-7 a 100 km/h em 3ª com o motor preso às rodas (≈ 4 790 rpm)', Math.round(rpmR));
+confere(maxR > 75 && maxR < 105, 'nível no ouvido na passagem do RX-7', `${maxR.toFixed(1)} dB(A)`);
 await clicar('#ignicao');
 if (await ev(`${P}.andando`)) await clicar('#ignicao');
 // ---- locomotiva EMD em N8 (diesel adaptado, governador do motor, carga do portador)
