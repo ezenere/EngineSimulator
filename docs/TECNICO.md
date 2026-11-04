@@ -22,7 +22,8 @@ O site é compilado com Vite (TypeScript + React) e publicado como páginas est�
 | Arquivo ou pasta | O que faz |
 |---|---|
 | `index.html`, `src/pages/menu/` | Menu de tipos de motor (porta de entrada do site) |
-| `ronco.html`, `src/pages/ronco/` | Página do Ronco (por enquanto, casca com a navegação de presets e a prova do worklet) |
+| `ronco.html`, `src/pages/ronco/` | Página do Ronco em React: `PaginaRonco.tsx` (barra, presets, instrumentos, câmbio), `Painel.tsx` (todas as seções de controles), `controle.ts` (estado e ações, com as mesmas mensagens ao DSP de `app.js`), `mostradores.ts` (conta-giros, ciclo de ignição, onda e espectro, vista da via, desenhados no `requestAnimationFrame`, fora do React), `teclado.ts` |
+| `src/engines/ronco/` | O motor a pistão em TypeScript: `dsp.ts` (`EngineDSP`, ex-`src/dsp.js`), `geometria.ts` (ex-`src/geometry.js`), `presets.ts` (os 68 carros e motos, tipo `PresetRonco`, ex-`src/presets.js`), `constantes.ts` (`T_MAN`, `T_BACK`, `T_WALL`, `T_EXREF`, `SCREW_H`, `ENV_LOOP`) e `config.ts` (configuração mandada ao DSP, com a sonda de calibração) |
 | `turbina.html`, `src/pages/turbina/` | Página da Turbina, migrada de `jato.html` + `jet-app.js`: `controle.ts` (estado e mensagens para o DSP, fora do React), `Painel.tsx` (controles), `Turbina.tsx` (barra, presets, manete, instrumentos, laço de desenho), `desenho.ts` (EICAS, fan, osciloscópio, mapa e leituras em canvas) |
 | `src/engines/turbina/` | DSP da Turbina em TypeScript: `dsp.ts` (`JetDSP`), `presets.ts` (os aviões, tipo `PresetTurbina`), `constantes.ts` (tabela de seno, diretividade, volta da passagem); o worklet é `src/worklet/processador-turbina.ts` (`turbina-engine`) |
 | `tools/turbina-paridade.ts`, `tools/turbina-testa-navegador.mjs` | Prova de som idêntico ao legado (todos os aviões) e teste da página no Chromium e no Firefox headless |
@@ -31,13 +32,14 @@ O site é compilado com Vite (TypeScript + React) e publicado como páginas est�
 | `src/ui/audio/` | `AudioShell` (contexto React) e `CadeiaDeAudio`: AudioContext, carga do worklet e a cadeia compressor → EQ → seco/molhado → ambiente → analisador; ambientes e respostas ao impulso; perfis de Ronco e Turbina |
 | `src/acoustics/` | Blocos de acústica compartilhados: `RNG`, `Biquad`/`BiquadComPiso`, guias de onda (`Line`, `Junction`, `TwoPort`, `Radiator`, `Cutout`, `ClosedEnd`), escoamento compressível, constantes físicas |
 | `src/worklet/` | Pipeline do AudioWorklet: `registrar.ts` (envolve um DSP num `AudioWorkletProcessor`), `tipos.ts` (contrato do DSP), `processador-*.ts` (pontos de entrada) e o DSP de prova `tom.ts` |
+| `tools/ronco-paridade.ts`, `tools/ronco-navegador.mjs` | Prova de que o Ronco migrado soa igual ao legado (dados, WAV e bundle do worklet) e teste da página no Chromium e no Firefox headless |
 | `tools/render.ts`, `tools/compare-wav.ts`, `tools/acoustics-paridade.ts` | Renderização offline para WAV, comparação amostra a amostra e conferência bit a bit do `acoustics/` contra o legado |
 | `tools/analise-som/` | Banco de testes em Node e análise em Python para comparar o som com gravações reais (ver `docs/REVISAO-DE-SOM.md`) |
 | **Legado** (até a migração): | |
-| `src/geometry.js` | Geometria do motor: virabrequins, ordem de ignição, intervalos, balanceamento |
-| `src/presets.js` | Os carros e motos (um preset por modelo, agrupados em famílias) |
-| `src/dsp.js` | Toda a síntese do Ronco: termodinâmica, escapamento, câmbio, temperatura, ouvinte |
-| `src/app.js`, `style.css` | Interface do Ronco: painel, mostradores, teclado, acústica do ambiente (a página `index.html` que a carregava virou o menu; a versão completa está em `master`) |
+| `src/geometry.js` | Geometria do motor: virabrequins, ordem de ignição, intervalos, balanceamento (migrado para `src/engines/ronco/geometria.ts`) |
+| `src/presets.js` | Os carros e motos (migrado para `src/engines/ronco/presets.ts`) |
+| `src/dsp.js` | Toda a síntese do Ronco: termodinâmica, escapamento, câmbio, temperatura, ouvinte (migrado para `src/engines/ronco/dsp.ts`) |
+| `src/app.js`, `style.css` | Interface do Ronco: painel, mostradores, teclado, acústica do ambiente (a página `index.html` que a carregava virou o menu; migrado para `src/pages/ronco/`) |
 | `jato.html`, `jet.css` | Página da Turbina legada (abre no `npm run dev`, mas não entra no `dist/`; já migrada, fica como referência até o fim da etapa) |
 | `src/jet-presets.js` | Os aviões (migrados para `src/engines/turbina/presets.ts`) |
 | `src/jet-dsp.js` | Toda a síntese da Turbina (migrada para `src/engines/turbina/dsp.ts`) |
@@ -85,6 +87,7 @@ await ctx.audioWorklet.addModule(urlTom);
 - `npx tsx tools/render.ts ronco <presets|all> <idle|cold|rev|wot|sweep> <pasta> [ouvinte]` e `npx tsx tools/render.ts turbina <presets|all> <start|takeoff|flyby> <pasta> [ouvinte]` renderizam para WAV float 32 (`--pcm16` para 16 bits) e JSON de telemetria. `DSP=<arquivo>` troca o DSP: um legado CommonJS (ex.: `git show master:src/dsp.js > /tmp/dsp.master.js`) ou um módulo TS que exporte `EngineDSP`/`JetDSP`. `PRESETS=` e `GEOMETRY=` fazem o mesmo para presets e geometria. Os cenários e o laço (eventos no início de cada bloco de 128 amostras, telemetria depois do bloco) são os de `render.js`/`jetrender.js`; com `--pcm16` a saída é idêntica à desses harnesses (WAV conferido nos 68 carros em `rev`; WAV e JSON, byte a byte, em Mustang, Fusca e F1 V8 em `wot` e 737 e F-16 em `flyby`). Os acessórios padrão são o `STOCK` completo do `loadPreset()` de `app.js`.
 - `npx tsx tools/compare-wav.ts <a> <b> [--limite -90]` compara dois WAVs (ou duas pastas, por nome): diz se são idênticos e dá o erro máximo e RMS em dBFS e onde está a primeira diferença. Sai com código 0 se idênticos (ou abaixo do limite).
 - `npx tsx tools/acoustics-paridade.ts` recompila as fábricas legadas com um `return` que expõe as classes internas e passa as mesmas entradas pelos blocos de `src/acoustics/` e pelos legados, comparando bit a bit (RNG, utilitários, Biquad de cada tipo, Ψ e vazão, rede de guias de onda com cada abafador).
+- **Paridade do Ronco:** `npx tsx tools/ronco-paridade.ts` compara os presets e a geometria em TypeScript com os de `master`, campo a campo, e renderiza com o DSP legado (o `src/dsp.js` de `master`, com a geometria e os presets de lá) e com o migrado: `idle`, `rev`, `wot` e `sweep` em 22 presets variados, `idle` e `rev` nos 68, `rev` com cada ouvinte e `cold` em alguns (200 cenários, ~1 min com 24 em paralelo). Tudo tem de sair idêntico, amostra a amostra e na telemetria. `--rapido` roda só 44 cenários, `--ref <commit>` troca a referência e `--dist` (depois de `npm run build`) confere também o `processador-ronco-*.js` do `dist/`, com a calibração feita como na página. Sai com código ≠ 0 se algo diferir. A página se testa com `node tools/ronco-navegador.mjs <url>/ronco.html [chromium|firefox]`: liga, acelera, troca marcha, carro, ambiente e ouvinte, mexe no painel e confere telemetria, som e console (`RESERVA=1` testa a reserva no `ScriptProcessorNode`).
 
 ### Paridade da Turbina
 
