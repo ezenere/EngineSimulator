@@ -3,7 +3,7 @@
 // mostradores são desenhados em canvas no requestAnimationFrame, lendo a telemetria de um campo
 // (nada re-renderiza a cada telemetria).
 import { memo, useEffect, useRef, useState } from 'react';
-import { AudioShell, Barra, BotaoIgnicao, FamilyNav, PERFIL_TURBINA, PresetNav, useAudioShell } from '../../ui';
+import { AudioShell, Barra, BotaoIgnicao, FamilyNav, Manete as ManeteDePotencia, PERFIL_TURBINA, PresetNav, useAudioShell, type MarcaManete } from '../../ui';
 import { JetDSP } from '../../engines/turbina/dsp';
 import urlTurbina from '../../worklet/processador-turbina.ts?worker&url';
 import { ControleTurbina, MAXT, PRESETS, useTopico } from './controle';
@@ -103,26 +103,13 @@ function Navegacao({ c }: { c: ControleTurbina }) {
   );
 }
 
-// manete: fica onde foi deixada (não volta como o pedal)
+// manete: fica onde foi deixada (não volta como o pedal); o componente é o de src/ui/Manete.tsx
 function Manete({ c }: { c: ControleTurbina }) {
   useTopico(c, 'manete', 'painel');
-  const trilho = useRef<HTMLDivElement>(null);
   const { tla, spec } = c;
-  const marcas: [number, string][] = [[0, 'lenta'], [0.8, 'subida'], [1, 'deco']];
-  if (spec.ab && spec.arch !== 'turboprop') marcas.push([1.3, 'pós']);
-  const mover = (e: { clientY: number }) => { if (trilho.current) c.setTla(c.tlaFrom(e, trilho.current)); };
-  return (
-    <div className="lever" id="lever" role="slider" tabIndex={0} aria-label="Manete de potência" aria-valuemin={0} aria-valuemax={130} aria-valuenow={Math.round(tla * 100)}
-      onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); mover(e); }}
-      onPointerMove={(e) => { if (e.currentTarget.hasPointerCapture(e.pointerId)) mover(e); }}
-      onKeyDown={(e) => { if (e.code === 'PageUp') c.setTla(c.tla + 0.1); else if (e.code === 'PageDown') c.setTla(c.tla - 0.1); }}>
-      <div className="lever-track" ref={trilho}><div className="lever-fill" id="leverFill" style={{ height: `${(tla / MAXT) * 100}%` }} /></div>
-      <div className="lever-marks" id="leverMarks">
-        {marcas.map(([v, rotulo]) => <span key={rotulo} className={v > 1 ? 'ab' : ''} style={{ bottom: `${(v / MAXT) * 100}%` }}>{rotulo}</span>)}
-      </div>
-      <div className="lever-knob" id="leverKnob" style={{ bottom: `calc(10px + (100% - 20px) * ${tla / MAXT})` }} />
-    </div>
-  );
+  const marcas: MarcaManete[] = [[0, 'lenta'], [0.8, 'subida'], [1, 'deco']];
+  if (spec.ab && spec.arch !== 'turboprop') marcas.push([1.3, 'pós', 'ab']);
+  return <ManeteDePotencia valor={tla} max={MAXT} marcas={marcas} aoMudar={(v) => c.setTla(v)} obter={() => c.tla} passo={0.1} rotulo="Manete de potência" />;
 }
 
 // posições da manete, reversor e atalhos

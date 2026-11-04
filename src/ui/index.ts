@@ -6,4 +6,5 @@ export { Field } from './Field';
 export { Section } from './Section';
 export { FamilyNav, PresetNav, type Familia, type PresetResumo } from './PresetNav';
 export { Barra, BotaoIgnicao } from './Barra';
+export { Manete, segurarManete, VELOCIDADE_MANETE, type ManeteProps, type MarcaManete } from './Manete';
 export * from './audio';
