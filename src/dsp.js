@@ -74,7 +74,7 @@ function EngineDSPFactory() {
   class Line {
     constructor(fs, length, Y, lossHz = 9000, damp = 1) {
       this.D = Math.max(1, (length / SOUND_SPEED) * fs);
-      this.Dprev = this.D; this.kNL = 0;
+      this.Dprev = this.D; this.kNL = 0; this.len = length; this.runner = false;
       let size = 16; while (size < this.D * 1.8 + 8) size <<= 1;
       this.a = new Float32Array(size); this.b = new Float32Array(size);
       this.mask = size - 1; this.w = 0; this.Y = Y;
@@ -103,8 +103,14 @@ function EngineDSPFactory() {
       this.in1 = v;
     }
     write() {
+      // atrito turbulento na onda de volta do tubo primário: a onda refletida na junção do coletor, subindo contra o
+      // fluxo, perde energia como Δp ∝ ρu|u| (perda ∝ |p| por passagem, escalada pelo comprimento sobre o diâmetro). Sem
+      // isso, em giro muito alto (F1: cada cilindro a ~150 Hz, perto dos ~167 Hz de 1/4 de onda do primário de 0,78 m) a
+      // ressonância crescia sem limite e o afiamento da onda de ida virava subharmônicos (período de 3 ciclos) e caos: o
+      // som "engasgava" e virava ruído. A onda de ida (o pulso, com o afiamento) não é tocada
+      const xb = this.runner ? Math.abs(this.out1) / P0 : 0, lb = 0.7 * (this.len / 0.78) / Math.sqrt(this.Y) * xb;
       this.sa += this.k * (this.out0 * this.g - this.sa);
-      this.sb += this.k * (this.out1 * this.g - this.sb);
+      this.sb += this.k * (this.out1 * this.g * (1 - lb) - this.sb);
       this.a[this.w] = this.sa; this.b[this.w] = this.sb;
       this.w = (this.w + 1) & this.mask;
     }
@@ -566,7 +572,7 @@ function EngineDSPFactory() {
         for (const c of cyls) {
           // caixas de calefação (Fusca): os tubos longos atravessam o trocador aletado, que come agudo e esfria o gás
           const heat = cfg.header === 'heater' && cfg.runners[c] > meanRun;
-          const r = heat ? L(cfg.runners[c], 1, 5000, 2.5) : L(cfg.runners[c], 1, 12000);
+          const r = heat ? L(cfg.runners[c], 1, 5000, 2.5) : L(cfg.runners[c], 1, 12000); r.runner = true;
           this.brkW[c] = (heat ? 0.35 : 1) * (1 + 0.2 * new RNG(0x7a11 + 977 * c + 31 * N).bi()); // (cada junta vaza um pouco diferente)
           runners[c] = r;
           ports.push(port(r, 1));

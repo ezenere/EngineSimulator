@@ -13,6 +13,8 @@ qualquer veículo, antigo ou novo.
 - [Do achado ao modelo](#do-achado-ao-modelo)
 - [Caso completo: o Fusca](#caso-completo-o-fusca)
 - [Caso: o Mustang](#caso-o-mustang)
+- [Caso: a Fórmula 1](#caso-a-fórmula-1)
+- [Caso: o compressor do Hellcat](#caso-o-compressor-do-hellcat)
 - [Ferramentas](#ferramentas)
 - [O que olhar em cada tipo de veículo](#o-que-olhar-em-cada-tipo-de-veículo)
 
@@ -163,6 +165,7 @@ Ruído estacionário passado pela mesma cadeia dá desvio/média ≈ 0,21 (2–8
   Mustang a 1250 rpm, tudo acima de 4 kHz era o ambiente). Compare o motor sozinho: `PARAMS='{"ambSound":false}'`.
 - **Celular junto de uma ponteira:** ouve uma bancada (no Mustang, só uma bancada acima de 4 kHz). O ouvinte externo
   do simulador fica entre as duas ponteiras e soma as bancadas; compare com um canal só.
+- **zsh não separa variáveis em palavras:** `for e in $lista` roda uma vez só, com a lista inteira. Use `${=lista}`.
 - **Giro travado abaixo de 5% de pedal:** o controle de lenta continua agindo e, com o giro acima da lenta, vai
   fechando o ar (o coletor do Mustang caía de 0,26 para 0,11 bar em 12 s). O `render.js` congela o integrador.
 - **O banco de testes não inclui o navegador.** Reverberação, compressor e equalizador do `app.js` ficam de fora.
@@ -346,6 +349,56 @@ abertura do escape ficou em 1,21 bar e a variação entre explosões em 0,17 (an
 
 Outro achado da primeira comparação continua valendo: o modo Esportivo fechava a válvula com o pedal em ~5% em ponto
 morto. Agora ele só fecha rodando leve em marcha.
+
+## Caso: a Fórmula 1
+
+**Queixa:** estridente, "tudo se engasga e vira ruído" em rotação muito alta.
+
+**Gravação:** vídeo de bordo (câmera acima da cabeça do piloto) com um V10 2002 (~1:09), um V8 2007 (~2:01) e um V8 2011
+(2:36–3:16), sempre em corrida. A rotação sai do pente harmônico em janelas de 0,2 s: 17.000–18.600 rpm nas retas.
+
+**O que a medida mostrou:** o real é tom do motor. Reamostrando o sinal no ângulo do virabrequim (giro rastreado pela linha
+mais forte), 90–99% da energia de 0,3–2 kHz e 60–76% da de 2–4 kHz caem nos harmônicos do ciclo. No simulado, acima de
+2 kHz era 21–27%, o mesmo que ruído puro. O nível por banda era parecido; o que mudava era tom contra chiado.
+
+**A causa não era ruído:** com todos os ruídos e a variação entre ciclos desligados, a saída continuava não periódica, com
+linhas em k/3 da frequência do ciclo (um padrão que só se repete a cada 3 ciclos) e caos. Era o afiamento não linear da onda
+nos tubos primários, num laço ressonante: em giro de F1 cada cilindro dispara perto da ressonância de 1/4 de onda do
+primário. O auditor (Fable) testou ~60 variantes. Mudar a lei do afiamento ou o seu limite resolvia a F1 mas mudava a
+metalicidade dos carros de rua; o que resolveu foi a física que faltava: o atrito turbulento (`Δp ∝ ρu|u|`) na onda que volta
+pelo primário, sem tocar na onda de ida. Detalhes e números em `TECNICO.md`.
+
+**Lições:**
+
+- **Teste de periodicidade com o giro travado.** Com ruídos e variação desligados, um motor simulado tem de ser 100%
+  periódico. Fração de energia nos harmônicos do ciclo abaixo de ~0,9 (fora turbo e vazamento) é instabilidade do modelo,
+  não som. Vale varrer todos os presets em 50/70/85/95% da faixa vermelha depois de qualquer mudança nos tubos.
+- **Uma instabilidade pode morar num giro só.** Valkyrie, Jesko, McLaren e T50 tinham o mesmo caos em giros isolados, e
+  ninguém tinha percebido.
+- **Sobra o equilíbrio:** nas gravações de bordo dominam as ordens baixas (ordem 2 a ~600 Hz no V8, 500 Hz–1 kHz no V10);
+  no simulado essa região fica 7–20 dB abaixo e sobra 2–8 kHz. Ouvida depois da correção, a estridência ficou aceitável;
+  fica como ponto de partida se a F1 for revista de novo.
+
+## Caso: o compressor do Hellcat
+
+**Queixa:** o uivo soava como apito; o real soa como sirene de ataque aéreo e só aparece forte nas aceleradas; e no começo
+de cada acelerada o real faz um "tó roouummm", um tom grave que varre até o uivo.
+
+**O que a medida mostrou** (vídeo de celular com aceleradas curtas em ponto morto):
+
+- O uivo está em 11,9–12,1× o giro logo depois da acelerada, onde a rotação é confiável: compressor IHI de duplo parafuso,
+  polia de 2,36:1, rotor de 5 lóbulos (11,8×). O simulado usava 14,4× com três senoides paradas.
+- O 2º harmônico é tão forte quanto o fundamental. Do 3º em diante eles ficam só 7–8 dB acima do ruído de fundo: o número
+  medido é um teto, não o nível.
+- O giro sai da lenta e sobe ~9000 rpm/s até ~3900 rpm. No simulado ia a 20.000–36.000 rpm/s: faltava a inércia do
+  conversor de torque em ponto morto.
+
+**Erros que custaram rodadas:**
+
+- **"Agudo" pode ser a nota, o brilho ou o quando.** Escureci o timbre duas vezes quando o problema era a nota subindo rápido
+  demais e o uivo presente na hora errada. Pergunte cedo qual dos três, e descreva o que mudou em termos de ouvido.
+- **Uivo preso só ao giro.** O nível segue a pressão que os rotores fazem: forte com o pé embaixo, um fundo tirando o pé.
+  Olhar só o espectro numa rotação não mostra isso; acompanhe o nível ao longo de uma acelerada.
 
 ## Ferramentas
 
