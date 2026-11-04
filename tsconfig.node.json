@@ -1,0 +1,18 @@
+{
+  // Ferramentas em Node (tsx) e configuração do Vite. O DSP de src/ também é verificado aqui,
+  // porque ele precisa rodar no Node sem nada do navegador.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["tools/**/*.ts", "vite.config.mts", "src/acoustics/**/*.ts", "src/worklet/tom.ts"]
+}
