@@ -23,11 +23,11 @@ export function reservaTrem(cfg: CfgEletrico, N: number) {
  * Portador do preset, com o motor. `tremBase` (a configuração do trem da página ou da Passagem) é a base sobre a qual entra
  * a do preset; `carga` muda o tipo de portador só na bancada (a página escolhe pelo preset).
  */
-export function montarPortadorEletrico(cfg: CfgEletrico, fs: number, tremBase: Partial<ConfigTrem> = {}, motor?: MotorEletrico): Portador {
+export function montarPortadorEletrico(cfg: CfgEletrico, fs: number, tremBase: Partial<ConfigTrem> = {}, motor?: MotorEletrico, opcoes: { pneusAero?: boolean } = {}): Portador {
   const m = motor ?? montarMotorEletrico(cfg, fs);
   const pt = cfg.portador;
   if (pt.tipo === 'carro') {
-    const c = new CarroEletrico(fs, { massa: pt.massa, CdA: pt.CdA, Crr: pt.Crr, rw: pt.rw, corpo: pt.corpo, pneus: pt.pneus, trole: pt.trole });
+    const c = new CarroEletrico(fs, { massa: pt.massa, CdA: pt.CdA, Crr: pt.Crr, rw: pt.rw, corpo: pt.corpo, pneus: pt.pneus, trole: pt.trole, pneusAero: opcoes.pneusAero ?? true });
     c.acoplar(m);
     if (cfg.segundo) c.acoplarSegundo(montarMotorEletrico(cfg.segundo, fs));
     return c;

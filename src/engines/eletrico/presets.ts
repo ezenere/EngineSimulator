@@ -89,10 +89,10 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
       escada: { f0: ESCADA_F0, delta: ESCADA_DELTA, notas: NOTAS_TAURUS, patamar: PATAMAR_TAURUS },
       sincrona: [15, 11, 9, 7, 5, 3, 1],
       // grupos 2f_c, 3f_c, 4f_c medidos no patamar (3.1: D −4/−9/−8, A −11/−15/−22): os do meio
-      perfilGrupos: [0, -5, -8, -6],
+      perfilGrupos: [0, -6, -9, -9],
     },
     // linhas fixas da locomotiva parada (conversor auxiliar e ventilação, 3.1)
-    auxLinhas: [[176, 0], [527, 0], [688, -3], [467, -6]],
+    auxLinhas: [[176, 0], [527, 0], [688, -3]],
     reducao: { estagios: [{ Zp: 26, Zc: 96 }], eta: 0.97 }, ventilacao: { forcada: true, B: 9, rpm: 2950 }, carcaca: 'trem',
     niveis: { motor: 100, inversor: 98, reducao: 96, ventilador: 95, aux: 85 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 2, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 230,

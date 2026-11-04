@@ -51,6 +51,8 @@ export const PADROES: Record<IdPortadorPagina, PadroesPortador> = {
   aviao: { traj: { tipo: 'reta', comprimento: 6000, raioCurva: 2000, lateral: 0, altitude: 150, sentido: 1 }, vKmh: 300, ambiente: 'ceu', x0: 2000 },
   gerador: { traj: { tipo: 'reta', comprimento: 400, raioCurva: 2000, lateral: 7.5, altitude: 0, sentido: 1 }, vKmh: 0, ambiente: 'ceu', x0: 0 },
   locomotiva: { traj: { tipo: 'volta', comprimento: 2000, raioCurva: 400, lateral: 5, altitude: 0, sentido: 1 }, vKmh: 60, ambiente: 'ceu', x0: 300 },
+  // Elétrico: o drone passa devagar a 10 m de altura
+  drone: { traj: { tipo: 'reta', comprimento: 1000, raioCurva: 2000, lateral: 0, altitude: 10, sentido: 1 }, vKmh: 20, ambiente: 'ceu', x0: 60 },
 };
 export const AR_PADRAO = { ur: 60, temperatura: 20 };
 export const OUVINTE_PADRAO: Ouvinte = { modo: 'fixo', pos: [0, 0, 1.6], gimbal: { az: 90, el: 0, r: 8, alvo: 'corpo' }, local: 'auto', binaural: true };

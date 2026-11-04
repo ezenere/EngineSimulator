@@ -197,8 +197,10 @@ export class Inversor {
       // perfil medido (GTO em escada, Taurus): os grupos 2f_c, 3f_c, 4f_c ficam no nível das gravações (a tabela de Bessel
       // com M ≈ 0,1 dá 2f_c a −22 dB e nenhum 4f_c, contra −4..−9 e −3..−10 dB medidos: o padrão de pulsos do GTO com
       // poucos pulsos por período não é o PWM senoidal)
+      // (o perfil é acústico, como foi medido: relativo à linha f_c já com a curva da carcaça)
+      const hm = perfil && m <= perfil.length && a10 * Math.pow(10, perfil[m - 1] / 20) * H(fc) > ac * H(fm) ? H(fc) : H(fm);
       if (perfil && m <= perfil.length) ac = Math.max(ac, a10 * Math.pow(10, perfil[m - 1] / 20));
-      if (ac > 0) pp(m, 0, fm, ac * gI * H(fm));
+      if (ac > 0) pp(m, 0, fm, ac * gI * hm);
       if (m <= 2) this.eG[m - 1] = (ac * ac + potLat * corr * corr) * gI * gI * H(fm) * H(fm) * 0.5;
     }
   }

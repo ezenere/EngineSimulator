@@ -318,7 +318,8 @@ export class TracaoTrem {
   trem: Trem; motor: MotorEletrico;
   fontes: FonteSonora[] = [];
   private mapa: { ch: Int32Array; g: Float64Array }[] = [];
-  private canais: Float32Array[];
+  /** canais do motor (as unidades antes da replicação): os testes medem o inversor aqui */
+  readonly canais: Float32Array[];
   i = 1; eta = 0.95; rw = 0.43; nMot = 1; massa = 100000; davis = { A: 0, B: 0, C: 0 };
   inclinacao = 0; massaExtra = 0;
   carga: Carga;
