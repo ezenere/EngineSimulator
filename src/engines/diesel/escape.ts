@@ -21,7 +21,7 @@ export class DoisPortasDiesel extends TwoPort {
       this.gT = 0.9; this.rA = 0.25; this.rB = 0.12; this.x = 0.06; lr = 500;
     } else {
       // chaminé curta de locomotiva: só um tubo largo com o silenciador de faíscas, quase transparente
-      q(new Biquad().lp(fs, 6000, 0.6));
+      q(new Biquad().lp(fs, 10000, 0.6)); // (o corta-faíscas é uma tela larga: em 6 kHz ele tirava o agudo que a gravação do EMD tem)
       this.gT = 0.97; this.rA = 0.05; this.rB = 0.02; this.x = 0.02;
     }
     this.k = onePole(fs, lr); this.s = 0;

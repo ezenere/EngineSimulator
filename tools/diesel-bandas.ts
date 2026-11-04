@@ -9,7 +9,7 @@
 //   npx tsx tools/diesel-bandas.ts <arquivo.wav> <t0> <t1> [N tempos rpm]   (imprime a linha da tabela)
 import fs from 'node:fs';
 
-export const BANDAS: [number, number][] = [[60, 150], [150, 400], [400, 1000], [1000, 2500], [2500, 6000], [6000, 12000]];
+export const BANDAS: [number, number][] = [[60, 150], [150, 400], [400, 1000], [1000, 2500], [2500, 6000], [6000, 12000], [30, 60]];
 
 // FFT radix-2 complexa, no lugar
 export function fft(re: Float64Array, im: Float64Array, inversa = false) {
@@ -145,9 +145,25 @@ export function analisar(x: Float64Array | Float32Array, sr: number, rpm = 0, N 
   const idx = acharPicos(es, thr, Math.floor(0.004 * fse), 0.25 * (percentil(es, 95) - thr));
   const porS = idx.length / (es.length / fse);
   const fCiclo = rpm / 60 / (tempos / 2);
+  // CV do knock (real3/RESUMO.md): altura da envoltória 1–4 kHz em cada intervalo de ignição a[i]; em janelas de 3 s,
+  // std(a[i+1] − a[i])/(√2·média(a)); a mediana das janelas
+  let cv = NaN;
+  if (fCiclo > 0) {
+    const Lg = Math.max(8, Math.round(sr / (fCiclo * N))), a: number[] = [];
+    for (let i = 0; i + Lg <= env.length; i += Lg) { let m = 0; for (let k = i; k < i + Lg; k++) if (env[k] > m) m = env[k]; a.push(m); }
+    const porJ = Math.max(4, Math.round((3 * sr) / Lg)), cvs: number[] = [];
+    for (let j = 0; j + porJ <= a.length || (j === 0 && a.length >= 4); j += porJ) {
+      const w = a.slice(j, j + porJ); if (w.length < 4) break;
+      const d = w.slice(1).map((v, k) => v - w[k]), md = d.reduce((x, y) => x + y, 0) / d.length;
+      const sd = Math.sqrt(d.reduce((x, y) => x + (y - md) * (y - md), 0) / d.length), mw = w.reduce((x, y) => x + y, 0) / w.length;
+      cvs.push(sd / (Math.SQRT2 * mw + 1e-30));
+      if (j + porJ > a.length) break;
+    }
+    cvs.sort((x, y) => x - y); if (cvs.length) cv = cvs[Math.floor(cvs.length / 2)];
+  }
   return {
-    nivel, ref, b60: b[0], b400: b[2], b1k: b[3], b25k: b[4], b6k: b[5], cen, k14, curtose: k, p9010: 20 * Math.log10(p90 / (p10 + 1e-12)),
-    tiquesPorS: porS, tiquesPorCiclo: fCiclo ? porS / fCiclo : 0, tiquesPorEvento: fCiclo ? porS / fCiclo / N : 0,
+    nivel, ref, b30: b[6], b60: b[0], b400: b[2], b1k: b[3], b25k: b[4], b6k: b[5], cen, k14, curtose: k, p9010: 20 * Math.log10(p90 / (p10 + 1e-12)),
+    tiquesPorS: porS, tiquesPorCiclo: fCiclo ? porS / fCiclo : 0, tiquesPorEvento: fCiclo ? porS / fCiclo / N : 0, cv,
   };
 }
 
@@ -176,13 +192,13 @@ export function lerWavMono(arq: string): { x: Float64Array; sr: number } {
 
 const fmt = (v: number, c = 1) => v.toFixed(c).padStart(6);
 export const linha = (r: ReturnType<typeof analisar>) =>
-  `${fmt(r.nivel)} ${fmt(r.ref)} | ${fmt(r.b60)} ${fmt(r.b400)} ${fmt(r.b1k)} ${fmt(r.b25k)} ${fmt(r.b6k)} ${fmt(r.cen, 0)} | ${fmt(r.k14)} ${fmt(r.curtose)} ${fmt(r.p9010)} ${fmt(r.tiquesPorCiclo)} ${fmt(r.tiquesPorEvento, 2)}`;
+  `${fmt(r.nivel)} ${fmt(r.ref)} | ${fmt(r.b30)} ${fmt(r.b60)} ${fmt(r.b400)} ${fmt(r.b1k)} ${fmt(r.b25k)} ${fmt(r.b6k)} ${fmt(r.cen, 0)} | ${fmt(r.k14)} ${fmt(r.curtose)} ${fmt(r.p9010)} ${fmt(r.tiquesPorCiclo)} ${fmt(r.tiquesPorEvento, 2)} ${fmt(r.cv, 2)}`;
 
 if (process.argv[1] && process.argv[1].endsWith('diesel-bandas.ts')) {
   const [arq, t0, t1, N, tempos, rpm] = process.argv.slice(2);
   if (!arq) { console.error('uso: tsx tools/diesel-bandas.ts <arquivo.wav> <t0> <t1> [N tempos rpm]'); process.exit(2); }
   const { x, sr } = lerWavMono(arq);
   const seg = x.subarray(Math.floor(+(t0 || 0) * sr), t1 ? Math.floor(+t1 * sr) : x.length);
-  console.log(' 60-150 400-1k 1-2.5k 2.5-6k 6-12k   cen |   1-4k  curt p90/10 tq/cic tq/ev');
+  console.log(' nivel    ref |  30-60 60-150 400-1k 1-2.5k 2.5-6k 6-12k   cen |   1-4k  curt p90/10 tq/cic tq/ev    CV');
   console.log(linha(analisar(seg, sr, +(rpm || 0), +(N || 4), +(tempos || 4))));
 }

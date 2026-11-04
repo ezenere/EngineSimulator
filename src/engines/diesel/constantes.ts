@@ -41,8 +41,24 @@ export const NOTCH_RPM = {
 // peso do trem de válvulas e do fundo mecânico; acertados nas bandas do ouvinte `bay` (DIESEL.md 2.6, Apêndice A)
 export const K_MEC = 0.045;
 export const K_VALV = 0.3;
-export const K_FUNDO = 0.02;
+export const K_FUNDO = 0.1; // (0,02 com o chiado da admissão e do turbo por cima; sem eles a lenta tinha p90/p10 de 26 dB no cofre, 15–17 nas gravações)
 export const K_VIB = 0.1;
 // perda de calor para a parede no diesel, sobre a do Ronco: a mistura pobre da lenta (λ 4–8) queima mais fria e a
 // perda ×1 deixava o gás a 480–520 K na abertura do escape em lenta (alvo 600–750 K)
 export const K_CALOR = 0.6;
+
+// tempo de mistura do jato na queima por difusão (ms) para um cilindro de 100 mm com 200 MPa de injeção; escala com o
+// diâmetro e com 1/√(pressão de injeção) (DieselDSP.tMistura). Acertado para a plena carga da tabela 2.5 (pico a 10–14°,
+// dp/dθ 5–8 bar/° na picape)
+export const K_MISTURA = 0.5;
+
+// ruído aerodinâmico de banda larga da turbina, em fração de Zr·ṁ (pressão de um pulso) com a ponta do rotor a 500 m/s;
+// acertado na banda 1–6 kHz do EMD 710 em notch 8 (gravação do SD70ACe, DIESEL.md 4.4)
+export const K_TURBINA = 0.0045;
+
+// banda larga do compressor sob carga (DieselDSP.turboSom), na escala do canal do turbo; acertada nas bandas de 1–12 kHz
+// dos caminhões, ônibus e gerador em carga do real3 (RESUMO.md)
+export const K_SOPRO = 4.5;
+
+// ruído de choque do jato subexpandido do Jake (fração de Zr·ṁ por (M² − 1)); acertado no agudo do Jake (DIESEL.md 3.4)
+export const K_CHOQUE = 0.025;

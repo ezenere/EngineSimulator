@@ -70,7 +70,7 @@ export class EngineDSP implements DSPDeAudio {
   declare phB: any; declare scIn: any; declare ambL: any; declare ambR: any; declare ambSpec: any; declare ambHum: any;
   // ignição por compressão (src/engines/diesel/dsp.ts, DieselDSP): flag, ciclo e os ramos que a subclasse implementa
   declare cc: any; declare tempos: any; declare ciclo: any; declare tParede: any; declare fmepK: any; declare pmeCarga: any; declare rpmPartida: any;
-  declare ccInjecao: any; declare ccValvulas: any; declare ccQueima: any; declare ccEscape: any; declare ccAdmissao: any; declare ccMecanica: any; declare ccTurbo: any;
+  declare ccInjecao: any; declare ccValvulas: any; declare ccQueima: any; declare ccEscape: any; declare ccAdmissao: any; declare ccMecanica: any; declare ccTurbo: any; declare ccDens: any;
   // adaptador Motor da Cena (src/engines/ronco/motor.ts): só lê os canais antes da mistura; null no Ronco
   declare tap: any;
 
@@ -996,7 +996,8 @@ export class EngineDSP implements DSPDeAudio {
         // cortado sai abafado.
         // (referência = ciclo queimado em carga, ~1650 K: a amplitude no tubo em carga fica como foi acertada; a lenta
         // sai a ~950 K (−5 dB, que a calibração repõe) e o ciclo cortado ou de freio-motor a ~350 K (piso −20 dB))
-        if (ap <= evo && a > evo) this.densC[c] = clamp(T / T_EXREF, 0.1, 1.3);
+        if (this.cc) { if (ap <= evo && a > evo) this.densC[c] = this.ccDens(T); } // (diesel: p' = c·ṁ/A, ∝ √T)
+        else if (ap <= evo && a > evo) this.densC[c] = clamp(T / T_EXREF, 0.1, 1.3);
         const dens = mEx > 0 ? this.densC[c] : 1;
         // (o chiado do jato na válvula não entra na correção: é o escoamento sônico, não o empurrão do gás)
         run.out0 = 0.985 * run.in0 + Zr * mEx * (dens + turb * hiN);
