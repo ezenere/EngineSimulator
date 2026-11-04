@@ -140,6 +140,12 @@ function EngineDSPFactory() {
         q(new Biquad().peak(fs, 350, 0.9, -7)); q(new Biquad().peak(fs, 800, 0.9, -6)); q(new Biquad().lp(fs, 900, 0.7)); q(new Biquad().lp(fs, 900, 0.7)); q(new Biquad().lp(fs, 2000, 0.6)); q(new Biquad().peak(fs, 55, 1.0, 3));
         this.gT = 0.95; this.rA = 0.22; this.rB = 0.15; this.x = 0.06; lr = 500;
       }
+      // original antigo (Fusca, carros dos anos 60/70): caixa de lata só com câmaras, sem lã. As câmaras seguram o
+      // grave-médio, mas sem material absorvente o médio-agudo passa e a lata ressoa: é o som "de lata", estridente
+      else if (kind === 'classic') {
+        q(new Biquad().peak(fs, 300, 0.9, -7)); q(new Biquad().peak(fs, 1600, 1.4, 1.5)); q(new Biquad().lp(fs, 3200, 0.7)); q(new Biquad().lp(fs, 7000, 0.6));
+        this.gT = 0.9; this.rA = 0.25; this.rB = 0.12; this.x = 0.06; lr = 700;
+      }
       else {
         // turbina: o rotor quebra a frente dos pulsos (agudos caem uns 6 dB) e reforça um pouco o
         // grave do coletor, mas não é uma parede; um passa-baixa forte aqui soava "de longe"
@@ -186,9 +192,11 @@ function EngineDSPFactory() {
   // Válvula cutout ("escape aberto"): boca lateral antes do abafador. Fechada é um
   // toco tampado; aberta vira uma saída livre e o gás escolhe o caminho mais fácil.
   class Cutout extends Radiator {
-    constructor(fs, line, panL, panR, fc, gain, valve, fRad) { super(fs, line, panL, panR, fc, gain, fRad); this.valve = valve; }
+    constructor(fs, line, panL, panR, fc, gain, valve, fRad) { super(fs, line, panL, panR, fc, gain, fRad); this.valve = valve; this.o = valve.v; this.ko = onePole(fs, 40); }
     step() {
-      const x = this.line.in1, o = this.valve.v;
+      // a posição da válvula vem do control (a cada 16 amostras): em degraus, ela modulava a boca e o
+      // toco em escada durante a abertura/fechamento e soava um zumbido em fs/16 (3, 6, 9 kHz). Alisa aqui
+      const x = this.line.in1, o = (this.o += this.ko * (this.valve.v - this.o));
       this.s += this.k * (x - this.s);
       const open = -this.R * this.s;
       this.line.out1 = o * open + (1 - o) * 0.7 * x; // fechada: a borboleta da válvula vaza e absorve um pouco
@@ -229,12 +237,12 @@ function EngineDSPFactory() {
       this.iac = 0.004; this.iacI = 0.006; this.advTrim = 0; this.ePrev = 0; this.dash = 0;
       this.KP = 0.0015; this.KI = 0.0035; this.iacTrim = 1; this.KD = 0.0012; this.KA = 40; this.KAD = 0; this.RG = 0.08;
       this.pMan = P0; this.boost = 0; this.turboW = 0; this.bovEnv = 0; this.bovAmp = 0;
-      this.limiter = false; this.popWindow = 0; this.prevThrUser = 0;
+      this.limiter = false; this.popWindow = 0; this.popDur = 1; this.prevThrUser = 0; this.exhT = 20; this.burnHeat = 1; this.als = false;
       this.gear = 0; this.shiftT = 0; this.shifting = false; this.shiftCut = false; this.blip = false; this.clutch = 1; this.locked = false;
       this.shiftCool = 0; this.auto = false; this.ratios = gearRatios(6);
       this.v = 0; this.tqMean = 0; this.tqGas = 0;
       this.ignition = false;
-      this.params = { listener: 'ext', env: 'open', roadDist: 6, exhaust: 1, intake: 1, mech: 1, master: 0.8, fanSound: true, saSound: true };
+      this.params = { listener: 'ext', env: 'open', roadDist: 6, exhaust: 1, intake: 1, mech: 1, air: 1, master: 0.8, fanSound: true, saSound: true, ambSound: true, dynamics: 'real' };
       this.wE = 1; this.wI = 0; this.wB = 0; this.wP = 0; this.wR = 0;
       // observador parado na via: propagação pelo ar com atraso variável (Doppler)
       let ps = 1024; while (ps < fs * 2.6) ps <<= 1;
@@ -242,15 +250,16 @@ function EngineDSPFactory() {
       this.carX = -12; this.airL = 0; this.gndL = 0; this.shade = 0; this.rDist = 12; this.vRad = 0;
       this.roadL = 0; this.roadR = 0; this.roadS = 0; this.panS = 0;
       this.amb = [new Biquad().lp(fs, 220, 0.7), new Biquad().lp(fs, 220, 0.7), new Biquad().bp(fs, 900, 0.7), new Biquad().bp(fs, 900, 0.7)];
-      this.ambEnv = ''; this.ambMod = 0; this.phH = 0;
+      this.ambEnv = ''; this.ambMod = 0;
       this.ctrl = 0; this.telem = 0;
       this.pops = [];
       this.phW = 0; this.phT = 0; this.phS = 0;
       this.dcL = 0; this.dcR = 0; this.dcxL = 0; this.dcxR = 0;
-      this.lockOmega = false; this.cfgGain = 1; this.mkIdle = 1; this.tqScale = 1; this.tqS = 1; this.frMean = 0; this.rw = 0.33; this.kDrag = 0.42; this.roll = 165; this.brakeF = 13000; this.mk = 1; this.fade = 1; this.jetGain = 900; this.valveNoise = 0.07; this.tzLP = 0; this.tzK = 0.15; this.revCd = 0.15; this.varScale = 1; this.solverIt = 6; this.spread = 1; this.boxerAsym = 0.15; this.valveState = { v: 0 }; this.valveMode = 'closed'; this.valveAuto = false; this.twoStep = false; this.twoStepMode = 'off'; this.lcI = 0.12; this.launching = false; this.boxerPan = [1.0, 0.5, 0.22, 0.55];
+      this.lockOmega = false; this.cfgGain = 1; this.mkIdle = 1; this.tqScale = 1; this.tqS = 1; this.frMean = 0; this.rw = 0.33; this.kDrag = 0.42; this.roll = 165; this.brakeF = 13000; this.mk = 1; this.fade = 1; this.jetGain = 500; this.scK = 1; this.brkK = 0.028; this.brkFloor = 0.5; this.carbVar = 0.18; this.carbMis = 0.01; this.valveNoise = 0.07; this.vnTh = 1.3; this.vnLow = 0.3; this.tzLP = 0; this.tzK = 0.15; this.revCd = 0.15; this.varScale = 1; this.solverIt = 6; this.spread = 1; this.boxerAsym = 0.15; this.valveState = { v: 0 }; this.valveMode = 'closed'; this.valveAuto = false; this.twoStep = false; this.twoStepMode = 'off'; this.lcI = 0.12; this.launching = false; this.boxerPan = [1.0, 0.5, 0.22, 0.55];
       // temperatura do líquido de arrefecimento (°C); começa frio, como numa manhã qualquer
       this.coolant = 20; this.ambientT = 20; this.tempMode = 'real'; this.tempSet = 90; this.warm = 0;
       this.fanOn = false; this.fanSpin = 0; this.secAir = 0; this.catRetard = 0; this.idleTarget = 0; this.phFan = 0; this.phSA = 0;
+      this.arcE = 0; this.arcG = 1; this.arcP = 0; // nivelador do modo arcade
     }
 
     message(m) {
@@ -286,8 +295,11 @@ function EngineDSPFactory() {
       // tempo de troca do carro: metade com a marcha em transição, metade soltando a embreagem
       const st = this.shiftTime;
       this.shiftT = this.gear === 0 || target === 0 ? 0.05 : Math.max(0.02, up ? 0.5 * st : 0.75 * st);
-      this.shiftCut = up && this.thr > 0.5 && this.gear > 0;
-      // troca rápida (dupla embreagem, automático, quickshifter): a central corta a ignição
+      // subida de pé embaixo: corta a ignição, menos no automático com conversor (troca lenta): lá a
+      // central só atrasa a ignição (shiftRetard) e o motor segue queimando e roncando durante a troca
+      const hard = up && this.thr > 0.5 && this.gear > 0, tc = this.auto && st > 0.2;
+      this.shiftCut = hard && !tc;
+      // troca comandada pela central (dupla embreagem, automático, quickshifter): a central tira torque
       // e a borboleta fica aberta, então o turbo não despeja. Troca manual normal: o
       // motorista tira o pé e a válvula de alívio solta a pressão.
       this.ignCut = this.auto || this.shiftTime <= 0.2;
@@ -295,7 +307,8 @@ function EngineDSPFactory() {
       this.blip = !up && target > 0 && after > this.rpmAvg * 1.05;
       // automático (troca embreagem-a-embreagem): na subida a próxima marcha já vai
       // pegando enquanto a outra solta, então o motor é puxado para baixo e não dispara
-      this.clutch = this.auto && up && this.gear > 0 ? 0.3 : 0;
+      // (com conversor e sem corte a embreagem nova aperta mais, para a troca durar o mesmo)
+      this.clutch = this.auto && up && this.gear > 0 ? (hard && tc ? 0.75 : 0.3) : 0;
       this.gear = target;
       this.shiftCool = Math.max(0.3, 1.5 * st + 0.2);
     }
@@ -320,7 +333,9 @@ function EngineDSPFactory() {
       this.Vd = Vd; this.bore = bore;
       this.Ap = (Math.PI / 4) * bore * bore;
       this.rCrank = bore / 2; this.lRod = this.rCrank / 0.3;
-      this.CR = this.turbo || this.blower ? 9.5 : 11;
+      // taxa de compressão: motor antigo, feito para gasolina de baixa octanagem, comprime pouco (Fusca 7,5:1) e
+      // expande pouco: o gás chega à abertura do escape mais quente e com pressão, e o pulso sai mais forte e estalado
+      this.CR = clamp(cfg.compression || (this.turbo || this.blower ? 9.5 : 11), 6, 15);
       this.Vc = Vd / (this.CR - 1);
       this.Ar = 0.16 * bore * bore;           // seção do tubo primário
       this.Zr = SOUND_SPEED / this.Ar;         // impedância: Pa por kg/s
@@ -334,7 +349,7 @@ function EngineDSPFactory() {
       this.p = new Float64Array(N); this.m = new Float64Array(N); this.Vprev = new Float64Array(N);
       this.mEx = new Float64Array(N); this.mIn = new Float64Array(N); this.densC = new Float64Array(N).fill(1);
       this.Q = new Float64Array(N); this.xb = new Float64Array(N); this.air = new Float64Array(N);
-      this.armed = new Uint8Array(N); this.spk = new Float64Array(N);
+      this.armed = new Uint8Array(N); this.spk = new Float64Array(N); this.burnK = new Float64Array(N).fill(1);
       this.aPrev = new Float64Array(N);
       // nenhum cilindro é igual ao outro: distribuição de ar no coletor, sede de
       // válvula, injetor e câmara variam alguns por cento. Isso gera as ordens que
@@ -374,7 +389,7 @@ function EngineDSPFactory() {
       this.state = 'crank'; this.crankT = 0; this.runT = 0;
       this.omega = 0; this.rpmAvg = 0;
       this.iacI = 0.006; this.iac = 0.004; this.dash = 0; this.ePrev = 0; this.advTrim = 0; this.lcI = 0.12; this.lcPrev = undefined;
-      this.limiter = false; this.pops.length = 0; this.boost = 0; this.turboW = 0; this.bovEnv = 0; this.catRetard = 0;
+      this.limiter = false; this.pops.length = 0; this.boost = 0; this.turboW = 0; this.bovEnv = 0; this.catRetard = 0; this.exhT = this.ambientT; this.popWindow = 0; this.als = false;
       this.gear = 0; this.clutch = 1; this.locked = false; this.shifting = false; this.shiftCut = false; this.blip = false; this.v = 0;
       this.pMan = P0; this.thr = 0; this.dfcoOn = false; this.fuelRamp = 1;
     }
@@ -401,8 +416,22 @@ function EngineDSPFactory() {
       this.final = cfg.finalDrive || defaultFinal(cfg.redline);
       this.cam = cfg.cam;
       this.maxBoost = cfg.boost;
-      this.popsLevel = cfg.pops;
+      // estalos: o mapa da desaceleração e o catalisador (sem os campos: carburador não corta na desaceleração,
+      // e só o escape direto de corrida/moto não tem catalisador)
+      this.overrun = cfg.overrun || (cfg.fuel === 'carb' ? 'lean' : 'cut');
+      if (this.overrun === 'antilag' && !this.turbo) this.overrun = 'popbang';
+      this.hasCat = cfg.cat ?? cfg.muffler !== 'straight';
+      this.catNoise = this.hasCat ? 0.8 : 1;
       this.fuelVar = cfg.fuel === 'carb' ? 1.9 : 1;
+      // posição do motor → [pulso da admissão, mecânica, compressor, parte sem a sombra da carroceria, chiado] na câmera de trás
+      this.engPos = cfg.engine || (cfg.family === 'moto' ? 'mid' : 'front');
+      this.posW = { front: [0.12, 0.1, 0.07, 0, 0.12], mid: [0.15, 0.2, 0.22, 0.5, 0.12], rear: [0.15, 0.15, 0.3, 1, 0.12] }[this.engPos] || [0.12, 0.1, 0.07, 0, 0.12];
+      // refrigerado a ar: sem camisa d'água a mecânica soa mais, e não há ventoinha elétrica de radiador. (O sopro da
+      // ventoinha de correia do Fusca foi testado: no som real ele não aparece, e aqui soava como mar)
+      this.airCool = cfg.cooling === 'air';
+      // vedação do escape perto do motor: coletor de parede grossa e juntas soldadas não deixa a rajada da abertura
+      // escapar; paredes finas e juntas deslizantes (Fusca, carros antigos) deixam, e com vazamento mais ainda
+      this.breakK = { sealed: 0, old: 1, leaky: 2.2 }[cfg.breakout] || 0;
       this.valveMode = cfg.valve || 'closed';
       // 2-step: 'cut' corta a ignição no limite; 'soft' (controle de largada) dosa o acelerador
       this.twoStepMode = cfg.twoStep === true ? 'cut' : cfg.twoStep || 'off';
@@ -441,7 +470,7 @@ function EngineDSPFactory() {
     // entre configurações (mantendo a diferença natural entre abafadores).
     calibrate(cfg) {
       const t = new EngineDSP(this.fs);
-      t.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false }, false);
+      t.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false, breakout: 'sealed' }, false);
       t.state = 'run'; t.lockOmega = true; t.tempMode = 'fixed'; t.tempSet = 90; t.coolant = 90;
       t.omega = (this.redline * 0.55 * TAU) / 60; t.rpmAvg = this.redline * 0.55;
       // turbo calibrado em pressão parcial: com a pressão cheia o motor sopra quase o dobro de ar e
@@ -461,7 +490,7 @@ function EngineDSPFactory() {
       // e em marcha lenta: motores com dinâmica muito diferente (turbo abafado × corrida) ficavam
       // 30 dB apartados na lenta; a média geométrica (pesada 60/40 para a carga) dos dois ganhos divide essa diferença ao meio
       const ti = new EngineDSP(this.fs);
-      ti.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false }, false);
+      ti.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false, breakout: 'sealed' }, false);
       ti.state = 'run'; ti.lockOmega = true; ti.tempMode = 'fixed'; ti.tempSet = 90; ti.coolant = 90; ti.runT = 60;
       ti.omega = (this.idle * TAU) / 60; ti.rpmAvg = this.idle; ti.thrTarget = 0; ti.thr = 0; ti.params.master = 0.02; ti.dash = 0;
       // com o giro travado o controle de lenta não tem o que corrigir; aqui a válvula de ar é ajustada até o
@@ -485,7 +514,7 @@ function EngineDSPFactory() {
     // a dinâmica até a ficha técnica do carro sem mexer no som.
     measurePower(cfg) {
       const t = new EngineDSP(this.fs);
-      t.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false, limiter: 'none', power: undefined }, false);
+      t.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false, breakout: 'sealed', limiter: 'none', power: undefined }, false);
       t.state = 'run'; t.lockOmega = true; t.tempMode = 'fixed'; t.tempSet = 90; t.coolant = 90; t.runT = 100;
       t.thrTarget = 1; t.thr = 1; t.turboW = 1; t.boost = cfg.boost; t.maxBoost = cfg.boost; t.params.master = 0;
       const B = 256, L = new Float32Array(B), R = new Float32Array(B);
@@ -502,7 +531,10 @@ function EngineDSPFactory() {
     buildExhaust(cfg) {
       const fs = this.fs, N = this.N;
       const lines = []; const nodes = []; const runners = new Array(N); const rads = [];
-      const L = (len, Y, loss, damp = 1) => { const l = new Line(fs, len, Y, loss, damp); l.kNL = 0.28; lines.push(l); return l; };
+      // (afiamento da onda: o teórico é (γ+1)/2γ ≈ 0,88; atrito e troca de calor nas paredes seguram a frente, e 0,6
+      // bate com gravações de V8 acelerando. Com o chiado de jato antigo, alto em qualquer giro, isso virava um
+      // muro de agudo e o valor tinha descido a 0,28, o que deixava o ronco abafado)
+      const L = (len, Y, loss, damp = 1) => { const l = new Line(fs, len, Y, loss, damp); l.kNL = 0.6; lines.push(l); return l; };
       const pipe = cfg.pipeLen;
       // diâmetro do escape (referência 2,5"): área muda a impedância vista pelo coletor,
       // tubo fino atrita mais e acelera o gás (mais chiado de jato), ponta larga irradia mais grave
@@ -511,12 +543,16 @@ function EngineDSPFactory() {
       // ka = 1 na boca: c/(2πa) com o gás já mais frio na ponta (~400 m/s); raio 31,75 mm numa ponta de 2,5"
       const fRad = 400 / (TAU * 0.03175 * ds);
       const bankOut = []; this.bankJ = [];
+      const meanRun = cfg.runners.reduce((a, b) => a + b, 0) / N; this.brkW = new Float64Array(N).fill(1);
       for (let b = 0; b < cfg.banks; b++) {
         const cyls = [];
         for (let c = 0; c < N; c++) if (cfg.bank[c] === b) cyls.push(c);
         const ports = [];
         for (const c of cyls) {
-          const r = L(cfg.runners[c], 1, 12000);
+          // caixas de calefação (Fusca): os tubos longos atravessam o trocador aletado, que come agudo e esfria o gás
+          const heat = cfg.header === 'heater' && cfg.runners[c] > meanRun;
+          const r = heat ? L(cfg.runners[c], 1, 5000, 2.5) : L(cfg.runners[c], 1, 12000);
+          this.brkW[c] = (heat ? 0.35 : 1) * (1 + 0.2 * new RNG(0x7a11 + 977 * c + 31 * N).bi()); // (cada junta vaza um pouco diferente)
           runners[c] = r;
           ports.push(port(r, 1));
         }
@@ -553,7 +589,7 @@ function EngineDSPFactory() {
         }
         const tail = L(pipe * 0.3, mid.Y, 9000, dw);
         // depois do abafador a onda já é fraca: quase não se afia de novo (senão refaz os agudos que ele tirou)
-        tail.kNL = cfg.muffler === 'stock' ? 0.05 : 0.28;
+        tail.kNL = cfg.muffler === 'stock' ? 0.05 : cfg.muffler === 'classic' ? 0.15 : 0.6;
         nodes.push(new TwoPort(fs, port(feed, 1), port(tail, 0), cfg.muffler));
         const r = new Radiator(fs, tail, panL, panR, 1500 / ds, A2, fRad); nodes.push(r); rads.push(r);
       };
@@ -562,13 +598,17 @@ function EngineDSPFactory() {
         const mid = L(pipe * 0.55, Ym * (cfg.banks === 2 ? 1.4 : 1), 9000, dw);
         nodes.push(new Junction([...bankOut.map((o) => port(o, 1)), port(mid, 0)]));
         addTail(mid, 0.62, 0.78);
-      } else if (cfg.banks === 1 || routing === 'xpipe') {
+      } else if (cfg.banks === 1) {
         const mL = L(pipe * 0.55, Ym, 9000, dw), mR = L(pipe * 0.55 * 1.03, Ym, 9000, dw);
         nodes.push(new Junction([...bankOut.map((o) => port(o, 1)), port(mL, 0), port(mR, 0)]));
         addTail(mL, 0.95, 0.32); addTail(mR, 0.32, 0.95);
-      } else if (routing === 'hpipe') {
+      } else if (routing === 'xpipe' || routing === 'hpipe') {
+        // H: tubo fino de equalização. X: cruzamento curto e largo, onde os pulsos se trocam em boa parte, mas
+        // cada lado ainda leva o ritmo da sua bancada. (Uma junção única deixava as duas ponteiras idênticas e
+        // apagava o "pop" de cada volta do V8 de virabrequim cruzado: correlação 0,99 entre os ouvidos)
+        const x = routing === 'xpipe';
         const mL = L(pipe * 0.55, Ym, 9000, dw), mR = L(pipe * 0.55 * 1.03, Ym, 9000, dw);
-        const bal = L(0.28, Ym * 0.35, 6000); bal.kNL = 0;
+        const bal = L(x ? 0.1 : 0.28, Ym * (x ? 0.8 : 0.35), x ? 8000 : 6000); bal.kNL = 0;
         nodes.push(new Junction([port(bankOut[0], 1), port(mL, 0), port(bal, 0)]));
         nodes.push(new Junction([port(bankOut[1], 1), port(mR, 0), port(bal, 1)]));
         addTail(mL, 0.95, 0.32); addTail(mR, 0.32, 0.95);
@@ -591,9 +631,20 @@ function EngineDSPFactory() {
       this.radHP = rads.map(() => new Biquad().hp(this.fs, 45, 0.7));
       // microfones junto ao carro: a ponteira fica a ~35 cm do asfalto, e abaixo de ~200 Hz a reflexão no chão
       // chega em fase (fonte-imagem): é o "peso" do grave que se sente perto do escape
-      this.radSh = rads.map(() => new Biquad().peak(this.fs, 110, 0.6, 5));
+      // (acima disso a reflexão não some, soma em potência: +3 dB em média; o ganho relativo do grave é ~3 dB)
+      this.radSh = rads.map(() => new Biquad().peak(this.fs, 110, 0.6, 3));
+      // de fora, cada ouvido recebe cada ponteira com um pequeno atraso conforme o lado (até ~0,6 ms): é a
+      // diferença de tempo entre os ouvidos que tira o som "de dentro da cabeça" no fone; só o volume não basta
+      let ib = 64; while (ib < this.fs * 0.0015) ib <<= 1;
+      this.itdB = rads.map(() => new Float32Array(ib)); this.itdM = ib - 1; this.itdW = 0;
+      this.itdD = rads.map((r) => {
+        const p = (r.panR - r.panL) / (r.panR + r.panL + 1e-9), d = Math.round(Math.abs(p) * 0.0006 * this.fs);
+        return p > 0 ? [d, 0] : [0, d]; // (atrasa o ouvido do lado de lá)
+      });
       this.jetF = rads.map(() => [new Biquad().bp(this.fs, 450, 0.5), new Biquad().bp(this.fs, 1400, 0.6)]);
       this.jetEnv = rads.map(() => 0);
+      // ponteira: só a saída, por onde o gás sopra; fina, o mesmo pulso sai mais rápido (o resto do escape segue o tubo)
+      const td = clamp((cfg.tipD || cfg.pipeD || 2.5) / 2.5, 0.5, 1.6); this.tipA = td * td;
     }
 
     buildFilters(cfg) {
@@ -612,6 +663,9 @@ function EngineDSPFactory() {
         this.inGain = 0.8; this.hissF = new Biquad().bp(fs, 1200, 0.8); this.hissGain = 0.2;
       }
       this.clickF = [new Biquad().bp(fs, 2600, 2.5), new Biquad().bp(fs, 5200, 3)];
+      // irradiação do coletor: ruído largo caindo ~4 dB/oitava de 1 a 8 kHz e mais rápido acima (medido num Fusca)
+      this.brkF = [new Biquad().hp(fs, 700, 0.7), new Biquad().lp(fs, 10000, 0.7)]; this.brkLP = 0; this.brkE = 0; this.cabBrk = new Biquad().lp(fs, 900, 0.7);
+      this.brkKa = 1 - Math.exp(-1 / (0.003 * fs)); this.brkKd = 1 - Math.exp(-1 / (0.01 * fs)); this.brkKl = onePole(fs, 2500); this.brkKs = 1 - Math.exp(-1 / (0.1 * fs)); this.brkS = 0;
       this.knockF = [new Biquad().bp(fs, 900, 3), new Biquad().bp(fs, 2100, 4), new Biquad().bp(fs, 4200, 5)];
       this.mechHP = new Biquad().hp(fs, 80);
       this.saF = new Biquad().bp(fs, 2600, 0.8);
@@ -655,9 +709,23 @@ function EngineDSPFactory() {
     control(dtc) {
       const rpm = this.rpmAvg;
       const user = this.thrTarget;
-      if (this.prevThrUser > 0.35 && user < 0.1 && rpm > this.redline * 0.42) this.popWindow = 1.3;
+      // mapa da desaceleração: tirando o pé depois de carga, o crepitar de fábrica dura um ou dois segundos e o
+      // pop & bang de remap bem mais; a janela é da central, os estouros em si dependem do escape quente
+      if (this.prevThrUser > 0.35 && user < 0.1 && rpm > this.redline * 0.35) this.popWindow = this.popDur = { burble: 1.8, popbang: 4 }[this.overrun] || 0;
       this.popWindow = Math.max(0, this.popWindow - dtc);
       this.prevThrUser = user;
+      // antilag (rali): pé fora com giro acima de ~1/3 da faixa, a central abre um desvio de ar, atrasa a
+      // ignição e queima a mistura no coletor: estouros secos e a turbina não para de girar
+      // (arma só depois de o piloto pisar: a arrancada de giro da partida não conta)
+      const alsRpm = Math.max(this.idle * 2, this.redline * 0.3);
+      if (user > 0.35) this.alsArm = true; else if (rpm < alsRpm || this.state !== 'run') this.alsArm = false;
+      this.als = this.overrun === 'antilag' && this.turbo && this.state === 'run' && !!this.alsArm && user < 0.1 && rpm > alsRpm;
+      // temperatura da parede do coletor (é ela, em brasa, que acende a mistura): segue o gás (lenta ~320 °C, carga
+      // total ~850 °C) com a inércia do ferro, aquecendo em ~4 s e esfriando em ~20 s. Ciclo cortado só bombeia ar
+      // e esfria o escape, a não ser que leve combustível que queima lá dentro
+      const tBurn = Math.min(950, 180 + 720 * Math.sqrt(clamp(rpm / this.redline, 0, 1.1)) * Math.pow(clamp(this.pMan / P0, 0, 1.6), 0.6));
+      const tWant = this.state === 'run' ? this.ambientT + (tBurn - this.ambientT) * this.burnHeat : this.ambientT;
+      this.exhT += (tWant - this.exhT) * (1 - Math.exp(-dtc / (tWant > this.exhT ? 4 : 20)));
 
       this.runT = this.state === 'run' ? (this.runT || 0) + dtc : 0;
       // escala de torque até a potência da ficha técnica: só sobre o torque dos gases (o atrito é o que é) e só
@@ -675,14 +743,14 @@ function EngineDSPFactory() {
         this.coolant += dT * dtc;
       }
       // ventoinha do radiador liga perto de 100 °C e desliga uns graus abaixo
-      if (this.coolant > 99 && this.state === 'run') this.fanOn = true; else if (this.coolant < 93 || this.state === 'off') this.fanOn = false;
+      if (this.coolant > 99 && this.state === 'run' && !this.airCool) this.fanOn = true; else if (this.coolant < 93 || this.state === 'off') this.fanOn = false;
       this.fanSpin += ((this.fanOn ? 1 : 0) - this.fanSpin) * (1 - Math.exp(-dtc / (this.fanOn ? 1.5 : 4)));
       this.warm = smooth(15, 80, this.coolant);
       const cold = 1 - this.warm;
       // partida a frio: a central atrasa a ignição para esquentar o catalisador (ronco mais
       // rasgado) e liga a bomba de ar secundário por um minuto ou dois
-      // (escape direto de corrida/moto não tem catalisador nem bomba de ar)
-      const hasCat = this.cfg && this.cfg.muffler !== 'straight';
+      // (sem catalisador não há o que esquentar nem bomba de ar)
+      const hasCat = this.hasCat;
       this.catRetard = this.state === 'run' && hasCat ? 12 * (1 - smooth(30, 60, this.coolant)) * (1 - smooth(45, 80, this.runT)) * (user < 0.3 ? 1 : 0.4) : 0;
       const saWant = hasCat && this.state === 'run' && this.coolant < 45 && this.runT < 100 ? 1 : 0;
       this.secAir += (saWant - this.secAir) * (1 - Math.exp(-dtc / (saWant ? 0.8 : 1.5)));
@@ -765,14 +833,14 @@ function EngineDSPFactory() {
       // turbo
       if (this.turbo) {
         const flowN = (rpm / this.redline) * (0.15 + 0.85 * clamp(this.pMan / P0, 0, 1.5)) * (this.state === 'run' ? 1 : 0.2);
-        const target = clamp(flowN * 1.35, 0, 1);
+        const target = this.als ? Math.max(0.85, clamp(flowN * 1.35, 0, 1)) : clamp(flowN * 1.35, 0, 1);
         const tau = target > this.turboW ? 0.55 : 1.2;
         this.turboW += (target - this.turboW) * (1 - Math.exp(-dtc / tau));
         const avail = this.maxBoost * Math.pow(smooth(0.25, 0.85, this.turboW), 1.3);
         const boostWant = avail * smooth(0.35, 0.9, this.thr);
         const prev = this.boost;
         this.boost += (boostWant - this.boost) * (1 - Math.exp(-dtc / (boostWant > this.boost ? 0.12 : 0.05)));
-        if (prev > 0.35 && this.thr < 0.25 && user < 0.2 && this.bovEnv < 0.2) { this.bovAmp = prev / Math.max(0.3, this.maxBoost); this.bovEnv = 1; }
+        if (prev > 0.35 && this.thr < 0.25 && user < 0.2 && this.bovEnv < 0.2 && !this.als) { this.bovAmp = prev / Math.max(0.3, this.maxBoost); this.bovEnv = 1; }
       } else if (this.blower) {
         // compressor de deslocamento positivo: a pressão vem na hora, proporcional ao giro;
         // sem acelerar, a válvula de alívio abre e ele só gira em vazio
@@ -807,9 +875,15 @@ function EngineDSPFactory() {
       if (this.valveMode === 'auto') {
         if (user > 0.55 && rpm > this.idle * 1.6 || rpm > this.redline * 0.62) this.valveAuto = true;
         else if (user < 0.3 && rpm < this.redline * 0.5) this.valveAuto = false;
+      } else if (this.valveMode === 'sport') {
+        // modo esportivo dos escapes ativos: aberta em lenta e assim que se pisa; fecha só rodando leve em giro
+        // baixo, para não zunir na estrada
+        const cruise = this.gear > 0 && this.v > 5 && user > 0.03 && user < 0.15 && rpm < this.redline * 0.4; // (rodando: parado ou em ponto morto fica aberta)
+        this.valveAuto = !cruise;
       }
-      const vt = this.valveMode === 'open' || (this.valveMode === 'auto' && this.valveAuto) ? 1 : 0;
+      const vt = this.valveMode === 'open' || ((this.valveMode === 'auto' || this.valveMode === 'sport') && this.valveAuto) ? 1 : 0;
       this.valveState.v += (vt - this.valveState.v) * (1 - Math.exp(-dtc / 0.15));
+
 
       if (this.state === 'crank') {
         this.crankT += dtc;
@@ -883,7 +957,9 @@ function EngineDSPFactory() {
         // corte de combustível na desaceleração: entra bem acima da lenta, sai a ~1,4× o alvo (histerese) e o
         // combustível volta em rampa, como numa central real; sem isso a combustão voltava de uma vez
         // com o giro ainda despencando, e o motor batia na lenta e quicava
-        const dfcoWant = running && this.thr < 0.02 && !this.shifting && !(this.launching && this.twoStepMode === 'soft');
+        // (carburador não corta: o circuito de lenta segue mandando mistura e o motor continua queimando, mal, na
+        // desaceleração; cortar e religar a ~1200 rpm fazia o som sumir e voltar de repente)
+        const dfcoWant = running && this.thr < 0.02 && !this.shifting && !(this.launching && this.twoStepMode === 'soft') && this.fuelVar === 1;
         const it = this.idleTarget || this.idle;
         if (dfcoWant && this.rpmAvg > Math.max(it + 900, it * 1.9)) this.dfcoOn = true;
         else if (!dfcoWant || this.rpmAvg < Math.max(it + 350, it * 1.4)) this.dfcoOn = false;
@@ -908,7 +984,7 @@ function EngineDSPFactory() {
         const wn = rng.bi();
         this.tzLP += this.tzK * (wn - this.tzLP);
         const hiN = (wn - this.tzLP) * 1.4;
-        let Tgas = 0, mInSum = 0, vib = 0, intake = 0;
+        let Tgas = 0, mInSum = 0, vib = 0, intake = 0, brkIn = 0;
         for (let c = 0; c < N; c++) {
           let a = this.theta - fire[c]; if (a < 0) a += 720;
           const ap = aPrev[c];
@@ -934,25 +1010,50 @@ function EngineDSPFactory() {
             // sem limitador (motor antigo): passando da faixa vermelha as válvulas flutuam,
             // a mistura não entra direito e o motor falha e perde força
             const float = this.limType === 'none' ? clamp((this.rpmAvg - this.redline) / (0.12 * this.redline), 0, 1) : 0;
-            const misfire = rng.next() < this.cam * this.cam * 0.02 * idleness + 0.5 * float;
+            // (carburador em lenta: de vez em quando uma mistura não acende, a "tossida" do motor velho, ~1% das explosões)
+            // (e na desaceleração, com o vácuo alto, a mistura rala falha muito mais: até ~15% das explosões)
+            const misfire = rng.next() < this.cam * this.cam * 0.02 * idleness + 0.5 * float + (this.fuelVar > 1 ? (this.carbMis * idleness + 0.15 * clamp((0.3 - this.pMan / P0) / 0.15, 0, 1)) * this.varScale : 0);
             if (combust && !misfire) {
-              this.Q[c] = Math.max(0, this.air[c]) * 2.6e6 * this.cylQ[c] * (1 - 0.7 * float) * (0.45 + 0.55 * this.fuelRamp) * clamp(1 + sigma * this.varScale * this.fuelVar * rng.gauss(), 0.3, 1.5);
+              this.burnHeat += (1 - this.burnHeat) * 0.05;
+              // carburador em carga leve: com a borboleta quase fechada a mistura chega mal vaporizada e mal dividida
+              // entre os cilindros, e cada explosão sai diferente (na força e no ritmo da queima). Com o pé embaixo o
+              // fluxo forte homogeneíza e o motor assenta; em lenta e meio pé volta o "galope" (num Fusca real, ~25–35%
+              // de variação entre explosões a ~2000 rpm em neutro, contra ~4% sem isto)
+              const light = this.fuelVar > 1 ? clamp((0.8 - this.pMan / P0) / 0.5, 0, 1) * this.varScale : 0;
+              this.Q[c] = Math.max(0, this.air[c]) * 2.6e6 * this.cylQ[c] * (1 - 0.7 * float) * (0.45 + 0.55 * this.fuelRamp) * clamp(1 + (sigma * this.varScale * this.fuelVar + this.carbVar * light) * rng.gauss(), 0.25, 1.6);
+              this.burnK[c] = light ? 1 + 0.35 * light * clamp(rng.gauss(), -1.5, 2) : 1; // (mistura pobre queima devagar e chega mais quente no escape)
               this.xb[c] = 0;
               this.knockEnv += 0.6 + 0.4 * rng.next();
             } else {
               this.Q[c] = 0; this.xb[c] = 1;
-              const pl = this.popsLevel;
-              if (pl > 0 && running && this.rpmAvg > this.idle * 1.4 && !combust) {
-                let pr = 0;
-                if (this.launching && this.limiter) pr = 0.12;
-                // ignição cortada: o combustível passa e estoura no escape; corte de combustível é seco
-                else if (this.limiter) pr = { ign: 0.4, fuel: 0.02, partial: 0.15, throttle: 0.02 }[this.limType] ?? 0;
-                else if (this.shifting && this.shiftCut) pr = 0.55;
-                else if (dfco) pr = 0.32 * (this.popWindow / 1.3);
-                if (rng.next() < pr * pl && this.pops.length < 10) {
-                  const delay = ((evo + adv + 30) / Math.max(600, rpm * 6)) * fs + rng.next() * 0.006 * fs;
-                  this.pops.push({ d: delay | 0, t: 0, bank: this.cfg.bank[c], amp: (0.5 + 0.7 * rng.next()) * pl * 1.2e5 * (this.limiter ? 0.6 : 1) });
+              // estouro no escape: a mistura que não queimou no cilindro chega ao coletor quente e explode lá. Precisa
+              // de combustível (ignição cortada ou falha; corte de injeção só bombeia ar) e de escape quente (~600 °C).
+              // Cada fonte tem uma taxa típica (estouros por segundo, escape quente e sem catalisador) e um tamanho;
+              // o estouro cresce com a carga do cilindro, e o catalisador queima boa parte do combustível sem barulho
+              let rate = 0, k = 0, pr = 0, wet = true, floor = 0.15, lit = false;
+              if (running && this.rpmAvg > this.idle * 1.4) {
+                const ov = this.overrun;
+                if (combust) { pr = 0.015; k = 0.7; } // falha de ignição (válvulas flutuando, comando bravo): mistura inteira, mas quase nunca acende
+                else if (this.launching && this.limiter) { rate = 20; k = 0.8; } // 2-step com corte
+                else if (this.limiter) [rate, k, wet] = { ign: [25, 0.7, true], partial: [8, 0.6, true] }[this.limType] || [0.5, 0.3, false]; // (corte de injeção: só o filme de combustível do coletor)
+                else if (this.shifting && this.shiftCut) [rate, k] = this.ignCut ? [40, 0.8] : [5, 0.5];
+                else if (dfco) {
+                  if (this.als) { rate = 22; k = 1.1; floor = 0.6; lit = true; }
+                  else if (ov === 'lean') { rate = 1; k = 0.5; } // carburador: a mistura da desaceleração é rica e raramente acende (o pipoco frequente é vazamento no escape)
+                  // (os mapas de estouro abrem um pouco a borboleta e enriquecem: a carga não é a da lenta)
+                  else if (ov === 'burble' && this.popWindow > 0) { rate = 16 * Math.sqrt(this.popWindow / this.popDur); k = 0.8; floor = 0.35; lit = true; }
+                  else if (ov === 'popbang' && this.popWindow > 0) { rate = 20 * Math.min(1, this.popWindow); k = 1.2; floor = 0.5; lit = true; }
                 }
+              }
+              if (rate) pr = Math.min(0.9, rate / (N * Math.max(rpm, 300) / 120));
+              this.burnHeat += ((wet && (pr || rate) ? 0.5 : 0) - this.burnHeat) * 0.05;
+              // (nos mapas de estouro a ignição atrasada manda a chama acesa para o escape: não precisa da parede em
+              // brasa. A mistura crua do corte de ignição, do carburador ou de uma falha só acende no escape quente)
+              const hot = lit ? 0.7 + 0.3 * smooth(280, 520, this.exhT) : smooth(280, 520, this.exhT);
+              if (pr && rng.next() < pr * hot * (this.hasCat ? 0.6 : 1) && this.pops.length < 10) {
+                const size = Math.pow(clamp(this.air[c] / (this.Vd * 1.2), floor, 1.3), 0.7);
+                const delay = ((evo + adv + 30) / Math.max(600, rpm * 6)) * fs + rng.next() * 0.006 * fs;
+                this.pops.push({ d: delay | 0, t: 0, bank: this.cfg.bank[c], amp: 8e4 * k * size * (0.6 + 0.6 * rng.next()) * (this.hasCat ? 0.7 : 1) * (0.6 + 0.4 * hot) });
               }
             }
           }
@@ -977,7 +1078,7 @@ function EngineDSPFactory() {
           if (this.xb[c] < 1) {
             let d = a - this.spk[c]; if (d < -360) d += 720;
             if (d < 0) d = 0;
-            const u = d / burn;
+            const u = d / (burn * this.burnK[c]);
             const x = u >= 1 || d > 360 ? 1 : 1 - Math.exp(-5 * u * u * u);
             dQ = this.Q[c] * (x - this.xb[c]);
             this.xb[c] = x;
@@ -996,8 +1097,11 @@ function EngineDSPFactory() {
           // engasgado (pressão no cilindro bem acima do tubo). No resto do curso o escoamento
           // é manso; deixar o chiado ligado o tempo todo vira um som de vento contínuo.
           // O jato engasgado chia em alta frequência (rasgado); grave e médio continuam tonais.
+          // É o "rasgado" metálico, uma rajada colada a cada abertura. A turbulência no cilindro cresce com a
+          // velocidade média do pistão, então em giro baixo (a acelerada saindo da lenta) ela é bem mais mansa; a
+          // colmeia do catalisador, com milhares de canais finos, come um pouco desse agudo antes do abafador
           let turb = 0;
-          if (mEx > 0) turb = this.valveNoise * clamp((p / (P0 + 2 * run.in0) - 1.25) / 1.2, 0, 1);
+          if (mEx > 0) turb = this.valveNoise * this.catNoise * P.air * (this.vnLow + (1 - this.vnLow) * Math.min(rf / 0.6, 1)) * clamp((p / (P0 + 2 * run.in0) - this.vnTh) / 1.2, 0, 1);
           // a pressão no tubo é impedância × vazão volumétrica, não mássica: o gás de um cilindro cortado
           // (ignição/combustível cortado, ~350 K) é 4× mais denso que o queimado (~1500 K) e empurra bem menos
           // pela mesma massa. Sem isso o corte de giro soava 8 dB mais alto que o motor queimando.
@@ -1011,6 +1115,7 @@ function EngineDSPFactory() {
           // (o chiado do jato na válvula não entra na correção: é o escoamento sônico, não o empurrão do gás)
           run.out0 = 0.985 * run.in0 + Zr * mEx * (dens + turb * hiN);
           this.mEx[c] = mEx;
+          if (mEx > 0) brkIn += this.brkW[c] * Zr * mEx * dens;
 
           // ---- válvula de admissão
           let mIn = 0;
@@ -1103,30 +1208,38 @@ function EngineDSPFactory() {
         for (let i = 0; i < nL; i++) lines[i].write();
 
         // ---- ponteira: irradiação + ruído de jato (escala com a velocidade do gás)
-        let exL = 0, exR = 0;
+        let exL = 0, exR = 0, exLd = 0, exRd = 0;
+        const iw = this.itdW = (this.itdW + 1) & this.itdM;
         for (let i = 0; i < nR; i++) {
           const rd = rads[i];
           const e = rd.emit;
           let x = this.radSh[i].run(this.radHP[i].run(e));
-          const vel = Math.max(0, rd.u) / (2.5e4 * this.pipeA);
+          // o chiado segue a velocidade instantânea do gás em cada pulso (∝ v²): é o "puf" de cada explosão saindo
+          // pela ponteira, com silêncio entre elas. (Uma versão que usava a velocidade média do gás tirava esses pufs
+          // e deixava o agudo de todos os carros abafado, como um fundo liso)
+          const vel = Math.max(0, rd.u) / (2.5e4 * this.tipA);
           this.jetEnv[i] += (vel - this.jetEnv[i]) * 0.15;
-          const jv = this.jetEnv[i];
-          const nz = rng.bi();
-          x += (this.jetF[i][0].run(nz) + 0.8 * this.jetF[i][1].run(nz)) * jv * jv * this.jetGain;
+          const jv = this.jetEnv[i], nz = rng.bi();
+          x += (this.jetF[i][0].run(nz) + 0.8 * this.jetF[i][1].run(nz)) * jv * jv * this.jetGain * P.air;
           exL += x * rd.panL; exR += x * rd.panR;
+          const ib = this.itdB[i], dd = this.itdD[i]; ib[iw] = x;
+          exLd += ib[(iw - dd[0]) & this.itdM] * rd.panL; exRd += ib[(iw - dd[1]) & this.itdM] * rd.panR;
         }
 
         // ---- admissão
-        let inS;
+        let inS, inP, inH;
         {
           const dIn = (intake - this.inPrev) * fs;
           this.inPrev = intake;
           let x = dIn * 0.9 / (this.N * 0.5 + 1) / Math.max(0.02, this.Vd * 1e3);
           for (let i = 0; i < this.inF.length; i++) x = this.inF[i].run(x);
-          const air = clamp(mInSum / (this.Vd * N * 1.2 * Math.max(rpm, 600) / 120 + 1e-9), 0, 2);
-          const hiss = this.hissF.run(rng.bi()) * air * air * this.hissGain * 0.25;
+          // chiado do ar entrando pela borboleta: cresce com a vazão nela, não com a carga. Pisando com o coletor em
+          // vácuo, a borboleta engole ar em fluxo sônico até o coletor encher: é o "suspiro" curto da acelerada; depois
+          // segue a vazão do motor (normalizado pela rotação ele ficava no máximo durante toda a acelerada)
+          const air = clamp(mThr / (this.Vd * N * 1.2 * this.redline / 120 + 1e-9), 0, 2);
+          const hiss = this.hissF.run(rng.bi()) * air * air * this.hissGain * 0.25 * P.air;
           const loadIn = 0.3 + 0.7 * clamp(pMan / P0, 0, 1); // em lenta (coletor em vácuo) a admissão quase não se ouve
-          inS = (x * this.inGain * 0.004 * loadIn + hiss);
+          inP = x * this.inGain * 0.004 * loadIn; inH = hiss; inS = inP + inH; // (pulso grave + chiado)
         }
 
         // ---- mecânico
@@ -1147,6 +1260,7 @@ function EngineDSPFactory() {
             mech += this.starterLP.run((this.phS * 2 - 1) * 0.05 + rng.bi() * 0.02) * (0.6 + 0.4 * Math.sin(this.phW * 2));
           }
           mech = this.mechHP.run(mech);
+          if (this.airCool) mech *= 1.2; // (sem a camisa d'água em volta, tucho, válvula e pistão irradiam mais)
           // bomba de ar secundário (zumbido elétrico) e ventoinha do radiador
           if (this.secAir > 0.01 && P.saSound !== false) {
             this.phSA += 760 * dt; if (this.phSA > 1) this.phSA -= 1;
@@ -1160,15 +1274,26 @@ function EngineDSPFactory() {
           vib = this.vibLP.run(vib * 0.04 * rf * rf + ripple * 0.05);
         }
 
+        // ---- irradiação do coletor perto do motor: a rajada de cada abertura de válvula vaza pelas paredes finas e
+        // juntas antes do abafador. Sobe em ~3 ms e cai em ~10 ms (acima de ~1800 rpm as rajadas se fundem em ondas por
+        // volta), e cada cilindro sopra conforme o próprio pulso. É o agudo "de lata" do Fusca, colado ao motor
+        let brk = 0;
+        if (this.breakK) {
+          this.brkE += (brkIn - this.brkE) * (brkIn > this.brkE ? this.brkKa : this.brkKd);
+          this.brkS += (brkIn - this.brkS) * this.brkKs; // (média de ~0,1 s: entre as rajadas o escape segue pressurizado e as juntas vazam um pouco)
+          this.brkLP += this.brkKl * (this.brkF[0].run(rng.bi()) - this.brkLP); // (passa-alta em 700 Hz e 1 polo em 2,5 kHz)
+          brk = this.brkF[1].run(this.brkLP) * (this.brkE + this.brkFloor * this.brkS) * this.breakK * this.brkK;
+        }
+
         // ---- turbo
-        let tur = 0;
+        let tur = 0, sc = 0;
         if (this.turbo) {
           const tw = this.turboW;
           const f = 500 + 6200 * tw;
           this.phT += TAU * f * dt; if (this.phT > TAU) this.phT -= TAU;
           const lvl = tw * tw * (0.2 + 0.8 * clamp(pMan / pUp, 0, 1));
           tur += (Math.sin(this.phT) + 0.25 * Math.sin(2 * this.phT + 0.7)) * 0.02 * lvl;
-          tur += this.turboHiss.run(rng.bi()) * 0.02 * lvl * (0.3 + this.boost);
+          tur += this.turboHiss.run(rng.bi()) * 0.02 * lvl * (0.3 + this.boost) * P.air;
           if (this.bovEnv > 0.002) {
             const nz = rng.bi();
             tur += (this.bovF[0].run(nz) + 0.6 * this.bovF[1].run(nz)) * this.bovEnv * this.bovAmp * 0.35;
@@ -1180,45 +1305,56 @@ function EngineDSPFactory() {
         if (this.blower) {
           const fb = (omega / TAU) * 2.4 * 6;
           this.phB = (this.phB || 0) + TAU * fb * dt; if (this.phB > TAU) this.phB -= TAU;
-          const lv = Math.pow(rf, 1.5) * (0.25 + 0.75 * clamp(this.boost / Math.max(0.2, this.maxBoost), 0, 1));
-          tur += (Math.sin(this.phB) + 0.45 * Math.sin(2 * this.phB + 0.4) + 0.2 * Math.sin(3 * this.phB + 1.1)) * 0.03 * lv;
-          tur += this.turboHiss.run(rng.bi()) * 0.012 * lv;
+          const lv = Math.pow(rf, 1.5) * (0.35 + 0.65 * clamp(this.boost / Math.max(0.2, this.maxBoost), 0, 1)); // (os rotores giram sempre: sem pressão o uivo diminui, não some)
+          // (a passagem dos lóbulos pulsa a pressão de descarga numa fração grande da própria pressão: no cofre, de pé
+          // embaixo, o uivo briga com o escape; antes ficava ~30 dB abaixo e não se ouvia)
+          sc += (Math.sin(this.phB) + 0.45 * Math.sin(2 * this.phB + 0.4) + 0.2 * Math.sin(3 * this.phB + 1.1)) * 0.36 * lv * this.scK;
+          sc += this.turboHiss.run(rng.bi()) * 0.14 * lv * P.air;
         }
 
         // ---- ouvinte (exL/exR em Pa, o resto já em escala de áudio)
         const exScale = 2.4e-4;
-        exL *= exScale * P.exhaust; exR *= exScale * P.exhaust;
+        exL *= exScale * P.exhaust; exR *= exScale * P.exhaust; exLd *= exScale * P.exhaust; exRd *= exScale * P.exhaust; brk *= exScale * P.exhaust;
         this.wE += (targetE - this.wE) * kw; this.wI += (targetI - this.wI) * kw; this.wB += (targetB - this.wB) * kw;
         this.wP += (targetP - this.wP) * kw; this.wR += (targetR - this.wR) * kw;
-        inS *= P.intake; mech *= P.mech; vib *= P.mech;
+        inS *= P.intake; inP *= P.intake; inH *= P.intake; mech *= P.mech; vib *= P.mech;
         let L = 0, R = 0;
+        // o que sai do cofre (admissão, mecânica, compressor) depende de onde o motor está: dianteiro, chega à câmera
+        // de trás de longe e com a carroceria no meio; central ou traseiro, a câmera fica colada nele e ouve o
+        // carburador puxando ar, a ventoinha e o trem de válvulas com o agudo. É por isso que o mesmo chiado é a
+        // alma do Fusca e soa postiço num Mustang. (O pulso grave da admissão fica contido na caixa do filtro e sob a
+        // tampa do motor; o chiado agudo, que nasce no carburador e na borboleta, escapa pelas grelhas)
+        const me = this.extMech.run(mech), [kIn, kMe, kSc, kRaw, kH] = this.posW, mm = me + kRaw * (mech - me), ia = kIn * inP + kH * inH;
         if (this.wE > 1e-4) {
-          const me = this.extMech.run(mech);
-          L += this.wE * (exL + 0.12 * inS + 0.1 * me + 0.2 * tur + 0.1 * vib);
-          R += this.wE * (exR + 0.12 * inS + 0.1 * me + 0.2 * tur + 0.1 * vib);
+          const bk = (0.3 + 0.7 * kRaw) * brk; // (motor dianteiro: o coletor fica sob o capô e chega por baixo do carro)
+          L += this.wE * (exLd + ia + kMe * mm + 0.2 * tur + kSc * sc + bk + 0.1 * vib);
+          R += this.wE * (exRd + ia + kMe * mm + 0.2 * tur + kSc * sc + bk + 0.1 * vib);
         }
         if (this.wP > 1e-4) {
           // microfone colado na ponteira esquerda: campo próximo, quase só escape
-          L += this.wP * (1.6 * exL + 0.4 * exR + 0.06 * inS + 0.05 * mech + 0.1 * tur);
-          R += this.wP * (1.1 * exL + 0.35 * exR + 0.06 * inS + 0.05 * mech + 0.1 * tur);
+          L += this.wP * (1.6 * exL + 0.4 * exR + 0.06 * inS + 0.05 * mech + 0.1 * tur + 0.03 * sc + 0.5 * brk);
+          R += this.wP * (1.1 * exL + 0.35 * exR + 0.06 * inS + 0.05 * mech + 0.1 * tur + 0.03 * sc + 0.5 * brk);
         }
         if (this.wI > 1e-4) {
           let cl = exL * 0.75 + exR * 0.25, cr = exR * 0.75 + exL * 0.25;
           for (let i = 0; i < 3; i++) { cl = this.cabL[i].run(cl); cr = this.cabR[i].run(cr); }
           // pela parede corta-fogo chegam admissão, mecânica e a vibração do bloco
-          const common = 0.35 * this.cabIn.run(inS) + 0.2 * this.cabMech.run(mech) + 0.25 * tur + 1.2 * vib;
+          const common = 0.35 * this.cabIn.run(inS) + 0.2 * this.cabMech.run(mech) + 0.25 * (tur + sc) + 0.2 * this.cabBrk.run(brk) + 1.2 * vib;
           L += this.wI * (cl * 0.6 + common); R += this.wI * (cr * 0.6 + common);
         }
         if (this.wB > 1e-4) {
           // cofre: o escape chega por baixo do carro, abafado; dominam admissão, comando e bloco
           const ex = this.bayEx.run((exL + exR) * 0.5);
-          const b = 0.55 * ex + 1.0 * inS + 0.7 * mech + 0.8 * tur + 0.8 * vib;
+          const b = 0.55 * ex + 1.0 * inS + 0.7 * mech + 0.8 * (tur + sc) + brk + 0.8 * vib;
           L += this.wB * b; R += this.wB * b;
         }
         // carro andando pela via (posição sempre atualizada; volta de "loop" metros)
         this.carX += this.v * dt;
         if (this.carX > loop / 2) this.carX -= loop;
-        this.road((exL + exR) * 0.5, 0.12 * inS + 0.1 * this.extMech.run(mech) + 0.2 * tur, P);
+        // (na rua o motor traseiro sopra para trás, junto com o escape; o dianteiro, para a frente)
+        // (de frente, nada fica entre o compressor e quem está na rua: ele entra como no cofre)
+        const eng = 0.12 * inP + kH * inH + 0.1 * mm + 0.8 * sc;
+        this.road((exL + exR) * 0.5 + 0.7 * brk + kRaw * eng, (1 - kRaw) * eng + 0.2 * tur, P);
         if (this.wR > 1e-4) { L += this.wR * this.roadL; R += this.wR * this.roadR; }
         // bloqueio DC + compensação de loudness por rotação + saturação suave
         // (leve: um motor real fica uns 25 dB mais alto da lenta ao corte; aqui comprimimos só ~5 dB disso)
@@ -1226,12 +1362,21 @@ function EngineDSPFactory() {
         const wIdle = 1 - smooth((this.idle / this.redline) * 1.15, 0.5, rpmFrac);
         this.mk += (Math.pow(this.mkIdle || 1, wIdle) - this.mk) * 0.0005;
         if (this.fade < 1) this.fade = Math.min(1, this.fade + dt / 0.04);
-        const gOut = P.master * 0.5 * this.cfgGain * this.mk * this.fade;
+        // arcade: nivelador sobre o escape na fonte (antes do ouvinte, para a distância na rua e a cabine
+        // continuarem valendo). Abaixo da carga total da calibração ele sobe o ganho na razão 1:2, até +10 dB: a lenta
+        // sobe metade do que falta, sem igualar ao giro alto; acima não mexe. O ganho desce em 15 ms e sobe em 300 ms, para não "bombear" no corte de giro
+        const lv = this.cfgGain * this.mk, e2 = 0.5 * (exL * exL + exR * exR) * lv * lv;
+        this.arcE += (e2 - this.arcE) * 0.0004; // (RMS de ~50 ms: um detector de pico lia os pulsos da lenta, não o nível)
+        const gw = P.dynamics === 'arcade' && this.state === 'run' ? clamp(Math.pow(0.17 / Math.sqrt(this.arcE + 1e-12), 0.5), 1, 3.16) : 1;
+        this.arcG += (gw - this.arcG) * (gw < this.arcG ? 0.0014 : 0.00007);
+        // (e o reforço nunca leva um estouro além do teto: pico com ataque na hora e soltura de ~140 ms)
+        this.arcP = Math.max(Math.max(Math.abs(exL), Math.abs(exR)) * lv * P.master * 0.5, this.arcP * 0.99985);
+        const gOut = P.master * 0.5 * this.cfgGain * this.mk * this.fade * Math.min(this.arcG, Math.max(1, 0.9 / (this.arcP + 1e-9)));
         this.dcL = L - this.dcxL + 0.9985 * this.dcL; this.dcxL = L;
         this.dcR = R - this.dcxR + 0.9985 * this.dcR; this.dcxR = R;
         // som de fundo do ambiente (independe do motor)
         this.ambience(this.wI);
-        const gA = P.master * 0.5;
+        const gA = P.ambSound === false ? 0 : P.master * 0.5;
         outL[s] = Math.tanh(this.dcL * gOut + this.ambL * gA);
         if (outR !== outL) outR[s] = Math.tanh(this.dcR * gOut + this.ambR * gA);
         if (sendL) {
@@ -1300,19 +1445,24 @@ function EngineDSPFactory() {
         open: [0.05, 0.0012, 0, 0], street: [0.045, 0.0035, 0, 0], tunnel: [0.04, 0.002, 100, 0.004],
         garage: [0.02, 0.001, 120, 0.002], track: [0.05, 0.004, 0, 0], canyon: [0.06, 0.001, 0, 0],
       }[env] || [0.04, 0.0012, 0, 0];
+      // ventilação (jet fans do túnel, exaustor da garagem): ruído de banda estreita na passagem das pás e no
+      // dobro, um para cada ouvido. Um seno parado soava como um tom de teste por baixo de tudo
+      const hz = this.ambSpec[2] || 100;
+      this.ambHum = [0, 1].map(() => [new Biquad().bp(fs, hz, 7), new Biquad().bp(fs, 2 * hz, 9)]);
     }
 
     // vento, trânsito distante, ventilação do túnel, murmúrio da arquibancada...
     ambience(inside) {
-      const [gl, gb, hz, gh] = this.ambSpec, rng = this.rng, a = this.amb;
+      const [gl, gb, , gh] = this.ambSpec, rng = this.rng, a = this.amb;
       this.ambMod += (rng.bi() * 0.5 - this.ambMod) * 0.00002;
       const gust = 0.7 + 0.6 * Math.abs(this.ambMod) * 4;
       let l = a[0].run(rng.bi()) * gl * gust + a[2].run(rng.bi()) * gb;
       let r = a[1].run(rng.bi()) * gl * gust + a[3].run(rng.bi()) * gb;
       if (gh) {
-        this.phH += TAU * hz * this.dt; if (this.phH > TAU) this.phH -= TAU;
-        const h = (Math.sin(this.phH) + 0.4 * Math.sin(2 * this.phH)) * gh;
-        l += h; r += h;
+        // (×16: a banda estreita só deixa passar ~1/1000 do ruído branco; fica uns 8 dB abaixo do antigo seno)
+        const [hl, hr] = this.ambHum, k = 16 * gh;
+        l += (hl[0].run(rng.bi()) + 0.4 * hl[1].run(rng.bi())) * k;
+        r += (hr[0].run(rng.bi()) + 0.4 * hr[1].run(rng.bi())) * k;
       }
       const g = 1 - 0.75 * inside;
       this.ambL = l * g; this.ambR = r * g;
@@ -1325,7 +1475,7 @@ function EngineDSPFactory() {
         boost: this.boost, thr: this.thr, map: this.pMan / P0, limiter: this.limiter, state: this.state,
         torque: Math.max(0, this.tqMean), turbo: this.blower ? this.boost / Math.max(0.2, this.maxBoost) : this.turboW, denied: (this.denied || 0) > 0,
         valve: this.valveState.v, launch: this.launching && (this.twoStepMode === 'cut' ? this.limiter : this.rpmAvg > this.launchRpm * 0.92), launchSoft: this.twoStepMode === 'soft',
-        coolant: this.coolant, fan: this.fanOn, secAir: this.secAir > 0.5, idleTarget: this.idleTarget,
+        coolant: this.coolant, fan: this.fanOn, secAir: this.secAir > 0.5, idleTarget: this.idleTarget, exhT: this.exhT, als: this.als,
         carX: this.carX, dist: this.rDist, vRad: this.vRad, loop: ENV_LOOP[this.params.env] || 800,
       };
     }

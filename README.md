@@ -17,18 +17,20 @@ Dá para mexer em quase tudo:
 
 - quantos cilindros o motor tem e como eles são arrumados (em linha, em V, boxer);
 - a ordem em que os cilindros explodem;
-- o escapamento: abafador, válvula, diâmetro, ressonador;
+- onde fica o motor (na frente, no meio ou atrás) e se ele é refrigerado a água ou a ar (como o Fusca e o 911 antigo);
+- o escapamento: coletor (inclusive as caixas de calefação do Fusca), vedação (escape antigo que vaza perto do motor), abafador, catalisador, escape ativo (silencioso, normal, esportivo, pista), diâmetro do tubo e da ponteira, ressonador;
+- os estalos no escape: o que a central faz quando você tira o pé (corta a injeção, carburador, crepitar de fábrica, pop & bang ou antilag de rali). Os estouros só saem com o escape quente, e o catalisador abafa;
 - turbo ou compressor;
 - o corte de giro: ignição (com estouro), combustível (seco), parcial, borboleta ou sem corte, e o ritmo dele;
 - câmbio: número de marchas, manual ou automático (com modos pista, esportivo, normal, econômico e automático), a relação de cada marcha e o tempo de troca;
 - temperatura do motor: ele começa frio e o som muda enquanto esquenta;
 - 2-step (corte ou controle de largada).
 
-Você também escolhe de onde ouve: ao lado do escape, atrás do carro, dentro da cabine, no cofre do motor ou parado na rua vendo o carro passar. E escolhe o lugar: céu aberto, rua com prédios, túnel, garagem, autódromo ou serra.
+Você também escolhe de onde ouve: ao lado do escape, atrás do carro, dentro da cabine, no cofre do motor ou parado na rua vendo o carro passar. E escolhe o lugar: céu aberto, rua com prédios, túnel, garagem, autódromo ou serra. Isso fica no topo do painel, em "Escuta e ambiente". Ali também dá para escolher o volume do motor (Real, com a marcha lenta bem mais baixa que o giro alto, como num carro de verdade, ou Arcade, com o som parecido em qualquer rotação), desligar o som de fundo do lugar e dosar o chiado de ar.
 
 ![Mustang passando pela rua, com o mapa mostrando onde ele está](docs/ronco-rua.png)
 
-**Teclas:** `I` liga · `W` acelera · `S` freia · `E` e `Q` trocam marcha · `C` muda o microfone · `V` alterna entre dentro do carro e na rua · `B` abre e fecha a válvula do escape · `M` muda o modo do câmbio automático (pista, esportivo, normal, econômico, automático).
+**Teclas:** `I` liga · `W` acelera · `S` freia · `E` e `Q` trocam marcha · `C` muda o microfone · `V` alterna entre dentro do carro e na rua · `B` troca o modo do escape ativo (silencioso, normal, esportivo, pista) · `M` muda o modo do câmbio automático (pista, esportivo, normal, econômico, automático).
 
 ## Turbina (aviões)
 
@@ -50,7 +52,7 @@ Também dá para pôr pós-combustão em qualquer jato, usar reversor e trocar p
 
 ## Dicas
 
-- Use fone de ouvido: o som tem esquerda e direita.
+- Use fone de ouvido: o som tem esquerda e direita, e com a câmera atrás do carro ele soa fora da cabeça, como se o carro estivesse ali.
 - O volume pode ficar alto, principalmente nos caças e no estrondo sônico. Comece baixo.
 - Funciona melhor no computador, mas também abre no celular.
 

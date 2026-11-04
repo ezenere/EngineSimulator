@@ -10,7 +10,7 @@
   let presetId = PRESETS[0].id;
   let engine = G.build(spec);
   let environment = 'open';
-  const params = { listener: 'ext', env: 'open', roadDist: 6, exhaust: 1, intake: 1, mech: 1, master: 0.8, fanSound: true, saSound: true };
+  const params = { listener: 'ext', env: 'open', roadDist: 6, exhaust: 1, intake: 1, mech: 1, master: 0.8, fanSound: true, saSound: true, ambSound: true, dynamics: 'real', air: 1 };
   let tempMode = 'real';
   let observer = 'car', carMic = 'ext';
 
@@ -267,6 +267,13 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
   }
 
   // trocar entre fechada/automática/aberta é só comando; instalar ou tirar muda o escape
+  // B: silencioso → normal → esportivo → pista (sem válvula instalada, instala aberta)
+  const VALVE_MODES = ['closed', 'auto', 'sport', 'open'];
+  function cycleValve() {
+    const v = spec.valve || 'none';
+    setValve(v === 'none' ? 'open' : VALVE_MODES[(VALVE_MODES.indexOf(v) + 1) % VALVE_MODES.length]);
+  }
+
   function setValve(v) {
     const was = spec.valve || 'none';
     setSpec({ valve: v }, { structural: (was === 'none') !== (v === 'none') });
@@ -307,6 +314,41 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     controls.textContent = '';
     const fam = familyFor(spec.layout, spec.cylinders);
     const crank = fam.find((k) => k.id === spec.crank) || fam[0];
+
+    // ---- Escuta e ambiente
+    const li = el('section', { class: 'group' }, [el('h2', { text: 'Escuta e ambiente' })]);
+    li.append(field('Observador', chipGroup('observer', [
+      { value: 'car', label: 'Junto com o carro' }, { value: 'road', label: 'Parado na via' },
+    ], observer, setObserver)));
+    if (observer === 'car') {
+      li.append(field('Microfone', chipGroup('mic', [
+        { value: 'pipe', label: 'Ao lado do escape' }, { value: 'ext', label: 'Câmera atrás' },
+        { value: 'int', label: 'Cabine' }, { value: 'bay', label: 'Cofre' },
+      ], carMic, (v) => { carMic = v; setListener(); })));
+    } else {
+      li.append(slider('roadDist', 'Distância até a via', 2, 40, 0.5, params.roadDist, (v) => `${v.toLocaleString('pt-BR')} m`,
+        (v) => { params.roadDist = v; audio?.send({ type: 'params', params }); }));
+      li.append(el('canvas', { id: 'passby', class: 'passby', 'aria-label': 'Posição do carro na via' }));
+      li.append(el('p', { class: 'note', id: 'passNote', text: 'Engate e acelere: o carro anda pela via e passa por você a cada volta.' }));
+    }
+    li.append(field('Ambiente', chipGroup('env', Object.entries(ENVS).map(([k, v]) => ({ value: k, label: v.name })),
+      environment, (v) => { setEnvironment(v); renderControls(); })));
+    li.append(field('Som de fundo do ambiente', chipGroup('ambSound', [
+      { value: true, label: 'Ligado', title: 'Vento, trânsito ao longe, ventilação do túnel, arquibancada…' },
+      { value: false, label: 'Desligado', title: 'Só o carro (a acústica do lugar, ecos e reverberação, continua)' },
+    ], params.ambSound, (v) => { params.ambSound = v; audio?.send({ type: 'params', params }); renderControls(); })));
+    li.append(field('Volume do motor', chipGroup('dynamics', [
+      { value: 'real', label: 'Real', title: 'Nível de verdade: a marcha lenta fica uns 20 dB abaixo do giro alto em carga' },
+      { value: 'arcade', label: 'Arcade', title: 'Segura o som num nível médio em qualquer rotação: lenta e giro baixo sobem, o giro alto não muda' },
+    ], params.dynamics, (v) => { params.dynamics = v; audio?.send({ type: 'params', params }); renderControls(); })));
+    if (params.dynamics === 'arcade') li.append(el('p', { class: 'note', text: 'Arcade: a lenta e o giro baixo ganham volume até ficar perto do giro alto. Útil em alto-falante pequeno ou volume baixo.' }));
+    const mix = (id, label, key, max = 2) => slider(id, label, 0, max, 0.01, params[key], (v) => `${Math.round(v * 100)}%`,
+      (v) => { params[key] = v; audio?.send({ type: 'params', params }); });
+    li.append(mix('mxEx', 'Escape', 'exhaust'), mix('mxIn', 'Admissão', 'intake'), mix('mxMech', 'Mecânica', 'mech'), mix('mxAir', 'Ar (jato, chiado)', 'air'), mix('mxVol', 'Volume', 'master', 1.5));
+    const tone = (id, label, key) => slider(id, label, -12, 12, 0.5, eq[key], (v) => `${v > 0 ? '+' : ''}${v.toLocaleString('pt-BR')} dB`, (v) => { eq[key] = v; applyEq(); });
+    li.append(field('Equalização', el('div', { class: 'chips' }, [el('button', { type: 'button', class: 'chip', text: 'Zerar', onclick: () => { eq.lo = eq.mid = eq.hi = 0; applyEq(); renderControls(); } })])));
+    li.append(tone('eqLo', 'Grave (abaixo de 160 Hz)', 'lo'), tone('eqMid', 'Médio (900 Hz)', 'mid'), tone('eqHi', 'Agudo (acima de 3,5 kHz)', 'hi'));
+    controls.append(li);
 
     // ---- Motor
     const motor = el('section', { class: 'group' }, [el('h2', { text: 'Motor' })]);
@@ -351,8 +393,22 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
       (v) => setSpec({ redline: v, idle: Math.min(spec.idle, v * 0.45) }, { structural: false, render: false })));
     car.append(slider('idle', 'Marcha lenta', 500, 5000, 50, spec.idle, (v) => `${v.toLocaleString('pt-BR')} rpm`,
       (v) => setSpec({ idle: Math.min(v, spec.redline * 0.45) }, { structural: false, render: false })));
+    // taxa de compressão: motor antigo para gasolina ruim comprime pouco (Fusca 7,5:1), moderno 10–13:1, turbo ~9,5:1
+    const crDef = spec.aspiration === 'na' ? 11 : 9.5;
+    car.append(slider('compression', 'Taxa de compressão', 6.5, 14, 0.1, spec.compression || crDef, (v) => `${v.toFixed(1).replace('.', ',')}:1`,
+      () => {}, (v) => setSpec({ compression: v }, { render: false })));
     car.append(slider('cam', 'Comando de válvulas', 0, 1, 0.01, spec.cam, (v) => (v < 0.3 ? 'manso' : v < 0.6 ? 'esportivo' : 'bravo'),
       (v) => setSpec({ cam: v }, { structural: false, render: false })));
+    // onde o motor fica e como ele é arrefecido mudam o que se ouve de fora (cofre colado na câmera de trás, ventoinha)
+    car.append(field('Posição do motor', chipGroup('engine', [
+      { value: 'front', label: 'Dianteiro', title: 'Cofre na frente: de trás do carro, admissão e mecânica chegam de longe e atrás da carroceria' },
+      { value: 'mid', label: 'Central', title: 'Atrás da cabine (Ferrari, Lamborghini, F1, motos): a câmera de trás ouve o motor de perto' },
+      { value: 'rear', label: 'Traseiro', title: 'Atrás do eixo (Fusca, 911): a câmera de trás fica colada no cofre e ouve o carburador puxando ar e a mecânica' },
+    ], spec.engine || (spec.family === 'moto' ? 'mid' : 'front'), (v) => setSpec({ engine: v }, { structural: false }))));
+    car.append(field('Arrefecimento', chipGroup('cooling', [
+      { value: 'water', label: 'Água', title: 'Radiador e camisa d\'água: a camisa abafa a mecânica' },
+      { value: 'air', label: 'Ar', title: 'Aletas, sem radiador (Fusca, 911 antigo, motos clássicas): sem camisa d\'água em volta, a mecânica soa mais' },
+    ], spec.cooling || 'water', (v) => setSpec({ cooling: v }, { structural: false }))));
     car.append(slider('inertia', 'Volante do motor', 0.2, 2, 0.05, spec.inertia, (v) => (v < 0.5 ? 'muito leve' : v < 0.85 ? 'leve' : v < 1.25 ? 'normal' : 'pesado'),
       (v) => setSpec({ inertia: v }, { structural: false, render: false })));
     controls.append(car);
@@ -378,7 +434,7 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
         (v) => (v === 0 ? 'nenhum' : `${Math.round(v * 1000)} ms`), (v) => setSpec({ limiterHold: v }, { structural: false, render: false })));
     }
     lim.append(el('p', { class: 'note', text: {
-      ign: 'Faixa pequena com ~70 ms de corte: batido rápido ("brrrr"), em neutro e em marcha. Faixa grande e tempo longo: batido lento e fundo ("brap... brap"). Os estouros seguem o controle "Estalos no escape".',
+      ign: 'Faixa pequena com ~70 ms de corte: batido rápido ("brrrr"), em neutro e em marcha. Faixa grande e tempo longo: batido lento e fundo ("brap... brap"). Os estouros dependem do escape quente e do catalisador (veja "Estalos no escape").',
       fuel: 'Faixa pequena e tempo curto: batido rápido. Faixa grande e tempo longo: batido lento e fundo. Seco, quase sem estouro.',
       partial: 'O giro fica praticamente parado na faixa vermelha, com um ronco picotado.',
       throttle: 'O giro para de subir perto da faixa vermelha, sem batida nem estouro.',
@@ -438,6 +494,11 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     // o carro: massa e potência mudam só como ele anda (o som fica igual)
     const massDef = Math.round(clamp(850 + 160 * spec.displacement, 950, 1900));
     tr.append(slider('mass', 'Massa (com motorista)', 150, 2600, 10, spec.mass || massDef, (v) => `${v} kg`, (v) => setSpec({ mass: v }, { structural: false, render: false })));
+    // roda e arrasto: com o diferencial, definem a velocidade em cada marcha e a final (o som não muda)
+    tr.append(slider('wheelR', 'Raio da roda', 0.25, 0.45, 0.005, spec.wheelR || 0.33, (v) => `${Math.round(v * 1000)} mm`,
+      (v) => setSpec({ wheelR: v }, { structural: false, render: false }), () => renderControls()));
+    tr.append(slider('drag', 'Arrasto aerodinâmico (½·ρ·Cd·A)', 0.1, 1.2, 0.01, spec.drag ?? 0.42, (v) => `${v.toFixed(2).replace('.', ',')} N/(m/s)² · ${v < 0.33 ? 'moto/afilado' : v < 0.48 ? 'esportivo' : 'caixote'}`,
+      (v) => setSpec({ drag: v }, { structural: false, render: false })));
     tr.append(slider('power', 'Potência', 20, 1200, 5, spec.power || 0, (v) => (v ? `${v} kW · ${Math.round(v * 1.3596)} cv` : 'a do modelo (sem ajuste)'),
       () => {}, (v) => setSpec({ power: v }, { structural: true })));
     tr.append(el('p', { class: 'note', text: 'A potência escala o torque do modelo até a ficha técnica (recalibra ao soltar). Aparece no mostrador como N·m.' }));
@@ -450,7 +511,13 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     const ex = el('section', { class: 'group' }, [el('h2', { text: 'Escapamento' })]);
     ex.append(field('Coletor', chipGroup('header', [
       { value: 'equal', label: 'Tubos iguais' }, { value: 'unequal', label: 'Tubos desiguais' }, { value: 'short', label: 'Coletor curto' },
+      { value: 'heater', label: 'Caixas de calefação', title: 'Fusca: os tubos longos atravessam o trocador de calor da cabine, que come agudo; os curtos vão direto ao abafador. Um sopra diferente do outro a cada volta' },
     ], spec.header, (v) => setSpec({ header: v }))));
+    ex.append(field('Vedação do escape', chipGroup('breakout', [
+      { value: 'sealed', label: 'Vedado', title: 'Coletor de parede grossa e juntas soldadas: a rajada de cada válvula fica dentro do tubo' },
+      { value: 'old', label: 'Antigo', title: 'Paredes finas e juntas deslizantes (Fusca, carros antigos): a rajada de cada abertura vaza perto do motor, o agudo "de lata"' },
+      { value: 'leaky', label: 'Com vazamento', title: 'Junta furada ou escape solto: o vazamento sopra forte a cada explosão' },
+    ], spec.breakout || 'sealed', (v) => setSpec({ breakout: v }, { structural: false }))));
     const inline = spec.layout === 'inline';
     ex.append(field('Traçado', chipGroup('routing', [
       { value: 'single', label: 'Único' }, { value: 'dual', label: 'Duplo' },
@@ -458,7 +525,8 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
       { value: 'hpipe', label: 'H-pipe', disabled: inline, title: 'Tubo de equalização entre as bancadas' },
     ], spec.routing, (v) => setSpec({ routing: v }))));
     ex.append(field('Abafador', chipGroup('muffler', [
-      { value: 'straight', label: 'Direto' }, { value: 'sport', label: 'Esportivo' }, { value: 'stock', label: 'Original' },
+      { value: 'straight', label: 'Direto' }, { value: 'sport', label: 'Esportivo' }, { value: 'stock', label: 'Original', title: 'Câmaras com lã e ressonador, como nos carros modernos: grave encorpado, agudo cortado' },
+      { value: 'classic', label: 'Original antigo', title: 'Caixa de lata só com câmaras, sem lã (Fusca, anos 60/70): o médio-agudo passa e a lata ressoa, estridente' },
     ], spec.muffler, (v) => setSpec({ muffler: v }))));
     ex.append(slider('pipe', 'Comprimento do escape', 0.8, 5, 0.1, spec.pipeLen, (v) => `${v.toFixed(1)} m`,
       () => {}, (v) => setSpec({ pipeLen: v }, { render: false })));
@@ -466,14 +534,27 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
 
     // ---- Acessórios
     const ac = el('section', { class: 'group' }, [el('h2', { text: 'Acessórios' })]);
-    ac.append(field('Válvula no escape (cutout)', chipGroup('valve', [
-      { value: 'none', label: 'Sem' }, { value: 'closed', label: 'Fechada' },
-      { value: 'auto', label: 'Automática', title: 'Abre com o pé embaixo ou giro alto, fecha em cruzeiro' },
-      { value: 'open', label: 'Aberta', title: 'O gás sai antes do abafador' },
-    ], spec.valve || 'none', setValve)));
-    ac.append(field('Diâmetro do escape', chipGroup('pipeD', [2, 2.5, 3, 3.5].map((d) => ({
-      value: d, label: `${String(d).replace('.', ',')}"`,
-    })), spec.pipeD || 2.5, (v) => setSpec({ pipeD: v }))));
+    // escape ativo: a válvula desvia o gás do abafador; cada modo é o comando que as centrais dos carros usam
+    const vm = spec.valve || 'none';
+    ac.append(field('Escape ativo (válvula)', chipGroup('valve', [
+      { value: 'none', label: 'Sem' },
+      { value: 'closed', label: 'Silencioso', title: 'Válvula sempre fechada: tudo passa pelo abafador' },
+      { value: 'auto', label: 'Normal', title: 'Abre com o pé embaixo ou giro alto, fecha em cruzeiro' },
+      { value: 'sport', label: 'Esportivo', title: 'Aberta na lenta e assim que você pisa; fecha só rodando leve em giro baixo' },
+      { value: 'open', label: 'Pista', title: 'Sempre aberta: o gás sai antes do abafador' },
+    ], vm, setValve)));
+    if (vm !== 'none') ac.append(el('p', { class: 'note', text: {
+      closed: 'Silencioso: o som sempre passa pelo abafador, abafado e grave.',
+      auto: 'Normal: abre com o pé acima de ~55% ou acima de ~60% do giro; em cruzeiro fecha. B troca o modo.',
+      sport: 'Esportivo: aberta na lenta e acelerando, com o pulso de cada cilindro saindo seco; fecha só rodando leve. B troca o modo.',
+      open: 'Pista: sempre aberta, o gás sai antes do abafador. B troca o modo.',
+    }[vm] }));
+    // fino: mais contrapressão, gás mais rápido (mais chiado) e ponta que irradia menos grave; largo: o contrário
+    ac.append(slider('pipeD', 'Diâmetro do escape', 1.5, 4, 0.05, spec.pipeD || 2.5,
+      (v) => `${v.toFixed(2).replace('.', ',')}" · ${Math.round(v * 25.4)} mm`, () => {}, (v) => setSpec({ pipeD: v }, { render: false })));
+    // a ponteira é só a saída: fina, o gás sai rápido e sopra (o Fusca tem duas finas); larga, sai manso
+    ac.append(slider('tipD', 'Ponteira (saída)', 1.25, 4, 0.05, spec.tipD || spec.pipeD || 2.5,
+      (v) => `${v.toFixed(2).replace('.', ',')}" · ${Math.round(v * 25.4)} mm`, () => {}, (v) => setSpec({ tipD: v }, { render: false })));
     ac.append(field('Ressonador', chipGroup('reso', [
       { value: false, label: 'Sem' },
       { value: true, label: 'Com', title: 'Tubo lateral que cancela o ronco chato de cruzeiro (perto de 2200 rpm)' },
@@ -493,16 +574,31 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
         ? 'Em ponto morto, ou engatado segurando o freio (S), pise fundo: o giro bate no corte e estoura no escape. Engate ou solte o freio para largar.'
         : 'Em ponto morto, ou engatado segurando o freio (S), pise fundo: o giro fica parado na rotação escolhida, liso. Engate ou solte o freio para largar.' }));
     }
-    ac.append(slider('pops', 'Estalos no escape', 0, 1, 0.01, spec.pops, (v) => (v === 0 ? 'desligado' : `${Math.round(v * 100)}%`),
-      (v) => setSpec({ pops: v }, { structural: false, render: false })));
     controls.append(ac);
+
+    // ---- Estalos no escape
+    const po = el('section', { class: 'group' }, [el('h2', { text: 'Estalos no escape' })]);
+    po.append(field('Mapa na desaceleração', chipGroup('overrun', [
+      { value: 'cut', label: 'Corta a injeção', title: 'Central moderna: tirou o pé, cortou o combustível. Desacelera em silêncio.' },
+      { value: 'lean', label: 'Sem corte (carburador)', title: 'Carburador ou injeção antiga: a mistura continua entrando, falha no cilindro com o vácuo alto e às vezes estoura no escape quente.' },
+      { value: 'burble', label: 'Crepitar de fábrica', title: 'Mapa esportivo (AMG, Ferrari, RS3…): por um ou dois segundos depois de tirar o pé a central injeta e atrasa a ignição. Estalos curtos e seguidos.' },
+      { value: 'popbang', label: 'Pop & bang (remap)', title: 'Mapa preparado: abre um pouco a borboleta e injeta na desaceleração por vários segundos. Estouros fortes.' },
+      { value: 'antilag', label: 'Antilag (rali)', title: 'Tirou o pé, a central abre o ar e queima a mistura no coletor para a turbina não parar. Estouros secos e turbo sempre cheio.', disabled: spec.aspiration !== 'turbo' },
+    ], spec.overrun || 'cut', (v) => setSpec({ overrun: v }, { structural: false }))));
+    po.append(field('Catalisador', chipGroup('cat', [
+      { value: true, label: 'Com', title: 'Queima o combustível que sobra: menos estouros, e os que sobram saem abafados. Também abafa um pouco o chiado do escape.' },
+      { value: false, label: 'Sem', title: 'O combustível cru chega quente no escape: estoura mais e mais alto.' },
+    ], spec.cat !== false, (v) => setSpec({ cat: v }, { structural: false }))));
+    po.append(el('p', { class: 'note', text: 'Os estouros são combustível queimando no escape: precisam de mistura sem queimar (corte de ignição no limitador, troca rápida ou 2-step, ou o mapa da desaceleração) e de escape quente, depois de uma acelerada forte. O abafador e o catalisador abafam.' }));
+    po.append(el('p', { class: 'note', id: 'exhNote', hidden: '' }));
+    controls.append(po);
 
     // ---- Admissão
     const ad = el('section', { class: 'group' }, [el('h2', { text: 'Admissão' })]);
     ad.append(field('Aspiração', chipGroup('asp', [
       { value: 'na', label: 'Aspirado' }, { value: 'turbo', label: 'Turbo' },
       { value: 'super', label: 'Compressor mecânico', title: 'Supercharger tocado por correia: pressão na hora, com o uivo dos rotores' },
-    ], spec.aspiration, (v) => setSpec({ aspiration: v, boost: v !== 'na' && !spec.boost ? 0.8 : spec.boost }))));
+    ], spec.aspiration, (v) => setSpec({ aspiration: v, boost: v !== 'na' && !spec.boost ? 0.8 : spec.boost, ...(v !== 'turbo' && spec.overrun === 'antilag' ? { overrun: 'popbang' } : {}) }))));
     if (spec.aspiration !== 'na') {
       ad.append(slider('boost', 'Pressão máxima', 0.3, 2.5, 0.05, spec.boost || 1, (v) => `${v.toFixed(2)} bar`,
         (v) => setSpec({ boost: v }, { structural: false, render: false })));
@@ -516,31 +612,6 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     ], spec.intake, (v) => setSpec({ intake: v }))));
     controls.append(ad);
 
-    // ---- Escuta
-    const li = el('section', { class: 'group' }, [el('h2', { text: 'Escuta' })]);
-    li.append(field('Observador', chipGroup('observer', [
-      { value: 'car', label: 'Junto com o carro' }, { value: 'road', label: 'Parado na via' },
-    ], observer, setObserver)));
-    if (observer === 'car') {
-      li.append(field('Microfone', chipGroup('mic', [
-        { value: 'pipe', label: 'Ao lado do escape' }, { value: 'ext', label: 'Câmera atrás' },
-        { value: 'int', label: 'Cabine' }, { value: 'bay', label: 'Cofre' },
-      ], carMic, (v) => { carMic = v; setListener(); })));
-    } else {
-      li.append(slider('roadDist', 'Distância até a via', 2, 40, 0.5, params.roadDist, (v) => `${v.toLocaleString('pt-BR')} m`,
-        (v) => { params.roadDist = v; audio?.send({ type: 'params', params }); }));
-      li.append(el('canvas', { id: 'passby', class: 'passby', 'aria-label': 'Posição do carro na via' }));
-      li.append(el('p', { class: 'note', id: 'passNote', text: 'Engate e acelere: o carro anda pela via e passa por você a cada volta.' }));
-    }
-    li.append(field('Ambiente', chipGroup('env', Object.entries(ENVS).map(([k, v]) => ({ value: k, label: v.name })),
-      environment, (v) => { setEnvironment(v); renderControls(); })));
-    const mix = (id, label, key, max = 2) => slider(id, label, 0, max, 0.01, params[key], (v) => `${Math.round(v * 100)}%`,
-      (v) => { params[key] = v; audio?.send({ type: 'params', params }); });
-    li.append(mix('mxEx', 'Escape', 'exhaust'), mix('mxIn', 'Admissão', 'intake'), mix('mxMech', 'Mecânica', 'mech'), mix('mxVol', 'Volume', 'master', 1.5));
-    const tone = (id, label, key) => slider(id, label, -12, 12, 0.5, eq[key], (v) => `${v > 0 ? '+' : ''}${v.toLocaleString('pt-BR')} dB`, (v) => { eq[key] = v; applyEq(); });
-    li.append(field('Equalização', el('div', { class: 'chips' }, [el('button', { type: 'button', class: 'chip', text: 'Zerar', onclick: () => { eq.lo = eq.mid = eq.hi = 0; applyEq(); renderControls(); } })])));
-    li.append(tone('eqLo', 'Grave (abaixo de 160 Hz)', 'lo'), tone('eqMid', 'Médio (900 Hz)', 'mid'), tone('eqHi', 'Agudo (acima de 3,5 kHz)', 'hi'));
-    controls.append(li);
     controls.scrollTop = scrollTop;
   }
 
@@ -597,7 +668,7 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
     document.querySelectorAll('.preset').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.id === presetId)));
   }
   // cada carro vem com o próprio escape: acessórios que ele não define voltam ao padrão
-  const STOCK = { valve: 'none', pipeD: 2.5, reso: false, twoStep: 'off', launchRpm: undefined, fuel: 'efi', shiftTime: undefined, driveMode: 'auto', limiter: 'ign', limiterBand: 70, limiterHold: 0.07, power: undefined, mass: undefined, wheelR: undefined, drag: undefined, ratios: undefined, finalDrive: undefined };
+  const STOCK = { valve: 'none', pipeD: 2.5, reso: false, twoStep: 'off', launchRpm: undefined, fuel: 'efi', shiftTime: undefined, driveMode: 'auto', limiter: 'ign', limiterBand: 70, limiterHold: 0.07, power: undefined, mass: undefined, wheelR: undefined, drag: undefined, ratios: undefined, finalDrive: undefined, overrun: 'cut', cat: true, tipD: undefined, cooling: 'water', engine: undefined, breakout: 'sealed', compression: undefined };
   function loadPreset(p) {
     spec = { ...STOCK, ...p };
     pushConfig(true, true);
@@ -950,6 +1021,14 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
       cs.style.setProperty('--p', `${((cs.value - cs.min) / (cs.max - cs.min)) * 100}%`);
       cs.parentElement.querySelector('output').textContent = `${cs.value} °C`;
     }
+    // temperatura do escape: só mexe no texto quando o grau muda
+    const en = document.getElementById('exhNote');
+    const et = tele.exhT === undefined ? '' : String(Math.round(tele.exhT));
+    if (en && en.dataset.t !== et) {
+      const t = +et;
+      en.dataset.t = et; en.hidden = !et;
+      if (et) en.textContent = `Escape a ${t} °C · ${t < 350 ? 'frio: quase não estoura' : t < 550 ? 'morno: estoura pouco' : 'quente: pronto para estourar'}`;
+    }
     lastNow = now;
     drawTach(now);
     drawRing(now, dt);
@@ -975,7 +1054,7 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
       const i = DRIVE_MODES.findIndex(([v]) => v === (spec.driveMode || 'auto'));
       setSpec({ driveMode: DRIVE_MODES[(i + 1) % DRIVE_MODES.length][0] }, { structural: false });
     }
-    else if (e.code === 'KeyB') setValve((spec.valve || 'none') === 'open' ? 'closed' : 'open');
+    else if (e.code === 'KeyB') cycleValve();
     else if (e.code === 'KeyI') { ignitionAt = performance.now(); setIgnition(!ignition); }
     else if (e.code === 'KeyC') { const order = ['pipe', 'ext', 'int', 'bay']; observer = 'car'; carMic = order[(order.indexOf(carMic) + 1) % 4]; setListener(); }
     else if (e.code === 'KeyV') setObserver(observer === 'car' ? 'road' : 'car');
@@ -998,7 +1077,7 @@ registerProcessor('ronco-engine', RoncoProcessor);`;
   $('#ignition').addEventListener('click', () => { ignitionAt = performance.now(); setIgnition(!ignition); });
   $('#gUp').addEventListener('click', () => shift(1));
   $('#gDown').addEventListener('click', () => shift(-1));
-  $('#valveTag').addEventListener('click', () => setValve(spec.valve === 'open' ? 'closed' : 'open'));
+  $('#valveTag').addEventListener('click', cycleValve);
   const brake = $('#brakeBtn');
   brake.addEventListener('pointerdown', () => { input.brake = 1; sendInput(); brake.classList.add('on'); });
   for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) brake.addEventListener(ev, () => { input.brake = 0; sendInput(); brake.classList.remove('on'); });
