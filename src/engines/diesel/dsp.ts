@@ -14,7 +14,7 @@ import {
 } from '../../acoustics';
 import { EngineDSP } from '../ronco/dsp';
 import { T_MAN } from '../ronco/constantes';
-import { LHV, ESTEQ, CETANO_PADRAO, K_ATRASO, R_UNIV, BSFC, INJECAO, NOTCH_POT } from './constantes';
+import { LHV, ESTEQ, CETANO_PADRAO, K_ATRASO, R_UNIV, BSFC, INJECAO, NOTCH_POT, K_MEC, K_VALV, K_FUNDO, K_VIB } from './constantes';
 import { DoisPortasDiesel } from './escape';
 
 // Carga e comando vindos de um portador externo (CENA.md 1.2). TODO(integração carriers/): trocar por
@@ -42,6 +42,7 @@ export class DieselDSP extends EngineDSP {
   declare manual: any; declare portador: any; declare notch: any; declare degrau: any; declare cargaBancada: any; declare rpmAlvoPainel: any; declare rpmAlvo: any;
   declare Pcarga: any; declare Tcarga: any; declare Jcarga: any; declare regCarga: any; declare fRede: any; declare gerCfg: any; declare locCfg: any;
   declare dinamico: any; declare ptBuf: any; declare ptUlt: any; declare ptI: any; declare telN: any; declare classe: any; declare boostAlvo: any; declare partida: any;
+  declare aquec: any; declare estadoAnt: any; declare lentaFixa: any; declare vF: any; declare vAmp: any; declare vDec: any; declare vEnv: any; declare fundoF: any; declare fundoAmp: any; declare fundoM: any; declare pumpAmp: any; declare oilAmp: any;
   declare wBuf: any; declare gwI: any; declare wSoma: any; declare wK: any; declare wSomaK: any; declare boostFixo: any; declare queimasBoas: any; declare cicloEv: any; declare lentaBaixa: any; declare kIdi: any; declare kPre: any;
 
   constructor(fs: number) {
@@ -57,7 +58,7 @@ export class DieselDSP extends EngineDSP {
     this.freioOn = false; this.freioAtivo = false; this.pBack = 0; this.jakeOn = false; this.nJake = 6;
     this.fuelM = 0; this.lamM = 10; this.etaM = 0.98; this.fumaca = 0; this.fumacaBranca = 0; this.pParcial = 0;
     this.pMaxM = P0; this.dpM = 0; this.angM = 0; this.tauM = 0; this.tInjM = 0; this.tEvoM = 0; this.tEsc = 20;
-    this.velas = 0; this.manual = 0; this.portador = 'carro'; this.notch = 0; this.degrau = 0; this.cargaBancada = 0; this.rpmAlvoPainel = 0; this.rpmAlvo = 0;
+    this.velas = 0; this.aquec = 0; this.manual = 0; this.portador = 'carro'; this.notch = 0; this.degrau = 0; this.cargaBancada = 0; this.rpmAlvoPainel = 0; this.rpmAlvo = 0;
     this.Pcarga = 0; this.Tcarga = 0; this.Jcarga = 0; this.regCarga = 1; this.dinamico = false; this.telN = 0; this.boostAlvo = 0;
     this.wBuf = new Float64Array(512); this.gwI = 0; this.wSoma = 0; this.wK = 0; this.wSomaK = 0;
     this.queimasBoas = 0; this.cicloEv = 0; this.lentaBaixa = false; this.fuelLenta = 0.1; this.fuelPartida = 0.5;
@@ -294,10 +295,12 @@ export class DieselDSP extends EngineDSP {
     // banco estrutural do knock (2.6): 3 modos do bloco que escalam com o diâmetro, tampa/cárter e a câmara
     const B = this.bore || 0.1, sb = Math.sqrt(0.1 / B);
     const fCam = (1.84 * 830) / (Math.PI * B);
-    this.kHP = new Biquad().hp(fs, 300, 0.5);
+    // (o passa-alta de 1 polo em 300 Hz do DIESEL.md deixava a subida lenta da pressão dominar 400–1000 Hz, +16 dB
+    // sobre a gravação: aqui são dois de 2ª ordem em 700 Hz, que tiram o "empuxo" e deixam o que bate no bloco)
+    this.kHP = [new Biquad().hp(fs, 700, 0.7), new Biquad().hp(fs, 700, 0.7)];
     const banco: [number, number, number][] = [[1200 * sb, 4, 1.0], [1900 * sb, 5, 0.8], [2800 * sb, 6, 0.6], [4200, 6, 0.3], [fCam, 12, 0.2]];
     this.kBank = banco.map(([f, q]) => new Biquad().bp(fs, f, q));
-    this.kW8 = banco.map(([f, q, w]) => w / enbw(fs, f, q) * 0.25);
+    this.kW8 = banco.map(([, , w]) => w);
     this.kLP = new Biquad().lp(fs, 6000, 0.7);
     this.kEnv = 0; this.kPk = 0; this.knockSrc = 0;
     // tiques de injeção (2.7)
@@ -306,9 +309,16 @@ export class DieselDSP extends EngineDSP {
     this.injAmp = ij.bp.map(([f, q]) => 1 / enbw(fs, f, q));
     this.injDec = Math.exp(-1 / (ij.tau * 1e-3 * fs));
     this.injEnv = 0; this.pumpEnv = 0;
-    this.pumpF = new Biquad().bp(fs, 1500, 1.5);
-    this.oilF = new Biquad().bp(fs, 1500, 1.2);
+    this.pumpF = new Biquad().bp(fs, 1300, 6); this.pumpAmp = 1 / enbw(fs, 1300, 6);
+    this.oilF = new Biquad().bp(fs, 1500, 1.2); this.oilAmp = 1 / enbw(fs, 1500, 1.2);
+    // trem de válvulas e fundo mecânico
+    this.vF = [new Biquad().bp(fs, 2000, 2), new Biquad().bp(fs, 4500, 2.5)]; this.vAmp = [1 / enbw(fs, 2000, 2), 1 / enbw(fs, 4500, 2.5)];
+    this.vDec = Math.exp(-1 / (0.6e-3 * fs)); this.vEnv = 0;
+    this.fundoF = [new Biquad().bp(fs, 1500, 0.7), new Biquad().bp(fs, 3500, 0.9)]; this.fundoAmp = [1 / enbw(fs, 1500, 0.7), 1 / enbw(fs, 3500, 0.9)]; this.fundoM = 0;
     this.wgF = new Biquad().bp(fs, 3000, 1.5);
+    // vibração do bloco: o pico de torque do diesel é 2–3× o do gasolina e o `ripple` do Ronco (por N·m da ficha)
+    // fazia o grave da vibração dominar o cofre e a cabine; o bloco de ferro pesado transmite menos por N·m
+    const gv = K_VIB; this.vibLP.b0 *= gv; this.vibLP.b1 *= gv; this.vibLP.b2 *= gv;
     this.fbF = new Biquad().bp(fs, 2000, 1);
   }
 
@@ -369,7 +379,10 @@ export class DieselDSP extends EngineDSP {
       // frio (2.8): atraso longo ou ar frio na injeção → queima parcial, tarde, e sai fumaça branca
       const msTau = tau / (0.006 * Math.max(rpm, 30));
       let kQ = 1;
-      if (msTau > 4 || T < 620) { kQ = clamp((T - 560) / 120, 0, 1) * (0.2 + 0.8 * this.rng.next()); dD *= 2; }
+      // (a temperatura que decide é a que o ar alcança durante o atraso: a compressão segue até o PMS, então vale
+      // a maior entre a da injeção e a estimada no PMS (politrópica n = 1,35), mais o ponto quente da vela)
+      const Tef = Math.max(T, T * Math.pow(this.Vprev[c] / this.Vc, 0.35)) + this.aquec;
+      if (msTau > 4 || Tef < 620) { kQ = clamp((Tef - 560) / 120, 0, 1) * (0.2 + 0.8 * this.rng.next()); dD *= 2; }
       else if (this.pParcial > 0 && this.rng.next() < this.pParcial) { kQ = 0.4 + 0.4 * this.rng.next(); dD *= 2; }
       const cold = 1 - this.warm, sigma = 0.025 + 0.055 * cold;
       this.Qm[c] = mm * LHV * this.etaC(this.lam[c]) * this.cylQ[c] * kQ * clamp(1 + sigma * this.rng.gauss(), 0.6, 1.4);
@@ -435,10 +448,10 @@ export class DieselDSP extends EngineDSP {
     const evo = this.evo, evc = this.evc, ivo = this.ivo, ivc = this.ivc, rng = this.rng;
     const cruza = (x) => ap < x && a >= x;
     if (this.tempos === 4) {
-      if (cruza(evo) || cruza(evc) || cruza(ivo) || cruza(ivc)) this.clickEnv += 1.5 * (0.5 + 0.5 * rng.next());
+      if (cruza(evo) || cruza(evc) || cruza(ivo) || cruza(ivc)) { const k = 0.5 + 0.5 * rng.next(); this.clickEnv += 1.5 * k; this.vEnv += k; }
       if (cruza(ivo)) this.air[c] = 0;
     } else {
-      if (cruza(evo) || cruza(evc)) this.clickEnv += 1.5 * (0.5 + 0.5 * rng.next());
+      if (cruza(evo) || cruza(evc)) { const k = 0.5 + 0.5 * rng.next(); this.clickEnv += 1.5 * k; this.vEnv += k; }
       if (cruza(ivo)) this.air[c] = 0;
       if (cruza(ivc)) this.arPreso[c] = this.m[c];
     }
@@ -517,11 +530,15 @@ export class DieselDSP extends EngineDSP {
     return 0;
   }
 
-  // mecânica do diesel: knock estrutural, tiques de injeção, bombas (item 22)
+  // mecânica do diesel: knock estrutural, tiques de injeção, trem de válvulas, bombas e o fundo mecânico (item 22).
+  // Tudo é referido ao pico do knock de lenta quente do próprio motor (medido na sonda de calibração, `refKnock`) e
+  // escalado por K_MEC: o nível relativo entre as fontes é o do DIESEL.md 2.7 e o absoluto foi acertado nas bandas
+  // do ouvinte `bay` contra as gravações (Apêndice A)
   mecanica(rf, coldN, pMan) {
     const rng = this.rng;
-    // knock: dp/dθ do próprio cilindro → passa-alta 300 Hz → banco estrutural → parede (passa-baixa 6 kHz) (2.6)
-    const x = this.kHP.run(this.knockSrc); this.knockSrc = 0;
+    // knock: dp/dθ do próprio cilindro → passa-alta → banco estrutural → parede (passa-baixa 6 kHz) (2.6)
+    let x = this.knockSrc; this.knockSrc = 0;
+    for (let i = 0; i < this.kHP.length; i++) x = this.kHP[i].run(x);
     let s = 0;
     for (let i = 0; i < this.kBank.length; i++) s += this.kBank[i].run(x) * this.kW8[i];
     s = this.kLP.run(s);
@@ -529,16 +546,28 @@ export class DieselDSP extends EngineDSP {
     // 70% determinístico + 30% "chocalho" (ruído modulado pela mesma envoltória); as folgas do frio transmitem mais
     let y = (0.7 * s + 0.3 * 1.4 * this.kEnv * rng.bi()) * (1 + 0.3 * coldN);
     const ay = Math.abs(y); if (ay > this.kPk) this.kPk = ay; else this.kPk *= 0.99995;
-    y *= this.kKnock || 1;
-    // tiques de injeção: nível relativo ao pico do knock de lenta quente (2.7)
-    const ref = this.refKnock || 0.02, ij = this.inj;
+    const ref = (this.refKnock || 0.5), kr = ref * K_MEC;
+    y *= K_MEC;
+    const ij = this.inj;
     let m = 0;
+    // tiques de injeção: nível relativo ao pico do knock de lenta quente (2.7)
     if (this.injEnv > 1e-5) {
       const nz = rng.bi() * this.injEnv;
-      m += (this.injF[0].run(nz) * this.injAmp[0] + 0.6 * this.injF[1].run(nz) * this.injAmp[1]) * ref * Math.pow(10, ij.nivel / 20) * 0.5;
+      m += (this.injF[0].run(nz) * this.injAmp[0] + 0.6 * this.injF[1].run(nz) * this.injAmp[1]) * kr * Math.pow(10, ij.nivel / 20) * 0.6;
       this.injEnv *= this.injDec;
     }
-    if (this.pumpEnv > 1e-5) { m += this.pumpF.run(rng.bi() * this.pumpEnv) * 2 * ref * 0.6; this.pumpEnv *= this.injDec; }
+    if (this.pumpEnv > 1e-5) { m += this.pumpF.run(rng.bi() * this.pumpEnv) * this.pumpAmp * kr * 0.6; this.pumpEnv *= this.injDec; }
+    // trem de válvulas: cada abertura e fechamento bate (válvulas maiores, folga hidráulica ou mecânica)
+    if (this.vEnv > 1e-5) {
+      const nz = rng.bi() * this.vEnv;
+      m += (this.vF[0].run(nz) * this.vAmp[0] + 0.5 * this.vF[1].run(nz) * this.vAmp[1]) * kr * K_VALV * (1 + 1.6 * coldN);
+      this.vEnv *= this.vDec;
+    }
+    // fundo mecânico: engrenagens da distribuição, bomba, correias e o chocalho contínuo da combustão (entre as
+    // explosões o bloco não fica mudo: é o que dá o p90/p10 de 9–17 dB das gravações em vez de silêncio)
+    const fl = clamp(this.fuelCmd, 0, 1);
+    this.fundoM += (1 - this.fundoM) * 0.0002;
+    m += (this.fundoF[0].run(rng.bi()) * this.fundoAmp[0] + 0.6 * this.fundoF[1].run(rng.bi()) * this.fundoAmp[1]) * kr * K_FUNDO * (0.5 + 0.8 * rf + 0.4 * fl) * (1 + 0.5 * coldN);
     const dt = this.dt, rpm = this.omega * 9.549296585513721;
     if (this.injTipo === 'common-rail') {
       // bomba de alta (CP3/HP4): 3 lóbulos a meia rotação → pulsos fracos a 1,5·rpm/60 Hz, −20 dB
@@ -548,10 +577,10 @@ export class DieselDSP extends EngineDSP {
       // anel de roletes da VP37: harmônicos k·N·rpm/120, k = 8–12, −26 dB
       this.phRot += (this.N * rpm / 120) * dt; if (this.phRot > 1e3) this.phRot -= 1e3;
       let w = 0; for (let k = 8; k <= 12; k++) w += Math.sin(TAU * k * this.phRot);
-      m += w * 0.2 * ref * 0.05 * (0.3 + 0.7 * rf);
+      m += w * 0.2 * kr * 0.05 * (0.3 + 0.7 * rf);
     } else if (this.injTipo === 'heui') {
       // bomba de óleo de alta: chiado 1–2 kHz, −18 dB, ∝ combustível
-      m += this.oilF.run(rng.bi()) * ref * 0.125 * 2.5 * clamp(this.fuelCmd, 0.05, 1);
+      m += this.oilF.run(rng.bi()) * this.oilAmp * kr * 0.125 * clamp(this.fuelCmd, 0.05, 1);
     }
     return y + m;
   }
@@ -585,7 +614,7 @@ export class DieselDSP extends EngineDSP {
     // velas: a espera conta antes de girar
     if (this.velas > 0) {
       this.velas -= dtc;
-      if (this.velas <= 0) { this.velas = 0; this.clickEnv += 3; if (this.ignition) { this.gI = this.fuelLenta; this.rpmAlvo = 0; super.setIgnition(true); } }
+      if (this.velas <= 0) { this.velas = 0; this.clickEnv += 3; this.aquec = 150; if (this.ignition) { this.gI = this.fuelLenta; this.rpmAlvo = 0; super.setIgnition(true); } }
     }
     super.control(dtc);
     this.ccDepois(dtc);
@@ -604,7 +633,7 @@ export class DieselDSP extends EngineDSP {
     }
     // lenta: eletrônico sobe a lenta no frio; mecânico não (o motorista puxa o acelerador manual) (item 18)
     const coldAdd = this.eletronico ? cold * Math.min(0.35 * this.idle, 300) : 0;
-    let idleT = this.idle + coldAdd;
+    let idleT = this.lentaFixa || this.idle + coldAdd; // (lentaFixa: só as ferramentas de medida, para comparar à mesma rotação)
     if (this.portador === 'locomotiva' && this.lentaBaixa && this.locCfg) idleT = this.locCfg.lentaBaixa;
     this.idleTarget = idleT;
     // temperatura do gás de escape (°C): lenta ≈ 150, plena ≈ 600 (item 16), com a inércia do coletor
@@ -614,6 +643,8 @@ export class DieselDSP extends EngineDSP {
     this.exhT = this.tEsc;
     // frio: queimas parciais nos primeiros segundos (2.8)
     this.pParcial = run ? 0.3 * cold * Math.exp(-(this.runT || 0) / 40) : 0;
+    // ponto quente das velas: ajuda a acender nos primeiros segundos e some com a pós-incandescência (~40 s)
+    this.aquec = (this.aquec || 0) * Math.exp(-dtc / (run ? 40 : 120));
     this.fumaca = clamp((1.3 - this.lamM) / 0.3, 0, 1) * (this.fuelM > 0.02 ? 1 : 0);
     this.fumacaBranca = clamp(this.pParcial + 0.5 * (1 - this.etaM / 0.98), 0, 1);
     // início da injeção (graus antes do PMS) (2.2)
@@ -621,6 +652,9 @@ export class DieselDSP extends EngineDSP {
     this.advInj = this.advFixo ?? (this.idi ? 10 + 4 * rfi : this.eletronico ? 2 + 8 * rfi + 4 * clamp(this.fuelCmd, 0, 1) : 12 + 6 * rfi);
     // partida e apagamento (item 21): liga acima de 0,7·lenta, apaga abaixo de 0,4·lenta
     if (this.state === 'crank' && this.crankT > 0.45 && rpm > 0.7 * this.idle) this.state = 'run';
+    // pegou: o governador começa do combustível de lenta (com o atrito do frio), sem o tranco da integral zerada
+    if (this.state === 'run' && this.estadoAnt !== 'run') { this.gI = this.gX = this.fuelLenta * (1 + 0.6 * cold); }
+    this.estadoAnt = this.state;
     if (run && (this.runT || 0) > 1 && rpm < 0.4 * this.idle && this.omega < 0.45 * this.idle / 9.55) this.state = 'off';
     this.cargas(dtc);
     this.turboDiesel(dtc);
@@ -670,13 +704,15 @@ export class DieselDSP extends EngineDSP {
         // contrapesos contra a mola: proporcional puro em regime (droop), realizado com ganho alto lento e baixo rápido
         // (a "ligação" contrapesos-mola-cremalheira de 2ª ordem do DIESEL.md com ζ 0,25 deixava o laço instável na
         // lenta: aqui a parte lenta é um atraso de 1ª ordem de 0,35 s, que dá a caça leve de ~1 Hz)
-        const alvo = it + clamp(ped + this.manual, 0, 1) * (this.rpmMax - it);
+        // (a mola de lenta é regulada para a lenta quente sair na rotação da ficha: alvo = lenta·(1 + droop·combustível de lenta))
+        const itM = it * (1 + 0.15 * this.fuelLenta);
+        const alvo = itM + clamp(ped + this.manual, 0, 1) * (this.rpmMax - itM);
         const dr = this.droop + (0.15 - this.droop) * (1 - smooth(0, 0.15, ped + this.manual));
         const e = (alvo - rpmG) / (alvo);
         const K0 = 1 / dr, Pa = P((alvo * TAU) / 60);
-        const Kh = Math.min(K0, 6 / Pa);
-        this.gX += ((K0 - Kh) * e - this.gX) * (1 - Math.exp(-dtc / 0.35));
-        this.gX = clamp(this.gX, -1, 1.5);
+        const Kh = Math.min(K0, 15 / Pa);
+        this.gX += ((K0 - Kh) * e - this.gX) * (1 - Math.exp(-dtc / 0.5));
+        this.gX = clamp(this.gX, -0.2, 1);
         f = clamp(Kh * e + this.gX, 0, 1);
         this.rpmAlvo = alvo;
       } else if (gov === 'isocrono') {
@@ -750,7 +786,15 @@ export class DieselDSP extends EngineDSP {
       }
     } else { this.Pcarga = 0; this.Tcarga = 0; }
     this.Tcarga = T;
-    this.pmeCarga = (T * 4 * Math.PI) / (this.dispL * 1e-3);
+    let Tm = T;
+    // motor de partida do diesel: o do Ronco (feito para taxa 10:1) mal gira um 15 L a 17:1 com o óleo frio
+    // (30–60 rpm); o de redução do diesel (24 V nos pesados) tem torque de travamento ~2,5× o atrito frio e gira
+    // o motor a 150–250 rpm (locomotiva ~100) (2.8). Entra como pressão média negativa (empurra)
+    if (this.state === 'crank') {
+      const livre = 0.9 * this.idle, Tstall = 46 * this.dispL * (this.tempos === 2 ? 1.6 : 1);
+      Tm -= Tstall * Math.max(0, 1 - this.rpmAvg / livre) / (this.omega > 0.5 ? 1 : 0.6);
+    }
+    this.pmeCarga = (Tm * 4 * Math.PI) / (this.dispL * 1e-3);
   }
 
   // turbo diesel (5): rotação pela energia do escape (combustível × giro), τ do preset, VGT, wastegate, engrenado

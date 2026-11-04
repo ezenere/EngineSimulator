@@ -36,3 +36,10 @@ export const NOTCH_RPM = {
   emd710: [269, 269, 343, 490, 568, 651, 729, 820, 904],
   ge7fdl: [440, 440, 511, 585, 672, 764, 846, 950, 1050],
 };
+
+// Escala da mecânica diesel (knock, tiques, válvulas, fundo) sobre o pico do knock de lenta quente do motor, e o
+// peso do trem de válvulas e do fundo mecânico; acertados nas bandas do ouvinte `bay` (DIESEL.md 2.6, Apêndice A)
+export const K_MEC = 0.045;
+export const K_VALV = 0.3;
+export const K_FUNDO = 0.025;
+export const K_VIB = 0.1;

@@ -29,6 +29,10 @@ export const CENARIOS: Record<string, (spec: PresetDiesel) => Cenario> = {
   cold: () => ({ eventos: [[0, (d) => { d.message({ type: 'input', temp: { mode: 'real', value: 20 } }); liga(d); }], [14, null]], portador: 'nenhum0' }),
   // partida a −10 °C (velas, partida, queimas parciais), 20 s
   frio10: () => ({ eventos: [[0, (d) => { d.ambientT = -10; d.message({ type: 'input', temp: { mode: 'real', value: -10 } }); liga(d); }], [22, null]], portador: 'nenhum0' }),
+  // lenta com a água fixa em −10 °C, à mesma rotação da lenta quente (DIESEL.md 2.6: o knock sobe 8 ± 3 dB)
+  idleFrio: (spec) => ({ eventos: [[0, (d) => { d.lentaFixa = spec.idle; d.message({ type: 'input', temp: { mode: 'fixed', value: -10 } }); liga(d); }], [12, null]], portador: 'nenhum0' }),
+  // lenta fria a −23 °C (Cummins 6.7 da gravação: a central sobe a lenta a 1000 rpm)
+  idle23: () => ({ eventos: [[0, (d) => { d.ambientT = -23; d.message({ type: 'input', temp: { mode: 'fixed', value: -23 } }); liga(d); }], [12, null]], portador: 'nenhum0' }),
   // em neutro: lenta, pé no fundo (governador de máxima), solta
   rev: () => ({ eventos: [[0, (d) => { quente(d); liga(d); }], [3, pedal(1)], [7.5, pedal(0)], [11, null]], portador: 'nenhum0' }),
   // carro: 1ª, pé no fundo, trocas automáticas
@@ -73,6 +77,8 @@ export function renderizar(spec: PresetDiesel, cen: string | Cenario, op: { ouvi
   const c = typeof cen === 'string' ? CENARIOS[cen](spec) : cen;
   const d = new DieselDSP(SR);
   d.params.listener = op.ouvinte || c.ouvinte || 'ext';
+  // (MIX=exhaust=0,intake=0 isola fontes nas medições)
+  if (process.env.MIX) for (const kv of process.env.MIX.split(',')) { const [k, v] = kv.split('='); d.params[k] = +v; }
   const cfg = op.cfg || configCalibrada(spec, SR);
   d.setConfig(cfg);
   const port = op.portador || c.portador || 'carro';
