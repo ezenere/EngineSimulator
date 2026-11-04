@@ -1089,6 +1089,73 @@ Itens da segunda passada (alvo do DIESEL.md × 1ª passada × agora):
 - **Grave de lenta 6–8 dB acima do real3** em picapes e caminhões (o 1º harmônico da ignição de 30 Hz).
 - **Fumaça preta** (aspirado com ar sobrando, locomotiva com a carga seguindo o giro), **Jake** sem o agudo e a 69% da frenagem, **freio de descarga** −7,7 dB, **Hilux** com a lenta carregada a ±2% por 5 s.
 
+### Terceira passada (o "mar" do turbo e o ar da lenta)
+
+Queixa, depois da 2ª passada: "o turbo está com som de mar, parece que tem vento"; "o som de ar fica bem alto em lenta".
+Método do `REVISAO-DE-SOM.md`: medir por fonte, mudar uma por vez, duas condições (lenta e carga). Ferramentas novas:
+`tools/diesel-fontes.ts` (renderiza o preset com cada fonte desligada, sem mudar a semente do ruído: a diferença é a
+fonte; as que entram na rede de tubos, válvula e turbina, pela diferença de energia) e `envoltoriaBanda` em
+`tools/diesel-bandas.ts` (p90/p10 da envoltória de uma banda, modulação na ignição e p10 relativo a 150–400 Hz; a mesma
+conta do script Python usado nas gravações, conferida a ±0,3 dB). Gravações: as do real3, em janelas de 8 s.
+
+**O que era o "mar".** Em carga, o sopro do compressor (`whoosh` 0,25–1,5 kHz ∝ vazão·U⁵, mais o chiado de 1,3 kHz) era
+60–95% do som ponderado A (caminhão, ônibus, gerador, picape acelerando) e enchia o vão entre as explosões (no vão, −0,2 a
+−2 dB do total): ruído largo que subia com o giro, modulado só ±15% pela vazão média. A envoltória de 2–6 kHz tinha
+p90/p10 de 7,6–8,7 dB, quase a do ruído liso pela mesma cadeia (6,1 dB); as gravações em carga, 8–18 dB. A banda larga da
+turbina (`K_TURBINA`) seguia a vazão média (`mExM`). Mudanças: (1) as duas seguem a **pressão instantânea na entrada da
+turbina** (onda que chega + onda que volta no tubo antes dela, relativa à média de ~40 ms; `K_MOD_TURBO` = 1); (2) o sopro
+fica **6 dB abaixo** (`K_SOPRO` 4,5 → 2,25). Na lenta e no apito, nada muda.
+
+| Carga: p90/p10 de 2–6 kHz (dB) | gravações (real3) | antes | depois |
+|---|---|---|---|
+| picape acelerando (ram67) | 11,6 (Cummins 6.7), 13,4 (TDI) | 8,3 | 13,6 |
+| caminhão em carga, cabine (scaniav8) | 10,1–18,3 (FH16, ERF, R620) | 8,7 | 10,4 |
+| ônibus em carga (onibusisl) | 8,1–12,2 (Bedford, K360, OF-1519) | 8,1 | 11,6 |
+| gerador com carga (gen500) | 8,3 (Cummins 2500 kW) | 7,6 | 8,8 |
+| EMD notch 8 | 7,6 e 9,9 | 6,7 | 6,8 |
+| GE 7FDL notch 8 | 9,7 (7FDL-12) | 6,8 | 6,8 (desvio) |
+
+| Carga: sopro no som ponderado A · no vão (dB do total) · 2,5–6 kHz do teste (dB rel. 150–400) | antes | depois |
+|---|---|---|
+| catc15 (ext) | −1,9 · −0,4 · — | −4,2 · −1,0 · — |
+| scaniav8 (cabine; real3 −22,6 a −6,4) | −0,6 · −0,4 · −12,5 | −2,0 · −1,3 · −18,0 |
+| onibusisl (real3 −19,6 a −3,8) | −1,8 · −0,4 · −19,4 | −4,2 · −1,0 · −24,0 (desvio) |
+| gen500 | −0,8 · −0,7 · −17,9 | −2,2 · −1,9 · −23,6 |
+| hilux28 acelerando · em ponto morto | −1,7 · −13,3 | −3,8 · −18,9 |
+
+O vão em carga (energia ponderada A abaixo do p30 da envoltória, relativa ao total) foi de −2,2…−4,7 para −4,0…−9,6 dB;
+nas gravações, −3 a −8 dB. Não se atenuou mais porque o sopro é o único agudo do modelo em carga: com −10 dB, 2,5–6 kHz cai
+7–10 dB abaixo das classes do real3 (caminhão, ônibus, gerador), e as gravações têm esse agudo, modulado. O controle
+**Sopro do turbo** (`turboChiado`, dB) está no painel para o ouvido decidir.
+
+**O ar da lenta.** Por fonte, no vão da lenta (amostras abaixo do p30 da envoltória ponderada A): de 1 a 4 kHz, o
+**fundo mecânico** (ruído branco em 1,5 e 3,5 kHz, `K_FUNDO`) era 80–100% da energia (picape −0,8 dB, caminhão −0,1 dB
+no teste novo); de 4 a 16 kHz e abaixo de 500 Hz, o som de fundo do ambiente da Cena. O fundo tinha subido 5× na 2ª
+passada (0,02 → 0,1) para o p90/p10 do cofre bater com um vídeo lo-fi, cujo vão é o ruído da própria gravação. Mudança:
+`K_FUNDO` 0,1 → **0,012** (−18 dB), o maior valor em que ele é no máximo metade do vão de 1–4 kHz também nos caminhões.
+
+| Lenta | antes | depois |
+|---|---|---|
+| fundo liso no vão de 1–4 kHz (teste) hilux28 · catc15 | −0,8 · −0,1 dB | −11,2 · −3,4 dB |
+| vão ponderado A: picapes (hilux, ram67, ranger, duramax) · caminhões (catc15, volvod13) | −8,6…−9,9 · −10,3…−10,7 dB | −10,2…−13,1 · −19,2…−20,4 dB |
+| p10 por oitava (rel. RMS da banda) 1 kHz · 2 kHz: hilux28 · catc15 | −12,6 · −6,0 · −10,0 · −10,5 | −19,2 · −10,7 · −22,4 · −23,1 |
+| bandas do real3 1–2,5k · 2,5–6k: picape · caminhão | −3,1 · −12,5 · −0,2 · −4,9 | −3,4 · −13,6 · −0,9 · −5,5 |
+
+O que sobra no vão da lenta é o som de fundo do ambiente (vento do "Céu aberto"), no mesmo nível absoluto do Ronco (a
+lenta do Mustang tem o mesmo nível ponderado A da Hilux); o botão **Som de fundo do ambiente** o desliga.
+
+Medidas que contrariam a queixa, registradas para a próxima rodada: nas gravações de lenta o vão **não** é silêncio (p10 da
+envoltória 5–8 dB abaixo do RMS da banda em todas as oitavas de 500 Hz a 4 kHz; vão ponderado A de −3 a −4,5 dB),
+porque a textura mecânica real (engrenagens, bomba, válvulas, reverberação curta) é contínua e presa ao motor. No
+simulado ela era ruído liso; agora o vão é mais fundo que o das gravações (p90/p10 de 2–6 kHz no caminhão em lenta 24,7
+dB contra 9–10). Falta textura mecânica presa ao ciclo, não ruído liso.
+
+Desvios novos (`DESVIOS`): p90/p10 do cofre da Hilux (referência lo-fi), 2,5–6 kHz, 6–12 kHz e CV do ônibus em carga
+(o CV cai para 0,10 sem o ruído do sopro por cima: a queima do ISL9 é regular demais), envoltória da GE em N8 (no 7FDL-16
+do preset os 8 pulsos por volta se fundem antes da turbina); o cofre fica em 32 dB (alvo lo-fi 15). `npm run teste:diesel`:
+0 falhas, 66 desvios (antes 65), com o grupo novo `envoltoria` (6 casos de carga e 2 de lenta). Saíram dois desvios (CV do knock e 400–1 kHz do Scania em
+carga voltaram para dentro da faixa).
+
 ## Radial e aviação a pistão
 
 O projeto está em [`RADIAL.md`](RADIAL.md); aqui fica o que foi feito, como e o que se mediu. Página `radial.html` (`src/pages/radial/`), DSP em `src/engines/radial/`, worklet `src/worklet/processador-radial.ts` (`radial-engine`); a família **Aviação** (motores planos de avião e de helicóptero leve) está na página do Ronco.

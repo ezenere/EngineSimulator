@@ -51,6 +51,7 @@ Estes erros aconteceram na sessão que gerou este método. Cada um virou uma reg
 | Estalos de válvula como ressonâncias estreitas (Q 30–50) | "Despertador no fundo" | Ressonância estreita batida 240 vezes por segundo vira um tom | Não usar ressonância estreita para ruído de impacto |
 | Diâmetro de escape menor no Fusca para soprar mais | O som tonal do motor mudou (−6 a −9 dB, outras ordens) | — | Mudar só a peça que o fenômeno envolve (a ponteira virou um campo próprio) |
 | Hipótese do chiado do carburador para o agudo do Fusca | Não foi implementada: o auditor refutou | — | Auditoria independente antes de implementar |
+| Diesel: sopro do turbo ∝ vazão·U⁵ liso (±15% pela vazão média) e fundo mecânico liso subido 5× para o p90/p10 da lenta bater com um vídeo | "Som de mar", "vento" no turbo; "ar" alto na lenta | O p90/p10 da gravação inclui o ruído da própria gravação, e ninguém mediu de que fonte era o vão do simulado: em carga o sopro era 60–95% do som ponderado A; na lenta o fundo era 80–100% do vão de 1–4 kHz | Medir a composição do vão por fonte (`tools/diesel-fontes.ts`: uma fonte desligada por vez, mesma semente). O que enche o vão tem de ser preso ao motor (modulado pelo pulso), não ruído liso |
 | Comparar o Mustang a 2027 rpm tomando a linha mais forte do grave (135 Hz) pela ignição | Hipótese errada de "estouros aleatórios" e ordens do grave sem sentido | A linha mais forte era o 13º harmônico do ciclo; a lenta real era ~1250 rpm | Confirmar a rotação dobrando o sinal em N períodos da linha mais forte (ver Armadilhas) |
 
 ## Passo a passo

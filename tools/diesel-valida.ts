@@ -4,13 +4,13 @@
 // docs/TECNICO.md → Diesel) e aparecem como "desvio", sem reprovar.
 //
 //   npx tsx tools/diesel-valida.ts [--j 12] [--so grupo1,grupo2]
-//   grupos: pressoes, bandas, real3, fumaca, jake, potencia, veiculo, cambio, nan, lenta, governador, troca
+//   grupos: pressoes, bandas, real3, envoltoria, fumaca, jake, potencia, veiculo, cambio, nan, lenta, governador, troca
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { renderizar, preset, media, trecho, SR, type Cenario } from './diesel-comum';
-import { analisar, welch } from './diesel-bandas';
+import { analisar, welch, bandaEEnvoltoria, envoltoriaBanda } from './diesel-bandas';
 import { PRESETS } from '../src/engines/diesel/presets';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -47,6 +47,10 @@ export const DESVIOS: [RegExp, string][] = [
   [/freio de descarga: pulsos/, 'a borboleta só atenua a boca e o jato; a rede do escape antes dela continua irradiando pelo coletor'],
   [/hilux28 degrau de 30%/, 'a lenta carregada oscila ±2% com a dispersão de ciclo a ciclo (atraso e injetor), e encosta na faixa por 5 s; a queda (7%) está na janela'],
   [/emd710 potência por notch/, '3,2% num notch (alvo 3%)'],
+  // ---- 3ª passada (turbo modulado, sopro −6 dB, fundo mecânico −18 dB; TECNICO.md → Diesel → Terceira passada)
+  [/leve · cofre · hilux28 lenta: p90\/p10/, 'referência interna lo-fi (vídeo do 1GD no cofre): o p90/p10 de 15 dB só saía com o fundo mecânico liso enchendo o vão (o "som de ar" da lenta); sem ele o vão do cofre fica mais fundo que o do vídeo, cujo vão é o ruído da própria gravação'],
+  [/real3 · ônibus carga.*(2,5–6k|6–12k|CV)/, 'o agudo de carga do ônibus era o sopro liso do compressor (60–95% do som ponderado A); modulado e 6 dB abaixo, faltam 3–4 dB acima de 2,5 kHz contra as gravações de dentro do ônibus (carroceria, rodagem, ventilação), e o CV do knock cai para 0,10 sem o ruído do sopro por cima: a queima do ISL9 com injeção longa é regular demais'],
+  [/envoltória · GE 7FDL notch 8/, 'o agudo da GE em N8 é o ruído da turbina, que segue a pressão na entrada dela: no 7FDL-16 do preset os 8 pulsos por volta se fundem no coletor (6,8 dB, quase liso); a gravação é de um 7FDL-12 (6 por volta, 9,7 dB)'],
   [/om617 (droop|caça)/, 'droop 9,1% (alvo 7–9%) e caça ±2–3,6% em lenta: a dispersão das bombas mecânicas (±6,5% por elemento) move a lenta do OM617'],
 ];
 const desvio = (nome: string) => DESVIOS.find(([r]) => r.test(nome))?.[1];
@@ -205,6 +209,47 @@ const GRUPOS: Record<string, () => Linha[]> = {
     L.push({ grupo: 'real3', nome: 'real3 · turbo: caminhão em carga sem apito proeminente', alvo: '≤ +11 dB', medido: `+${t1.best.toFixed(0)} dB em ${(t1.fb / 1000).toFixed(1)} kHz`, ok: t1.best <= 11 });
     L.push({ grupo: 'real3', nome: 'real3 · turbo: VGT do Cummins 6.7 em lenta', alvo: '+17 a +24 dB em ~7 kHz', medido: `+${t2.best.toFixed(0)} dB em ${(t2.fb / 1000).toFixed(1)} kHz`, ok: faixa(t2.best, 14, 27) });
     L.push({ grupo: 'real3', nome: 'real3 · turbo: EMD em notch 8', alvo: '+19,5 dB (3,6–17 kHz)', medido: `+${t3.best.toFixed(0)} dB em ${(t3.fb / 1000).toFixed(1)} kHz`, ok: faixa(t3.best, 14, 26) });
+    return L;
+  },
+
+  // Envoltória do agudo (REVISAO-DE-SOM.md: "ruído contínuo que sobe com o giro e enche o silêncio entre as explosões
+  // soa como mar: exigir modulação"; 3ª passada do Diesel, TECNICO.md). Em carga: o contraste p90/p10 da envoltória de
+  // 2–6 kHz (envoltoriaBanda) dentro da faixa das gravações do real3 da mesma classe ±1 dB (ruído liso pela mesma
+  // cadeia: 6,1 dB). Na lenta: o fundo mecânico (ruído liso) não pode ser o que enche o vão entre as explosões em
+  // 1–4 kHz (amostras abaixo do p30 da envoltória de 1–4 kHz do motor inteiro): no máximo metade da energia ali.
+  envoltoria: () => {
+    const L: Linha[] = [];
+    const carga = (s: number): Cenario => ({ eventos: [[0, (d) => { quente(d); liga(d); }], [3, (d) => { d.message({ type: 'input', shift: 1 }); d.message({ type: 'input', throttle: 1 }); }], [s, null]], portador: 'carro' });
+    const loco = (n: number): Cenario => ({ eventos: [[0, (d) => { quente(d); liga(d); }], [3, (d) => d.message({ type: 'diesel', notch: n })], [30, null]], portador: 'locomotiva' });
+    const ger = (g: number): Cenario => ({ eventos: [[0, (d) => { quente(d); liga(d); }], [6, (d) => d.message({ type: 'diesel', degrau: g })], [16, null]], portador: 'gerador' });
+    // [nome, preset, cenário, ouvinte, t0, t1, faixa, portador]; faixas: as gravações da classe (scratchpad/real3), ±1 dB
+    const C: [string, string, Cenario, string, number, number, [number, number], string?][] = [
+      ['picape acelerando (ram67; Cummins 6.7 11,6, TDI 13,4)', 'ram67', carga(14), 'ext', 9, 14, [10.6, 14.4]],
+      ['caminhão carga, cabine (scaniav8; ERF 11,1, FH16 10,1, Scania 18,3)', 'scaniav8', carga(14), 'int', 9, 14, [9.1, 19.3]],
+      ['ônibus carga (onibusisl; Bedford 8,1, K360 9,3, OF-1519 12,2)', 'onibusisl', carga(14), 'ext', 9, 14, [7.1, 13.2]],
+      ['gerador com carga (gen500; Cummins 2500 kW 8,3)', 'gen500', ger(1), 'ext', 10, 16, [7.3, 9.3], 'gerador'],
+      ['GE 7FDL notch 8 (ge7fdl; U23B 9,7)', 'ge7fdl', loco(8), 'ext', 22, 30, [8.7, 10.7], 'locomotiva'],
+      ['EMD notch 8 (emd710; SD70ACe 7,6 e 9,9)', 'emd710', loco(8), 'ext', 22, 30, [6.6, 10.9], 'locomotiva'],
+    ];
+    for (const [nome, id, cen, ouv, t0, t1, fx, port] of C) {
+      const sp = preset(id), rr = renderizar(sp, cen, { ouvinte: ouv, portador: port });
+      const rpm = med(trecho(rr.tele, t0, t1), 'rpm'), fIgn = (rpm / 60) * sp.cylinders * (2 / sp.tempos);
+      const e = envoltoriaBanda(mono(rr, t0, t1), SR, 2000, 6000, fIgn);
+      L.push({ grupo: 'envoltoria', nome: `envoltória · ${nome}: p90/p10 de 2–6 kHz`, alvo: `${fx[0].toFixed(1)}–${fx[1].toFixed(1)} dB`, medido: `${f1(e.p9010)} dB`, ok: faixa(e.p9010, fx[0], fx[1]) });
+    }
+    // lenta: parte do vão de 1–4 kHz que é o fundo mecânico liso (motor inteiro − motor sem o fundo; a semente do ruído
+    // segue igual, então a diferença é o fundo)
+    for (const id of ['hilux28', 'catc15']) {
+      const sp = preset(id);
+      const a = renderizar(sp, lentaQ(14)), b = renderizar(sp, { eventos: [[0, (d) => { quente(d); liga(d); (d as any).fundoAmp = [0, 0]; }], [14, null]], portador: 'nenhum0' });
+      const x = mono(a, 6, 14), y = mono(b, 6, 14);
+      const ea = bandaEEnvoltoria(x, SR, 1000, 4000, 150), yb = bandaEEnvoltoria(y, SR, 1000, 4000, 150).y;
+      const ord = Float64Array.from(ea.env).sort(), lim = ord[Math.floor(0.3 * (ord.length - 1))];
+      let et = 0, ef = 0;
+      for (let i = 0; i < x.length; i++) if (ea.env[i] < lim) { et += ea.y[i] * ea.y[i]; const df = ea.y[i] - yb[i]; ef += df * df; }
+      const fr = 10 * Math.log10(ef / (et + 1e-30) + 1e-30);
+      L.push({ grupo: 'envoltoria', nome: `envoltória · ${id} lenta: fundo mecânico liso no vão de 1–4 kHz`, alvo: '≤ −3 dB', medido: `${f1(fr)} dB`, ok: fr <= -3 });
+    }
     return L;
   },
 
