@@ -32,20 +32,22 @@ export function areaJanela(a: number, j: Janela) {
   return Math.min(1, u / j.ra, (1 - u) / j.rf);
 }
 
-/** nó da rede do escape que injeta a parte distribuída da pós-queima no ponto quente (1.4) */
+/** nó da rede do escape que injeta a parte distribuída da pós-queima no ponto quente e na boca (1.4) */
 class PosQueimaBoca {
-  d: RotativoDSP; e = 0; kE: number;
-  // (o gás cru de cada evento chega ao ponto quente espalhado pela mistura no caminho: a envoltória passa por um polo de
-  // 15 ms, com a mesma integral)
-  constructor(d: RotativoDSP) { this.d = d; this.kE = 1 - Math.exp(-1 / (0.015 * d.fs)); }
+  d: RotativoDSP;
+  // A envoltória é a do próprio evento (subida de 2 ms, queda de 12 ms, ROTATIVO.md 1.4): cada pulso tem o seu "chiado
+  // quente" e o vão até o próximo fica quieto. (Antes ela passava ainda por um polo de 15 ms, "o gás chega espalhado":
+  // na lenta do FD, a 25 eventos/s, isso emendava um evento no outro e a pós-queima na boca virava um chiado quase
+  // contínuo, o "som de ar" que o ouvido apontou, como o ruído de jato contínuo do Fusca. Sem o polo, o p10 da envoltória
+  // de 1–6 kHz cai de −6 para −15 dB da média e a modulação na ignição sobe de 0,4 para 1,0)
+  constructor(d: RotativoDSP) { this.d = d; }
   step() {
-    const d = this.d, n = d.ruidoHC(1), bs = d.bocas;
-    this.e += this.kE * (d.hcBoca - this.e);
+    const d = this.d, n = d.ruidoHC(1), bs = d.bocas, e = d.hcBoca;
     d.hcBoca = 0;
-    if (this.e < 1e-12) return;
-    const k = (d.kHC * d.kQuente * this.e * n) / bs.length;
+    if (e < 1e-12) return;
+    const k = (d.kHC * d.kQuente * e * n) / bs.length;
     for (let i = 0; i < bs.length; i++) bs[i].j.inj += bs[i].Z * k;
-    const bb = d.bocasF, kb = (d.kHC * d.kBoca * this.e * n) / bb.length;
+    const bb = d.bocasF, kb = (d.kHC * d.kBoca * e * n) / bb.length;
     for (let i = 0; i < bb.length; i++) bb[i].j.inj += bb[i].Z * kb;
   }
 }
