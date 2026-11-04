@@ -117,6 +117,14 @@ export abstract class FonteRuido {
 }
 
 /**
+ * Ganho do ramo do chiado do contato (rolamento): com ele o 1/3 de oitava do rolamento fica −11 dB em 8 kHz e
+ * −17 dB em 16 kHz (sem ele: −11 e −22), caindo ~6 dB/oitava acima de 8 kHz como o espectro de rolamento da
+ * literatura (Thompson, Railway Noise and Vibration: −3 a −6 dB/oitava acima de 2–3 kHz), em vez do corte de
+ * 12 dB/oitava em PSD do passa-banda com o polo. Até 6 kHz a forma é a ajustada contra as gravações.
+ */
+export const G_CHIADO = 0.05;
+
+/**
  * Rolamento roda-trilho (CENA.md 4.6): 1/3 de oitava relativo ao pico (2 kHz a 300 km/h, sobe com v^0,5):
  * 250 Hz −15, 500 −8, 1k −3, 2k 0, 4k −2, 8k −10. Realização: passa-banda Q 0,5 em 1,5 kHz·√(v/v_ref)
  * mais 1 polo em 2,5 kHz·√(v/v_ref), que em potência por 1/3 de oitava dá −16/−8/−2/0/−4/−11 (a anterior,
@@ -125,6 +133,9 @@ export abstract class FonteRuido {
  * pico do rolamento recebido em 1,6–2,5 kHz e caem 6–9 dB até 4 kHz e 10–16 dB até 8 kHz; esta forma, com
  * a propagação até 3 m, erra 0,7 dB (rms) contra a média delas de 500 Hz a 8 kHz. Modulação dos dormentes
  * a v/dormente com 2 dB (±1 dB) e, com `achatamento` > 0, um pulso por volta da roda (v/πD).
+ * Acima de 6 kHz as gravações (áudio comprimido: YouTube corta em ~16 kHz e atenua antes, o opus do Commons menos)
+ * não servem de alvo; ali vale a física: um 2º ramo (passa-alta de 1 polo em 6 kHz·√(v/v_ref), polo em 10 kHz·√(…))
+ * soma o chiado do contato e mantém a queda em −3 a −6 dB/oitava (G_CHIADO).
  */
 export class FonteRolamento extends FonteRuido {
   dormente: number; achatamento: number; diametro: number;
@@ -132,7 +143,8 @@ export class FonteRolamento extends FonteRuido {
   constructor(fs: number, esp: EspecFonteRuido, semente: number, dormente = 0.6, achatamento = 0, diametro = 0.86) {
     super(fs, esp, semente);
     this.dormente = dormente; this.achatamento = achatamento; this.diametro = diametro;
-    this.ramos = [new Ramo(semente, [new Bq()], 2500)];
+    // (2º ramo: o chiado do contato roda-trilho acima de 6 kHz, ver o comentário da classe)
+    this.ramos = [new Ramo(semente, [new Bq()], 2500), new Ramo(semente ^ 0x5eed, [new Bq()], 10000)];
   }
   montar(v: number) {
     const r = this.ramos[0], k = Math.sqrt(v / this.esp.vRef);
@@ -141,6 +153,10 @@ export class FonteRolamento extends FonteRuido {
     // a forma inteira escala com k: a potência do ruído filtrado cresce com a largura de banda (∝ k);
     // o ganho 1/√k a mantém, e a lei de velocidade fica só no gV (30·log v, não 35·log v)
     r.g = 1 / Math.sqrt(k);
+    const c = this.ramos[1];
+    polo1(c.bq[0], this.fs, 6000 * k, 'hp');
+    this.definirLp(c, 10000 * k);
+    c.g = G_CHIADO / Math.sqrt(k);
     this.fD = v / this.dormente; this.fR = v / (Math.PI * this.diametro);
   }
   protected modular(_k: number) {
@@ -169,15 +185,22 @@ export class FonteAero extends FonteRuido {
   constructor(fs: number, esp: EspecFonteRuido, semente: number, fPico = 350, forma: 'descrita' | 'bp' = 'descrita') {
     super(fs, { modLenta: 2, ...esp }, semente);
     this.fPico = fPico; this.forma = forma;
-    this.ramos = [new Ramo(semente, forma === 'bp' ? [new Bq()] : [new Bq(), new Bq()], 2500)];
+    this.ramos = [new Ramo(semente, forma === 'bp' ? [new Bq()] : [new Bq(), new Bq()], forma === 'bp' ? 2500 : F_AERO_POLO)];
   }
   montar(_v: number) {
     const r = this.ramos[0], fs = this.fs, fp = this.fPico;
     if (this.forma === 'bp') r.bq[0].bp(fs, fp, 0.5);
     else { polo1(r.bq[0], fs, fp / 5, 'hp'); polo1(r.bq[1], fs, fp, 'lp'); }
-    this.definirLp(r, 2500);
+    this.definirLp(r, this.forma === 'bp' ? 2500 : F_AERO_POLO);
   }
 }
+
+/**
+ * Polo do aerodinâmico acima de f_p. Em 2,5 kHz (antes) o 1/3 de oitava caía −9 dB/oitava acima de 2,5 kHz e o
+ * "silvo" do corpo e dos truques sumia (8 kHz a −21 dB do pico, 16 kHz a −32); o CENA 2.7 pede −3 dB/oitava até
+ * 2 kHz e −6 acima: com o polo em 5 kHz dá −10, −16 e −26 dB do pico em 4, 8 e 16 kHz (−5, −7, −10 dB por oitava).
+ */
+export const F_AERO_POLO = 5000;
 
 /** biquad degenerado num filtro de 1ª ordem (transformação bilinear com pré-distorção) */
 export function polo1(b: Bq, fs: number, f: number, tipo: 'lp' | 'hp') {
@@ -208,7 +231,7 @@ export class FonteVao extends FonteRuido {
 
 /**
  * Pantógrafo (4.6): tons de Strouhal (eólios) f = 0,2·v/d: cabeça d 0,04 m (Q 4), braços d 0,12 m;
- * ruído largo de 200 Hz a 3 kHz. A carenagem tira 10 dB (vem no L_W: 125 → 115).
+ * ruído largo de 200 Hz a 6 kHz. A carenagem tira 10 dB (vem no L_W: 125 → 115).
  */
 export class FontePantografo extends FonteRuido {
   constructor(fs: number, esp: EspecFonteRuido, semente: number) {
@@ -218,7 +241,8 @@ export class FontePantografo extends FonteRuido {
   montar(v: number) {
     this.ramos[0].bq[0].bp(this.fs, (0.2 * v) / 0.04, 4);
     this.ramos[1].bq[0].bp(this.fs, (0.2 * v) / 0.12, 4);
-    this.ramos[2].bq[0].hp(this.fs, 200, 0.7071); this.ramos[2].bq[1].lp(this.fs, 3000, 0.7071);
+    // (ruído largo de 200 Hz a 6 kHz: o silvo da cabeça e dos braços; o passa-baixa de 2ª ordem em 3 kHz o cortava)
+    this.ramos[2].bq[0].hp(this.fs, 200, 0.7071); this.ramos[2].bq[1].lp(this.fs, 6000, 0.7071);
   }
 }
 

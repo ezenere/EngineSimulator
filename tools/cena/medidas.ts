@@ -276,7 +276,28 @@ export function medirNiveisTrem(): Linha[] {
     const ms = ((fim - 100) * 128 * 1000) / SR;
     L.push(linha('3.3', 'lado do ouvinte: crossfade das faces (potência bloco a bloco; duração)', '±0,1 dB; 50 ms', `${f1(dDb, 2)} dB; ${f1(ms, 0)} ms`, dDb <= 0.1 && ms >= 40 && ms <= 60, ms));
   }
+  L.push(...medirAgudoTrem());
   return L;
+}
+
+/**
+ * Agudo da passagem (pedido depois de ouvir o trem: "sem qualidade, como gravado por celular antigo"): bandas
+ * 6–12 kHz e 12–24 kHz rel. 150–400 Hz no pico (2 s em torno do máximo, direto + reverberação), céu aberto a
+ * 300 km/h, a 3 m e a 7,5 m. Acima de 6 kHz as gravações (áudio comprimido) não são alvo; vale a física do
+ * rolamento e do aero (−3 a −6 dB/oitava acima de 2–3 kHz): ≈ −10 e ≈ −20 dB. Antes do ajuste: −14,1 / −24,2 a 3 m
+ * e −9,7 / −20,9 a 7,5 m, com o rolamento e o aero cortando em 12 dB/oitava e o ar tirando 2 dB em 16 kHz a 3 m.
+ */
+export function medirAgudoTrem(): Linha[] {
+  const out: Linha[] = [];
+  const F: [number, number][] = [[150, 400], [6000, 12000], [12000, 23900]];
+  for (const d of [3, 7.5]) {
+    const r = renderPassagem({ portador: 'trem', v: 300 / 3.6, d, ambiente: 'ceu', dur: 12, x0: 600 });
+    const env = A.nivelF(r.L, r.R, SR, 1, false, 480); let im = 0; for (let i = 0; i < env.length; i++) if (env[i] > env[im]) im = i;
+    const t = im / 100, e = A.bandas([r.L, r.R], SR, Math.round((t - 1) * SR), Math.round((t + 1) * SR), F);
+    const b1 = 10 * Math.log10(e[1] / e[0]), b2 = 10 * Math.log10(e[2] / e[0]);
+    out.push(linha('2.11', `agudo no pico a ${f1(d)} m, 300 km/h (rel. 150–400): 6–12 kHz / 12–24 kHz`, '≈ −10 ± 4 / ≈ −20 ± 4 dB', `${f1(b1)} / ${f1(b2)} dB`, Math.abs(b1 + 10) <= 4 && Math.abs(b2 + 20) <= 4, b1));
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- passos 1–3, 5, 6, 8, 9: unidades

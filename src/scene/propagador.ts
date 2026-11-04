@@ -82,7 +82,11 @@ const S_R = 41;
 const S_THETA = 42;
 const S_GANHODB = 43;
 const S_ATRASOMS = 44;
-const N_ESTADO = 45;
+// ar em 1ª ordem bilinear: b0 = b1 (zero em Nyquist), c1 (polo), e a entrada anterior de cada polo
+const S_B1 = 45;
+const S_X1 = 46;
+const S_X2 = 47;
+const N_ESTADO = 48;
 export const S_ESTADO = { sa: S_SA, sb: S_SB, fade: S_FADE, ganhoDb: S_GANHODB };
 
 export class EstadoFonte {
@@ -123,7 +127,7 @@ export class EstadoFonte {
     let n = 1024; while (n < (distAnel / C_SOM + 0.1) * fs + 512) n <<= 1;
     this.anel = new Float32Array(n); this.mask = n - 1; this.cap = n - 512;
     const v = this.s;
-    v[S_FADE] = 1; v[S_KAR] = 1; v[S_KARALVO] = 1; v[S_SA] = 1; v[S_SB] = 1; v[S_SAALVO] = 1; v[S_SBALVO] = 1;
+    v[S_FADE] = 1; v[S_KAR] = 0; v[S_KARALVO] = 1; v[S_B1] = 0; v[S_SA] = 1; v[S_SB] = 1; v[S_SAALVO] = 1; v[S_SBALVO] = 1;
     v[S_IL] = 1; v[S_IR] = 1; v[S_ILALVO] = 1; v[S_IRALVO] = 1; v[S_PL] = 1; v[S_PR] = 1; v[S_PLALVO] = 1; v[S_PRALVO] = 1;
     v[S_PESO] = 1; v[S_R] = 1; v[S_THETA] = 90; v[S_GANHODB] = -120;
   }
@@ -275,8 +279,8 @@ export class Propagador {
             let fc = 1000 * Math.pow(3 / (this.a1kCache * Math.max(rs[6], 0.1)), 0.625);
             fc = fc < 600 ? 600 : fc > 20000 ? 20000 : fc;
             if (fcDir < fc) fc = fcDir;   // sombra do próprio corpo por ângulo (o `shade` do road() do Ronco)
-            fc *= POLO_POR_CORTE; if (fc > 0.45 * fs) fc = 0.45 * fs;
-            es.s[S_KARALVO] = 1 - Math.exp(-TAU * fc / fs);
+            fc *= POLO_POR_CORTE;
+            arBilinear(es.s, fc, fs);
           }
           let A100 = 0, A1k = 0;
           if (R.sombra && !es.f.dentro) {
@@ -433,8 +437,8 @@ export class Propagador {
       if (rMin < 1e9) {
         if (this.urCache !== this.ur) { this.urCache = this.ur; this.a1kCache = corteAr(1000, this.ur) > 0 ? alfa1k(this.ur) : 0.0037; }
         let fc = 1000 * Math.pow(3 / (this.a1kCache * Math.max(rMin, 0.1)), 0.625);
-        fc = (fc < 600 ? 600 : fc > 20000 ? 20000 : fc) * POLO_POR_CORTE; if (fc > 0.45 * fs) fc = 0.45 * fs;
-        es.s[S_KARALVO] = 1 - Math.exp(-TAU * fc / fs);
+        fc = (fc < 600 ? 600 : fc > 20000 ? 20000 : fc) * POLO_POR_CORTE;
+        arBilinear(es.s, fc, fs);
         // direção de chegada (ouvinte → ponto de emissão) na cabeça
         const dx = -cthP * tx, dy = -uyP;
         const lat = dx * O.lx + dy * O.ly;
@@ -450,20 +454,21 @@ export class Propagador {
       if (es.s[S_FADE] < 1) es.s[S_FADE] = Math.min(1, es.s[S_FADE] + N / (0.05 * fs));
       // ar, solo e saída
       const oL = this.accL[es.bus], oR = this.accR[es.bus], eL = this.envL, eR = this.envR;
-      const kAr = es.s[S_KARALVO], kGr = this.kGr, peso = es.s[S_PESO];
-      let a1 = es.s[S_A1], a2 = es.s[S_A2], gr = es.s[S_GR];
+      const b0 = es.s[S_KARALVO], b1 = es.s[S_B1], c1 = es.s[S_KAR], kGr = this.kGr, peso = es.s[S_PESO];
+      let a1 = es.s[S_A1], a2 = es.s[S_A2], gr = es.s[S_GR], x1 = es.s[S_X1], x2 = es.s[S_X2];
       let pL = es.s[S_PL] * peso, pR = es.s[S_PR] * peso, gs = es.s[S_GS], ps = es.s[S_PS];
       const dpL = (es.s[S_PLALVO] * peso - pL) * invN, dpR = (es.s[S_PRALVO] * peso - pR) * invN, dgs = (es.s[S_GSALVO] - gs) * invN, dps = (es.s[S_PSALVO] - ps) * invN;
       for (let k = 0; k < N; k++) {
         gr += kGr * (tmpI[k] - gr);
         const x = tmp[k] + gr;
-        a1 += kAr * (x - a1); a2 += kAr * (a1 - a2);
+        a1 = b0 * x + b1 * x1 - c1 * a1; x1 = x;
+        a2 = b0 * a1 + b1 * x2 - c1 * a2; x2 = a1;
         const e = a2 * gs;
         eL[ini + k] += e * (1 - ps); eR[ini + k] += e * (1 + ps);
         oL[ini + k] += a2 * pL; oR[ini + k] += a2 * pR;
         pL += dpL; pR += dpR; gs += dgs; ps += dps;
       }
-      es.s[S_A1] = a1; es.s[S_A2] = a2; es.s[S_GR] = gr; es.s[S_KAR] = kAr;
+      es.s[S_A1] = a1; es.s[S_A2] = a2; es.s[S_GR] = gr; es.s[S_X1] = x1; es.s[S_X2] = x2;
       es.s[S_PL] = es.s[S_PLALVO]; es.s[S_PR] = es.s[S_PRALVO]; es.s[S_GS] = es.s[S_GSALVO]; es.s[S_PS] = es.s[S_PSALVO];
       // se o corpo voltar a ficar abaixo de M 0,9, o ponto fixo recomeça do zero
       es.ativo[0] = 0; es.ativo[1] = 0;
@@ -508,8 +513,8 @@ export class Propagador {
     let cb = es.s[S_CB]; const dcb = (es.s[S_CBALVO] - cb) * invN;
     let gs = es.s[S_GS]; const dgs = (es.s[S_GSALVO] - gs) * invN;
     let ps = es.s[S_PS]; const dps = (es.s[S_PSALVO] - ps) * invN;
-    const kAr = es.s[S_KARALVO], kGr = this.kGr, kSh = this.kSh, kHb = this.kHb, kI = this.kIld;
-    let gr = es.s[S_GR], a1 = es.s[S_A1], a2 = es.s[S_A2], sl = es.s[S_SL], hb = es.s[S_HB], lpL = es.s[S_LPL], lpR = es.s[S_LPR];
+    const b0 = es.s[S_KARALVO], b1 = es.s[S_B1], c1 = es.s[S_KAR], kGr = this.kGr, kSh = this.kSh, kHb = this.kHb, kI = this.kIld;
+    let gr = es.s[S_GR], a1 = es.s[S_A1], a2 = es.s[S_A2], sl = es.s[S_SL], hb = es.s[S_HB], lpL = es.s[S_LPL], lpR = es.s[S_LPR], x1 = es.s[S_X1], x2 = es.s[S_X2];
     const itd = es.itd; let iw = es.s[S_ITDW];
     let w = this.w + ini;
     // crossfade da reancoragem
@@ -543,7 +548,8 @@ export class Propagador {
         D2 += inc2; inc2 += dd2; g2 += dg2;
       }
       // ar (2 polos)
-      a1 += kAr * (s - a1); a2 += kAr * (a1 - a2);
+      a1 = b0 * s + b1 * x1 - c1 * a1; x1 = s;
+      a2 = b0 * a1 + b1 * x2 - c1 * a2; x2 = a1;
       // sombra do corpo: shelf em 400 Hz
       sl += kSh * (a2 - sl);
       let y = sb * a2 + (sa - sb) * sl;
@@ -571,7 +577,8 @@ export class Propagador {
     }
     es.g[0] = es.gAlvo[0]; es.g[1] = es.gAlvo[1];
     es.s[S_SA] = es.s[S_SAALVO]; es.s[S_SB] = es.s[S_SBALVO]; es.s[S_PL] = es.s[S_PLALVO]; es.s[S_PR] = es.s[S_PRALVO]; es.s[S_DL] = es.s[S_DLALVO]; es.s[S_DR] = es.s[S_DRALVO];
-    es.s[S_IL] = es.s[S_ILALVO]; es.s[S_IR] = es.s[S_IRALVO]; es.s[S_CB] = es.s[S_CBALVO]; es.s[S_GS] = es.s[S_GSALVO]; es.s[S_PS] = es.s[S_PSALVO]; es.s[S_KAR] = kAr;
+    es.s[S_IL] = es.s[S_ILALVO]; es.s[S_IR] = es.s[S_IRALVO]; es.s[S_CB] = es.s[S_CBALVO]; es.s[S_GS] = es.s[S_GSALVO]; es.s[S_PS] = es.s[S_PSALVO];
+    es.s[S_X1] = x1; es.s[S_X2] = x2;
     es.s[S_GR] = gr; es.s[S_A1] = a1; es.s[S_A2] = a2; es.s[S_SL] = sl; es.s[S_HB] = hb; es.s[S_LPL] = lpL; es.s[S_LPR] = lpR; es.s[S_ITDW] = iw;
     if (xfOn) { es.s[S_XF] = xf; es.s[S_XFN] = xf >= 1 ? 0 : es.s[S_XFN]; }
   }
@@ -590,6 +597,18 @@ export class Propagador {
     this.accL[0].fill(0, 0, n); this.accR[0].fill(0, 0, n); this.accL[1].fill(0, 0, n); this.accR[1].fill(0, 0, n);
     this.envL.fill(0, 0, n); this.envR.fill(0, 0, n);
   }
+}
+
+/**
+ * Coeficientes de um polo do ar, 1ª ordem bilinear com pré-distorção (polo e zero em Nyquist), em s[S_KARALVO] (b0),
+ * s[S_B1] (b1) e s[S_KAR] (c1, o polo): y = b0·x + b1·x₋₁ − c1·y₋₁. O "y += k·(x − y)" de antes, com o corte limitado
+ * a 0,45·fs, nunca ficava transparente: a 3–7,5 m (f_c no teto de 20 kHz) os dois polos ficavam em 21,6 kHz e tiravam
+ * ~1 dB em 10 kHz e ~2 dB em 16 kHz, mais que a ISO 9613 (< 1 dB a 10 kHz em 7,5 m). Acima de 0,49·fs vira um fio.
+ */
+export function arBilinear(s: Float64Array, fp: number, fs: number) {
+  if (fp >= 0.49 * fs) { s[S_KARALVO] = 1; s[S_B1] = 0; s[S_KAR] = 0; return; }
+  const K = Math.tan((Math.PI * fp) / fs);
+  s[S_KARALVO] = K / (1 + K); s[S_B1] = K / (1 + K); s[S_KAR] = (K - 1) / (K + 1);
 }
 
 /** segmento do corpo que contém a abscissa x (referencial do corpo, x = 0 no centro, frente em +L/2) */
