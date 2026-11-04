@@ -14,7 +14,7 @@ import {
 } from '../../acoustics';
 import { EngineDSP } from '../ronco/dsp';
 import { T_MAN, T_EXREF } from '../ronco/constantes';
-import { LHV, ESTEQ, CETANO_PADRAO, K_ATRASO, R_UNIV, BSFC, INJECAO, NOTCH_POT, K_MEC, K_VALV, K_FUNDO, K_VIB, K_CALOR, K_MISTURA, K_TURBINA, K_SOPRO, K_CHOQUE } from './constantes';
+import { LHV, ESTEQ, CETANO_PADRAO, K_ATRASO, R_UNIV, BSFC, INJECAO, NOTCH_POT, K_MEC, K_VALV, K_FUNDO, K_VIB, K_CALOR, K_MISTURA, K_TURBINA, K_SOPRO, K_MOD_TURBO, K_CHOQUE } from './constantes';
 import { DoisPortasDiesel } from './escape';
 
 // Carga e comando vindos de um portador externo (CENA.md 1.2). TODO(integração carriers/): trocar por
@@ -43,7 +43,7 @@ export class DieselDSP extends EngineDSP {
   declare Pcarga: any; declare Tcarga: any; declare Jcarga: any; declare regCarga: any; declare fRede: any; declare gerCfg: any; declare locCfg: any;
   declare dinamico: any; declare ptBuf: any; declare ptUlt: any; declare ptI: any; declare telN: any; declare classe: any; declare boostAlvo: any; declare partida: any;
   declare gChiado: any; declare lamInst: any; declare subidaTq: any; declare gMec: any; declare g0Rad: any; declare govBancada: any; declare boostD: any; declare aquec: any; declare estadoAnt: any; declare lentaFixa: any; declare vF: any; declare vAmp: any; declare vDec: any; declare vEnv: any; declare fundoF: any; declare fundoAmp: any; declare fundoM: any; declare pumpAmp: any; declare oilAmp: any;
-  declare wBuf: any; declare gwI: any; declare wSoma: any; declare wK: any; declare wSomaK: any; declare boostFixo: any; declare queimasBoas: any; declare cicloEv: any; declare lentaBaixa: any; declare kIdi: any; declare kPre: any; declare egtN: any; declare egtD: any; declare egtNs: any; declare egtDs: any; declare soiM: any; declare thInjM: any; declare thMix: any; declare eD: any; declare pInjMax: any; declare injK: any; declare tauK: any; declare injA: any; declare jTurb: any; declare turbNzF: any; declare zTurb: any; declare uPonta: any; declare whooshF: any; declare turboLenta: any; declare mecLP: any; declare trocaT: any; declare trocaDir: any;
+  declare wBuf: any; declare gwI: any; declare wSoma: any; declare wK: any; declare wSomaK: any; declare boostFixo: any; declare queimasBoas: any; declare cicloEv: any; declare lentaBaixa: any; declare kIdi: any; declare kPre: any; declare egtN: any; declare egtD: any; declare egtNs: any; declare egtDs: any; declare soiM: any; declare thInjM: any; declare thMix: any; declare eD: any; declare pInjMax: any; declare injK: any; declare tauK: any; declare injA: any; declare jTurb: any; declare turbNzF: any; declare linTurb: any; declare pTM: any; declare kModT: any; declare zTurb: any; declare uPonta: any; declare whooshF: any; declare turboLenta: any; declare mecLP: any; declare trocaT: any; declare trocaDir: any;
 
   constructor(fs: number) {
     super(fs);
@@ -54,7 +54,7 @@ export class DieselDSP extends EngineDSP {
     this.fmepK = 1; this.pmeCarga = 0; this.rpmPartida = 330; this.tParede = 430;
     this.fuelCmd = 0; this.gI = 0.1; this.gX = 0; this.gV = 0; this.sobre = false; this.sonda = false; this.combExterno = null; this.cargaExterna = null;
     this.knockSrc = 0; this.kEnv = 0; this.kPk = 0; this.refKnock = 0; this.injEnv = 0; this.pumpEnv = 0; this.phPump = 0; this.phRot = 0;
-    this.tw = 0; this.nTurbo = 0; this.phTT = 0; this.tjit = 0; this.mExM = 1e-6; this.wgAmt = 0; this.boostR = 0;
+    this.tw = 0; this.nTurbo = 0; this.phTT = 0; this.tjit = 0; this.mExM = 1e-6; this.pTM = 1e-6; this.kModT = K_MOD_TURBO; this.wgAmt = 0; this.boostR = 0;
     this.freioOn = false; this.freioAtivo = false; this.pBack = 0; this.jakeOn = false; this.nJake = 6;
     this.fuelM = 0; this.lamM = 10; this.etaM = 0.98; this.fumaca = 0; this.fumacaBranca = 0; this.pParcial = 0;
     this.pMaxM = P0; this.dpM = 0; this.angM = 0; this.tauM = 0; this.tInjM = 0; this.tEvoM = 0; this.tEsc = 20;
@@ -288,11 +288,12 @@ export class DieselDSP extends EngineDSP {
     const tpart = (kind) => { const nx = seg(0.25); nodes.push(kind === 'turbo' ? new TwoPort(fs, port(cur, 1), port(nx, 0), 'turbo') : new DoisPortasDiesel(fs, port(cur, 1), port(nx, 0), kind)); cur = nx; };
     const Lt = Math.max(0.6, esc.comprimento || 3);
     if (esc.turbina && this.turbo) {
+      this.linTurb = cur; // (entrada da turbina: a pressão instantânea dela modula o ruído do turbo)
       tpart('turbo');
       // saída da turbina: o ruído de banda larga do rotor (esteira das pás, escoamento turbulento) entra no tubo aqui e
       // segue o caminho do gás: nos carros e caminhões o DPF e o abafador o comem; na locomotiva só há a chaminé
       const nx = seg(0.15); const jt = new Junction([port(cur, 1), port(nx, 0)]); nodes.push(jt); cur = nx; this.jTurb = jt;
-    } else this.jTurb = null;
+    } else { this.jTurb = null; this.linTurb = null; }
     if (esc.dpf) { const p = seg(0.35 * Lt); nodes.push(new Junction([port(cur, 1), port(p, 0)])); cur = p; tpart('dpf'); }
     // tubo até o abafador
     { const p = seg(esc.dpf ? 0.25 * Lt : 0.55 * Lt); nodes.push(new Junction([port(cur, 1), port(p, 0)])); cur = p; }
@@ -717,16 +718,21 @@ export class DieselDSP extends EngineDSP {
       if (f > 0.45 * this.fs) lvl = 0;
       const h2 = 2 * f < 0.45 * this.fs ? 0.25 * (2 * f > 16000 ? (16000 / (2 * f)) ** 2 : 1) : 0;
       tur += (Math.sin(this.phTT) + h2 * Math.sin(2 * this.phTT + 0.7)) * 0.02 * lvl;
-      // chiado modulado ±15% pelos pulsos do escape que chegam à turbina (para não virar "mar")
+      // a turbina não recebe um fluxo contínuo: recebe o pulso de cada abertura do escape. O ruído de banda larga dela e o
+      // sopro que se ouve de fora seguem a pressão instantânea na entrada da turbina (onda que chega + onda que volta),
+      // relativa à média (~40 ms): forte no pulso, quase nada entre as explosões. (Modulado só ±15%, pela média, era um
+      // chiado liso que subia com o giro e enchia o vão entre as explosões: o "mar" do REVISAO-DE-SOM.md)
       let mx = 0; for (let c = 0; c < this.N; c++) mx += this.mEx[c] > 0 ? this.mEx[c] : 0;
       this.mExM += (mx - this.mExM) * 0.0005;
-      const am = clamp(1 + 0.15 * (mx / Math.max(this.mExM, 1e-9) - 1), 0.7, 1.3);
+      const lt = this.linTurb, pt = lt ? Math.max(0, lt.in1 + lt.out1) : mx;
+      this.pTM += (pt - this.pTM) * 0.0005;
+      const am = clamp(1 + this.kModT * (pt / Math.max(this.pTM, 1e-9) - 1), 0, 4);
       // whoosh: segue a vazão de ar comprimido (pressão de alimentação) e a rotação do turbo, que tem constante de tempo
       // de segundos; sem carga (turbo girando à toa, coletor sem pressão) quase some
       const carga = clamp(this.boost / Math.max(0.2, this.maxBoost), 0, 1.2);
       tur += this.turboHiss.run(rng.bi()) * 0.02 * tn * tn * (0.08 + carga) * am * P.air * this.gChiado;
-      // banda larga do compressor e do escoamento do ar comprimido sob carga (potência ∝ vazão·U⁵: some em lenta e é o
-      // "sopro" que as gravações de caminhão, ônibus e gerador em carga têm em 0,6–6 kHz, 10–25 dB abaixo do grave)
+      // banda larga do compressor e do escoamento do ar comprimido sob carga (potência ∝ vazão·U⁵: some em lenta), bem
+      // abaixo do escape: de fora ele chega pela caixa do filtro e pelo cofre
       const w5 = tn * tn * tn * tn * tn;
       tur += this.whooshF[1].run(this.whooshF[0].run(rng.bi())) * K_SOPRO * w5 * (0.05 + carga) * am * P.air * this.gChiado;
       if (this.wgAmt > 0.01) tur += this.wgF.run(rng.bi()) * 0.002 * this.wgAmt * P.air;
@@ -735,7 +741,7 @@ export class DieselDSP extends EngineDSP {
       if (this.jTurb) {
         const nz = this.turbNzF[1].run(this.turbNzF[0].run(rng.bi()));
         const u = tn * this.uPonta / 500; // (velocidade de ponta do rotor, referida a 500 m/s)
-        this.jTurb.inj += nz * K_TURBINA * this.zTurb * this.mExM * u * u * u * P.air;
+        this.jTurb.inj += nz * K_TURBINA * this.zTurb * this.mExM * am * u * u * u * P.air; // (vazão instantânea = média × pulso)
       }
     }
     if (this.pBack > 2000) tur += this.fbF.run(rng.bi()) * 0.006 * (this.pBack / 3e5) * P.air;

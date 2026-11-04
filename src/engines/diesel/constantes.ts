@@ -41,7 +41,12 @@ export const NOTCH_RPM = {
 // peso do trem de válvulas e do fundo mecânico; acertados nas bandas do ouvinte `bay` (DIESEL.md 2.6, Apêndice A)
 export const K_MEC = 0.045;
 export const K_VALV = 0.3;
-export const K_FUNDO = 0.1; // (0,02 com o chiado da admissão e do turbo por cima; sem eles a lenta tinha p90/p10 de 26 dB no cofre, 15–17 nas gravações)
+// fundo mecânico contínuo (engrenagens, bomba, correias), na mesma escala. 0,02 na 1ª passada; 0,1 na 2ª, para a lenta
+// do cofre chegar ao p90/p10 de 15–17 dB de um vídeo lo-fi (cujo vão é o ruído da gravação). Mas é ruído branco em 1,5
+// e 3,5 kHz, liso, que não segue as explosões: na lenta era 80–100% da energia do vão entre elas de 1 a 4 kHz, o "som
+// de ar" da lenta. 3ª passada: 0,012, o maior valor em que ele é no máximo metade do vão de 1–4 kHz também nos
+// caminhões (teste:diesel → envoltoria; TECNICO.md → Diesel)
+export const K_FUNDO = 0.012;
 export const K_VIB = 0.1;
 // perda de calor para a parede no diesel, sobre a do Ronco: a mistura pobre da lenta (λ 4–8) queima mais fria e a
 // perda ×1 deixava o gás a 480–520 K na abertura do escape em lenta (alvo 600–750 K)
@@ -56,9 +61,15 @@ export const K_MISTURA = 0.5;
 // acertado na banda 1–6 kHz do EMD 710 em notch 8 (gravação do SD70ACe, DIESEL.md 4.4)
 export const K_TURBINA = 0.0045;
 
-// banda larga do compressor sob carga (DieselDSP.turboSom), na escala do canal do turbo; acertada nas bandas de 1–12 kHz
-// dos caminhões, ônibus e gerador em carga do real3 (RESUMO.md)
-export const K_SOPRO = 4.5;
+// banda larga do compressor sob carga (DieselDSP.turboSom), na escala do canal do turbo. A 2ª passada acertou 4,5 nas
+// bandas de 1–12 kHz dos caminhões, ônibus e gerador em carga do real3, mas liso (modulado ±15% pela média): era 60–95%
+// do som ponderado A em carga e enchia o vão entre as explosões (o "mar"). Agora segue o pulso na entrada da turbina e
+// fica 6 dB abaixo (3ª passada, TECNICO.md → Diesel)
+export const K_SOPRO = 2.25;
+
+// profundidade da modulação do ruído do turbo (sopro do compressor e banda larga da turbina) pela pressão instantânea
+// na entrada da turbina: 0 = liso, 1 = segue o pulso inteiro
+export const K_MOD_TURBO = 1;
 
 // ruído de choque do jato subexpandido do Jake (fração de Zr·ṁ por (M² − 1)); acertado no agudo do Jake (DIESEL.md 3.4)
 export const K_CHOQUE = 0.025;
