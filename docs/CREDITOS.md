@@ -34,3 +34,11 @@ As fontes dessas gravações:
 
 - **Wikimedia Commons**, com licenças CC.
 - **Vídeos públicos**, usados como referência privada.
+
+### Elétrico (etapa 6)
+
+O Elétrico (`docs/ELETRICO.md` 3, `tools/eletrico/valida.ts`) foi comparado, até 6 kHz, com:
+
+- **Wikimedia Commons**: Schwebebahn de Wuppertal (WWS, CC BY 4.0), metrô de Paris MP 73 (duas, CC BY 4.0), bonde de Lyon (Citadis, CC BY 3.0), bonde de West Midlands (Urbos 3, Andy Mabbett, CC BY-SA 4.0), Tesla Roadster (CC BY-SA 3.0).
+- **Vídeos públicos** (referência privada): Siemens Taurus ES64U2 partindo (quatro, o "do-re-mi"), CPTM Séries 9500 e 9000, Nissan Leaf e Tesla Model S Plaid acelerando, duas furadeiras sem fio e uma de rede, DJI Mavic Pro pairando e um drone menor.
+

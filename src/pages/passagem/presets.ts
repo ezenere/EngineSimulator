@@ -13,6 +13,7 @@ import { PRESETS_RADIAL } from '../../engines/radial/presets';
 import { PRESETS_ROTATIVO } from '../../engines/rotativo/presets';
 import { PRESETS as PRESETS_DIESEL } from '../../engines/diesel/presets';
 import { PRESETS_TURBINA } from '../../engines/turbina/presets';
+import { PRESETS_ELETRICO } from '../../engines/eletrico/presets';
 
 export type IdPortadorPagina = Exclude<TipoPortador, 'nenhum'>;
 export type IdAmbientePagina = Extract<IdAmbiente, 'ceu' | 'corte' | 'estacao' | 'ponte' | 'tunel'>;
@@ -20,7 +21,9 @@ export type IdAmbientePagina = Extract<IdAmbiente, 'ceu' | 'corte' | 'estacao' |
 /** famílias de motor com adaptador pronto para a Cena ('nenhum' = o portador sozinho; docs/TECNICO.md → Adaptadores de motor) */
 export const MOTORES_PRONTOS: readonly FamiliaMotor[] = ADAPTADORES;
 /** portadores que o DSP da Cena (src/scene/dsp-cena.ts) monta */
-export const PORTADORES_NO_DSP: readonly IdPortadorPagina[] = ['trem', 'rotor', 'carro', 'helice', 'gerador', 'locomotiva', 'aviao'];
+export const PORTADORES_NO_DSP: readonly IdPortadorPagina[] = ['trem', 'rotor', 'carro', 'helice', 'gerador', 'locomotiva', 'aviao',
+  'drone', // Elétrico (etapa 6): o multirrotor
+];
 
 export const NOME_MOTOR: Record<FamiliaMotor, string> = {
   nenhum: 'Sem motor', pistao: 'Pistão (Ronco)', turbina: 'Turbina', turboelice: 'Turboélice', turboeixo: 'Turboeixo',
@@ -41,6 +44,8 @@ export const PORTADORES: readonly InfoPortador[] = [
   { id: 'gerador', nome: 'Gerador', descricao: 'Rotação fixa, degraus de carga' },
   { id: 'locomotiva', nome: 'Locomotiva', descricao: 'Diesel-elétrica de 8 notches' },
   { id: 'aviao', nome: 'Avião a jato', descricao: 'Fuselagem com os motores da Turbina; acima de Mach 0,9 o resolvedor fechado e o estrondo' },
+  // Elétrico (etapa 6)
+  { id: 'drone', nome: 'Drone', descricao: 'Multirrotor de 4 hélices (Mavic): BPF por rotor com o desvio de rotação medido, o motor em 9·f_e' },
 ];
 
 /** motores possíveis no portador que já têm adaptador e foram usados nele de verdade (regra do produto) */
@@ -58,11 +63,14 @@ export function presetsDoMotor(p: IdPortadorPagina, f: FamiliaMotor): OpcaoMotor
   if (f === 'diesel') return PRESETS_DIESEL.filter((x) => (x.portadores as string[]).includes(p === 'carro' ? 'carro' : p)).map(op);
   if (f === 'turboelice') return PRESETS_TURBINA.filter((x) => x.arch === 'turboprop').map(op);
   if (f === 'turbina') return PRESETS_TURBINA.filter((x) => x.arch !== 'turboprop').map(op);
+  // Elétrico: carro (e trólebus), trem (metrô, bonde, trem-bala), drone
+  if (f === 'eletrico') return PRESETS_ELETRICO.filter((x) => x.portador.tipo === (p === 'carro' || p === 'trem' || p === 'drone' ? p : '')).map(op);
   return [];
 }
 /** preset de motor padrão por portador e família */
 export const MOTOR_PADRAO: Partial<Record<FamiliaMotor, Partial<Record<IdPortadorPagina, string>>>> = {
   pistao: { carro: 'muscle', helice: 'c172', rotor: 'r44' }, radial: { helice: 'r2800', rotor: 's55', carro: 'r975' }, rotativo: { carro: 'rx7fd', helice: 'ar741', rotor: 'ae50r', gerador: 'xts210' }, diesel: { carro: 'hilux28', gerador: 'gen500', locomotiva: 'emd710' }, turboelice: { helice: 'regional' }, turbina: { aviao: 'narrow' },
+  eletrico: { carro: 'model3', trem: 'n700', drone: 'mavic' },
 };
 
 /** habilitado e, se não, por quê */
@@ -110,10 +118,13 @@ export interface PresetPassagem {
   motorPreset?: string; pedal?: number; marcha?: number; notch?: number; cargaFracao?: number;
   /** ouvinte parado nesta posição ao longo da via (m) e altura do ouvido */
   x0?: number;
+  /** (Elétrico) freio elétrico 0..1 durante a passagem; `partida`: o corpo parte parado (a velocidade vem do motor) */
+  freio?: number; partida?: boolean;
 }
 
 export const PRESETS_PASSAGEM: readonly PresetPassagem[] = [
-  { id: 'trembala-tunel', nome: 'Trem-bala no túnel', sub: '10 vagões · 350 km/h · 3 m', portador: 'trem', motor: 'nenhum', ambiente: 'tunel', vKmh: 350, lateral: 3 },
+  // (o trem-bala ganha o motor do N700 na etapa 6: a 350 km/h ele fica 15–20 dB abaixo do aero e do rolamento)
+  { id: 'trembala-tunel', nome: 'Trem-bala no túnel', sub: '10 vagões · N700 · 350 km/h · 3 m', portador: 'trem', motor: 'eletrico', motorPreset: 'n700', pedal: 0.3, ambiente: 'tunel', vKmh: 350, lateral: 3 },
   { id: 'trembala-ceu', nome: 'Trem-bala a céu aberto', sub: '10 vagões · 300 km/h · 7,5 m', portador: 'trem', motor: 'nenhum', ambiente: 'ceu', vKmh: 300, lateral: 7.5 },
   { id: 'trembala-ponte', nome: 'Trem-bala no viaduto', sub: '8 vagões · 320 km/h · 5 m', portador: 'trem', motor: 'nenhum', ambiente: 'ponte', vKmh: 320, lateral: 5, trem: { N: 8, pantografos: [2, 6] } },
   { id: 'convencional-estacao', nome: 'Trem convencional na estação', sub: '8 vagões · 120 km/h · 2 m', portador: 'trem', motor: 'nenhum', ambiente: 'estacao', vKmh: 120, lateral: 2,
@@ -140,4 +151,10 @@ export const PRESETS_PASSAGEM: readonly PresetPassagem[] = [
   { id: 'gerador-bancada', nome: 'Gerador em bancada', sub: 'Cummins 500 kVA · 1800 rpm · 50% de carga · 7,5 m', portador: 'gerador', motor: 'diesel', motorPreset: 'gen500', ambiente: 'ceu', vKmh: 0, lateral: 7.5, solo: 'concreto', cargaFracao: 0.5, x0: 0 },
   { id: 'jato-1500', nome: 'Jato a 1500 m', sub: '737-800 · 300 km/h · manete 0,85', portador: 'aviao', motor: 'turbina', motorPreset: 'narrow', ambiente: 'ceu', vKmh: 300, lateral: 0, altitude: 1500, solo: 'grama', pedal: 0.85, x0: 2500 },
   { id: 'caca-supersonico', nome: 'Caça supersônico a 200 m', sub: 'F-16 · Mach 1,5 · estrondo', portador: 'aviao', motor: 'turbina', motorPreset: 'fighter', ambiente: 'ceu', vKmh: 1836, lateral: 0, altitude: 200, solo: 'grama', pedal: 1, x0: 1500 },
+  // Elétrico (etapa 6)
+  { id: 'tesla-rua', nome: 'Tesla na rua', sub: 'Model 3 AWD · 30 km/h · 6 m · pneus e AVAS', portador: 'carro', motor: 'eletrico', motorPreset: 'model3', ambiente: 'ceu', vKmh: 30, lateral: 5.1, solo: 'asfalto', pedal: 0.15, x0: 60 },
+  { id: 'taurus-doremi', nome: 'Taurus partindo do-re-mi', sub: 'ES64U2 · GTO em escada · arranca parado a 7,5 m', portador: 'trem', motor: 'eletrico', motorPreset: 'taurus', ambiente: 'estacao', vKmh: 0, lateral: 6, pedal: 0.63, partida: true, x0: -12 },
+  { id: 'metro-estacao', nome: 'Metrô chegando na estação', sub: 'Metropolis · freio elétrico · 35 km/h · 2 m', portador: 'trem', motor: 'eletrico', motorPreset: 'metropolis', ambiente: 'estacao', vKmh: 35, lateral: 2, pedal: 0, freio: 0.6, x0: 120 },
+  { id: 'n700-tunel', nome: 'Trem-bala N700 no túnel', sub: '10 vagões · tração a 150 km/h · 3 m', portador: 'trem', motor: 'eletrico', motorPreset: 'n700', ambiente: 'tunel', vKmh: 150, lateral: 3, pedal: 0.8 },
+  { id: 'drone-pairando', nome: 'Drone pairando', sub: 'Mavic Pro · 4 hélices · 10 m · 5 km/h', portador: 'drone', motor: 'eletrico', motorPreset: 'mavic', ambiente: 'ceu', vKmh: 5, lateral: 0, altitude: 10, solo: 'grama', pedal: 0.5, x0: 15 },
 ];

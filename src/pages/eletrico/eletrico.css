@@ -1,0 +1,27 @@
+/* Página do Elétrico: mostradores à esquerda, espectro e espectrograma à direita, painel ao lado. */
+.eletrico .palco {
+  grid-area: cluster; min-height: 0;
+  display: grid; gap: 12px;
+  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: "inst graf" "dica dica";
+}
+.instrumentos { grid-area: inst; align-content: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); overflow: auto; }
+.instrumentos .ro-row { grid-template-columns: 86px minmax(0, 1fr); }
+.instrumentos .ro-row.grande .v { font: 600 22px/1.1 var(--f-mono); color: var(--gold); }
+.eletrico .graficos { grid-area: graf; display: grid; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; min-height: 420px; }
+.eletrico .graficos figure { margin: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 4px; min-height: 0; }
+.eletrico .graficos figcaption { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.eletrico .graficos canvas { width: 100%; height: 100%; display: block; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); }
+.eletrico .hints { grid-area: dica; margin: 0; }
+.teclado { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 2px; margin-top: 10px; }
+.teclado[hidden] { display: none; }
+.tecla { padding: 18px 0 4px; border: 1px solid var(--line); border-radius: 0 0 4px 4px; background: #e9e4d8; color: #20242b; font: 600 9.5px var(--f-mono); text-align: center; writing-mode: vertical-rl; transform: rotate(180deg); }
+.tecla.patamar { background: var(--raise); color: var(--muted); }
+.tecla.acesa { background: var(--gold); color: #000; border-color: var(--gold); box-shadow: 0 0 8px color-mix(in srgb, var(--gold) 60%, transparent); }
+.avancado h2 .chip { font: inherit; letter-spacing: inherit; text-transform: inherit; }
+.nota-aprox { margin: 6px 0 0; font-size: 11px; color: var(--muted); }
+
+@media (max-width: 1100px) {
+  .eletrico .palco { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 420px auto; grid-template-areas: "inst" "graf" "dica"; }
+}

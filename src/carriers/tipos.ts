@@ -35,8 +35,12 @@ export interface MotorLegado extends Motor {
 
 // ---------------------------------------------------------------- 1.4 Portador → Cena
 
-/** (`aviao`: extensão, o avião a jato em passagem da tabela de comando de 1.6) */
-export type TipoPortador = 'carro' | 'helice' | 'rotor' | 'gerador' | 'locomotiva' | 'trem' | 'aviao' | 'nenhum';
+/**
+ * (`aviao`: extensão, o avião a jato em passagem da tabela de comando de 1.6)
+ * (`drone`: extensão do Elétrico, ELETRICO.md 4.3: o multirrotor, carriers/multirrotor.ts)
+ */
+export type TipoPortador = 'carro' | 'helice' | 'rotor' | 'gerador' | 'locomotiva' | 'trem' | 'aviao' | 'nenhum'
+  | 'drone';
 
 export interface Segmento {           // um vagão, uma carroceria, uma fuselagem
   comprimento: number;                // m, do corpo (sem o vão)

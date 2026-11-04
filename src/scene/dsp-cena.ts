@@ -32,6 +32,9 @@ import { MotorTurbina } from '../engines/turbina/motor';
 import { MotorRadial } from '../engines/radial/motor';
 import { MotorRotativo } from '../engines/rotativo/motor';
 import type { Motor } from '../carriers/tipos';
+// Elétrico (etapa 6): motor, carro elétrico, trem com motor, bancada e drone
+import { MotorEletrico } from '../engines/eletrico/motor';
+import { montarMotorEletrico, montarPortadorEletrico } from '../engines/eletrico/portador';
 
 /** monta o motor de uma mensagem `portador` (fora do laço: aloca) */
 export function montarMotor(m: { familia: string; cfg: Record<string, any> } | undefined, fs: number): Motor | null {
@@ -41,12 +44,15 @@ export function montarMotor(m: { familia: string; cfg: Record<string, any> } | u
   if (m.familia === 'turboelice' || m.familia === 'turbina') { const x = new MotorTurbina(fs); x.configurar(m.cfg, fs); return x; }
   if (m.familia === 'radial') { const x = new MotorRadial(fs); x.configurar(m.cfg, fs); return x; }
   if (m.familia === 'rotativo') { const x = new MotorRotativo(fs); x.configurar(m.cfg, fs); return x; }
+  if (m.familia === 'eletrico') return montarMotorEletrico(m.cfg as never, fs);
   return null;
 }
 
 /** portador com motor de uma mensagem `portador` (a página monta o mesmo na thread principal, para a geometria) */
 export function montarPortadorComMotor(tipo: string, config: Record<string, any> | undefined, motor: Motor | null, fs: number): Portador | null {
   const c = config || {};
+  // elétrico: o portador vem do preset (carro elétrico, trólebus, trem, bancada, drone)
+  if (motor instanceof MotorEletrico) return montarPortadorEletrico(motor.cfg, fs, c, motor);
   let p: Portador | null = null;
   if (tipo === 'carro') p = new CarroLegado();
   else if (tipo === 'helice') p = new Helice(fs, c);
@@ -98,7 +104,9 @@ export class CenaDSP implements DSPDeAudio {
       if (m.tipo === 'trem') {
         const ladoOuvinte = (this.traj.sentido === 1 ? -1 : 1) as 1 | -1;
         const vf = this.portador ? this.portador.cinematica.v : null;
-        this.montar(new Trem(this.fs, { ladoOuvinte, ...(m.config || {}) }));
+        const motor = montarMotor(m.motor, this.fs);
+        this.montar(motor ? montarPortadorComMotor('trem', { ladoOuvinte, ...(m.config || {}) }, motor, this.fs)! : new Trem(this.fs, { ladoOuvinte, ...(m.config || {}) }));
+        if (motor) this.portador!.comandar({ pedal: 0, ignicao: true, ...(m.comando || {}) });
         if (vf != null) this.portador!.comandar({ pedal: 0, velocidadeFixa: vf });
       } else if (m.tipo === 'rotor' && !m.motor) {
         // helicóptero sem motor (compatibilidade "nenhum × rotor"): Nr imposto, coletivo pelo pedal

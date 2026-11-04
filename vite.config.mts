@@ -26,6 +26,7 @@ export default defineConfig({
         diesel: resolve(raiz, 'diesel.html'),
         radial: resolve(raiz, 'radial.html'),
         rotativo: resolve(raiz, 'rotativo.html'),
+        eletrico: resolve(raiz, 'eletrico.html'),
       },
     },
   },
