@@ -20,6 +20,7 @@ export default defineConfig({
         menu: resolve(raiz, 'index.html'),
         ronco: resolve(raiz, 'ronco.html'),
         turbina: resolve(raiz, 'turbina.html'),
+        diesel: resolve(raiz, 'diesel.html'),
       },
     },
   },

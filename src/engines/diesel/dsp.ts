@@ -42,7 +42,7 @@ export class DieselDSP extends EngineDSP {
   declare manual: any; declare portador: any; declare notch: any; declare degrau: any; declare cargaBancada: any; declare rpmAlvoPainel: any; declare rpmAlvo: any;
   declare Pcarga: any; declare Tcarga: any; declare Jcarga: any; declare regCarga: any; declare fRede: any; declare gerCfg: any; declare locCfg: any;
   declare dinamico: any; declare ptBuf: any; declare ptUlt: any; declare ptI: any; declare telN: any; declare classe: any; declare boostAlvo: any; declare partida: any;
-  declare aquec: any; declare estadoAnt: any; declare lentaFixa: any; declare vF: any; declare vAmp: any; declare vDec: any; declare vEnv: any; declare fundoF: any; declare fundoAmp: any; declare fundoM: any; declare pumpAmp: any; declare oilAmp: any;
+  declare govBancada: any; declare boostD: any; declare aquec: any; declare estadoAnt: any; declare lentaFixa: any; declare vF: any; declare vAmp: any; declare vDec: any; declare vEnv: any; declare fundoF: any; declare fundoAmp: any; declare fundoM: any; declare pumpAmp: any; declare oilAmp: any;
   declare wBuf: any; declare gwI: any; declare wSoma: any; declare wK: any; declare wSomaK: any; declare boostFixo: any; declare queimasBoas: any; declare cicloEv: any; declare lentaBaixa: any; declare kIdi: any; declare kPre: any;
 
   constructor(fs: number) {
@@ -51,7 +51,7 @@ export class DieselDSP extends EngineDSP {
     // os ramos cc do laço do EngineDSP chamam estes métodos (propriedades da instância: o EngineDSP só os declara)
     this.ccInjecao = this.injetar; this.ccValvulas = this.valvulas; this.ccQueima = this.queimar; this.ccEscape = this.escapar;
     this.ccAdmissao = this.admitir; this.ccMecanica = this.mecanica; this.ccTurbo = this.turboSom;
-    this.fmepK = 1.6; this.pmeCarga = 0; this.rpmPartida = 330; this.tParede = 430;
+    this.fmepK = 1; this.pmeCarga = 0; this.rpmPartida = 330; this.tParede = 430;
     this.fuelCmd = 0; this.gI = 0.1; this.gX = 0; this.gV = 0; this.sobre = false; this.sonda = false; this.combExterno = null; this.cargaExterna = null;
     this.knockSrc = 0; this.kEnv = 0; this.kPk = 0; this.refKnock = 0; this.injEnv = 0; this.pumpEnv = 0; this.phPump = 0; this.phRot = 0;
     this.tw = 0; this.nTurbo = 0; this.phTT = 0; this.tjit = 0; this.mExM = 1e-6; this.wgAmt = 0; this.boostR = 0;
@@ -86,6 +86,7 @@ export class DieselDSP extends EngineDSP {
     if (m.manual !== undefined) this.manual = clamp(m.manual, 0, 1);
     if (m.fRede !== undefined) this.fRede = m.fRede;
     if (m.governador !== undefined) this.gov = m.governador;
+    if (m.govBancada !== undefined) this.govBancada = m.govBancada;
     if (m.droop !== undefined) this.droop = m.droop;
     // TODO(integração carriers/): ComandoMotor.combustivel do governador do portador (gerador, locomotiva, rotor)
     if (m.combustivel !== undefined) this.combExterno = m.combustivel === null ? null : clamp(m.combustivel, 0, 1);
@@ -140,7 +141,7 @@ export class DieselDSP extends EngineDSP {
 
   freshStart() {
     super.freshStart();
-    this.fuelCmd = 0; this.gI = this.fuelLenta; this.gX = 0; this.gV = 0; this.sobre = false; this.tw = 0; this.boostR = 0; this.pBack = 0;
+    this.fuelCmd = 0; this.gI = this.fuelLenta; this.gX = 0; this.gV = 0; this.sobre = false; this.tw = 0; this.boostR = 0; this.boostD = 0; this.pBack = 0;
     this.Pcarga = 0; this.regCarga = 1; this.tEsc = this.ambientT;
   }
 
@@ -184,7 +185,9 @@ export class DieselDSP extends EngineDSP {
     this.limiteFumaca = cfg.limiteFumaca || 1.25;
     this.injTipo = cfg.injecao || 'common-rail'; this.inj = INJECAO[this.injTipo] || INJECAO['common-rail'];
     // vazão do injetor (mg/ms → kg/ms): common-rail q_max 40 mg/ms no 1GD, escalado pelo combustível máximo
-    this.qInj = 40e-6 * this.mfMax / 81e-6 * (this.idi ? 0.6 : 1);
+    // (escalado para a injeção de plena carga durar ~32° na rotação de potência: 1GD 81 mg em 36° a 3000 rpm; nos
+    // motores grandes e lentos a mesma vazão por mg dava 11° no EMD a 904 rpm, quase tudo pré-misturado)
+    this.qInj = (this.mfMax * 0.006 * this.rpmNom) / 32 / (this.idi ? 0.6 : 1) * 1;
     this.kPre = this.piloto ? 0.45 : this.idi ? 0.6 : 1;
     this.advFixo = cfg.avanco;
     this.gov = cfg.governador || 'min-max';
@@ -699,7 +702,8 @@ export class DieselDSP extends EngineDSP {
     else if (this.state === 'crank') f = this.fuelPartida;
     else if (this.state !== 'run') f = 0;
     else {
-      const gov = this.portador === 'carro' ? this.gov : 'isocrono';
+      // carro: o do preset (ou o escolhido no painel); gerador e locomotiva: isócrono; bancada: isócrono ou o escolhido
+      const gov = this.portador === 'carro' ? this.gov : this.portador === 'nenhum' ? (this.govBancada || 'isocrono') : 'isocrono';
       if (gov === 'todas-as-rotacoes') {
         // contrapesos contra a mola: proporcional puro em regime (droop), realizado com ganho alto lento e baixo rápido
         // (a "ligação" contrapesos-mola-cremalheira de 2ª ordem do DIESEL.md com ζ 0,25 deixava o laço instável na
@@ -710,7 +714,7 @@ export class DieselDSP extends EngineDSP {
         const dr = this.droop + (0.15 - this.droop) * (1 - smooth(0, 0.15, ped + this.manual));
         const e = (alvo - rpmG) / (alvo);
         const K0 = 1 / dr, Pa = P((alvo * TAU) / 60);
-        const Kh = Math.min(K0, 15 / Pa);
+        const Kh = Math.min(K0, 7 / Pa);
         this.gX += ((K0 - Kh) * e - this.gX) * (1 - Math.exp(-dtc / 0.5));
         this.gX = clamp(this.gX, -0.2, 1);
         f = clamp(Kh * e + this.gX, 0, 1);
@@ -722,16 +726,17 @@ export class DieselDSP extends EngineDSP {
         if (!this.rpmAlvo) this.rpmAlvo = Math.max(rpm, it);
         this.rpmAlvo += clamp(alvoBruto - this.rpmAlvo, -rampa * dtc, rampa * dtc);
         const e = (this.rpmAlvo - rpmG) / this.rpmAlvo;
-        const wc = this.portador === 'locomotiva' ? 2.5 : 8;
-        const Kp = wc / P((this.rpmAlvo * TAU) / 60), Ki = Kp * wc / (this.portador === 'locomotiva' && this.tempos === 2 && this.rpmAlvo < 300 ? 8 : 5);
+        // (gerador: ω_c 3,7 rad/s, o que dá o Kp 5 do DIESEL.md no QSX15; locomotiva 2,5; bancada 8)
+        const wc = this.portador === 'locomotiva' ? 2.5 : this.portador === 'gerador' ? 2.7 : 8;
+        const Kp = wc / P((this.rpmAlvo * TAU) / 60), Ki = Kp * wc / (this.portador === 'locomotiva' && this.tempos === 2 && this.rpmAlvo < 250 ? 6 : 4);
         this.gI = clamp(this.gI + Ki * e * dtc, 0, 1);
         f = clamp(Kp * e + this.gI, 0, 1);
       } else {
         // min-max: pedal manda combustível; PI de lenta isócrono; governador de máxima com rampa de 120 rpm
         const e = (it - rpmG) / it;
         const ativo = ped < 0.05 || rpmG < 1.05 * it;
-        const Kp = 10 / P((it * TAU) / 60), Ki = Kp * 10 / 4;
-        if (ativo && rpmG < 1.3 * it) this.gI = clamp(this.gI + Ki * e * dtc, 0, 0.35);
+        const Kp = 9 / P((it * TAU) / 60), Ki = Kp * 9 / 2.5;
+        if (ativo && rpmG < 1.3 * it) this.gI = clamp(this.gI + Ki * e * dtc, 0, 0.6);
         const fIdle = ativo ? clamp(Kp * e + this.gI, 0, 1) : 0;
         f = Math.max(ped, fIdle) * clamp((this.rpmMax + 60 - rpmG) / 120, 0, 1);
         this.rpmAlvo = it;
@@ -767,7 +772,10 @@ export class DieselDSP extends EngineDSP {
         const Pw = (this.degrau * this.gerCfg.kWe * 1000) / this.gerCfg.eta;
         this.Pcarga += (Pw - this.Pcarga) * (1 - Math.exp(-dtc / 0.1));
         const w0 = (this.alvoIsocrono() * TAU) / 60;
-        T = this.Pcarga / Math.max(w, 0.5 * w0);
+        // (regulador de tensão com queda por subfrequência, como nos AVR reais: abaixo de 97% da rotação a tensão cai com
+        // a frequência e a potência com o quadrado dela; sem isso um degrau de 100% com o turbo ainda vazio apagava o motor)
+        const rf = clamp(w / w0 / 0.97, 0, 1);
+        T = (this.Pcarga * rf * rf) / Math.max(w, 0.3 * w0);
       } else if (this.portador === 'locomotiva' && this.locCfg) {
         // gerador de tração: potência do notch com 1,5 s de atraso; o regulador de carga alivia se o motor não acompanha
         const n = this.dinamico ? 0 : this.notch;
@@ -775,7 +783,12 @@ export class DieselDSP extends EngineDSP {
         const pronto = this.rpmAvg > 0.97 * alvoRpm;
         if (this.fuelCmd > 0.97 && !pronto) this.regCarga = Math.max(0.3, this.regCarga - 0.3 * dtc);
         else this.regCarga = Math.min(1, this.regCarga + 0.2 * dtc);
-        const Pw = NOTCH_POT[n] * this.locCfg.kW * 1000 * this.regCarga;
+        // (o regulador de carga segue a rotação que o motor já alcançou: a potência pedida é a da tabela na rotação
+        // atual, nunca mais que a do notch; assim o motor sobe de giro antes de receber a carga toda)
+        const nr = this.locCfg.notchRpm, rr = this.rpmAvg;
+        let pRpm = 0;
+        for (let k = 1; k < 8; k++) if (rr >= nr[k]) pRpm = NOTCH_POT[k] + (NOTCH_POT[k + 1] - NOTCH_POT[k]) * clamp((rr - nr[k]) / Math.max(1, nr[k + 1] - nr[k]), 0, 1);
+        const Pw = Math.min(NOTCH_POT[n], Math.max(pRpm, NOTCH_POT[1])) * this.locCfg.kW * 1000 * this.regCarga;
         this.Pcarga += (Pw - this.Pcarga) * (1 - Math.exp(-dtc / 1.5));
         T = this.Pcarga / Math.max(w, (0.5 * alvoRpm * TAU) / 60);
       } else if (this.portador === 'nenhum') {
@@ -794,7 +807,10 @@ export class DieselDSP extends EngineDSP {
       const livre = 0.9 * this.idle, Tstall = 46 * this.dispL * (this.tempos === 2 ? 1.6 : 1);
       Tm -= Tstall * Math.max(0, 1 - this.rpmAvg / livre) / (this.omega > 0.5 ? 1 : 0.6);
     }
-    this.pmeCarga = (Tm * 4 * Math.PI) / (this.dispL * 1e-3);
+    // atrito do diesel: +0,57 bar sobre o do Ronco (×1,6 só no termo constante: 1,8 bar em lenta, como pede o DIESEL.md;
+    // o ×1,6 no polinômio inteiro dava 4,4 bar na rotação máxima e o motor em vazio precisava de 63% do combustível)
+    const pmeAtrito = 0.6 * 0.95e5 * (1 + 0.5 * (1 - this.warm));
+    this.pmeCarga = (Tm * 4 * Math.PI) / (this.dispL * 1e-3) + pmeAtrito;
   }
 
   // turbo diesel (5): rotação pela energia do escape (combustível × giro), τ do preset, VGT, wastegate, engrenado
@@ -822,7 +838,9 @@ export class DieselDSP extends EngineDSP {
     if (this.turboTipo === 'wastegate' && b > turboMax) { this.wgAmt += (clamp((b - turboMax) / (0.15 * turboMax + 1e-9), 0, 1) - this.wgAmt) * 0.05; b = turboMax; }
     else this.wgAmt *= 0.98;
     b = Math.min(b, turboMax * 1.05);
-    this.boost += (b + this.boostR - this.boost) * (1 - Math.exp(-dtc / 0.08));
+    // (estado próprio: o controle do Ronco também mexe em this.boost antes deste passo)
+    this.boostD = (this.boostD || 0) + (b + this.boostR - (this.boostD || 0)) * (1 - Math.exp(-dtc / 0.08));
+    this.boost = this.boostD;
   }
 
   // freio-motor (3.4): ativo com a chave ligada, sem pedal e acima de 1,3× a lenta
