@@ -23,6 +23,12 @@ export const BLOCO = 128;
 
 export interface OpcoesPassagem {
   portador?: 'trem' | 'teste';
+  /** portador já montado (com motor): substitui `portador` */
+  portadorPronto?: Portador;
+  /** chamado antes de cada bloco (comandos) */
+  antesBloco?: (t: number, p: Portador) => void;
+  /** trajetória completa (substitui d/altitude/comprimentoVia) */
+  traj?: Partial<Trajetoria>;
   trem?: Partial<ConfigTrem>;
   fontesTeste?: FonteTeste[];
   corpoTeste?: ConstructorParameters<typeof PortadorTeste>[2];
@@ -45,6 +51,8 @@ export interface OpcoesPassagem {
   medirCpu?: boolean;
   semSombra?: boolean;
   kPonte?: number;
+  /** °C do ar (velocidade do som da propagação) */
+  temperatura?: number;
 }
 
 export interface ResultadoPassagem {
@@ -61,17 +69,18 @@ export function renderPassagem(o: OpcoesPassagem): ResultadoPassagem {
   const amb = o.amb ?? ambientePassagem(o.ambiente ?? 'ceu');
   if (o.solo) amb.solo = { tipo: o.solo };
   if (o.semFundo) amb.fundo = { vento: 0, ventilacao: 0, murmurio: 0 };
-  const traj: Trajetoria = { tipo: 'reta', comprimento: o.comprimentoVia ?? 3000, raioCurva: 2000, lateral: o.d, altitude: o.altitude ?? 0, sentido: 1 };
+  const traj: Trajetoria = { tipo: 'reta', comprimento: o.comprimentoVia ?? 3000, raioCurva: 2000, lateral: o.d, altitude: o.altitude ?? 0, sentido: 1, ...(o.traj || {}) };
   const ouv: Ouvinte = { modo: 'fixo', pos: [0, 0, 1.6], gimbal: { az: 90, el: 0, r: 5, alvo: 'corpo' }, local: 'fora', binaural: true, ...(o.ouvinte || {}) };
-  const portador: Portador = o.portador === 'teste'
+  const portador: Portador = o.portadorPronto ?? (o.portador === 'teste'
     ? new PortadorTeste(SR, o.fontesTeste ?? [], o.corpoTeste)
-    : new Trem(SR, { ladoOuvinte: -1, ...(o.trem || {}) });
+    : new Trem(SR, { ladoOuvinte: -1, ...(o.trem || {}) }));
   const L = portador.corpo.comprimento;
-  const s0 = o.sCentro0 ?? -(o.x0 ?? 600) - (o.portador === 'teste' ? 0 : L / 2);
+  const s0 = o.sCentro0 ?? -(o.x0 ?? 600) - (o.portador === 'teste' || o.portadorPronto ? 0 : L / 2);
   (portador.cinematica as { s: number }).s = s0;
-  portador.comandar({ pedal: 0, velocidadeFixa: o.v });
+  portador.comandar(o.portadorPronto ? { ...(portador as any).cmd, velocidadeFixa: o.v } : { pedal: 0, velocidadeFixa: o.v });
   const cena = new CenaPassagem({ ur: o.ur, semSombra: o.semSombra, kPonte: o.kPonte });
   cena.configurar(amb, traj, ouv, SR);
+  if (o.temperatura != null) cena.definirTemperatura(o.temperatura);
   const nF = portador.fontes().length;
   const canais = Array.from({ length: nF }, () => new Float32Array(BLOCO));
   const n = Math.round(o.dur * SR);
@@ -81,6 +90,7 @@ export function renderPassagem(o: OpcoesPassagem): ResultadoPassagem {
   let cpu = 0n;
   for (let i = 0; i < n; i += BLOCO) {
     const t0 = o.medirCpu ? process.hrtime.bigint() : 0n;
+    o.antesBloco?.(i / SR, portador);
     portador.processar(canais, BLOCO, 1 / SR);
     cena.processar(portador, canais, bl, br, el, er, BLOCO);
     if (o.medirCpu) cpu += process.hrtime.bigint() - t0;

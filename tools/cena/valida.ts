@@ -2,7 +2,7 @@
 // CENA.md e sai com código ≠ 0 se algum alvo falhar sem desvio documentado.
 //
 //   npx tsx tools/cena/valida.ts [grupo…] [--json arquivo]
-//   grupos: propagador sombra vento ambientes ouvinte trem niveis cpu portadores legado (padrão: todos)
+//   grupos: propagador sombra vento ambientes ouvinte trem niveis cpu portadores legado motores niveis-motores (padrão: todos)
 import fs from 'node:fs';
 import * as M from './medidas';
 import type { Linha } from './medidas';
@@ -19,6 +19,8 @@ const GRUPOS: Record<string, () => Promise<Grupo>> = {
   cpu: async () => M.medirCpu,
   portadores: async () => (await import('./portadores')).medirPortadores,
   legado: async () => (await import('./legado')).compararLegado,
+  motores: async () => (await import('./motores')).medirMotores,
+  'niveis-motores': async () => (await import('./motores')).medirNiveisMotores,
 };
 
 async function main() {

@@ -86,8 +86,23 @@ export function medirLegado() {
     const terc = [400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500];
     const e = A.bandas([L, R], SR, Math.round((t0 - 0.25) * SR), Math.round((t0 + 0.25) * SR), terc.map((f) => [f / 1.122, f * 1.122] as const));
     const ref = e[0];
+    // a mesma curva sem o som de fundo do ambiente (o `ambSound` soma vento ao outL do legado: longe do carro ele
+    // levanta a curva uns dB; a Cena compara a passagem sem fundo, então compara com esta)
+    const curvaSemFundo: [number, number][] = [];
+    {
+      const d2 = new M.EngineDSP(SR);
+      d2.params.listener = 'road'; d2.params.env = 'open'; d2.params.roadDist = 6; d2.params.ambSound = false;
+      d2.setConfig(engineConfig(M.G, spec));
+      d2.message({ type: 'input', temp: { mode: 'fixed', value: 90 } }); d2.message({ type: 'input', ignition: true });
+      d2.state = 'run'; d2.lockOmega = true; d2.omega = w; d2.rpmAvg = 3000; d2.thrTarget = 0.5; d2.thr = 0.5;
+      d2.carX = -180;
+      const xs2: number[] = [];
+      const o2 = rodar(d2, 12, () => { d2.v = 30; d2.omega = w; }, () => xs2.push(d2.carX));
+      const lf2 = A.nivelF(o2.L, o2.R, SR, 1, false, 480);
+      for (let k = 4; k * 0.25 < 11.9; k++) { const t = k * 0.25, i = Math.min(xs2.length - 1, Math.round((t * SR) / B)); curvaSemFundo.push([r3(xs2[i]), r3(lf2[Math.round(t * 100)])]); }
+    }
     return { cenario: 'muscle, road 6 m, open, 3000 rpm travado, ponto morto, v = 30 m/s, carX −180 → +180 (curva de nível a partir de 1 s)', dopplerChegando: r3(fa), dopplerIndo: r3(fi), teoria: [r3(200 / (1 - 30 / 343)), r3(200 / (1 + 30 / 343))],
-      bandasAbeam: { faixas: FAIXAS, relDb: ban }, curvaNivelX: curva, terciosAbeam: { f: terc, relDb: e.map((v) => r3(10 * Math.log10(v / ref))) } };
+      bandasAbeam: { faixas: FAIXAS, relDb: ban }, curvaNivelX: curva, curvaNivelXSemFundo: curvaSemFundo, terciosAbeam: { f: terc, relDb: e.map((v) => r3(10 * Math.log10(v / ref))) } };
   })();
   // ------------------------------------------------------------ avião a 1500 m
   const aviao = (() => {
@@ -160,7 +175,7 @@ export function compararLegado(): Linha[] {
     const pe = parametrosEstrondo(1.5, 200, e.comprimento, e.forma);
     out.push({ passo: '5 #4', nome: 'Cena nova (supersonico.ts): instante do cone, Δp e T de Carlson', alvo: `${e.tCone} s ± 1 ms; Δp e T idênticos`, medido: `${tCone.toFixed(4)} s; Δp ${pe.dp.toFixed(3)} Pa, T ${pe.T.toFixed(3)} s`, ok: Math.abs(tCone - e.tCone) <= 0.001 && Math.abs(pe.dp - e.dpPa) < 0.001 && Math.abs(pe.T - e.duracaoS) < 0.001 });
   }
-  out.push({ passo: '5 #4', nome: 'Cena nova: bandas do avião a 1500 m (±2 dB) e do carro a 6 m (±1,5 dB) pela Cena', alvo: '±2 / ±1,5 dB por banda', medido: 'TODO: precisa dos adaptadores do Ronco e da Turbina (fontes separadas)', ok: false, desvio: 'Depende das migrações do Ronco e da Turbina (outras frentes): sem as fontes do EngineDSP/JetDSP separadas não há o que propagar. As referências estão gravadas no JSON para a comparação quando a Cena assumir esses casos.' });
+  // (as bandas do carro a 6 m e do avião a 1500 m pela Cena, com os motores adaptados, estão no grupo `motores`)
   return out;
 }
 
