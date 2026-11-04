@@ -95,7 +95,7 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     janelas: { admissao: 'lateral4', escape: 'periferico', apv: [3750] }, velas: 2, idle: 750, rpmMax: 8000, power: 206, torque: 314, J: 0.25,
     aspiration: 'turbo', boost: 0.7, turbo: { sequencial: true, boost: 0.7, trocaRpm: 4500 },
     escape: { tipo: 'serie', Lp: 0.3, Dp: 55, presilencioso: true, cat: true, downpipe: { L: 1.0, D: 76 }, saidas: [{ L: 3.4, D: 76, phi: 30 }] },
-    muffler: 'sport', pipeD: pol(76), gears: 5, ratios: [3.483, 2.015, 1.391, 1.0, 0.806], finalDrive: 4.1, mass: 1300, wheelR: 0.316, drag: 0.37,
+    muffler: 'sport', pipeD: pol(76), gears: 5, ratios: [3.483, 2.015, 1.391, 1.0, 0.761], finalDrive: 4.1, mass: 1300, wheelR: 0.316, drag: 0.37,
     overrun: 'burble', cat: true, limiter: 'fuel', limiterBand: 70, limiterHold: 0.07, portadores: carro },
   { id: 'rx7fc', family: 'mazda', name: 'Mazda RX-7 FC 13B-T', tag: 'S5 1989–91 · 2 rotores · turbo HT-18 · 200 hp',
     tipo: 'wankel', rotores: 2, geo: G['13B'], cilindradaCamara: 654, displacement: 1.308, cr: 9.0,
@@ -135,7 +135,7 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     janelas: { admissao: 'periferica', escape: 'periferico' }, velas: 3, idle: 1900, rpmMax: 9000, power: 522, torque: 608, J: 0.3,
     escape: { tipo: 'megafone', Lp: 0.9, Dp: 60, presilencioso: false, cat: false, megafone: { L: 0.5, Dboca: 120 }, saidas: [{ L: 0.5, D: 120, phi: 5 }] },
     muffler: 'straight', pipeD: pol(60), intake: 'sport', engine: 'mid', gears: 5, ratios: [2.8, 1.96, 1.53, 1.24, 1.04], finalDrive: 3.0, mass: 900, wheelR: 0.33, drag: 0.3,
-    overrun: 'popbang', cat: false, limiter: 'fuel', limiterBand: 60, limiterHold: 0.05, portadores: carro, vPassagem: 340, dispersao: 0.5, dispersaoRotor: 1 },
+    overrun: 'burble', cat: false, limiter: 'fuel', limiterBand: 60, limiterHold: 0.05, portadores: carro, vPassagem: 340, dispersao: 1, dispersaoRotor: 3 },
   // ---- Europeus (8–10)
   { id: 'ro80', family: 'europeus', name: 'NSU Ro80 KKM 612', tag: '1967–77 · 2 rotores · uma vela · semiautomático',
     tipo: 'wankel', rotores: 2, geo: G.KKM612, cilindradaCamara: 497.5, displacement: 0.995, cr: 9.0,
@@ -199,7 +199,7 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     janelas: { admissao: 'x', escape: 'x' }, velas: 1, idle: 2500, rpmMax: 7500, power: 19, J: 0.01,
     escape: { tipo: '2em1', Lp: 0.5, Dp: 35, presilencioso: false, cat: false, saidas: [{ L: 0.4, D: 35, phi: 90 }] },
     muffler: 'stock', pipeD: pol(35), gears: 0, overrun: 'cut', cat: false, limiter: 'fuel', limiterBand: 150,
-    nivelEscape: 118, portadores: ['gerador', 'nenhum'], gerador: { polos: 2, fRede: 100, kWe: 15, eta: 0.9, J: 0.03 },
+    nivelEscape: 118, portadores: ['gerador', 'nenhum'], gerador: { polos: 2, fRede: 100, kWe: 15, eta: 0.9, J: 0.08 },
     aproximacao: 'X-Engine diesel (HEHC) feito a centelha com CR 18: aproximação do ciclo SI' },
   // ---- Palhetas (17), aproximação
   { id: 'palhetas', family: 'palhetas', name: 'Motor pneumático de palhetas', tag: 'retífica / parafusadeira · motor de arranque a ar',

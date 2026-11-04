@@ -25,7 +25,7 @@ export type Janela = { abre: number; fecha: number; ra: number; rf: number; area
  * Admissão (tabela 1.3). `area` em boreEq² (13B: boreEq = 94,1 mm, boreEq² = 88,6 cm²): primária lateral 9 cm² = 0,10;
  * secundária +6 cm² = 0,068; auxiliar do Renesis +5 cm² = 0,056; street 11 cm² = 0,124; bridge 14 = 0,158; periférica 18 = 0,203.
  * Sachs (Norton, MidWest, Austro, UEL): periférica de admissão pequena, a conferir (IO ≈ 540, IC ≈ 870).
- * X-Engine: canais do rotor (IO 350; IC 615 num ciclo de 720°, 75° depois do PMI: o fechamento tardio dá a expansão
+ * X-Engine: canais do rotor (IO 350; IC 620 num ciclo de 720°, 80° depois do PMI: o fechamento tardio dá a expansão
  * prolongada do HEHC, expansão > compressão; o documento dá IC ≈ 560 pelas patentes, aproximação).
  */
 export const ADMISSAO: Record<TipoAdmissao, Janela & { sec?: number; aux?: number }> = {
@@ -35,7 +35,7 @@ export const ADMISSAO: Record<TipoAdmissao, Janela & { sec?: number; aux?: numbe
   bridge: { abre: 490, fecha: 880, ra: 0.15, rf: 0.2, area: 0.158 },
   periferica: { abre: 460, fecha: 890, ra: 0.1, rf: 0.2, area: 0.203 },
   sachs: { abre: 540, fecha: 870, ra: 0.12, rf: 0.2, area: 0.15 },
-  x: { abre: 350, fecha: 615, ra: 0.2, rf: 0.25, area: 0.14 },
+  x: { abre: 350, fecha: 620, ra: 0.2, rf: 0.25, area: 0.14 },
 };
 
 /**

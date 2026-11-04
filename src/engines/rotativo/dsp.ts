@@ -20,7 +20,7 @@ import { EngineDSP } from '../ronco/dsp';
 import { T_MAN } from '../ronco/constantes';
 import { ADMISSAO, ESCAPE, K_VELAS, T_EXREF_ROT, DENS_TETO_ROT, DENTES_ENGRENAGEM, type Janela } from './constantes';
 import { DoisPortasRotativo } from './escape';
-import type { EscapeRotativo } from './presets';
+import { PRESETS_ROTATIVO, type EscapeRotativo } from './presets';
 
 /** escape de referência da calibração (ROTATIVO.md 1.6): série com pré-silencioso, abafador esportivo, Ø 2,5" */
 export const ESCAPE_REF: EscapeRotativo = { tipo: 'serie', Lp: 0.3, Dp: 50, presilencioso: true, cat: true, downpipe: { L: 1.0, D: 63.5 }, saidas: [{ L: 3.0, D: 63.5, phi: 30 }] };
@@ -56,7 +56,7 @@ export class RotativoDSP extends EngineDSP {
   declare kVelas: number; declare trailingOn: boolean; declare velas: number; declare tipoRot: string; declare fHCextra: number; declare fHCcat: number;
   declare seq: boolean; declare trocaRpm: number; declare transT: number; declare seqW: number; declare boostBase: number; declare rpmPrevSeq: number; declare phT2: number;
   declare pEO: Float64Array; declare TEO: Float64Array; declare MjEO: Float64Array; declare nEstouros: number; declare estourosS: number; declare tEst: number; declare fumaca: number;
-  declare traco: Float32Array; declare iacLenta: number; declare magnetos: any; declare mistura: any; declare kBurn0: number; declare gastas: boolean; declare reator: boolean; declare rotFase: Float64Array; declare densMax: number;
+  declare traco: Float32Array; declare vedF: Biquad; declare vedLP: number; declare iacLenta: number; declare estourosTotal: number; declare magnetos: any; declare mistura: any; declare kBurn0: number; declare gastas: boolean; declare reator: boolean; declare rotFase: Float64Array; declare densMax: number;
 
   constructor(fs: number) {
     super(fs);
@@ -67,10 +67,10 @@ export class RotativoDSP extends EngineDSP {
     this.kBurn = 1.5 * 1.15; this.falhaRot = 0; this.prRot = 0.04; this.runRot = [];
     this.hcN = new RNG(0x4c0b); this.hcS = new Float64Array(4); this.hcBoca = 0; this.kBoca = 0.1; this.kQuente = 0.6; this.hcKh = 0; this.hcKl = 0; this.bocas = []; this.bocasF = []; this.kHC = 1; this.fHCatual = 0; this.ov = 0; this.rotores = 2;
     this.seq = false; this.trocaRpm = 4500; this.transT = -1; this.seqW = 0; this.boostBase = 0; this.rpmPrevSeq = 0; this.phT2 = 0;
-    this.traco = new Float32Array(64); this.iacLenta = 0; this.nEstouros = 0; this.estourosS = 0; this.tEst = 0; this.fumaca = 0; this.densMax = 0;
+    this.traco = new Float32Array(64); this.iacLenta = 0; this.estourosTotal = 0; this.nEstouros = 0; this.estourosS = 0; this.tEst = 0; this.fumaca = 0; this.densMax = 0;
     // (conta os estouros: o mecanismo é o do Ronco, que põe cada um em `pops`)
     const pops = this.pops;
-    pops.push = (...xs: any[]) => { this.nEstouros += xs.length; return Array.prototype.push.apply(pops, xs); };
+    pops.push = (...xs: any[]) => { this.nEstouros += xs.length; this.estourosTotal += xs.length; return Array.prototype.push.apply(pops, xs); };
   }
 
   // ------------------------------------------------------------------ configuração
@@ -79,13 +79,13 @@ export class RotativoDSP extends EngineDSP {
     const N = cfg.N;
     // dispersão por flanco (a do Ronco: ar ±7%, janela ±10%, energia ±5%, × 2,6 com carburador) escalada por `dispersao`:
     // as câmaras de um rotor dividem a mesma janela de admissão e o mesmo primário, então variam menos que cilindros
-    this.spread = cfg.dispersao ?? 1;
+    this.spread = cfg.dispersao ?? 2.5;
     this.hcQ = new Float64Array(N); this.pEO = new Float64Array(N); this.TEO = new Float64Array(N); this.MjEO = new Float64Array(N);
     super.setConfig(cfg, calibrate);
     if (cfg.iacLenta) this.iacLenta = cfg.iacLenta;
     // dispersão por rotor (1.2): além da do Ronco por flanco, ±4% na energia e ±6% na janela de escape de cada rotor (a
     // ordem 1 do eixo sai 8–15 dB abaixo da ignição, como nas gravações)
-    const sr = new RNG(0x707a + 131 * N), sp = (cfg.fuel === 'carb' ? 2.6 : 1) * (cfg.dispersaoRotor ?? 1.5);
+    const sr = new RNG(0x707a + 131 * N), sp = (cfg.fuel === 'carb' ? 2.6 : 1) * (cfg.dispersaoRotor ?? 3);
     const fq = Array.from({ length: this.rotores }, () => 1 + 0.04 * sp * sr.bi()), fe = Array.from({ length: this.rotores }, () => 1 + 0.06 * sp * sr.bi());
     for (let c = 0; c < N; c++) { this.cylQ[c] *= fq[cfg.bank[c]]; this.cylEx[c] *= fe[cfg.bank[c]]; }
   }
@@ -120,6 +120,10 @@ export class RotativoDSP extends EngineDSP {
     this.kBurn = this.kBurn0; // (o controle soma o fator do vácuo)
     // o Wankel respira como um 4 tempos do dobro da cilindrada nominal (cada rotor admite uma câmara por volta)
     if (!x) { this.Athr *= 1.8; this.Vman *= 1.5; }
+    // (X-Engine: o fechamento tardio da admissão devolve parte da carga ao coletor; a borboleta passa mais ar que a câmara
+    // guarda. Aviação: a hélice de passo fixo e o rotor pesam na lenta, e o circuito de lenta do carburador é maior)
+    if (x) this.Athr *= 1.6;
+    if (cfg.aviation) this.Athr *= cfg.helice?.passoFixo ? 3 : 1.5;
     if (cfg.torque) this.Tmax = Math.max(this.Tmax, cfg.torque);
     // atrito: o Ronco faz T = pme_atrito·V/(4π) com V = o volume varrido em 720°; no Wankel cada rotor queima uma câmara
     // por volta, então em 720° varre 2·rotores·V_cam = 2× a cilindrada nominal da Mazda (vedações de ápice e laterais,
@@ -135,11 +139,11 @@ export class RotativoDSP extends EngineDSP {
     // variação explosão a explosão (a dispersão do Ronco, `varScale`): a câmara alongada, a chama que não volta para o lado
     // da vela trailing e o apagamento nas vedações fazem cada queima sair mais diferente que num cilindro (CVciclo 0,20–0,25
     // na lenta da gravação do RX-7, contra 0,07 com a dispersão do pistão)
-    this.varScale = cfg.variacao ?? 3;
+    this.varScale = cfg.variacao ?? 3.5;
     this.fHCcat = this.hasCat ? 0.6 : 1;
     // turbo sequencial (2.3)
     this.seq = !!cfg.turbo?.sequencial && this.turbo; this.trocaRpm = cfg.turbo?.trocaRpm || 4500;
-    this.kHC = cfg.kHC ?? 0.7; this.kBoca = cfg.kBoca ?? 0.7; this.kQuente = cfg.kQuente ?? 0.2;
+    this.kHC = cfg.kHC ?? 0.85; this.kBoca = cfg.kBoca ?? 0.7; this.kQuente = cfg.kQuente ?? 0.2;
     // jato na abertura da janela (o `turb` do Ronco, M³·vazão): a aresta do alojamento descoberta pelo ápice solta um jato
     // sônico desde o primeiro grau, em vez da lâmina anular da válvula de prato (0,05 no Ronco)
     this.valveNoise = cfg.kJato ?? 0.05;
@@ -148,7 +152,13 @@ export class RotativoDSP extends EngineDSP {
   // ------------------------------------------------------------------ ganchos do laço
   /** gancho 7: a fração fHC do calor não sai na câmara; fica guardada para a pós-queima no escape */
   queimaRot(c: number, idleness: number, slowB: number) {
-    let f = (0.08 * idleness * slowB) / 2.4 + 0.015;
+    // (o documento escreve 0,08·idleness·slowB/2,4 + 0,015: lenta ≈ 8%, plena carga ≈ 1,5%. Aqui o termo de lenta segue o
+    // vácuo do coletor, não a distância à rotação de lenta: o HC do Wankel vem do apagamento da chama nas vedações e nos
+    // cantos da câmara, que é o que piora com a carga leve, em qualquer rotação. A lenta e a plena carga ficam iguais; a
+    // carga leve em giro alto (o RX-8 a 5 000 rpm em ponto morto) ganha a pós-queima que a gravação mostra no agudo)
+    const leve = clamp((0.85 - this.pMan / P0) / 0.55, 0, 1);
+    let f = (0.08 * leve * slowB) / 2.4 + 0.015;
+    void idleness;
     if (this.ov > 90) f *= 2;
     f = f * this.fHCcat + this.fHCextra + ((this.runT || 0) < 20 ? 0.01 : 0);
     f = clamp(f, 0, 0.3);
@@ -233,6 +243,10 @@ export class RotativoDSP extends EngineDSP {
   mecanicaRot(omega: number, rf: number) {
     const ph = this.phW;
     let m = (Math.sin(DENTES_ENGRENAGEM * ph) + 0.25 * Math.sin(2 * DENTES_ENGRENAGEM * ph) + 0.11 * Math.sin(3 * DENTES_ENGRENAGEM * ph)) * 0.0012 * rf * rf;
+    // vedações de ápice e laterais raspando na carcaça: chiado granulado contínuo (2–6 kHz), que funde os tiques das bordas
+    // das janelas (o Wankel em lenta não tem os cliques contáveis do trem de válvulas)
+    this.vedLP += 0.5 * (this.hcN.bi() - this.vedLP);
+    m += this.vedF.run(this.vedLP) * 0.006 * (0.25 + rf) * (this.gastas ? 1.8 : 1);
     if (this.seq && this.seqW > 0.05) {
       // (o secundário gira a ~0,8 da rotação do primário: segunda linha de apito; ×2 porque a mecânica pesa metade do turbo de fora)
       const f = 0.8 * (500 + 6200 * this.turboW);
@@ -265,7 +279,7 @@ export class RotativoDSP extends EngineDSP {
     const vac = clamp((0.6 - this.pMan / P0) / 0.4, 0, 1);
     // queima em °e: no vácuo da lenta o rotativo carrega mais gás queimado de um ciclo para o outro (o rebaixo do flanco
     // e a câmara que passa direto do escape à admissão): a chama anda mais devagar que no pistão com o mesmo vácuo
-    this.kBurn = this.kBurn0 * (1 + 1.3 * vac);
+    this.kBurn = this.kBurn0 * (1 + 1.65 * vac);
     const lento = clamp(1 - (rpm - this.idle) / 1500, 0, 1);
     const ovk = clamp((this.ov - 40) / 90, 0, 1.2);
     const queda = clamp(this.idle / Math.max(rpm, 300), 0.5, 2.5);
@@ -273,12 +287,12 @@ export class RotativoDSP extends EngineDSP {
     // (e com o escape esfriando: o gás que volta à câmara pela sobreposição reacende menos a mistura nova; a parede do
     // coletor esquenta em ~4 s e esfria em ~20 s, então as falhas e a rotação se perseguem devagar: é a caça da lenta)
     const frio = 1 - smooth(this.cfg?.tCacaA ?? 530, this.cfg?.tCacaB ?? 600, this.exhT);
-    let f = ovk * (this.cfg?.falhaBase ?? 0.05) * (1 + 1.5 * vac) * lento * Math.pow(queda, kq) * (1 + (this.cfg?.kCaca ?? 2) * frio);
+    let f = ovk * (this.cfg?.falhaBase ?? 0.05) * (1 + 1.5 * vac) * lento * Math.pow(queda, kq) * (1 + (this.cfg?.kCaca ?? 2) * frio * this.warm);
     if (!this.trailingOn && this.velas >= 2) f += 0.02;
     if (this.gastas) f += 0.03 * (1 - this.warm);
     this.falhaRot = this.state === 'run' ? clamp(f, 0, 0.6) : 0;
     // estouro de uma câmara que falhou: a mistura crua chega ao escape quente (1.4)
-    this.prRot = Math.min(0.9, (this.ov > 90 ? 0.35 : 0.04 * (1 + Math.max(0, this.ov) / 60)) * (this.reator ? 0.5 : 1));
+    this.prRot = Math.min(0.9, (this.ov > 90 ? 0.7 : 0.04 * (1 + Math.max(0, this.ov) / 60)) * (this.reator ? 0.5 : 1));
     // turbo sequencial (2.3)
     if (this.seq) {
       const run = this.state === 'run';
@@ -435,13 +449,17 @@ export class RotativoDSP extends EngineDSP {
 
   buildFilters(cfg) {
     super.buildFilters(cfg);
+    this.vedF = new Biquad().bp(this.fs, 3500, 0.6); this.vedLP = 0;
     this.hcKh = onePole(this.fs, this.cfg?.hcFh ?? 400); this.hcKl = onePole(this.fs, this.cfg?.hcFl ?? 3000); this.hcS.fill(0);
   }
 
   // ------------------------------------------------------------------ sondas (1.6)
-  private sonda(cfg, rpm: number) {
-    const ref = { ...cfg, escape: { ...ESCAPE_REF, Lp: cfg.escape?.Lp ?? 0.3, Dp: cfg.escape?.Dp ?? 50 }, muffler: 'sport', pipeD: 2.5,
-      turbo: cfg.turbo ? { ...cfg.turbo, sequencial: false } : undefined, gain: undefined, powerModel: undefined, breakout: 'sealed', valve: 'none', reso: false, twoStep: false };
+  private sonda(cfg, rpm: number, proprio: boolean | 'fabrica' = false) {
+    const fab: any = proprio === 'fabrica' ? PRESETS_ROTATIVO.find((p) => p.id === cfg.id) : null;
+    const ref = fab ? { ...cfg, escape: fab.escape, muffler: fab.muffler ?? 'stock', turbo: fab.turbo, gain: undefined, powerModel: undefined, valve: 'none', reso: false, twoStep: false }
+      : proprio ? { ...cfg, gain: undefined, powerModel: undefined, valve: 'none', reso: false, twoStep: false }
+      : { ...cfg, escape: { ...ESCAPE_REF, Lp: cfg.escape?.Lp ?? 0.3, Dp: cfg.escape?.Dp ?? 50 }, muffler: 'sport', pipeD: 2.5,
+        turbo: cfg.turbo ? { ...cfg.turbo, sequencial: false } : undefined, gain: undefined, powerModel: undefined, breakout: 'sealed', valve: 'none', reso: false, twoStep: false };
     const t = new RotativoDSP(this.fs);
     t.setConfig(ref, false);
     t.state = 'run'; t.lockOmega = true; t.tempMode = 'fixed'; t.tempSet = 90; t.coolant = 90; t.runT = 100;
@@ -450,18 +468,31 @@ export class RotativoDSP extends EngineDSP {
     return t;
   }
 
+  /**
+   * Calibração da página (a do Ronco, 1.6): o ganho leva a plena carga a 55% de rpmMax, com o escape 'serie' de referência,
+   * ao alvo; assim o escape do preset (megafone, 2 em 1, pré-silencioso retirado) continua mudando o volume de verdade.
+   * O reforço da lenta é medido com o escape do PRÓPRIO preset (lenta e plena carga a 55% com ele): com as topologias tão
+   * diferentes dos rotativos, a razão lenta/carga da série de referência não vale para o megafone do 787B nem para o
+   * 2 em 1 de uma moto, e a lenta saía 4–10 dB fora dos 21 dB abaixo da carga.
+   */
   calibrate(cfg) {
-    const B = 256, L = new Float32Array(B), R = new Float32Array(B), fs = this.fs;
-    const t = this.sonda(cfg, this.redline * 0.55);
-    t.thrTarget = 1; t.thr = 1; t.turboW = 0.6; t.boost = cfg.boost * 0.3; t.maxBoost = cfg.boost * 0.4; t.params.master = 0.02;
-    let acc = 0, cnt = 0, pk = 0;
-    for (let i = 0; i < 0.5 * fs; i += B) {
-      t.process(L, R, B);
-      if (i > 0.25 * fs) for (let k = 0; k < B; k++) { acc += L[k] * L[k] + R[k] * R[k]; cnt += 2; pk = Math.max(pk, Math.abs(L[k]), Math.abs(R[k])); }
-    }
-    const rms = Math.sqrt(acc / Math.max(1, cnt)) / 0.01, target = 0.17;
-    const gWot = Math.min(target / Math.max(rms, 1e-6), 0.9 / Math.max(pk / 0.01, 1e-6));
-    const ti = this.sonda(cfg, this.idle);
+    const B = 256, L = new Float32Array(B), R = new Float32Array(B), fs = this.fs, target = 0.17;
+    const plena = (proprio: boolean | 'fabrica') => {
+      const t = this.sonda(cfg, this.redline * 0.55, proprio);
+      t.thrTarget = 1; t.thr = 1; t.turboW = 0.6; t.boost = cfg.boost * 0.3; t.maxBoost = cfg.boost * 0.4; t.params.master = 0.02;
+      let acc = 0, cnt = 0, pk = 0;
+      for (let i = 0; i < 0.5 * fs; i += B) {
+        t.process(L, R, B);
+        if (i > 0.25 * fs) for (let k = 0; k < B; k++) { acc += L[k] * L[k] + R[k] * R[k]; cnt += 2; pk = Math.max(pk, Math.abs(L[k]), Math.abs(R[k])); }
+      }
+      return { rms: Math.sqrt(acc / Math.max(1, cnt)) / 0.01, pk: pk / 0.01 };
+    };
+    // (o escape de FÁBRICA do preset: os presets saem equilibrados entre si, e o que o usuário muda no escape, como tirar o
+    // pré-silencioso, muda o volume de verdade em relação a ele; sem preset de fábrica, o escape 'serie' de referência)
+    const fab = PRESETS_ROTATIVO.some((p) => p.id === cfg.id) ? 'fabrica' : false;
+    const ref = plena(fab), prop = fab ? ref : plena(true);
+    const gWot = Math.min(target / Math.max(ref.rms, 1e-6), 0.9 / Math.max(ref.pk, 1e-6));
+    const ti = this.sonda(cfg, this.idle, fab || true);
     ti.runT = 60; ti.thrTarget = 0; ti.thr = 0; ti.params.master = 0.02; ti.dash = 0;
     let acc2 = 0, cnt2 = 0;
     for (let i = 0; i < 1.2 * fs; i += B) {
@@ -470,23 +501,26 @@ export class RotativoDSP extends EngineDSP {
       if (i > 0.8 * fs) for (let k = 0; k < B; k++) { acc2 += L[k] * L[k] + R[k] * R[k]; cnt2 += 2; }
     }
     const rmsIdle = Math.sqrt(acc2 / Math.max(1, cnt2)) / 0.01;
-    this.iacLenta = ti.iac; // (o ar de lenta em equilíbrio: o batente da borboleta das janelas de competição)
-    const gIdle = (target * 0.09) / Math.max(rmsIdle, 1e-6);
+    this.iacLenta = ti.iac; // (o ar de lenta em equilíbrio)
     const gain = clamp(gWot, 0.05, 40);
-    return { gain, idle: clamp(gIdle / gain, 1, 8) };
+    return { gain, idle: clamp((0.09 * prop.rms) / Math.max(rmsIdle, 1e-6), 1, 8) };
   }
 
   measurePower(cfg) {
     const B = 256, L = new Float32Array(B), R = new Float32Array(B), fs = this.fs;
-    const t = this.sonda({ ...cfg, limiter: 'none', power: undefined }, this.redline * 0.7);
+    // (com o escape do próprio preset: o megafone do 787B e os 2 em 1 da aviação entregam bem diferente da série de referência)
+    const t = this.sonda({ ...cfg, limiter: 'none', power: undefined }, this.redline * 0.7, true);
     t.thrTarget = 1; t.thr = 1; t.turboW = 1; t.boost = cfg.boost; t.maxBoost = cfg.boost; t.params.master = 0;
     let kw = 0, tq = 0, fr = 0;
     // (a ficha do Wankel é a potência perto da rotação máxima: 81–100% de rpmMax)
     for (const f of [0.7, 0.8, 0.9, 1.0]) {
       t.omega = (this.redline * f * TAU) / 60; t.rpmAvg = this.redline * f; t.tqMean = 0; t.frMean = 0;
-      for (let i = 0; i < 0.35 * fs; i += B) t.process(L, R, B);
-      const k = (t.tqMean * t.omega) / 1000;
-      if (k > kw) { kw = k; tq = t.tqMean; fr = t.frMean; }
+      // (média do torque nos últimos 0,3 s: o tqMean do Ronco é uma média de ~50 ms, que num monorrotor carburado pega poucas
+      // explosões e variava ±10% de uma sonda para a outra)
+      let sq = 0, sf = 0, n = 0;
+      for (let i = 0; i < 0.6 * fs; i += B) { t.process(L, R, B); if (i > 0.3 * fs) { sq += t.tqMean; sf += t.frMean; n++; } }
+      const tm = sq / n, k = (tm * t.omega) / 1000;
+      if (k > kw) { kw = k; tq = tm; fr = sf / n; }
     }
     return { kw: Math.max(kw, 1), tq: Math.max(tq, 1), fr: Math.max(fr, 0) };
   }
