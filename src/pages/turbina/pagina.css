@@ -1,0 +1,3 @@
+/* No legado a .app era filha direta do <body>; aqui ela fica dentro do #raiz do React, que
+   precisa da altura toda para o `height: 100%` da .app valer (grade de instrumentos + painel). */
+#raiz { height: 100%; }
