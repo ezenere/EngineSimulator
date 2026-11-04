@@ -47,3 +47,7 @@ Cada etapa termina com: código, presets, tabela de compatibilidade, testes pass
 - Arquivos de outra pessoa em paralelo não se tocam: a divisão de pastas por etapa está na tarefa. Precisou de mudança em `acoustics/` ou `ui/` que não é sua? Relate em vez de mudar.
 - Presets continuam arquivos de dados simples (TypeScript), um objeto por veículo, fáceis de editar à mão.
 - Relatórios: o que foi feito, o que foi medido (números), o que ficou de fora e por quê.
+
+## Recursos 3D
+
+Para a cena 3D (modo de testes e Passagem) podem ser usados modelos, malhas e texturas abertos, com licença CC0 ou equivalente (Poly Haven para texturas e HDRIs; Sketchfab/Blend Swap/Kenney só com CC0 ou CC-BY, com atribuição em `docs/CREDITOS.md`). Regras: guardar em `public/3d/` com um `LICENSES.md` ao lado (fonte, autor, licença, URL); orçamento de ~10 MB por página carregado sob demanda (glTF binário comprimido com Draco/meshopt, texturas de 1k em KTX2 ou JPEG); o que não existir em aberto (um vagão de trem-bala, um helicóptero específico) é feito em geometria simples parametrizada no three.js, com a mesma silhueta e dimensões reais. A cena nunca bloqueia o áudio: se o modelo não carregar, fica a caixa segmentada.
