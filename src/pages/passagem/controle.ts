@@ -29,6 +29,9 @@ import { configHelice, configRotor } from '../../engines/ronco/aviacao';
 import { PRESETS as PRESETS_RONCO, ACESSORIOS_PADRAO } from '../../engines/ronco/presets';
 import { PRESETS as PRESETS_DIESEL, PADRAO_DIESEL } from '../../engines/diesel/presets';
 import { PRESETS_TURBINA } from '../../engines/turbina/presets';
+// Elétrico (etapa 6)
+import { PRESETS_ELETRICO } from '../../engines/eletrico/presets';
+import { prepararMotorEletrico } from '../../engines/eletrico/motor';
 import {
   PRESETS_PASSAGEM, TREM_PAGINA_PADRAO, situacaoPortador, motoresProntos, presetsDoMotor, MOTOR_PADRAO,
   type IdAmbientePagina, type IdPortadorPagina, type PresetPassagem, type TremPagina,
@@ -75,6 +78,8 @@ export class ControlePassagem {
   marcha = 3;
   notch = 8;
   cargaFracao = 0.5;
+  /** (Elétrico) freio elétrico na passagem e partida parada (a velocidade vem do motor) */
+  freio = 0; partida = false;
   /** mensagem do motor para o worklet: o cfg calibrado aqui (Ronco e Diesel: ~1 s de sonda, guardado por preset) */
   private motorMsg: { familia: FamiliaMotor; cfg: Record<string, any> } | null = null;
   private cacheMotor = new Map<string, Record<string, any>>();
@@ -150,6 +155,15 @@ export class ControlePassagem {
       this.motorMsg = id ? { familia: fam, cfg: this.cfgMotor(fam, id, fs) } : null;
       p = montarPortadorComMotor(this.portador, this.configPortador(), montarMotor(this.motorMsg ?? undefined, fs), fs)!;
       if (p instanceof Rotor) this.rotorCfg = { R: p.cfg.R, Rc: p.cfg.Rc, B: p.cfg.B, posRotor: p.cfg.posRotor, posCauda: p.cfg.posCauda };
+    } else if (this.motor === 'eletrico') {
+      // trem com o motor elétrico (etapa 6): o mesmo que o worklet monta (montarPortadorComMotor), com as calibrações dele
+      this.trem.N = Math.min(this.trem.N, this.maxVagoes());
+      const id = this.motorPreset ?? MOTOR_PADRAO.eletrico?.trem ?? 'n700';
+      this.motorPreset = id;
+      this.motorMsg = { familia: 'eletrico', cfg: this.cfgMotor('eletrico', id, fs) };
+      const t = montarPortadorComMotor('trem', this.configTrem(), montarMotor(this.motorMsg, fs), fs) as Trem;
+      this.calibracao = t.calibracoes();
+      p = t;
     } else {
       this.trem.N = Math.min(this.trem.N, this.maxVagoes());
       const t = new Trem(fs, this.configTrem());
@@ -167,7 +181,7 @@ export class ControlePassagem {
     const a = this.audio; if (!a) return;
     if (this.fsSonda !== a.ctx.sampleRate) this.sondar(a.ctx.sampleRate);
     if (this.portador === 'rotor' && this.motor === 'nenhum') a.send({ type: 'portador', tipo: 'rotor' });
-    else if (this.portador === 'trem') a.send({ type: 'portador', tipo: 'trem', config: { ...this.configTrem(), calibracao: this.calibracao } });
+    else if (this.portador === 'trem') a.send({ type: 'portador', tipo: 'trem', config: { ...this.configTrem(), calibracao: this.calibracao }, ...(this.motorMsg ? { motor: this.motorMsg, comando: this.comandoMotor() } : {}) });
     else a.send({ type: 'portador', tipo: this.portador, config: this.configPortador(), motor: this.motorMsg, comando: this.comandoMotor() });
   }
 
@@ -179,6 +193,7 @@ export class ControlePassagem {
       if (fam === 'pistao') cfg = prepararMotorRonco({ ...ACESSORIOS_PADRAO, ...[...PRESETS_RONCO, ...PRESETS_AVIACAO].find((x) => x.id === id)! }, fs);
       else if (fam === 'radial') cfg = prepararMotorRadial({ ...PADRAO_RADIAL, ...PRESETS_RADIAL.find((x) => x.id === id)! }, fs);
       else if (fam === 'diesel') cfg = prepararMotorDiesel({ ...PADRAO_DIESEL, ...PRESETS_DIESEL.find((x) => x.id === id)! }, fs, this.portador as UsoDiesel);
+      else if (fam === 'eletrico') cfg = prepararMotorEletrico(PRESETS_ELETRICO.find((x) => x.id === id)!, fs);
       else cfg = { ...PRESETS_TURBINA.find((x) => x.id === id)! };
       this.cacheMotor.set(chave, cfg);
     }
@@ -202,6 +217,8 @@ export class ControlePassagem {
     if (this.portador === 'locomotiva') return { pedal: 0, notch: this.notch as 0 };
     if (this.portador === 'gerador') return { pedal: 0, cargaFracao: this.cargaFracao };
     if (this.portador === 'rotor') return { pedal: this.coletivo };
+    // (Elétrico) freio elétrico da passagem (o metrô chegando)
+    if (this.motor === 'eletrico') return { pedal: this.pedal, freio: this.freio, ignicao: true };
     return { pedal: this.pedal };
   }
   /** família do motor (no carro: pistão ou diesel) */
@@ -222,6 +239,7 @@ export class ControlePassagem {
   setMarcha(n: number) { this.marcha = n; this.mandarComando(); }
   setNotch(n: number) { this.notch = n; this.mandarComando(); }
   setCarga(f: number) { this.cargaFracao = f; this.mandarComando(); }
+  setFreio(f: number) { this.freio = f; this.mandarComando(); }
 
   /** mudança estrutural no trem (N, passo, vão…): monta de novo e manda */
   setTrem(patch: Partial<TremPagina>) {
@@ -238,6 +256,7 @@ export class ControlePassagem {
     this.portador = p;
     this.motor = motoresProntos(p)[0] ?? 'nenhum';
     this.motorPreset = MOTOR_PADRAO[this.motor]?.[p] ?? null;
+    this.freio = 0; this.partida = false;
     const d = PADROES[p];
     this.traj = { ...d.traj }; this.vKmh = d.vKmh; this.ambiente = d.ambiente; this.x0 = d.x0; this.solo = soloPadrao(p);
     this.via.configurar(this.traj);
@@ -363,7 +382,8 @@ export class ControlePassagem {
     this.audio?.send({ type: 'params', posicao: s });
   }
   private mandarComando() {
-    this.audio?.send({ type: 'comando', ...this.comandoMotor(), velocidadeFixa: this.andando ? this.vKmh / 3.6 : 0 });
+    // (Elétrico) partida: andando, a velocidade é a do motor (o Taurus arrancando); parado, presa em 0
+    this.audio?.send({ type: 'comando', ...this.comandoMotor(), velocidadeFixa: this.andando ? (this.partida ? null : this.vKmh / 3.6) : 0 });
   }
 
   /** s e v estimados agora (telemetria interpolada linearmente; antes dela, a posição mandada) */
@@ -442,6 +462,7 @@ export class ControlePassagem {
     if (p.marcha != null) this.marcha = p.marcha;
     if (p.notch != null) this.notch = p.notch;
     if (p.cargaFracao != null) this.cargaFracao = p.cargaFracao;
+    this.freio = p.freio ?? 0; this.partida = !!p.partida;
     const d = PADROES[p.portador];
     // (presets de passagem andam numa reta: o corpo vem de longe, passa e some)
     this.traj = { ...d.traj, tipo: p.portador === 'trem' || p.portador === 'rotor' ? d.traj.tipo : 'reta', comprimento: p.portador === 'carro' ? 800 : p.portador === 'locomotiva' ? 2000 : d.traj.comprimento, lateral: p.lateral, altitude: p.altitude ?? d.traj.altitude };
@@ -537,7 +558,7 @@ export class ControlePassagem {
 
 /** solo padrão por portador (null = o do ambiente): asfalto na rua, grama sob o que voa, brita na via, concreto na bancada */
 export function soloPadrao(p: IdPortadorPagina): Solo['tipo'] | null {
-  return p === 'carro' ? 'asfalto' : p === 'rotor' || p === 'helice' || p === 'aviao' ? 'grama' : p === 'gerador' ? 'concreto' : p === 'locomotiva' ? 'brita' : null;
+  return p === 'carro' ? 'asfalto' : p === 'rotor' || p === 'helice' || p === 'aviao' || p === 'drone' ? 'grama' : p === 'gerador' ? 'concreto' : p === 'locomotiva' ? 'brita' : null;
 }
 
 export function clonarOuvinte(o: Ouvinte): Ouvinte { return { ...o, pos: [...o.pos] as unknown as Vec3, gimbal: { ...o.gimbal } }; }

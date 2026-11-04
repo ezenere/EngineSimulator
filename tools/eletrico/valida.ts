@@ -3,7 +3,7 @@
 // física (as gravações são comprimidas).
 //
 //   npx tsx tools/eletrico/valida.ts [grupos...]     (linhas maquina magneticas inversor modos mecanica avas niveis
-//                                                     portadores gravacoes cena cpu; sem grupo, todos)
+//                                                     portadores gravacoes cena passagem cpu; sem grupo, todos)
 // Sai ≠ 0 se houver falha sem desvio documentado (os desvios aparecem como "desv" e estão no TECNICO → Elétrico).
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -710,6 +710,30 @@ function gCena() {
   }
 }
 
+// os presets elétricos da Passagem pela mensagem `portador` do CenaDSP (o caminho da página)
+function gPassagem() {
+  const casos: [string, string, string, Record<string, unknown>, number | null][] = [
+    ['Tesla na rua', 'carro', 'model3', { pedal: 0.15 }, 30 / 3.6],
+    ['Taurus partindo do-re-mi', 'trem', 'taurus', { pedal: 0.63 }, null],
+    ['Metrô chegando na estação', 'trem', 'metropolis', { pedal: 0, freio: 0.6 }, 35 / 3.6],
+    ['Trem-bala N700 no túnel', 'trem', 'n700', { pedal: 0.8 }, 150 / 3.6],
+    ['Drone pairando', 'drone', 'mavic', { pedal: 0.5 }, 5 / 3.6],
+  ];
+  for (const [nome, tipo, id, cmd, v] of casos) {
+    const d = new CenaDSP(SR); d.cru = true;
+    d.message({ type: 'cena', amb: ambientePassagem(tipo === 'trem' && id === 'n700' ? 'tunel' : 'ceu'), traj: { tipo: 'reta', comprimento: 3000, raioCurva: 2000, lateral: 4, altitude: tipo === 'drone' ? 10 : 0, sentido: 1 }, ouv: { modo: 'fixo', pos: [0, 0, 1.6], gimbal: { az: 90, el: 0, r: 5, alvo: 'corpo' }, local: 'fora', binaural: true } });
+    d.message({ type: 'portador', tipo, config: tipo === 'trem' ? { N: 10, faces: 'duas' } : {}, motor: { familia: 'eletrico', cfg: cfg(id) }, comando: cmd });
+    d.message({ type: 'params', posicao: -40 });
+    d.message({ type: 'comando', ...cmd, velocidadeFixa: v });
+    const B = 128, l = new Float32Array(B), r = new Float32Array(B), sl = new Float32Array(B), sr = new Float32Array(B);
+    let nan = 0, e = 0;
+    for (let k = 0; k < 4 * SR; k += B) { d.process(l, r, B, sl, sr); for (let j = 0; j < B; j++) { if (!Number.isFinite(l[j])) nan++; e += l[j] * l[j]; } }
+    const t: any = d.portador!.telemetria();
+    const nivel = 10 * Math.log10((e / (4 * SR)) * PA_FS * PA_FS / 4e-10);
+    caso(`Passagem: "${nome}" monta pela mensagem e soa`, 'sem NaN, motor ligado', `${d.portador!.fontes().length} fontes, ${f1(nivel)} dB, ${f1(t.rpm ?? 0, 0)} rpm, v ${f1(d.portador!.cinematica.v * 3.6)} km/h, modo ${t.modo}`, nan === 0 && (t.rpm ?? 0) > 0 && nivel > 20);
+  }
+}
+
 // =============================================================================================== 12. CPU
 function gCpu() {
   {
@@ -737,7 +761,7 @@ function gCpu() {
 }
 
 // ---------------------------------------------------------------------------------------------- execução
-const GRUPOS: Record<string, () => void> = { linhas: gLinhas, maquina: gMaquina, magneticas: gMagneticas, inversor: gInversor, modos: gModos, mecanica: gMecanica, avas: gAvas, niveis: gNiveis, portadores: gPortadores, gravacoes: gGravacoes, cena: gCena, cpu: gCpu };
+const GRUPOS: Record<string, () => void> = { linhas: gLinhas, maquina: gMaquina, magneticas: gMagneticas, inversor: gInversor, modos: gModos, mecanica: gMecanica, avas: gAvas, niveis: gNiveis, portadores: gPortadores, gravacoes: gGravacoes, cena: gCena, passagem: gPassagem, cpu: gCpu };
 const pedidos = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const rodar = pedidos.length ? pedidos : Object.keys(GRUPOS);
 for (const g of rodar) {

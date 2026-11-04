@@ -41,12 +41,13 @@ function Conteudo({ c }: { c: ControlePassagem }) {
             opcoes={COMPAT[c.portador].map((f) => ({ valor: f, rotulo: NOME_MOTOR[f], desabilitado: !prontos.includes(f),
               titulo: prontos.includes(f) ? '' : MOTORES_PRONTOS.includes(f) ? 'Sem preset deste motor neste portador (só onde foi usado de verdade)' : `Espera o ${ESPERA_MOTOR[f] ?? 'adaptador'}` }))} />
         </Field>
-        <p className="note">{trem ? `Sem motor próprio na etapa 1 (o elétrico entra na etapa 6): o som é do trem andando. ${c.fontes.filter((f) => f.tipo !== 'pressao').length} fontes com propagação.`
+        <p className="note">{trem && c.motor === 'eletrico' ? `Motor elétrico por truque (etapa 6): as unidades do motor replicadas nos truques motores, sob o assoalho. ${c.fontes.filter((f) => f.tipo !== 'pressao').length} fontes com propagação.`
+          : trem ? `Sem motor: o som é do trem andando. ${c.fontes.filter((f) => f.tipo !== 'pressao').length} fontes com propagação.`
           : c.portador === 'rotor' ? (c.motor === 'nenhum' ? 'Rotor sem motor: Nr imposto (408 rpm), o coletivo muda a tração e o tapa das pás.' : 'Rotor com motor a pistão (Lycoming dos Robinson, Franklin do Bell 47, R-1340 do S-55): o governador do rotor mexe na borboleta e segura o Nr; o coletivo pede potência. O turboeixo ainda não existe.')
           : `${c.fontes.filter((f) => f.tipo !== 'pressao').length} fontes: as do motor (canais do DSP da família, em Pa a ${c.fontes[0] ? fmt(c.fontes[0].refDist) : '—'} m) e as do portador.`}</p>
       </Section>
 
-      {!trem && c.portador !== 'rotor' && <Motor c={c} />}
+      {(!trem || c.motor === 'eletrico') && c.portador !== 'rotor' && <Motor c={c} />}
 
       <Passagem c={c} />
 
@@ -109,7 +110,12 @@ function Motor({ c }: { c: ControlePassagem }) {
         </select>
       </Field>
       <p className="note">{atual ? `${atual.nome}: ${atual.tag}. O som é o do DSP da família, sem os painéis de ajuste dela (escape, admissão, mixagem): esses ficam na página do motor.` : ''}</p>
-      {p === 'carro' && <>
+      {c.motor === 'eletrico' && <>
+        <Slider id="pedal" rotulo={p === 'drone' ? 'Coletivo (50% = pairado)' : p === 'trem' ? 'Tração na passagem' : 'Acelerador na passagem'} min={0} max={1} passo={0.01} valor={c.pedal} formatar={(v) => `${fmt(v * 100)}%`} aoSoltar={(v) => c.setPedal(v)} />
+        {p !== 'drone' && <Slider id="freio" rotulo="Freio elétrico (regeneração)" min={0} max={1} passo={0.01} valor={c.freio} formatar={(v) => `${fmt(v * 100)}%`} aoSoltar={(v) => c.setFreio(v)} />}
+        <p className="note">{c.partida ? 'A passagem parte parada: a velocidade vem do motor (o do-re-mi do Taurus).' : 'Na passagem a velocidade é imposta (dinamômetro): o pedal e o freio mudam o torque, e o som segue a corrente.'}</p>
+      </>}
+      {p === 'carro' && c.motor !== 'eletrico' && <>
         <Slider id="pedal" rotulo="Acelerador na passagem" min={0} max={1} passo={0.01} valor={c.pedal} formatar={(v) => `${fmt(v * 100)}%`} aoSoltar={(v) => c.setPedal(v)} />
         <Field rotulo="Marcha na passagem">
           <ChipGroup id="marcha" atual={c.marcha} aoEscolher={(v) => c.setMarcha(v)} opcoes={[1, 2, 3, 4, 5, 6].map((n) => ({ valor: n, rotulo: `${n}ª` }))} />
