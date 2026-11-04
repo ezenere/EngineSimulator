@@ -34,7 +34,7 @@ export class PortadorTeste implements Portador {
     const L = corpo?.comprimento ?? 4.6;
     this.corpo = {
       segmentos: [{ comprimento: L, vao: 0, altura: corpo?.altura ?? 1.4, largura: corpo?.largura ?? 1.85, zPiso: corpo?.zPiso ?? 0.15 }],
-      comprimento: L, nariz: 0, cauda: 0, areaFrontal: 2.2, cd: 0.3, cpNariz: 0.05, massaSuperficial: 12, fCabine: 70,
+      comprimento: L, nariz: 0, cauda: 0, areaFrontal: 2.2, cd: 0.3, cpNariz: 0.05, massaSuperficial: corpo?.massaSuperficial ?? 12, fCabine: corpo?.fCabine ?? 70,
     };
     this.lista = fontes.map((f, i) => ({
       id: f.id ?? `teste.${i}`, tipo: f.tipo ?? 'mecanica', pos: f.pos,

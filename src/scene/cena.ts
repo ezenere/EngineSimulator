@@ -178,8 +178,11 @@ export class CenaPassagem implements Cena {
     else if (local === 'cabine') {
       r = { diretividade: false, sombra: false, solo: false, binaural: o.binaural, rota: () => ({ bus: 1, peso: 1 }), envio: 0.25 };
       const ms = this.portador?.corpo.massaSuperficial ?? 25, fc = this.portador?.corpo.fCabine ?? 45;
-      const f1 = 891 / ms;
-      this.cabK1 = k1(this.fs, f1); this.cabK2 = k1(this.fs, 2.6 * f1);
+      // Lei da massa TL = 20·log₁₀(f·m_s) − 47 dB, limitada a [5, 45]. O CENA.md (3.3) sugere dois polos em
+      // 891/m_s e 2,6× isso, mas dois polos caem 12 dB/oitava contra os 6 da lei e erram 7 dB em 125 Hz e
+      // 17 dB em 2 kHz no trem; aqui: H = 10^(−5/20)·(LP₁(f₀) + 10^(−40/20)), f₀ = 398/m_s, que segue a
+      // lei a ±1 dB entre 125 Hz e 2 kHz (o termo constante é o teto de 45 dB, o fator o piso de 5 dB).
+      this.cabK1 = k1(this.fs, 398 / ms); this.cabK2 = 0.01;
       this.cabPk[0].peak(this.fs, fc, 1.1, 7); this.cabPk[1].peak(this.fs, fc, 1.1, 7);
     } else if (local === 'cofre') {
       r = { diretividade: false, sombra: false, solo: false, binaural: o.binaural, envio: 0.5,
@@ -342,9 +345,8 @@ export class CenaPassagem implements Cena {
     // barramento 1 pelo filtro do local: cabine = lei da massa (2 polos) + ressonância do habitáculo; cofre = lp 900 Hz
     if (this.local === 'cabine') {
       for (let k = 0; k < n; k++) {
-        cs[0] += this.cabK1 * (a1L[k] - cs[0]); cs[1] += this.cabK2 * (cs[0] - cs[1]);
-        cs[2] += this.cabK1 * (a1R[k] - cs[2]); cs[3] += this.cabK2 * (cs[2] - cs[3]);
-        tc[k] = cs[1]; td[k] = cs[3];
+        cs[0] += this.cabK1 * (a1L[k] - cs[0]); cs[2] += this.cabK1 * (a1R[k] - cs[2]);
+        tc[k] = 0.5623 * (cs[0] + this.cabK2 * a1L[k]); td[k] = 0.5623 * (cs[2] + this.cabK2 * a1R[k]);
       }
       this.cabPk[0].bloco(tc, n); this.cabPk[1].bloco(td, n);
     } else if (this.local === 'cofre') {

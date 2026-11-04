@@ -427,7 +427,25 @@ export function medirOuvinte(): Linha[] {
       L.push(linha('5 #9', 'ILD em 4 kHz a 90° (além da panorâmica)', '−6 ± 1 dB', `${f1(ild)} dB (pan ${f1(dLo)} dB)`, dentro(ild, -6, 1), ild));
     }
   }
-  return L;
+  return [...L, ...medirCabine()];
+}
+
+/** passo 9: perda de transmissão da cabine do trem (m_s 25) contra a lei da massa */
+export function medirCabine(): Linha[] {
+  // ouvinte no gimbal dentro de um vagão; fonte de ruído fora; 'fora' × 'cabine' no mesmo ponto
+  const nivel = (local: 'fora' | 'cabine') => {
+    const r = renderPassagem({ portador: 'teste', fontesTeste: [{ pos: [0, -6, 1.6], sinal: 'ruido', paRms: 1 }], corpoTeste: { largura: 3.36, altura: 3.6, zPiso: 0.4, comprimento: 25, massaSuperficial: 25, fCabine: 45 },
+      v: 0, d: 3, ambiente: 'ceu', solo: 'nenhum', dur: 2, sCentro0: 0, reverb: false, semFundo: true,
+      ouvinte: { modo: 'gimbal', gimbal: { az: 0, el: 0, r: 0.5, alvo: 'corpo' }, local } });
+    return A.bandas([r.dL, r.dR], SR, Math.round(0.5 * SR), r.dL.length, [[125 / 1.122, 125 * 1.122], [500 / 1.122, 500 * 1.122], [2000 / 1.122, 2000 * 1.122]]);
+  };
+  const fo = nivel('fora'), ca = nivel('cabine');
+  const lei = (f: number) => Math.max(5, Math.min(45, 20 * Math.log10(f * 25) - 47));
+  const fsb = [125, 500, 2000];
+  const tl = fo.map((v, i) => 10 * Math.log10(v / ca[i]));
+  // a ressonância do habitáculo (+7 dB em 45 Hz, Q 1,1) soma ~+0,5 dB em 125 Hz
+  const ok = tl.every((x, i) => Math.abs(x - lei(fsb[i])) <= 3);
+  return [linha('5 #9', 'cabine do trem (m_s 25): perda de transmissão em 125 / 500 / 2k Hz', `lei da massa ${fsb.map((f) => f1(lei(f))).join(' / ')} dB ± 3`, `${tl.map((x) => f1(x)).join(' / ')} dB`, ok, tl[1])];
 }
 
 // constantes usadas pelos testes e pelo relatório
