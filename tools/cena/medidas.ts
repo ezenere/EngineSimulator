@@ -400,6 +400,13 @@ export function medirAmbientes(): Linha[] {
     const ok = med.every((m, i) => Math.abs(m - alvo[i]) <= 0.15 * alvo[i]);
     L.push(linha('5 #8', `RT60 ${id} (125/500/2k/8k Hz)`, `${alvo.map((x) => f1(x, 1)).join(' / ')} s ± 15%`, `${med.map((x) => f1(x, 2)).join(' / ')} s`, ok, med[1]));
   }
+  // ponte (2.10): o ronco estrutural soma +5 dB nas bandas 31–125 Hz durante a passagem do corpo
+  {
+    const com = passagemTrem('ponte'), sem = passagemTrem('ponte', V350, 3, { kPonte: 0 }, 'semPonte');
+    const b = (r: ResultadoPassagem) => A.bandas([r.L, r.R], SR, Math.round(r.tNarizAbeam * SR), Math.round(r.tCaudaAbeam * SR), [[31, 125]])[0];
+    const d = 10 * Math.log10(b(com) / b(sem));
+    L.push(linha('2.10', 'ponte: ronco estrutural em 31–125 Hz na passagem', '+5 ± 1 dB', `${d >= 0 ? '+' : ''}${f1(d)} dB`, dentro(d, 5, 1), d));
+  }
   return L;
 }
 

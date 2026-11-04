@@ -44,6 +44,7 @@ export interface OpcoesPassagem {
   aoBloco?: (t: number, cena: CenaPassagem, p: Portador) => void;
   medirCpu?: boolean;
   semSombra?: boolean;
+  kPonte?: number;
 }
 
 export interface ResultadoPassagem {
@@ -69,7 +70,7 @@ export function renderPassagem(o: OpcoesPassagem): ResultadoPassagem {
   const s0 = o.sCentro0 ?? -(o.x0 ?? 600) - (o.portador === 'teste' ? 0 : L / 2);
   (portador.cinematica as { s: number }).s = s0;
   portador.comandar({ pedal: 0, velocidadeFixa: o.v });
-  const cena = new CenaPassagem({ ur: o.ur, semSombra: o.semSombra });
+  const cena = new CenaPassagem({ ur: o.ur, semSombra: o.semSombra, kPonte: o.kPonte });
   cena.configurar(amb, traj, ouv, SR);
   const nF = portador.fontes().length;
   const canais = Array.from({ length: nF }, () => new Float32Array(BLOCO));

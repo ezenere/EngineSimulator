@@ -8,7 +8,7 @@
 // alto-falante só o resíduo acima de 20 Hz.
 import type { Ambiente, Trajetoria, Ouvinte, Cena, TelemetriaCena, Vec3, FonteSonora, LocalOuvinte } from './tipos';
 import type { Portador } from '../carriers/tipos';
-import { BLOCO_CONTROLE, PA_FS, P_REF, RAMPA } from './constantes';
+import { BLOCO_CONTROLE, PA_FS, P_REF, RAMPA, C_SOM } from './constantes';
 import { Propagador, GeoOuvinte, type RegrasLocal } from './propagador';
 import { Via, Historico, PontoVia } from './trajetoria';
 import { SOLOS } from './solo';
@@ -21,10 +21,17 @@ import { RNG } from '../acoustics/rng';
 /** pesos do cofre por tipo de fonte (3.3; os mesmos do `bay` do Ronco) */
 const PESO_COFRE: Partial<Record<FonteSonora['tipo'], number>> = { admissao: 1.0, mecanica: 0.7, compressor: 0.8 };
 
-/** ronco estrutural da ponte: ganho calibrado para +5 dB em 31–125 Hz na passagem do trem de validação */
-const K_PONTE = 0.042;
+/**
+ * Ronco estrutural da ponte: ganho calibrado para +5 dB em 31–125 Hz na passagem do trem de validação
+ * (10 vagões, 350 km/h, 3 m; `valida.ts ambientes`). O 0,042 de antes somava 0,0 dB: o ronco ficava
+ * 50 dB abaixo do trem nessas bandas.
+ */
+export const K_PONTE = 26;
 
-export interface OpcoesCena { ur?: number; blocoMax?: number; /** desliga a sombra do corpo (diagnóstico) */ semSombra?: boolean }
+/** velocidade do som (m/s) à temperatura t (°C): 343 m/s a 20 °C */
+export const velocidadeSom = (t: number) => C_SOM * Math.sqrt((273.15 + t) / 293.15);
+
+export interface OpcoesCena { ur?: number; blocoMax?: number; /** desliga a sombra do corpo (diagnóstico) */ semSombra?: boolean; /** ganho do ronco da ponte (calibração; padrão K_PONTE) */ kPonte?: number }
 
 export class CenaPassagem implements Cena {
   fs = 48000;
@@ -67,9 +74,11 @@ export class CenaPassagem implements Cena {
   tmpP = new Float64Array(64); tmpQ = new Float64Array(64); tmpA = new Float64Array(4096); tmpB = new Float64Array(4096); tmpC = new Float64Array(4096); tmpD = new Float64Array(4096);
 
   semSombra = false;
+  kPonte = K_PONTE;
   constructor(op: OpcoesCena = {}) {
     if (op.ur) this.ur = op.ur;
     this.semSombra = !!op.semSombra;
+    this.kPonte = op.kPonte ?? K_PONTE;
     const bm = op.blocoMax ?? 4096;
     this.bL = new Float64Array(bm); this.bR = new Float64Array(bm);
     this.vento = new RuidoVento(48000);
@@ -81,6 +90,7 @@ export class CenaPassagem implements Cena {
     this.fs = fs;
     this.prop = new Propagador(fs, this.bL.length);
     this.prop.ur = this.ur;
+    this.prop.c = velocidadeSom(this.temperatura);
     this.vento = new RuidoVento(fs);
     this.fundo = new FundoAmbiente(fs);
     this.pa = [new PonderacaoA(fs), new PonderacaoA(fs)];
@@ -102,6 +112,44 @@ export class CenaPassagem implements Cena {
 
   /** umidade relativa (%) da absorção do ar (2.3); padrão 60 */
   definirUmidade(ur: number) { this.ur = ur; if (this.prop) this.prop.ur = ur; }
+  /**
+   * Temperatura do ar (°C, modo de testes): muda a velocidade do som da propagação, c = 343·√(T/293,15 K)
+   * (343 m/s a 20 °C, a das referências). A tabela de absorção (2.3) continua a de 20 °C.
+   */
+  temperatura = 20;
+  definirTemperatura(t: number) {
+    this.temperatura = Math.max(-30, Math.min(50, t));
+    if (this.prop) this.prop.c = velocidadeSom(this.temperatura);
+  }
+
+  /**
+   * Põe o corpo em s (o "disparar a passagem" da página): o histórico recomeça como se ele viesse
+   * andando assim, a onda do túnel e a detecção da boca zeram. As fontes sentem o salto do atraso e
+   * entram com o fade de 50 ms do propagador.
+   */
+  reposicionar(portador: Portador, s: number) {
+    const c = portador.cinematica as { s: number; v: number };
+    c.s = s;
+    if (this.portador === portador && this.hist) this.hist.reiniciar(this.amostra / this.fs, s, c.v);
+    this.tunel.zerar(); this.narizAnt = NaN;
+  }
+
+  /**
+   * Lado do corpo (y do referencial do corpo) em que está o ouvinte: +1 à esquerda, −1 à direita. Para o
+   * trem com duas faces (Trem.definirLado). Com histerese de 0,2 m para não alternar no plano y = 0.
+   */
+  ladoOuvinte: 1 | -1 = -1;
+  ladoDoOuvinte(): 1 | -1 {
+    if (!this.portador) return this.ladoOuvinte;
+    let y: number;
+    if (this.ouv.modo === 'gimbal') y = this.posGimbalCorpo()[1];
+    else {
+      const p = this.via.ponto(this.portador.cinematica.s, this.pv);
+      y = (this.geo.x - p.x) * p.nx + (this.geo.y - p.y) * p.ny;
+    }
+    if (y > 0.2) this.ladoOuvinte = 1; else if (y < -0.2) this.ladoOuvinte = -1;
+    return this.ladoOuvinte;
+  }
 
   atualizar(p: Partial<{ amb: Ambiente; traj: Trajetoria; ouv: Ouvinte }>) {
     if (p.traj) {
@@ -280,10 +328,14 @@ export class CenaPassagem implements Cena {
       P.trecho(ini, N, tj, this.geo);
       // campo próximo: pressão e vento, no fim do trecho; a pressão é interpolada por amostra
       let p = 0, u = 0;
+      let pTun = 0;
+      this.pNariz = 0;
       if (fixo) {
         const xiN = this.reduzir(sj + L / 2 - sO), xiC = xiN - L;
-        const d = this.lateral;
+        // distância do ouvinte à lateral do corpo; com o corpo no alto (helicóptero, avião) conta a altura
+        const d = this.altitude > 0 ? Math.hypot(this.lateral, this.altitude) : this.lateral;
         p = ondaNariz(xiN, xiC, vj, d, portador.corpo.cpNariz, portador.corpo.nariz || 1, portador.corpo.cauda || 1);
+        this.pNariz = p;
         // vento induzido (2.8): sobe ao longo do corpo, esteira de 3 s depois da cauda
         let w = 0;
         if (xiN >= 0 && xiN <= L) w = xiN / L;
@@ -292,13 +344,17 @@ export class CenaPassagem implements Cena {
         let up = 0;
         const tun = this.amb.tunel;
         if (tun) {
-          const nariz = sj + L / 2;
+          // abscissa do nariz reduzida à via: na reta, o corpo que reaparece do outro lado entra de novo no
+          // túnel (um salto para trás maior que meia via zera a onda da passagem anterior)
+          const nariz = this.reduzir(sj + L / 2);
+          if (!isNaN(this.narizAnt) && this.narizAnt - nariz > this.via.comp / 2) this.tunel.zerar();
           if (this.tunel.tEntrada < 0 && !isNaN(this.narizAnt) && this.narizAnt < tun.xEntrada && nariz >= tun.xEntrada && vj > 0) {
             const tc = tj - (nariz - tun.xEntrada) / vj;
             this.tunel.entrar(tc, vj, portador.corpo.areaFrontal, tun.area, portador.corpo.nariz || 10, sO - tun.xEntrada, tun.comprimento);
           }
           this.narizAnt = nariz;
-          p += this.tunel.pressao(tj);
+          pTun = this.tunel.pressao(tj);
+          p += pTun;
           if (this.tunel.tEntrada >= 0) {
             const ua = ventoPistao(vj, this.tunel.beta);
             const tch = this.tunel.tEntrada + this.tunel.chegada();
@@ -312,7 +368,7 @@ export class CenaPassagem implements Cena {
         if (this.amb.id === 'ponte') {
           let s = 0;
           for (const x of this.xTruques) { const xi = (sj + x - sO) / 15; s += 1 / (1 + xi * xi); }
-          this.ponteGAlvo = K_PONTE * s * Math.pow(Math.max(0, vj) / (300 / 3.6), 1.5);
+          this.ponteGAlvo = this.kPonte * s * Math.pow(Math.max(0, vj) / (300 / 3.6), 1.5);
         } else this.ponteGAlvo = 0;
       }
       // resíduo > 20 Hz da pressão no alto-falante (mono, os dois ouvidos); ponte: ronco em 31–125 Hz
@@ -330,6 +386,9 @@ export class CenaPassagem implements Cena {
       this.ponteG = this.ponteGAlvo;
       this.pAnt = p;
       this.tele.pressaoPa = p;
+      this.pTunel = pTun;
+      if (p > this.pMax) this.pMax = p;
+      if (p < this.pMin) this.pMin = p;
       this.ventoU = u;
       this.vento.uAlvo = u;
       ini += N;
@@ -393,4 +452,15 @@ export class CenaPassagem implements Cena {
 
   /** telemetria montada sob demanda (o worklet pede a cada 1024 amostras; escrever doubles em objetos aloca) */
   telemetria(): TelemetriaCena { if (this.portador) this.atualizarTelemetria(this.portador); return this.tele; }
+
+  // campo próximo separado e extremos desde a última leitura (o mostrador amostra a cada 21 ms; a onda
+  // de nariz dura ~80 ms e o pico se perderia)
+  pNariz = 0; pTunel = 0; pMax = -Infinity; pMin = Infinity;
+  /** extremos da pressão desde a última chamada e as duas parcelas instantâneas; zera os extremos */
+  lerPressao(o: { max: number; min: number; nariz: number; tunel: number }) {
+    o.max = this.pMax === -Infinity ? this.tele.pressaoPa : this.pMax; o.min = this.pMin === Infinity ? this.tele.pressaoPa : this.pMin;
+    o.nariz = this.pNariz; o.tunel = this.pTunel;
+    this.pMax = -Infinity; this.pMin = Infinity;
+    return o;
+  }
 }
