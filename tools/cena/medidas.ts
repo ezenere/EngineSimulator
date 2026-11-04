@@ -10,6 +10,7 @@ import { gerarRespostaPorBanda, ambientePassagem, BANDAS_RT, rt60Efetivo } from 
 import { CalculoSombra, maekawaDb } from '../../src/scene/sombra';
 import { atenuacaoIso } from '../../src/scene/ar';
 import { FonteVao } from '../../src/carriers/ruido';
+import { Trem } from '../../src/carriers/trem';
 import { laco, medirAlocacao } from './cpu';
 import type { FonteTeste } from '../../src/carriers/teste';
 import type { IdAmbiente } from '../../src/scene/tipos';
@@ -235,12 +236,12 @@ function rolamentoProf() {
 export function medirNiveisTrem(): Linha[] {
   const L: Linha[] = [];
   const v300 = 300 / 3.6, v160 = 160 / 3.6;
-  const leq = (v: number, tipos?: any) => {
+  const leq = (v: number, tipos?: any, faces?: 'uma' | 'duas') => {
     // render curto centrado na passagem: o corpo começa 300 m antes do ouvinte
     const L0 = 249.5;
     const x0 = 300;
     const dur = (x0 + L0 + 60) / v;
-    const rr = renderPassagem({ portador: 'trem', v, d: 7.5, ambiente: 'ceu', dur, x0, reverb: false, semFundo: true, trem: tipos ? { tipos } : {} });
+    const rr = renderPassagem({ portador: 'trem', v, d: 7.5, ambiente: 'ceu', dur, x0, reverb: false, semFundo: true, trem: { ...(tipos ? { tipos } : {}), ...(faces ? { faces } : {}) } });
     return A.leq(rr.L, rr.R, SR, PA_FS, Math.round(rr.tNarizAbeam * SR), Math.round(rr.tCaudaAbeam * SR));
   };
   const total = leq(v300);
@@ -250,6 +251,31 @@ export function medirNiveisTrem(): Linha[] {
   const conv = 'A potência das fontes segue a lei de 4.6 à letra (30·log v, 60·log v: +8,2 e +16,4 dB); a Cena soma por cima a amplificação convectiva de 2.1 (|1 − M·cosθ|^−n), que entre M 0,13 e 0,24 acrescenta ~1 dB na energia da passagem. As leis de 4.6 vêm de níveis medidos, que já incluem esse efeito: para bater as duas, a lei da fonte teria de ser corrigida pela convecção média.';
   L.push(linha('5 #7', 'lei de velocidade do rolamento 160 → 300 km/h', '+8 ± 1 dB', `${f1(r300 - r160)} dB (só rolamento: ${f1(r160)} → ${f1(r300)})`, dentro(r300 - r160, 8, 1), r300 - r160, dentro(r300 - r160, 8, 1) ? undefined : conv));
   L.push(linha('5 #7', 'lei de velocidade do aero 160 → 300 km/h', '+16 ± 1 dB', `${f1(a300 - a160)} dB (${f1(a160)} → ${f1(a300)})`, dentro(a300 - a160, 16, 1), a300 - a160, dentro(a300 - a160, 16, 1) ? undefined : conv));
+  // trem com as duas faces (página Passagem): mesmo nível que a face única para o ouvinte fixo (sem o aero
+  // dos truques, que fica 25 dB abaixo do rolamento e sai do orçamento de fontes)
+  const duas = leq(v300, undefined, 'duas');
+  L.push(linha('5 #7', 'trem com duas faces: L_Aeq,tp a 7,5 m igual à face única', `${f1(total)} ± 0,3 dB(A)`, `${f1(duas)} dB(A)`, dentro(duas, total, 0.3), duas));
+  // crossfade do lado do ouvinte: potência constante (cos/sen) em 50 ms
+  {
+    // dois trens iguais (mesmas sementes): um troca de lado no bloco 100, o outro não; a potência das duas
+    // faces do primeiro, bloco a bloco, tem de ser a da face única do segundo (o ruído é o mesmo)
+    const t = new Trem(SR, { faces: 'duas', ladoOuvinte: -1 }), ref = new Trem(SR, { faces: 'duas', ladoOuvinte: -1 });
+    t.comandar({ pedal: 0, velocidadeFixa: v300 }); ref.comandar({ pedal: 0, velocidadeFixa: v300 });
+    const F = t.fontes(), iD = F.findIndex((f) => f.id === 'corpo.0.d'), iE = F.findIndex((f) => f.id === 'corpo.0.e');
+    const can = F.map(() => new Float32Array(128)), cr = F.map(() => new Float32Array(128));
+    let pior = 0; const pe: number[] = [];
+    for (let b = 0; b < 200; b++) {
+      if (b === 100) t.definirLado(1);
+      t.processar(can, 128, 1 / SR); ref.processar(cr, 128, 1 / SR);
+      let sd = 0, se = 0, sr = 0; for (let k = 0; k < 128; k++) { sd += can[iD][k] ** 2; se += can[iE][k] ** 2; sr += cr[iD][k] ** 2; }
+      pior = Math.max(pior, Math.abs(10 * Math.log10((sd + se) / sr)));
+      pe.push(se / (sd + se + 1e-30));
+    }
+    const dDb = pior;
+    const fim = pe.findIndex((x, i) => i > 100 && x > 0.999);
+    const ms = ((fim - 100) * 128 * 1000) / SR;
+    L.push(linha('3.3', 'lado do ouvinte: crossfade das faces (potência bloco a bloco; duração)', '±0,1 dB; 50 ms', `${f1(dDb, 2)} dB; ${f1(ms, 0)} ms`, dDb <= 0.1 && ms >= 40 && ms <= 60, ms));
+  }
   return L;
 }
 
