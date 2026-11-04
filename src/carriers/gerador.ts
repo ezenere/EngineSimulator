@@ -98,15 +98,20 @@ export class Gerador extends PortadorComMotor {
   private atualizarFontes(omega: number) {
     const c = this.cfg, rpm = (omega * 60) / (2 * Math.PI), R = REF_DIST_PORTADOR, rpmN = rpmGerador(c.polos, c.fRede);
     this.alt.f0 = 2 * c.fRede * (omega / this.omegaNom);
-    calibrarSerieA(this.alt, this.relAlt, paDeLw(85 + 8 * this.cargaG.fracao, R));
+    // (o alternador só tem campo com o regulador de tensão ligado, perto da rotação: entra entre 50% e 90%)
+    const exc = Math.max(0, Math.min(1, (omega / this.omegaNom - 0.5) / 0.4));
+    calibrarSerieA(this.alt, this.relAlt, exc * paDeLw(85 + 8 * this.cargaG.fracao, R));
     this.vent.f0 = (c.ventilador.B * rpm) / 60;
     calibrarSerieA(this.vent, this.relVent, paDeLw(95 + 55 * Math.log10(Math.max(rpm, 1) / rpmN), R));
   }
 
   protected fisica(n: number, dt: number) {
     const c = this.cfg, tb = n * dt;
-    // rampa de 0,1 s da carga
-    const alvo = Math.max(0, Math.min(1, this.cmd.cargaFracao ?? 0));
+    // rampa de 0,1 s da carga; o disjuntor só fecha com o grupo funcionando perto da rotação nominal (um motor de
+    // verdade que dá a partida com a carga ligada não sai do motor de partida: P/ω com ω ≈ 0)
+    const m0 = this.motor;
+    const pronto = !m0 || (m0.estado === 'funcionando' && m0.eixo.omega > 0.9 * this.omegaNom);
+    const alvo = pronto ? Math.max(0, Math.min(1, this.cmd.cargaFracao ?? 0)) : 0;
     const d = tb / 0.1;
     this.cargaG.fracao += Math.max(-d, Math.min(d, alvo - this.cargaG.fracao));
     const m = this.motor;

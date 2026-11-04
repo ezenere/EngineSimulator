@@ -127,7 +127,9 @@ export class SerieHarmonica implements GeradorCanal {
  */
 export function calibrarSerieA(s: SerieHarmonica, rel: ArrayLike<number>, paA: number) {
   let e = 0;
-  for (let h = 0; h < s.a.length; h++) { const r = rel[h] ?? 0, a = ganhoA((h + 1) * s.f0); e += r * r * a * a; }
+  // (piso de −50 dB na ponderação: com a rotação perto de zero, f → 0 e A(f) → 0 pediam amplitudes enormes em
+  // poucos Hz para manter o L_W em dB(A): o grupo gerador dando a partida soltava 137 dB SPL de infrassom)
+  for (let h = 0; h < s.a.length; h++) { const r = rel[h] ?? 0, a = Math.max(0.00316, ganhoA((h + 1) * s.f0)); e += r * r * a * a; }
   const g = e > 0 ? paA / Math.sqrt(e) : 0;
   for (let h = 0; h < s.a.length; h++) s.a[h] = (rel[h] ?? 0) * g;
 }
