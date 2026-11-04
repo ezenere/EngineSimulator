@@ -29,7 +29,7 @@ export const TIPOS: TipoDeMotor[] = [
   { id: 'eletrico', nome: 'Elétrico',
     descricao: 'Ranhuras, PWM e redução.',
     exemplos: 'Carros elétricos, metrô, Taurus, trem-bala, bonde, drones' },
-  { id: 'testes', nome: 'Passagem e modo de testes',
+  { id: 'testes', nome: 'Passagem e modo de testes', pagina: './passagem.html',
     descricao: 'Qualquer fonte passando por você, com o ouvinte livre em 3D.',
-    exemplos: 'Trem-bala de 10 vagões a 350 km/h num túnel, voo rasante' },
+    exemplos: 'Trem-bala de 10 vagões a 350 km/h num túnel, trem na estação, helicóptero rasante' },
 ];

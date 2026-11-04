@@ -10,16 +10,19 @@ export default defineConfig({
   base: './',
   plugins: [
     // o React Refresh não pode entrar no código do AudioWorklet nem no DSP (não há `window` lá)
-    react({ exclude: [/\/src\/worklet\//, /\/src\/acoustics\//, /\/src\/engines\//] }),
+    react({ exclude: [/\/src\/worklet\//, /\/src\/acoustics\//, /\/src\/engines\//, /\/src\/scene\//, /\/src\/carriers\//] }),
   ],
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    // a cena 3D da Passagem (three.js, ~600 kB) é um chunk carregado sob demanda, depois do áudio
+    chunkSizeWarningLimit: 700,
     rolldownOptions: {
       input: {
         menu: resolve(raiz, 'index.html'),
         ronco: resolve(raiz, 'ronco.html'),
         turbina: resolve(raiz, 'turbina.html'),
+        passagem: resolve(raiz, 'passagem.html'),
       },
     },
   },

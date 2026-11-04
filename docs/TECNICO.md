@@ -7,6 +7,8 @@ Este documento explica a física e o processamento de áudio por trás dos dois 
 - [Caminho do áudio no navegador](#caminho-do-áudio-no-navegador)
 - [Ronco: motor de pistão](#ronco-motor-de-pistão)
 - [Turbina: motor a jato](#turbina-motor-a-jato)
+- [Cena e portadores](#cena-e-portadores)
+- [Página Passagem e modo de testes](#página-passagem-e-modo-de-testes)
 - [Validação](#validação)
 - [Limitações conhecidas](#limitações-conhecidas)
 - [Como adicionar um carro ou avião](#como-adicionar-um-carro-ou-avião)
@@ -36,6 +38,7 @@ O site é compilado com Vite (TypeScript + React) e publicado como páginas est�
 | `tools/render.ts`, `tools/compare-wav.ts`, `tools/acoustics-paridade.ts` | Renderização offline para WAV, comparação amostra a amostra e conferência bit a bit do `acoustics/` contra o legado |
 | `tools/analise-som/` | Banco de testes em Node e análise em Python para comparar o som com gravações reais (ver `docs/REVISAO-DE-SOM.md`) |
 | `src/scene/`, `src/carriers/`, `tools/cena/` | Camadas cena e portador (Passagem, trem e demais portadores) e a validação offline delas (ver [Cena e portadores](#cena-e-portadores)) |
+| `passagem.html`, `src/pages/passagem/`, `public/3d/` | Página Passagem / modo de testes: ouvinte no gimbal, cena three.js, mostradores; texturas com `LICENSES.md` (ver [Página Passagem e modo de testes](#página-passagem-e-modo-de-testes)); teste em `tools/passagem-navegador.mjs` |
 | **Legado** (até a migração): | |
 | `src/geometry.js` | Geometria do motor: virabrequins, ordem de ignição, intervalos, balanceamento (migrado para `src/engines/ronco/geometria.ts`) |
 | `src/presets.js` | Os carros e motos (migrado para `src/engines/ronco/presets.ts`) |
@@ -51,7 +54,7 @@ Os arquivos `*-dsp.js` legados ficam dentro de uma função-fábrica (`EngineDSP
 ## Build: Vite, TypeScript e React
 
 - `npm run dev` serve o projeto com recarga automática; `npm run build` confere os tipos (`tsc` com `tsconfig.json`, código do navegador, e `tsconfig.node.json`, ferramentas e DSP, sem tipos do DOM) e gera `dist/`; `npm run preview` serve o `dist/`.
-- **Multi-página:** as entradas estão em `vite.config.mts` (`build.rolldownOptions.input`: `index.html`, `ronco.html`, `turbina.html`). Uma página nova (`radial.html`…) é um HTML na raiz com `<script type="module" src="./src/pages/<nome>/main.tsx">` e uma linha a mais nessa lista.
+- **Multi-página:** as entradas estão em `vite.config.mts` (`build.rolldownOptions.input`: `index.html`, `ronco.html`, `turbina.html`, `passagem.html`). Uma página nova (`radial.html`…) é um HTML na raiz com `<script type="module" src="./src/pages/<nome>/main.tsx">` e uma linha a mais nessa lista.
 - **`base: './'`:** todos os caminhos do `dist/` são relativos, então o site funciona em `ezenere.com/data/engine/` (ou qualquer subpasta) sem reconfigurar. Foi testado servindo o `dist/` em `/data/engine/`. Abrir o HTML pelo `file://` não funciona (módulos ES exigem http).
 - **Por que não `"type": "module"` no `package.json`:** as ferramentas antigas em `tools/analise-som/` e os arquivos legados de `src/` são CommonJS (`require`, `module.exports`) e deixariam de carregar. A configuração do Vite é `.mts` para ser ESM mesmo assim. O `tsx` roda os `.ts` de `tools/` como CommonJS; eles usam `createRequire(import.meta.url)` e `import.meta.url`, que funcionam nos dois modos.
 - **TypeScript:** `strict: false`, e os campos das classes copiadas do legado são declarados com `declare` (não geram código; a classe compilada fica igual à original). TypeScript 7, React 19, Vite 8 (Rolldown).
@@ -67,7 +70,8 @@ await ctx.audioWorklet.addModule(urlTom);
 
 - **No build**, o Vite compila `processador-tom.ts` e tudo o que ele importa (DSP, `acoustics/`) num bundle separado, `dist/assets/processador-tom-<hash>.js`, formato ES (`worker.format: 'es'`), e a página recebe a URL como `new URL('processador-tom-<hash>.js', import.meta.url)`, relativa ao próprio chunk (por isso funciona em qualquer subpasta). O bundle do worklet **não é minificado** (`worker.rolldownOptions.output.minify: false`), para o código do DSP no navegador ser o mesmo, linha a linha, que roda no Node. (O Rolldown ainda dobra constantes, como `1 - 0.985` → `0.015000000000000013`, que dá o mesmo double.)
 - **No dev**, a URL aponta para o próprio `.ts` (`/src/worklet/processador-tom.ts?worker_file&type=module`); o Vite o transforma em módulo ES e os `import` dele são carregados pelo worklet como módulos. O Vite injeta `import "/@vite/env"` no topo, que só mexe em `globalThis` e funciona no escopo do worklet.
-- O plugin do React exclui `src/worklet/`, `src/acoustics/` e `src/engines/`: o React Refresh injetaria código que usa `window`, que não existe no worklet.
+- O plugin do React exclui `src/worklet/`, `src/acoustics/`, `src/engines/`, `src/scene/` e `src/carriers/`: o React Refresh injetaria código que usa `window`, que não existe no worklet.
+- **three.js** (dependência `three`, tipos em `@types/three`) só entra na página Passagem, num chunk carregado sob demanda (`import('./cena3d')`, ~600 kB, 150 kB gzip; `chunkSizeWarningLimit` 700). Arquivos de `public/` (as texturas de `public/3d/`) vão para o `dist/` como estão e são lidos com `import.meta.env.BASE_URL`, relativo à página.
 - **Regra do DSP:** não usa nada do navegador nem o `sampleRate` global; recebe a taxa no construtor. Só `src/worklet/registrar.ts` toca nos globais do worklet:
 
   ```ts
@@ -81,7 +85,7 @@ await ctx.audioWorklet.addModule(urlTom);
 
 ### Cadeia de áudio e `AudioShell`
 
-`src/ui/audio/cadeia.ts` reproduz `initAudio()` e `applyListenerAcoustics()` dos apps legados. As diferenças entre Ronco e Turbina ficam num perfil (`PERFIL_RONCO`, `PERFIL_TURBINA` em `perfis.ts`): compressor, EQ de 3 bandas (só o Ronco), corte inicial do envio, ganho de saída, tamanho da FFT, ambientes e a regra de abafamento por posição do ouvinte. `AudioShell` é o contexto React que cria a cadeia no primeiro `iniciar()` (o navegador só libera o áudio depois de um gesto) e a entrega por `useAudioShell()`. A telemetria chega no callback `aoMensagem`, fora do estado do React: guarde num `ref` e desenhe no `requestAnimationFrame`. Os parâmetros do DSP (`params`, `config`, `input`) continuam sendo mandados pela página com `audio.send(...)`, na mesma ordem do legado.
+`src/ui/audio/cadeia.ts` reproduz `initAudio()` e `applyListenerAcoustics()` dos apps legados. As diferenças entre Ronco e Turbina ficam num perfil (`PERFIL_RONCO`, `PERFIL_TURBINA` em `perfis.ts`): compressor, EQ de 3 bandas (só o Ronco), corte inicial do envio, ganho de saída, tamanho da FFT, ambientes e a regra de abafamento por posição do ouvinte. `AudioShell` é o contexto React que cria a cadeia no primeiro `iniciar()` (o navegador só libera o áudio depois de um gesto) e a entrega por `useAudioShell()`. A telemetria chega no callback `aoMensagem`, fora do estado do React: guarde num `ref` e desenhe no `requestAnimationFrame`. A Passagem usa o `PERFIL_PASSAGEM` (escala absoluta: sem ganho de saída, compressor só como limitador em −1 dBFS), a reverberação da Cena (`aplicarRespostaPorBanda`: RT60 por banda, `normalize = false`, molhado √`reverb.wet`) e a opção `medidor` (analisador na soma seco + molhado antes do compressor); Ronco e Turbina não mudam. Os parâmetros do DSP (`params`, `config`, `input`) continuam sendo mandados pela página com `audio.send(...)`, na mesma ordem do legado.
 
 ### Ferramentas de verificação
 
@@ -446,7 +450,7 @@ $$\Delta p \approx 1{,}9\,K_s\,p_0\,(M^2-1)^{1/8}\left(\frac{l}{h}\right)^{3/4},
 
 ## Cena e portadores
 
-Camadas novas da etapa 1 (projeto em `docs/CENA.md`): o **portador** carrega o motor (carga, geometria, fontes próprias) e a **cena** leva cada fonte até o ouvinte. Ainda sem interface: o modo de testes e a cena 3D vêm depois; o núcleo roda no Node e no worklet (`src/worklet/processador-cena.ts` → `CenaDSP`, 4 canais). Os caminhos legados do Ronco e da Turbina não passam por aqui (decisão 1.1.4).
+Camadas novas da etapa 1 (projeto em `docs/CENA.md`): o **portador** carrega o motor (carga, geometria, fontes próprias) e a **cena** leva cada fonte até o ouvinte. A interface é a página Passagem / modo de testes ([abaixo](#página-passagem-e-modo-de-testes)); o núcleo roda no Node e no worklet (`src/worklet/processador-cena.ts` → `CenaDSP`, 4 canais). Os caminhos legados do Ronco e da Turbina não passam por aqui (decisão 1.1.4).
 
 | Arquivo | O que faz |
 |---|---|
@@ -480,11 +484,11 @@ Camadas novas da etapa 1 (projeto em `docs/CENA.md`): o **portador** carrega o m
 - **Nariz/cauda (2.6):** `p = −A·x·e^(−x²/2)`, `x = 3ξ/L_nariz` (ξ = quanto o nariz já passou; só geometria), `A = Δp_pp/(2e^(−1/2))`, cauda com sinal trocado e 70%. Inteira na telemetria, no alto-falante só o resíduo do passa-alta de 2 polos em 20 Hz.
 - **Túnel (2.10):** a frente da onda de Hara (0,75×) nasce quando o nariz cruza a boca, chega ao ouvinte em `(x_O − x_entrada)/c`, reflete invertida na outra boca e volta, com período `2L/c` e −20% por reflexão; subida de meio cosseno em `L_nariz/v`. Vento: `Δp/(ρc)` depois da frente, `u_a = v·β/(1−β)·0,75` durante o corpo e esteira de 3 s, somado em quadratura com o vento induzido de 2.8.
 - **Vento no ouvinte:** `70 + 60·log₁₀(u/10)` dB, passa-baixa de 150 Hz e ombro de −12 dB em 1 kHz, ruído independente por ouvido, passa-alta de 20 Hz.
-- **Ponte:** ronco de 31–125 Hz pelos truques sobre o tabuleiro perto do ouvinte (peso `1/(1 + (ξ/15 m)²)` por truque); ganho fixo, ainda não calibrado contra os +5 dB de 2.10.
+- **Ponte:** ronco de 31–125 Hz pelos truques sobre o tabuleiro perto do ouvinte (peso `1/(1 + (ξ/15 m)²)` por truque), `K_PONTE` = 26 calibrado para os +5 dB de 2.10 em 31–125 Hz na passagem de validação (medido +5,0 dB; o 0,042 de antes somava 0,0 dB).
 
 ### Portadores
 
-- **Trem (4.6):** geometria por vagão (`L = N·L_c − vão` = 249,5 m), truques a 3,75 m das pontas, vãos na junção, pantógrafos nos vagões 3 e 8, nariz e cauda. Fontes calibradas em **potência** `L_W` dB(A): `L_p(refDist) = L_W − 20·log₁₀ refDist − 11` pela integral de |H(f)·A(f)|² da cadeia, e uma fonte com diretividade sobe no eixo pelo índice de diretividade (sem isso um dipolo irradiava 3–5 dB a menos que o L_W). Diretividades (o CENA não dá): rolamento dipolo lateral `[0, −1,2, −6, −20, −6, −1,2, 0]`, fontes aerodinâmicas dipolo de face `[0, −1, −4, −10, −4, −1, 0]`, ambos no eixo y. Espectro aerodinâmico: HP₁(f_p/5)·LP₁(f_p)·LP₁(2,5 kHz), o espectro em 1/3 de oitava descrito em 2.7 (o passa-banda Q 0,5 sugerido lá põe o pico de 1/3 de oitava em ~600 Hz). Rolamento: passa-banda Q 0,5 em 2,2 kHz·√(v/v_ref) + 1 polo em 7 kHz (a tabela de 1/3 de oitava de 4.6 a ±1,5 dB), dormentes a v/0,6 m com ±1 dB, achatamento opcional. Vão: corcova de 50–400 Hz + Rossiter (Q 5, −6 dB por ordem). Pantógrafo: tons eólios 0,2·v/d da cabeça e dos braços + ruído largo. `ladoOuvinte` põe as fontes de face no lado certo.
+- **Trem (4.6):** geometria por vagão (`L = N·L_c − vão` = 249,5 m), truques a 3,75 m das pontas, vãos na junção, pantógrafos nos vagões 3 e 8, nariz e cauda. Fontes calibradas em **potência** `L_W` dB(A): `L_p(refDist) = L_W − 20·log₁₀ refDist − 11` pela integral de |H(f)·A(f)|² da cadeia, e uma fonte com diretividade sobe no eixo pelo índice de diretividade (sem isso um dipolo irradiava 3–5 dB a menos que o L_W). Diretividades (o CENA não dá): rolamento dipolo lateral `[0, −1,2, −6, −20, −6, −1,2, 0]`, fontes aerodinâmicas dipolo de face `[0, −1, −4, −10, −4, −1, 0]`, ambos no eixo y. Espectro aerodinâmico: HP₁(f_p/5)·LP₁(f_p)·LP₁(2,5 kHz), o espectro em 1/3 de oitava descrito em 2.7 (o passa-banda Q 0,5 sugerido lá põe o pico de 1/3 de oitava em ~600 Hz). Rolamento: passa-banda Q 0,5 em 1,5 kHz·√(v/v_ref) + 1 polo em 2,5 kHz·√(v/v_ref) com ganho 1/√k (1/3 de oitava −16/−8/−2/0/−4/−11 dB de 250 Hz a 8 kHz; ver [Trem contra gravações reais](#trem-contra-gravações-reais)), dormentes a v/0,6 m com ±1 dB, achatamento opcional. Níveis `L_W` ajustados contra as gravações: rolamento 130, aero do truque 105, corpo 119, vãos 119, pantógrafo 115 carenado, nariz/cauda 116 dB(A). Vão: corcova de 50–400 Hz + Rossiter (Q 5, −6 dB por ordem). Pantógrafo: tons eólios 0,2·v/d da cabeça e dos braços + ruído largo. `ladoOuvinte` põe as fontes de face no lado certo; com `faces: 'duas'` (a página) há `corpo.k.d` e `corpo.k.e` no mesmo gerador e `definirLado()` passa de uma face à outra com crossfade de potência constante de 50 ms (a Cena dá o lado em `ladoDoOuvinte()`, com histerese de 0,2 m). `orcamentoTrem`/`maxVagoes`: o aero dos truques sai quando o trem não cabe nas 64 fontes.
 - **Hélice (4.2):** carga `c_Q(β, J)·ρ·n²·D⁵/i`, governador PI de passo (0,02 rad/%, 0,01/s, 5°/s), fonte de passagem de pá pela tabela do `buildPropTab` e ruído largo de pá. **Não** é ainda a migração idêntica amostra a amostra da Turbina (depende do adaptador do JetDSP).
 - **Rotor (4.3):** potência induzida + perfil + cauda + acessórios (R44: 171 kW no pairado), Nr pelo governador PI (0,8/%, 0,4/s); fontes rotor principal (carga, espessura e tapa até o 40º harmônico, peso do tapa 2,5), cauda modulada pela BPF principal, caixa e downwash.
 - **Gerador (4.4):** `Q = fração·P/(η·ω)` com rampa de 0,1 s, atraso de 0,3 s da bomba. Os ganhos do CENA (0,5 por % e 0,5/s, com o combustível em fração) fazem um ciclo-limite de ±10% com esse atraso; com 0,07 por % e 0,05/(%·s) o degrau de 50% num grupo de 500 kW com 80 kg·m² cai 5,9% e volta a ±2% em 1,6 s, como o parágrafo descreve. Fontes: alternador (2·f_rede e ímpares, ranhuras), ventilador.
@@ -493,7 +497,7 @@ Camadas novas da etapa 1 (projeto em `docs/CENA.md`): o **portador** carrega o m
 
 ### Validação (`npx tsx tools/cena/valida.ts`)
 
-Roda 89 medidas, compara com os alvos do CENA.md e sai com código ≠ 0 se algum falhar sem desvio documentado. Resultado atual: **73 ok, 16 desvios documentados, 0 falhas**. Medidas por ouvido (a soma mono de um sinal binaural cancela onde o ITD dá meia volta de fase: 770 Hz).
+`npm run teste:cena` (= `npx tsx tools/cena/valida.ts`) roda 92 medidas, compara com os alvos do CENA.md (dois deles atualizados pelas gravações, com a justificativa em `medidas.ts`) e sai com código ≠ 0 se algum falhar sem desvio documentado. Resultado atual: **83 ok, 9 desvios documentados, 0 falhas** (antes do ajuste contra as gravações: 73 ok, 16 desvios). Medidas por ouvido (a soma mono de um sinal binaural cancela onde o ITD dá meia volta de fase: 770 Hz).
 
 | Grandeza (trem 10×25 m, 350 km/h, 3 m) | Alvo | Medido |
 |---|---|---|
@@ -509,23 +513,277 @@ Roda 89 medidas, compara com os alvos do CENA.md e sai com código ≠ 0 se algu
 | onda de compressão; antecedência | 2,0 kPa; 3,7 s | 2,00 kPa; 3,66 s |
 | vento: céu aberto; túnel durante o corpo; esteira | 5,4 m/s; 15 m/s; e⁻¹ em 3 s | 5,41; 15,8 m/s; 0,37 |
 | RT60 por banda dos 5 ambientes | ±15% | todos dentro |
-| modulação 1–4 kHz: frequência; profundidade | 3,89 Hz; ≥ 6 dB | céu 3,93 Hz, **5,2 dB**; túnel **3,73 Hz, 2,3 dB** |
-| padrão duplo dos truques | 82 ms | 73 ms (vale de 1,8 dB) |
-| pulsos de vão 50–200 Hz ≥ 8 dB | 9 | **0** (0–5 dB) |
-| pico − nariz a 100 m: céu; túnel | 23 ± 4; 10–12 dB | 21,4; 11,4 dB |
-| túnel − céu no L_Aeq,tp | +7 ± 2 dB | +8,5 dB |
-| L_Aeq,tp / L_AFmax céu; túnel | 108/113; 115/120 dB(A) | 107,8/**109,3**; 116,3/117,1 |
-| L_Aeq,tp a 7,5 m e 300 km/h | 100 ± 3 dB(A) | 100,3 dB(A) |
-| lei de velocidade 160 → 300: rolamento; aero | +8; +16 ± 1 dB | **+9,3; +17,6** dB |
-| balanço espectral no pico (60–150 / 400–1k / 1–2,5k / 2,5–6k / 6–12k) | +4/−1/+1/−2/−10 ± 4 | **−1,0**/−1,8/**−5,3/−11,4/−18,6**; centroide 510 Hz |
+| modulação 1–4 kHz: frequência; profundidade | 3,89 Hz; ≥ 3 dB (gravações: 2,4–5,6; o CENA dava ≥ 6) | céu 3,95 Hz, 4,0 dB; túnel 3,93 Hz, **2,0 dB** |
+| padrão duplo dos truques | 82 ms | 79 ms (vale de 1,8 dB) |
+| pulsos de vão 50–200 Hz ≥ 8 dB | 9 | **0** (as gravações também não têm) |
+| pico − nariz a 100 m: céu; túnel | 23 ± 4; 10–12 dB | 22,6; 11,3 dB |
+| túnel − céu no L_Aeq,tp | +7 ± 2 dB | +8,6 dB |
+| L_Aeq,tp / L_AFmax céu; túnel | 108/113; 115/120 dB(A) | 105,4/**106,7**; 114,1/**114,9** |
+| L_Aeq,tp a 7,5 m e 300 km/h | 100 ± 3 dB(A) | 100,6 dB(A); duas faces 100,5 |
+| lei de velocidade 160 → 300: rolamento; aero | +8; +16 ± 1 dB | +9,0; **+17,7** dB |
+| balanço espectral no pico (60–150 / 400–1k / 1–2,5k / 2,5–6k / 6–12k) | −3 (gravações; o CENA dava +4)/−1/+1/−2/−10 ± 4 | −4,0/+0,1/−1,2/−5,6/−13,5; centroide 999 Hz |
+| ponte: ronco em 31–125 Hz | +5 ± 1 dB | +5,0 dB |
+| crossfade das faces do trem | potência ±0,1 dB; 50 ms | 0,01 dB; 48 ms |
 | CPU por bloco (trem no túnel, 63 fontes) | < 50% do quantum | 334 µs (12,5%), p99 436 µs |
 | CPU 48 fontes, 10 s | < 25% do tempo real | 7,8% |
 
-**Desvios e por quê.** (1) *Ar a 1500 m:* com dois polos a diferença entre 500 Hz e 4 kHz não passa de 36 dB em nenhum corte; a ISO pede 46,7. O critério "não pode piorar" do avião (≤ −20 dB) é atendido (−21,7). (2) *σ do nariz:* 51 ms sai de L_nariz = 15 m; o padrão de 4.6 é 12 m (41 ms). (3) *Modulação 1–4 kHz, pulsos de vão, crista e balanço espectral* têm a mesma raiz: com os níveis de 4.6, o espectro de 2.7 e a sombra do piso de 2.5, o ruído aerodinâmico (uniforme ao longo do corpo) domina o nível A e a banda de 1–4 kHz por ~15 dB, e o rolamento chega 8–10 dB atenuado (o rolamento sozinho modula 8 dB e mostra o padrão duplo). O orçamento de 4.6 (rolamento ≈ aero a 7,5 m) supõe rolamento sem sombra; os alvos de balanço parecem vir de gravações com mais rolamento. Refinar contra gravações de Shinkansen/ICE. (4) *Leis de velocidade:* a potência segue 30/60·log v à letra e a Cena soma a convecção de 2.1, +1 dB entre 160 e 300 km/h; as leis de 4.6 são de níveis medidos, que já incluem esse efeito. (5) *Alocação:* ver acima. (6) *Bandas do carro e do avião pela Cena:* esperam os adaptadores do Ronco e da Turbina.
+**Desvios e por quê.** (1) *Ar a 1500 m:* com dois polos a diferença entre 500 Hz e 4 kHz não passa de 36 dB em nenhum corte; a ISO pede 46,7. O critério "não pode piorar" do avião (≤ −20 dB) é atendido (−21,7). (2) *σ do nariz:* 51 ms sai de L_nariz = 15 m; o padrão de 4.6 é 12 m (41 ms). (3) *Modulação no túnel, pulsos de vão e crista:* com o orçamento ajustado contra as gravações ([abaixo](#trem-contra-gravações-reais)) o balanço e a modulação a céu aberto batem; no túnel o campo reverberante enche os vales (2,0 dB); os pulsos de vão em 50–200 Hz e a crista de 5 dB (L_AFmax − L_Aeq,tp) também não aparecem nas gravações (0,7–1,8 dB). (4) *Leis de velocidade:* a potência segue 30/60·log v à letra e a Cena soma a convecção de 2.1, +1 dB entre 160 e 300 km/h; as leis de 4.6 são de níveis medidos, que já incluem esse efeito. (5) *Alocação:* ver acima. (6) *Bandas do carro e do avião pela Cena:* esperam os adaptadores do Ronco e da Turbina.
 
 **Referências do legado** (`tools/cena/referencias/legado.json`, de `master` por `git show`; `npx tsx tools/cena/legado.ts gravar` regrava, `valida.ts legado` confere): carro a 6 m (Camaro SS, 3000 rpm travado, 30 m/s): Doppler 217,7/182,6 Hz (teoria 219,2/183,9), bandas abeam, curva nível × x a cada 0,25 s, 1/3 de oitava de 400 Hz a 2,5 kHz; 737 a 1500 m e 300 km/h: bandas no ponto mais próximo e 10 s antes, 4 kHz a −21,6 dB de 500 Hz; F-16 a Mach 1,5 e 200 m: cone em 3,373 s (teoria 3,373), Δp 2270 Pa, T 79 ms. O `supersonico.ts` reproduz o instante do cone (3,3733 s) e Δp/T.
 
-**Pendente (TODO):** integrar o resolvedor supersônico no propagador (duas leituras por caminho, depende das fontes da Turbina); hélice idêntica ao legado (migração da Turbina); vias estruturais das fontes `dentro` na cabine e no cofre (motores); calibrar o ronco da ponte (+5 dB em 31–125 Hz); `atualizar()` reconfigura as fontes de face do trem só na construção (`ladoOuvinte`), o ouvinte que troca de lado precisa de crossfade; reverberação na página (RT60 por banda) e a cena 3D.
+**Pendente (TODO):** integrar o resolvedor supersônico no propagador (duas leituras por caminho, depende das fontes da Turbina); hélice idêntica ao legado (migração da Turbina); vias estruturais das fontes `dentro` na cabine e no cofre (motores). Feitos depois: ponte calibrada, crossfade do lado do ouvinte (duas faces), reverberação na página e cena 3D.
+
+### Trem contra gravações reais
+
+O orçamento de níveis de 4.6 foi refeito contra passagens reais perto da via, a 265–320 km/h. As gravações não são calibradas: valem as formas e as razões, medidas em mono.
+
+**Gravações usadas:**
+
+| Trem | Velocidade (km/h) | Onde |
+|---|---|---|
+| E5 Hayabusa | 320 | estação |
+| ICE 3 | 320 | estação |
+| Velaro E | 300 e 265 | — |
+| Velaro | 300 | — |
+| Tohoku Shinkansen | ~300 | — |
+
+**Descartadas** (com o motivo):
+- ETR 500 e TGV Groß-Gerau: lentos demais.
+- ICE Bitterfeld: sem nariz e sem cauda.
+- TGV Boulogne: vento no microfone.
+- Gravações de túnel: servem só para a onda de pressão.
+- Trechos com narração ou música.
+
+**Ganho automático:** quatro gravações ficam a ±0,5 dB durante o corpo, sinal de controle automático de ganho na câmera. Isso não muda o balanço espectral, mas comprime a profundidade da modulação.
+
+**O que cada coluna mede:**
+- **Balanço:** 2 s em torno do máximo, sem ponderação, em dB relativos à banda de 150–400 Hz.
+- **E:** L(1–4 kHz) − L(150–600 Hz) durante o corpo. Estima o peso do rolamento contra o aerodinâmico.
+- **Modulação:** envoltória RMS de 20 ms em 1–4 kHz durante o corpo. A tabela dá o pico da FFT entre 2 e 6 Hz e a profundidade p90 − p10.
+
+| Caso | v (km/h) | v/L_c (Hz) | 60–150 | 400–1k | 1–2,5k | 2,5–6k | 6–12k | Centroide (Hz) | E (dB) | Modulação 1–4 kHz |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Real: E5 Hayabusa, estação | 320 | 3,56 | −2,3 | +4,1 | +3,8 | −2,0 | −5,9 | 1461 | +1,4 | 3,67 Hz / 2,6 dB |
+| Real: ICE 3, estação (vento < 100 Hz) | 320 | 3,58 | (+5,5) | −2,1 | −1,1 | −4,5 | −9,8 | 689 | −0,7 | 3,40 Hz / 4,9 dB |
+| Real: Velaro E | 300 | 3,44 | (+6,7) | +4,1 | +5,2 | +0,6 | −2,9 | 1138 | +3,0 | 3,41 Hz / 3,2 dB |
+| Real: Velaro E | 265 | 3,04 | −4,4 | −3,0 | +1,7 | +1,4 | −4,3 | 2216 | +0,9 | 2,99 Hz / 2,8 dB |
+| Real: Velaro | 300 | 3,44 | −2,1 | +6,0 | +9,1 | +3,7 | −5,8 | 1715 | +7,4 | 2,89 Hz / 2,4 dB |
+| Real: Tohoku Shinkansen | ~300 | 3,33 | −2,0 | +0,5 | +1,5 | −3,7 | −11,6 | 1145 | −0,2 | 3,46 Hz / 5,6 dB |
+| **Média real** (5 limpas) | | | **−2,7** | **+2,3** | **+4,3** | **0,0** | **−6,1** | **1535** | **+2,5** | **±4% de v/L_c; 2,4–5,6 dB** |
+| Simulado antes, 7,5 m | 300 | 3,33 | −1,8 | −2,5 | −6,3 | −10,0 | −16,9 | 548 | −6,6 | 3,32 Hz / 2,3 dB |
+| Simulado antes, 3 m | 300 | 3,33 | −2,1 | −2,2 | −5,7 | −11,5 | −19,1 | 514 | −6,1 | 3,33 Hz / 4,8 dB |
+| **Simulado agora, 7,5 m** | 300 | 3,33 | −2,0 | +2,0 | +1,9 | −0,3 | −9,8 | 1356 | +1,1 | 3,36 Hz / 3,1 dB |
+| **Simulado agora, 5 m** | 320 | 3,56 | −3,4 | +0,1 | +0,2 | −3,2 | −12,0 | 1183 | −0,2 | 3,54 Hz / 3,3 dB |
+| **Simulado agora, 3 m** | 300 | 3,33 | −4,8 | +0,2 | −1,0 | −5,3 | −14,1 | 1003 | −1,6 | 3,34 Hz / 3,6 dB |
+
+Entre parênteses: vento no microfone (fora da média).
+
+**O que mudou.**
+
+**Forma do rolamento.** O passa-banda em 2,2 kHz com o polo em 7 kHz punha o pico de 1/3 de oitava em 3,2 kHz. Agora é um passa-banda em 1,5 kHz·√(v/v_ref) com um polo em 2,5 kHz·√(v/v_ref):
+- em 1/3 de oitava dá −16/−8/−2/0/−4/−11 dB, de 250 Hz a 8 kHz;
+- fica a 0,7 dB rms do rolamento das gravações.
+
+Um ganho de 1/√k tira da lei de velocidade os ~1,4 dB que vinham da largura de banda crescendo com √v. A lei do rolamento passou de +9,3 dB (desvio) para +9,0 dB, dentro do alvo de +8 ± 1.
+
+**Níveis** (`LW_TREM`, em dB(A)):
+
+| Fonte | Antes | Agora |
+|---|---|---|
+| Rolamento | 123 | 130 |
+| Aero do truque | 119 | 105 |
+| Corpo | 122 | 119 |
+| Nariz e cauda | 119 | 116 |
+| Vãos | 119 | 119 (igual) |
+| Pantógrafos | 115 | 115 (igual) |
+
+Por que o rolamento subiu tanto: com os L_W de 4.6, o rolamento chegava a 7,5 m com só 92 dB(A), por causa da sombra do piso, contra os 97 da tabela.
+
+Resultado a 7,5 m e 300 km/h:
+
+| Parcela | dB(A) |
+|---|---|
+| Só rolamento | 98,8 |
+| Aero | 95,8 |
+| Total | 100,6 |
+
+O total continua dentro do alvo de 100 ± 3 dB(A).
+
+**Alvos atualizados** (`tools/cena/medidas.ts`, com a justificativa no código):
+- **Balanço 60–150 Hz:** +4 → −3 ± 4 dB. As quatro gravações sem vento dão de −2,0 a −4,4.
+- **Profundidade da modulação dos vãos:** ≥ 6 → ≥ 3 dB. Nenhuma das seis passagens chega a 6; elas dão 2,4–5,6 dB, com o pico a ±4% de v/L_c.
+
+**O que as gravações não confirmam:**
+- **Pulsos de vão em 50–200 Hz:** nenhuma gravação tem pico em v/L_c.
+- **Crista:** o L_AFmax − L_Aeq das gravações é de 0,7–1,8 dB. Os 5 dB implícitos em 2.11 não aparecem.
+
+Esses dois desvios continuam documentados.
+
+**Diferença que fica:** a 3 m o simulado sai mais escuro que as gravações. A sombra do piso tira 9,8 dB do rolamento em 1 kHz a 3 m, contra 5,8 dB a 7,5 m, e as gravações provavelmente foram feitas mais longe da via.
+
+**Efeito colateral:** a forma nova vale também para o rolamento da locomotiva (mesma classe `FonteRolamento`). O grupo `portadores` continua todo ok.
+
+## Página Passagem e modo de testes
+
+`passagem.html` e `src/pages/passagem/` formam a interface da Cena nova (CENA.md 3). Um portador passa pelo ouvinte: o trem de N vagões ou o helicóptero, os dois sem motor por enquanto. O ouvinte fica parado junto à via ou num gimbal 3D em torno do corpo, e há uma cena three.js. O padrão é o das outras páginas: estado e mensagens fora do React, painel com os componentes de `src/ui/`, mostradores em canvas e um único `requestAnimationFrame`.
+
+| Arquivo | O que faz |
+|---|---|
+| `controle.ts` | `ControlePassagem`. Guarda o estado e manda as mensagens ao worklet. Monta a sonda do portador na thread principal: geometria, lista de fontes e calibrações. Cuida de disparar e parar, dos atalhos do gimbal, do "voltar ao padrão" e da geometria do ouvinte no mundo |
+| `presets.ts` | Portadores, motores com adaptador, ambientes, solos, os padrões do trem e os presets de passagem |
+| `Painel.tsx`, `PaginaPassagem.tsx` | Painel, barra, presets, vista 3D, telemetria e gráficos |
+| `cena3d.ts`, `cena3d-cores.ts` | Cena three.js, num chunk próprio carregado sob demanda |
+| `mostradores.ts` | Nível no ouvido, telemetria em texto, HUD, onda de pressão, espectrograma e osciloscópio |
+| `tools/passagem-navegador.mjs` | Teste da página no navegador |
+
+**Áudio.**
+- `AudioShell` usa o `PERFIL_PASSAGEM`, o processador `cena` (`CenaDSP`) e o medidor.
+- **Escala absoluta:** o perfil não tem ganho de saída, e o compressor só limita a −1 dBFS (20:1), para o nível continuar o da física.
+- **Calibração fora do worklet:** a página calcula as calibrações das ~55 fontes do trem (`Trem.calibracoes()`, ~30 ms) e as manda prontas em `config.calibracao`. Calibrar dentro do worklet cortaria o áudio.
+- **Duas faces:** a página monta o trem com `faces: 'duas'`. A camada limite muda de face com o crossfade de 50 ms quando o ouvinte troca de lado, o que acontece no gimbal e na volta.
+- **Reverberação:**
+  - vem de `aplicarRespostaPorBanda`: resposta de `gerarRespostaPorBanda` com energia 1, `normalize = false`, molhado √`reverb.wet` e seco `reverb.dry`;
+  - as respostas ficam guardadas por ambiente;
+  - o "RT60 (× do lugar)" do modo de testes multiplica as quatro bandas.
+
+**Mensagens para o worklet.**
+
+| Mensagem | Conteúdo | Quando |
+|---|---|---|
+| `portador` | `trem` ou `rotor`, com a configuração | Mudança estrutural: N, passo, vão, nariz… |
+| `cena` | Ambiente, trajetória e ouvinte | A cada mudança; o worklet faz rampas de 20 ms |
+| `comando` | Velocidade fixa e coletivo | Ao disparar, parar e mudar a velocidade |
+| `params` | `master` e `posicao` | `posicao` chama `CenaPassagem.reposicionar` |
+| `ar` | Umidade e temperatura | Ao mudar o ar |
+
+Arrasto e sliders contínuos marcam a cena como pendente. `enviarPendentes()` manda no máximo uma mensagem por quadro.
+
+**Passagem.**
+- **Disparar:** põe o nariz a `x0` m antes do ouvinte (600 m no trem) e liga a velocidade fixa. `reposicionar` recomeça o histórico de poses e zera a onda do túnel.
+- **"Uma vez":** depois de a cauda se afastar 800 m (no máximo meia via), o corpo para longe, inaudível.
+- **"Repetindo":** o corpo segue. A reta "reaparece do outro lado" e o túnel dispara de novo, porque `CenaPassagem` reduz o nariz à via.
+- **Teclas:** <kbd>Espaço</kbd> dispara ou para, <kbd>R</kbd> alterna repetir, <kbd>G</kbd> alterna o gimbal e <kbd>C</kbd> troca a câmera, com a cena em foco.
+
+**Portadores e compatibilidade.**
+- Os portadores aparecem pela tabela `COMPAT` (CENA 1.6).
+- Um portador fica habilitado quando alguma família de motor dele tem adaptador (`MOTORES_PRONTOS`, hoje só `'nenhum'`) e o `CenaDSP` sabe montá-lo (`PORTADORES_NO_DSP`, hoje `trem` e `rotor`).
+- Carro, avião de hélice, gerador e locomotiva aparecem desabilitados, com o motor que esperam.
+- Os presets com motor ("Carro na rua a 6 m", "Turboélice rasante", "Locomotiva em notch 8") também ficam desabilitados.
+- Quando um adaptador chegar:
+  1. acrescente a família em `MOTORES_PRONTOS`;
+  2. ensine o `CenaDSP` a montar o portador com o motor;
+  3. dê ao portador uma entrada em `PADROES`.
+
+**Ouvinte.**
+- **Parado junto à via:** posição ao longo da via, altura do ouvido e distância à lateral.
+- **No gimbal:** azimute, elevação e distância em torno do centro do corpo ou de uma fonte (`alvo`). Os limites são os de 3.2.
+- **Atalhos** (3.2): resolvidos para as fontes do portador.
+
+  | Atalho | Posição |
+  |---|---|
+  | Frente | 3 m à frente do nariz |
+  | Lateral | 90°, 5 m |
+  | Câmera atrás | atrás da cauda |
+  | Cabine | ponto dentro do primeiro vagão; o local automático vira `cabine` |
+  | Sobre o pantógrafo / sobre o rotor | 1 m acima, a 89° |
+  | Escape, ponteira, cofre | desabilitados: o trem não tem escape nem fonte `dentro` |
+
+- **Filtro do local:** os de 3.3, aplicados pela Cena (`RegrasLocal`).
+  - **Fora:** diretividade × sombra × propagação, mais ITD/ILD.
+  - **Cabine:** lei da massa e ressonância do habitáculo.
+  - **Cofre:** fontes de dentro diretas.
+  - **Ponteira:** só a fonte alvo, as outras −20 dB.
+  - **Automático:** a página mostra o local resolvido com a mesma regra da Cena.
+
+**Modo de testes.** Todos os parâmetros da tabela 3.1 ficam livres:
+
+| Grupo | Parâmetros |
+|---|---|
+| Trajetória | tipo, comprimento (200–20 000 m), raio, lateral, altitude, sentido |
+| Passagem | velocidade, distância de partida |
+| Ambiente | solo, RT60, seção, comprimento e boca do túnel |
+| Ar | umidade (absorção ISO 9613) e temperatura (velocidade do som da propagação, 343 m/s a 20 °C; a absorção fica a de 20 °C) |
+| Trem | vagões, passo, vão, posição do truque, nariz, c_p do nariz, largura, altura, pantógrafos, carenagem |
+
+- **Vagões:** o limite vem do orçamento de 64 fontes da Cena (`maxVagoes`: 12 com duas faces e dois pantógrafos).
+- **Aero do truque:** sai do orçamento quando não cabe. Fica 25 dB abaixo do rolamento, então não se ouve.
+- **"Voltar ao padrão":** devolve os valores do CENA para o portador. No trem: reta de 3000 m, 3 m da lateral, 350 km/h, túnel, umidade de 60%, 20 °C, 10 vagões de 25 m.
+
+**Cena 3D** (3.4).
+
+*Carga.* A cena é carregada por `import('./cena3d')`, num chunk de 600 kB com o three.js. Ela nunca segura o áudio: se o WebGL faltar, a página segue com os mostradores e um aviso.
+
+*Cenário.*
+- Mundo em metros, com z para cima.
+- Chão com grades de 10 m e 100 m, na cor ou textura do solo. As texturas são CC0 da Poly Haven (`public/3d/LICENSES.md`).
+- Via com trilhos e dormentes a 0,6 m. No ar, a via vira uma linha tracejada na altitude.
+- Ambientes: túnel semitransparente da seção do ambiente; estação com plataforma, cobertura a 7 m e pilares; corte com taludes a 45°; ponte com tabuleiro de 3,7 m, pilares e vale.
+
+*Corpo.*
+- Trem por segmento, com o vão entre eles. A geometria é parametrizada: seções de superelipse, nariz e cauda afilados em bico de pato, faixa e janelas.
+- Truques, pantógrafo em "Z" com a carenagem, e o rotor com disco e pás.
+- Fantasma translúcido na posição de emissão da fonte escolhida: `s − v·τ`.
+
+*Fontes e ouvinte.*
+- Esferas das fontes coloridas por tipo, com raio `0,15 + 0,25·clamp((g + 40)/40)`.
+- Cabeça com nariz para o alvo, anel do azimute, arco da elevação e linha tracejada com a distância.
+- Alças da lateral e da altitude, e o ponto mais próximo da via.
+- HUD com v, distância de cada grupo de fontes, pressão, vento, dB(A) e Doppler.
+
+*Câmera.* Três modos: no ouvinte (padrão), seguindo o corpo, e livre.
+
+*Arrasto.* Por raycast, com passo de 5° e 0,5 m.
+
+| Peça | O que muda |
+|---|---|
+| Cabeça | parado: x e lateral, e altura com Shift; gimbal: azimute e distância, e elevação com Shift |
+| Anel | azimute |
+| Arco | elevação |
+| Linha | distância |
+| Corpo | `s`, ao longo da via |
+| Seta verde | lateral |
+| Seta azul | altitude |
+
+Um clique numa esfera faz da fonte o alvo do gimbal e mostra a ficha dela: tipo, posição, `refDist`, diretividade, ganho, distância e atraso.
+
+*Desempenho.* Cerca de 30 fps, sem sombras dinâmicas. A posição do corpo é interpolada da telemetria, que chega a cada 1024 amostras.
+
+**Mostradores.**
+- **Nível no ouvido:** um analisador lê a soma seco + molhado antes do compressor, com FFT própria de 8192 pontos (Hann) e ponderação A analítica. Vai para dB SPL pela escala absoluta: 124 dB SPL − 20·log₁₀(master). Isso inclui o campo reverberante, que o `splDbA` da Cena (só o direto) não tem.
+- **Telemetria:**
+  - posição do nariz em relação ao ouvinte;
+  - velocidade;
+  - Doppler da fonte escolhida, ou da mais próxima: f′/f = 1/(1 − M·cos θ_e), com θ_e da telemetria;
+  - pressão de nariz e cauda, e o pico do intervalo;
+  - onda de compressão do túnel, em kPa;
+  - vento;
+  - local e face do trem.
+- **Onda de pressão:** 11 s de histórico, com os extremos de cada telemetria (o pico de 41 ms do nariz não se perde) e as parcelas de nariz e cauda e do túnel.
+- **Espectrograma, espectro e osciloscópio:** do analisador da saída.
+
+**Teste** (`npm run navegador:passagem [-- url] [--firefox] [--reserva] [--foto arq.png]`). Sem url, o teste serve o `dist/` em `http://127.0.0.1:<porta>/data/engine/`. O roteiro confere:
+1. **Estrutura:** presets, portadores pela compatibilidade, seções, os 22 sliders do modo de testes, atalhos e cena 3D desenhando.
+2. **Passagem no túnel:** dispara o trem-bala a 350 km/h e confere:
+   - o AudioWorklet e as mensagens (trem de 10 vagões com duas faces e calibrações, túnel com a boca a 500 m);
+   - a reverberação por banda com `normalize = false`;
+   - a onda de compressão de ~2 kPa (medido 1996 Pa), chegando 3,7 s antes do nariz;
+   - a onda de nariz pico a pico (153 Pa);
+   - o nível no ouvido (111–112 dB(A));
+   - as leituras e o HUD.
+3. **Gimbal:**
+   - atalho lateral, com os sliders acompanhando;
+   - elevação;
+   - arrasto da cabeça na cena com o mouse de verdade (o worklet recebe);
+   - atalho da cabine, que vira o local `cabine`;
+   - ficha da fonte.
+4. **Ambiente:** a troca manda a mensagem e gera uma resposta ao impulso nova.
+5. **Parâmetros do modo de testes:** lateral e número de vagões (o trem é montado de novo).
+6. **Céu aberto:** passagem repetindo.
+7. **Câmeras e helicóptero.**
+8. **"Voltar ao padrão".**
+9. **Console sem erros.**
+
+**Resultado:** passa em Chromium (worklet e reserva) e em Firefox.
 
 ## Validação
 

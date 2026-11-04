@@ -138,6 +138,8 @@ export class Propagador {
   expEnvio = 0.5;
   /** largura refletora (m do eixo da via) além da qual o solo vira `nenhum` (ponte); Infinity = toda */
   soloLargura = Infinity;
+  /** velocidade do som (m/s): 343 a 20 °C; o modo de testes muda pela temperatura (definirTemperatura na Cena) */
+  c = C_SOM;
   regras: RegrasLocal = { diretividade: true, sombra: true, solo: true, binaural: true, rota: null, envio: 1 };
   kSh: number; kHb: number; kIld: number;
   iteracoesExtra = 0;
@@ -198,7 +200,7 @@ export class Propagador {
       sx = pv[0] + by * pv[4]; sy = pv[1] + by * pv[5]; sz = this.alt + bz;
       const dx = ox - sx, dy = oy - sy, dz = oz - sz;
       r = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      const tn = r / C_SOM, d = Math.abs(tn - tau);
+      const tn = r / this.c, d = Math.abs(tn - tau);
       tau = tn;
       if (it >= 2 && d < lim) break;
     }
@@ -227,13 +229,13 @@ export class Propagador {
         if (cam === 1 && !usaSolo) { es.ativo[1] = 0; es.gAlvo[1] = 0; continue; }
         this.resolver(es, cam, tRec, O);
         const rs = this.rs, tau = rs[14];
-        const M = rs[9 /*v*/] / C_SOM, mc = M * rs[7 /*cT*/];            // M·cosθ_e (velocidade · direção fonte→ouvinte)
+        const M = rs[9 /*v*/] / this.c, mc = M * rs[7 /*cT*/];            // M·cosθ_e (velocidade · direção fonte→ouvinte)
         let conv = Math.pow(Math.max(0.05, Math.abs(1 - mc)), -es.expConv);
         if (conv > 4) conv = 4;
         // dτ/dt = û·(v_s − v_O)/(c + û·v_s), û = ouvinte → fonte
         const usv = -rs[9 /*v*/] * rs[7 /*cT*/];
         const uvo = -(rs[3 /*ux*/] * O.vx + rs[4 /*uy*/] * O.vy + rs[5 /*uz*/] * O.vz);
-        const dtau = (usv - uvo) / (C_SOM + usv);
+        const dtau = (usv - uvo) / (this.c + usv);
         let gd = 1;
         if (R.diretividade && !es.f.dentro) {
           const cosD = es.ax * rs[7 /*cT*/] + es.ay * rs[8 /*uN*/] + es.az * rs[5 /*uz*/];

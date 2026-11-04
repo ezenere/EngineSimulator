@@ -8,6 +8,8 @@
 //
 // Se o AudioWorklet não carregar, o mesmo DSP roda na thread principal num ScriptProcessorNode.
 import { gerarRespostaAoImpulso } from './ambientes';
+import { gerarRespostaPorBanda } from '../../scene/ambientes';
+import type { Ambiente as AmbienteCena } from '../../scene/tipos';
 import type { PerfilDeAudio } from './perfis';
 import type { FabricaDeDSP } from '../../worklet/tipos';
 
@@ -19,6 +21,8 @@ export type OpcoesDaCadeia = {
   aoMensagem?: (m: any) => void; // telemetria que o DSP manda por post()
   ambiente: string;
   ouvinte?: string; // posição inicial do ouvinte (params.listener)
+  // analisador na soma seco + molhado, antes do compressor (o nível no ouvido da Passagem, em escala absoluta)
+  medidor?: boolean;
 };
 
 export type Equalizacao = { lo: number; mid: number; hi: number };
@@ -34,6 +38,7 @@ export class CadeiaDeAudio {
   conv: ConvolverNode;
   comp: DynamicsCompressorNode;
   analyser: AnalyserNode;
+  medidor: AnalyserNode | null = null;
   eq: { lo: BiquadFilterNode; mid: BiquadFilterNode; hi: BiquadFilterNode } | null;
   perfil: PerfilDeAudio;
   ambiente: string;
@@ -90,7 +95,16 @@ export class CadeiaDeAudio {
     const out = ctx.createGain(); out.gain.value = P.saida;
     const analyser = ctx.createAnalyser(); analyser.fftSize = P.fft; analyser.smoothingTimeConstant = 0.6;
     toDry.connect(dry); toWet.connect(conv); conv.connect(wetLP); wetLP.connect(wet);
-    dry.connect(comp); wet.connect(comp);
+    if (o.medidor) {
+      // soma seco + molhado num ganho unitário: dali vão o compressor e o medidor
+      const soma = ctx.createGain();
+      dry.connect(soma); wet.connect(soma); soma.connect(comp);
+      const med = ctx.createAnalyser(); med.fftSize = 8192; med.smoothingTimeConstant = 0;
+      soma.connect(med);
+      c.medidor = med;
+    } else {
+      dry.connect(comp); wet.connect(comp);
+    }
     if (P.eq) {
       // equalizador de escuta (grave / médio / agudo), para acertar o balanço no seu alto-falante
       const eqLo = ctx.createBiquadFilter(); eqLo.type = 'lowshelf'; eqLo.frequency.value = 160;
@@ -104,8 +118,37 @@ export class CadeiaDeAudio {
     }
     out.connect(analyser); analyser.connect(ctx.destination);
     Object.assign(c, { dry, wet, wetLP, conv, comp, analyser });
-    c.setAmbiente(o.ambiente);
+    if (P.ambientes[o.ambiente]) c.setAmbiente(o.ambiente);
     return c;
+  }
+
+  /**
+   * Reverberação da Passagem (CENA.md 2.10): resposta ao impulso com RT60 por banda de
+   * `gerarRespostaPorBanda`, que sai com energia 1 por canal. Por isso o convolver não normaliza
+   * (`normalize = false`) e o ganho do molhado vem do ambiente: `reverb.wet` é a razão de POTÊNCIA entre o
+   * campo reverberante e o envio, então o ganho de amplitude é √wet (como no render offline de
+   * tools/cena/render-passagem.ts). O seco fica em `reverb.dry` e o passa-baixa do envio aberto (o
+   * escurecimento já está no RT60 por banda). As respostas ficam guardadas por ambiente.
+   */
+  private respostas = new Map<string, AudioBuffer>();
+  aplicarRespostaPorBanda(amb: AmbienteCena) {
+    const ctx = this.ctx, sr = ctx.sampleRate;
+    const chave = JSON.stringify([amb.id, amb.solo.tipo, amb.reverb]);
+    let buf = this.respostas.get(chave);
+    if (!buf) {
+      const ir = gerarRespostaPorBanda(amb, sr);
+      buf = ctx.createBuffer(2, ir.L.length, sr);
+      buf.getChannelData(0).set(ir.L); buf.getChannelData(1).set(ir.R);
+      if (this.respostas.size > 12) this.respostas.clear();
+      this.respostas.set(chave, buf);
+    }
+    this.ambiente = amb.id;
+    this.conv.normalize = false;
+    this.conv.buffer = buf;
+    const t = ctx.currentTime;
+    this.wetLP.frequency.setTargetAtTime(20000, t, 0.05);
+    this.wet.gain.setTargetAtTime(Math.sqrt(Math.max(0, amb.reverb.wet)), t, 0.05);
+    this.dry.gain.setTargetAtTime(amb.reverb.dry ?? 1, t, 0.05);
   }
 
   // troca a resposta ao impulso do ambiente (setEnvironment); os params do DSP ficam com a página

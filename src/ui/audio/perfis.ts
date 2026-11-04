@@ -46,3 +46,16 @@ export const PERFIL_TURBINA: PerfilDeAudio = {
     return { corte: inside ? 500 : 16000, molhado: E.wet * (inside ? 0.3 : 1), seco: null };
   },
 };
+
+// Passagem e modo de testes (src/pages/passagem): escala absoluta da Cena (0 dBFS ≙ 124 dB SPL), sem
+// ganho de saída e com o compressor só como limitador perto do teto (−1 dBFS, 20:1), para o nível no
+// ouvido continuar o da física. A reverberação é a da Cena (aplicarRespostaPorBanda), não a destes ambientes.
+export const PERFIL_PASSAGEM: PerfilDeAudio = {
+  compressor: { threshold: -1, knee: 0, ratio: 20, attack: 0.002, release: 0.2 },
+  eq: false,
+  corteInicial: 20000,
+  saida: 1,
+  fft: 4096,
+  ambientes: {},
+  acustica: () => ({ corte: 20000, molhado: 1, seco: null }),
+};
