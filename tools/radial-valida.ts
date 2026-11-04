@@ -7,7 +7,7 @@
 // lado, solo de grama), que dá a propagação, o solo e a hélice de verdade; a dinâmica roda no RadialDSP direto.
 //
 //   npx tsx tools/radial-valida.ts [grupos...] [--j 8]    (grupos: geometria razoes bandas linhas niveis galope partida
-//                                                         motor aviacao cpu potencia; sem grupo, todos em paralelo)
+//                                                         estouros motor aviacao cpu potencia; sem grupo, todos em paralelo)
 // Sai ≠ 0 se houver falha (os desvios conhecidos, documentados no TECNICO, aparecem como "desv").
 import os from 'node:os';
 import { spawn } from 'node:child_process';
@@ -49,6 +49,7 @@ const DESVIOS: Record<string, string> = {
   'R-2800: mistura em corte, de 1 000 rpm a parar': '0,2 s abaixo: a hélice de bancada no passo mínimo freia um pouco mais que a do avião.',
   'R-2800: subida de giro com o passo mínimo (manete ao fundo em 3 s)': 'Com a hélice no passo mínimo absorvendo 90% da potência na rotação máxima, o R-2800 sobe junto com a manete (2,9 s com a manete em 3 s); o alvo de 4–7 s supõe uma manete mais lenta.',
   'R44: droop ao puxar o coletivo (0,5 → 0,75 em 1 s)': 'A borboleta do Ronco responde em 30 ms e o governador do rotor (Kp 0,8·0,12 por %) segura o Nr: 0,7% de queda e volta em ~1 s. O droop de 2–3% do R44 real vem do correlacionador e do atraso do coletor, que o modelo não tem; com ganho menor o Nr demorava 3 s para voltar.',
+  'm14p: lenta quente, picos por segundo (> 16 dB)': 'Nenhum estouro injetado: são as explosões fortes do galope (carburador de boia, dispersão ×2,6 do radial sobre a do carburador do Ronco) saindo como estalos no chiado do jato das duas saídas curtas (0,4 m, ∝ v²): sem o chiado (mistura "Ar" em 0) dá 2,3/s e curtose 4. A gravação do Yak-52 (Commons, codec saturando) tem 2,5/s; a do T-6G, também de boia, 10/s a 4 m, e o R-1340 do modelo fica em 0,7/s: com as duas gravações em sentidos opostos, o galope de boia não muda (e com menos dispersão o CVciclo do Yak e do T-6G cai abaixo de 0,30).',
   'potência rotec2800': 'A escala de torque (tqScale) é feita com o atrito médio; no Rotec de 2,8 L o atrito pesa mais e a potência na rotação máxima sai 8% acima da ficha.',
 };
 
@@ -230,9 +231,10 @@ async function grupo(nome: string): Promise<Linha[]> {
       // R-1830, arranque de inércia: energizar (apito 290 → 390 Hz em ~18 s), engate, contagem de pás, pegar, CV
       const s = preset('r1830');
       const d = novoDSP(s, { temp: 15 });
-      let pops = 0; const push = d.pops.push.bind(d.pops); d.pops.push = (...a: any[]) => { pops++; return push(...a); };
+      // (estouros com o instante: o alvo é dos primeiros 10 s depois de pegar)
+      const tPops: number[] = []; let tAgora = 0; const push = d.pops.push.bind(d.pops); d.pops.push = (...a: any[]) => { tPops.push(tAgora); return push(...a); };
       d.message({ type: 'av', prime: 2 });
-      const r = renderizar(d, 45, [[0, (x) => x.message({ type: 'input', ignition: true })]]);
+      const r = renderizar(d, 45, [[0, (x) => x.message({ type: 'input', ignition: true })]], (_x, t) => { tAgora = t; });
       const tEng = r.tele.find((q) => q.fase === 'girar')?.t ?? NaN, tPega = r.tele.find((q) => q.state === 'run')?.t ?? NaN;
       const tMag = r.tele.find((q) => q.t > tEng && q.magnetos === 'ambos')?.t ?? NaN;
       const apito = (t0: number) => { const x = mono(r.L, r.R, t0, t0 + 1); const [f, P] = welch(x, S, 16384); let kb = 0; for (let k = 1; k < f.length; k++) if (f[k] > 250 && f[k] < 450 && P[k] > P[kb]) kb = k; return f[kb]; };
@@ -241,11 +243,15 @@ async function grupo(nome: string): Promise<Linha[]> {
       add('R-1830: 9 pás contadas depois do engate', '4–6 s', `${f1(tMag - tEng, 1)} s`, tMag - tEng >= 4 && tMag - tEng <= 6);
       add('R-1830: pega depois dos magnetos', '1–3 s', `${f1(tPega - tMag, 1)} s`, tPega - tMag >= 1 && tPega - tMag <= 3);
       const cv = (t0: number, t1: number) => { const tl = trecho(r.tele, t0, t1); const rpm = media(tl.map((q) => q.rpm)); return medir(mono(r.L, r.R, t0, t1), S, { N: 14, fileiras: 2, fIgn: (rpm / 60) * 7, rastrear: false }).cvCiclo; };
-      const c3 = cv(tPega, tPega + 3), c20 = cv(tPega + 18, tPega + 21);
-      add('R-1830: CVciclo nos 3 s depois de pegar', '≥ 0,8', f1(c3, 2), c3 >= 0.8);
+      // (a janela da gravação, DC-3 25–28 s, começa meio segundo antes da 1ª explosão e pega a subida de 20 dB do nível
+      // enquanto o motor pega; a do modelo é a mesma, de 0,5 s antes a 2,5 s depois. O alvo é a faixa das partidas do A.3
+      // com o motor frio: P-47 0,62, DC-3 0,80, R-2800 1,06, SBD 1,11 (o Corsair, quente, 0,37). O "≥ 0,8" de antes só
+      // passava com 21 estouros de 28–34 dB nesses 3 s, que nenhuma gravação tem: ver ESTOURO_PARTIDA em aviacao.ts)
+      const c3 = cv(tPega - 0.5, tPega + 2.5), c20 = cv(tPega + 18, tPega + 21);
+      add('R-1830: CVciclo nos 3 s em que pega (de 0,5 s antes a 2,5 s depois)', '0,6–1,1 (A.3)', f1(c3, 2), c3 >= 0.6 && c3 <= 1.1);
       add('R-1830: CVciclo aos 20 s', '≤ 0,45', f1(c20, 2), c20 <= 0.45);
-      const popsIni = pops; void popsIni;
-      add('R-1830 com primer 2: estouros nos primeiros 10 s depois de pegar', '≥ 3 (3–8)', String(pops), pops >= 3);
+      const p10 = tPops.filter((t) => t >= tPega && t < tPega + 10).length, pTot = tPops.filter((t) => t >= tPega).length;
+      add('R-1830 com primer 2: estouros nos primeiros 10 s depois de pegar', '3–8', `${p10} (${pTot} até ${f1(45 - tPega, 0)} s depois de pegar)`, p10 >= 3 && p10 <= 8);
       // M-14P, ar comprimido: "tchufs" por segundo (cilindros recebendo ar) por 2–3 s
       const dm = novoDSP(preset('m14p'), { temp: 15 });
       let tch = 0, ant = new Uint8Array(9); const fn = dm.partidaAr.bind(dm);
@@ -345,6 +351,26 @@ async function grupo(nome: string): Promise<Linha[]> {
     add('Cessna 172: f_ign/BPF', '1,0', f1(fIgn / tl.bpf, 3), Math.abs(fIgn / tl.bpf - 1) <= 0.01);
   }
 
+  if (nome === 'estouros') {
+    // "pipocos" (REVISAO-DE-SOM.md: picos por segundo e curtose do agudo; tools/radial-estouros.ts): o detector do pops.py
+    // na saída da página (de fora, 5 m do cubo) contra as gravações (DC-3, P-47, Corsair, T-28, R-2800 em banco, Rotec,
+    // Sh-14): nos 20 s depois de pegar, 0–6 picos acima de 20 dB e 0–0,73 por segundo acima de 16 dB; na lenta quente
+    // 0–2,5 picos por segundo e nenhum acima de 16 dB (DC-3 0, P-47 0–2,3, Corsair 2,5, T-28 1,8)
+    const { cenario, ign, eng, thr } = await import('./radial-estouros');
+    const f2 = (x: number) => f1(x, 2);
+    for (const id of ['r1820', 'r1830', 'r2800', 'r2800turbo']) {
+      const [p20] = cenario(id, false, 45, [[0, ign], [0.5, eng]], [['partida 0–20 s', 0, 20]], true);
+      add(`${id}: estouros nos 20 s depois de pegar (picos > 20 dB)`, '≤ 6', `${p20.m.n20} (o mais alto ${f1(p20.m.hmax)} dB; ${f2(p20.inj)} injetados/s)`, p20.m.n20 <= 6);
+      add(`${id}: picos > 16 dB por segundo nos 20 s depois de pegar`, '≤ 0,75', f2(p20.m.fortes), p20.m.fortes <= 0.75);
+      const fr = cenario(id, false, 40, [[0, ign], [0.5, eng], [14, thr(1)], [20, thr(0)]], [['subida', 14.5, 20], ['desaceleração', 20, 26]]);
+      add(`${id}: picos > 16 dB por segundo acelerando e desacelerando a frio (14–26 s)`, '≤ 0,5', fr.map((r) => f2(r.m.fortes)).join(' / '), fr.every((r) => r.m.fortes <= 0.5));
+    }
+    for (const id of ['r1820', 'r1830', 'r2800', 'r2800turbo', 'm14p']) {
+      const [lq] = cenario(id, true, 14, [], [['lenta quente', 3, 14]]);
+      add(`${id}: lenta quente, picos por segundo (> 16 dB)`, '≤ 3 (0)', `${f2(lq.m.est)} (${f2(lq.m.fortes)}; curtose ${f1(lq.m.kmed)})`, lq.m.est <= 3 && lq.m.fortes <= 0.3);
+    }
+  }
+
   if (nome === 'cpu') {
     const { preset, novoDSP } = await import('./radial-comum');
     const d = novoDSP(preset('r4360'), { quente: true });
@@ -382,7 +408,7 @@ if (args[0] === '--grupo') {
 } else if (process.argv[1] && process.argv[1].endsWith('radial-valida.ts')) {
   const ji = args.indexOf('--j'), J = ji >= 0 ? +args[ji + 1] : Math.max(2, Math.floor(os.cpus().length * 0.5));
   const pedidos = args.filter((a, i) => !a.startsWith('--') && (ji < 0 || i !== ji + 1));
-  const GRUPOS = ['geometria', 'razoes', 'bandas', 'linhas', 'niveis', 'galope', 'partida', 'motor', 'aviacao', 'cpu', 'potencia'];
+  const GRUPOS = ['geometria', 'razoes', 'bandas', 'linhas', 'niveis', 'galope', 'partida', 'estouros', 'motor', 'aviacao', 'cpu', 'potencia'];
   const fila = pedidos.length ? pedidos : GRUPOS;
   const res: Record<string, Linha[]> = {};
   const t0 = Date.now();
@@ -392,8 +418,10 @@ if (args[0] === '--grupo') {
     p.on('close', () => { try { res[g] = JSON.parse(out); } catch { res[g] = [{ grupo: g, nome: 'execução do grupo', alvo: 'sem erro', medido: out.slice(-300), ok: false }]; } console.error(`  (${g}: ${((Date.now() - t0) / 1000).toFixed(0)} s)`); ok(); });
   });
   (async () => {
-    const q = [...fila];
+    // (o grupo cpu mede tempo: roda sozinho, depois dos outros, para não disputar os núcleos com eles)
+    const q = fila.filter((g) => g !== 'cpu');
     await Promise.all(Array.from({ length: Math.min(J, q.length) }, async () => { while (q.length) await rodar(q.shift()!); }));
+    if (fila.includes('cpu')) await rodar('cpu');
     let ok = 0, desv = 0, falha = 0;
     for (const g of fila) for (const l of res[g] || []) {
       const tag = l.ok ? 'ok   ' : l.desvio ? 'desv ' : 'FALHA';

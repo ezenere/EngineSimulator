@@ -60,7 +60,9 @@ Também dá para pôr pós-combustão em qualquer jato, usar reversor e trocar p
 
 Motores em estrela: o R-2800 do Corsair e do P-47, o R-1830 do DC-3, o R-1820 do T-28, o R-1340 do T-6, o M-14P do Yak-52, o R-4360 de 28 cilindros, Rotec e Verner de ultraleve, o R-975 do tanque Sherman, o Monaco-Trossi, a moto Megola e o helicóptero S-55. A partida é como num avião: no DC-3 você energiza o volante do arranque (o apito sobe) e engata; nos outros o motor gira, você conta as pás e os magnetos ligam. Depois mexe na manete, na mistura, nos magnetos e no passo da hélice. Os motores planos de avião e de helicóptero (Cessna, Piper, Cirrus, Rotax, Robinson R22 e R44, Bell 47, Schweizer) ficam na família Aviação do Ronco.
 
-**Teclas:** `I` partida (energizar, engatar, magnetos) · `W` manete · `M` magnetos · `[` e `]` mistura · `,` e `.` manete de passo · `C` muda o microfone.
+A manete de potência é a mesma da Turbina: fica onde você a deixa (arraste com o mouse ou use as teclas), com as posições de lenta, cruzeiro, subida e decolagem. No Sherman, no Monaco-Trossi e na Megola é o pedal, com câmbio. Na família Aviação do Ronco a manete também substitui o pedal.
+
+**Teclas:** `I` partida (energizar, engatar, magnetos) · `W` e `S` mexem a manete · `1` a `4` posições da manete · `M` magnetos · `[` e `]` mistura · `,` e `.` manete de passo · `C` muda o microfone · no tanque, `W` acelera e `Q`/`E` trocam marcha.
 
 ## Rotativos (Wankel, X-Engine e palhetas)
 

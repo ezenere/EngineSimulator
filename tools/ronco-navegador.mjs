@@ -257,6 +257,27 @@ try {
   await clicar('.bar .ignition');
   t = await esperaAte(async () => { const x = await ev(`(() => { const t = window.__ronco.tele; return { state: t.state, rpm: t.rpm, rpmHelice: t.rpmHelice }; })()`); return x.state === 'run' && x.rpm > 450 ? x : null; }, 12000);
   confere(!!t && t.rpmHelice > 300, 'Cessna pegou e gira a hélice', t ? `${Math.round(t.rpm)} rpm · hélice ${Math.round(t.rpmHelice)} rpm` : 'não pegou');
+  // manete de potência (a da Turbina) no lugar do pedal: fica onde foi deixada
+  const manete = () => ev(`(() => { const l = document.getElementById('lever'); return l ? +l.getAttribute('aria-valuenow') : null; })()`);
+  const lv = await ev(`({ lever: !!document.getElementById('lever'), pedal: !!document.getElementById('pedal'), marcas: [...document.querySelectorAll('#leverMarks span')].map((s) => s.textContent), posicoes: document.querySelectorAll('#detents button').length })`);
+  confere(lv.lever && !lv.pedal && lv.marcas.join(',') === 'lenta,cruzeiro,subida,deco' && lv.posicoes === 4, 'aviação: manete de potência com as marcas e as 4 posições, sem o pedal', JSON.stringify(lv));
+  await tecla('KeyW');
+  await espera(800);
+  await tecla('KeyW', 'keyup');
+  const mw = await manete();
+  await espera(600);
+  confere(mw > 15 && mw < 80 && (await manete()) === mw, 'W segurado avança a manete e ela fica onde foi solta', `${mw}% → ${await manete()}%`);
+  await tecla('Digit3');
+  await espera(2500);
+  t = await ev(`(() => { const t = window.__ronco.tele; return { rpm: t.rpm, thr: t.thr }; })()`);
+  confere((await manete()) === 85 && Math.abs(t.thr - 0.85) < 0.03 && t.rpm > 1500, 'tecla 3 → manete em subida (85%): o acelerador fica lá e o giro sobe', `${await manete()}% · thr ${t.thr?.toFixed(2)} · ${Math.round(t.rpm)} rpm`);
+  await tecla('KeyS');
+  await espera(500);
+  await tecla('KeyS', 'keyup');
+  confere((await manete()) < 85 && (await manete()) > 40, 'S segurado recua a manete', `${await manete()}%`);
+  await clicar('#detents [data-manete="0"]');
+  await espera(300);
+  confere((await manete()) === 0, 'botão 1 · lenta', String(await manete()));
   await tecla('KeyM');
   await espera(400);
   confere((await ev(`window.__ronco.tele.magnetos`)) === 'desligado', 'M cicla os magnetos', await ev(`window.__ronco.tele.magnetos`));

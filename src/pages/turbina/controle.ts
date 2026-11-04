@@ -11,7 +11,7 @@
 //   mapa     → sliders de ângulo e distância quando se arrasta no mapa
 // Telemetria não avisa ninguém: fica em `tele` e é desenhada no requestAnimationFrame.
 import { useSyncExternalStore } from 'react';
-import type { CadeiaDeAudio } from '../../ui';
+import { segurarManete, type CadeiaDeAudio } from '../../ui';
 import { JetDSP } from '../../engines/turbina/dsp';
 import { PRESETS_TURBINA, type PresetTurbina } from '../../engines/turbina/presets';
 
@@ -217,7 +217,8 @@ export class ControleTurbina {
   // ------------------------------------------------------------ entrada
   // manete segura: avança/recua enquanto a tecla estiver apertada (chamado a cada quadro)
   segurar(dt: number) {
-    if (this.held.up || this.held.down) this.setTla(this.tla + (this.held.up - this.held.down) * dt * 0.45);
+    const v = segurarManete(this.held, this.tla, dt);
+    if (v !== null) this.setTla(v);
   }
 
   keydown = (e: KeyboardEvent) => {

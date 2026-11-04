@@ -1,12 +1,14 @@
-// Página do Radial (RADIAL.md 7.1): a casca do Ronco (barra, famílias e presets, conta-giros com a manete, ciclo de
-// ignição com as fileiras e os PMS reais, onda e espectro) mais as leituras da aviação (hélice, magnetos, partida) e o
-// painel de controles. Mesmo DOM e classes do Ronco, para o estilo (src/ui/estilo.css) valer.
+// Página do Radial (RADIAL.md 7.1): a casca do Ronco (barra, famílias e presets, conta-giros, ciclo de ignição com as
+// fileiras e os PMS reais, onda e espectro) mais as leituras da aviação (hélice, magnetos, partida) e o painel de
+// controles. Mesmo DOM e classes do Ronco, para o estilo (src/ui/estilo.css) valer. O comando de potência dos aviões e do
+// helicóptero é a manete da Turbina (src/ui/Manete.tsx: fica onde foi deixada, com as posições); o do tanque, do carro e
+// da moto, o pedal do Ronco.
 import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react';
-import { AudioShell, Barra, BotaoIgnicao, FamilyNav, PresetNav, PERFIL_RONCO, useAudioShell } from '../../ui';
+import { AudioShell, Barra, BotaoIgnicao, FamilyNav, Manete, PresetNav, PERFIL_RONCO, useAudioShell } from '../../ui';
 import { RadialDSP } from '../../engines/radial/dsp';
 import { PRESETS_RADIAL } from '../../engines/radial/presets';
 import urlRadial from '../../worklet/processador-radial.ts?worker&url';
-import { ControleRadial, type EstadoRadial } from './controle';
+import { ControleRadial, MARCAS_MANETE, POSICOES_MANETE, type EstadoRadial } from './controle';
 import { Mostradores } from '../ronco/mostradores';
 import { escreverLeiturasAv } from '../comum/Aviacao';
 import { Painel } from './Painel';
@@ -44,16 +46,21 @@ function Interior({ k, e }: { k: ControleRadial; e: EstadoRadial }) {
   k.iniciarAudio = iniciar;
   const pedal = useRef<HTMLDivElement>(null);
   const pedalFill = useRef<HTMLDivElement>(null);
+  const terra = (e.spec.portadores || []).includes('carro');
 
+  // (o pedal só existe no tanque, no carro e na moto)
+  useEffect(() => { k.pedal = pedal.current; k.pedalFill = pedalFill.current; }, [k, terra]);
   useEffect(() => {
-    k.pedal = pedal.current; k.pedalFill = pedalFill.current;
     // alça para os testes no navegador (tools/radial-navegador.mjs)
     (window as any).__radial = k;
     const m = new Mostradores(k as any);
     m.iniciar();
-    // leituras da aviação a cada quadro, fora do React
-    let raf = 0;
-    const laco = () => { escreverLeiturasAv(k.tele); raf = requestAnimationFrame(laco); };
+    // leituras da aviação a cada quadro, fora do React; e a manete com as teclas seguradas
+    let raf = 0, antes = 0;
+    const laco = (agora: number) => {
+      k.segurar(antes ? Math.min(0.1, (agora - antes) / 1000) : 0); antes = agora;
+      escreverLeiturasAv(k.tele); raf = requestAnimationFrame(laco);
+    };
     raf = requestAnimationFrame(laco);
     return () => { m.parar(); cancelAnimationFrame(raf); };
   }, [k]);
@@ -62,7 +69,6 @@ function Interior({ k, e }: { k: ControleRadial; e: EstadoRadial }) {
   const ligar = () => { k.toggleIgnition().catch((err) => console.error('Radial: áudio não iniciou', err)); };
   const padFrom = (ev: PointerEvent) => { const r = pedal.current!.getBoundingClientRect(); return clamp(1 - (ev.clientY - r.top) / r.height, 0, 1); };
   const solta = () => { k.input.pad = 0; k.sendInput(); };
-  const terra = (e.spec.portadores || []).includes('carro');
 
   return (
     <div className="app">
@@ -78,13 +84,15 @@ function Interior({ k, e }: { k: ControleRadial; e: EstadoRadial }) {
       <main className="cluster">
         <section className="tach-wrap" aria-label="Conta-giros">
           <canvas id="tach" />
-          <div className="pedal" id="pedal" ref={pedal} role="slider" tabIndex={0} aria-label="Manete" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}
-            onPointerDown={(ev) => { pedal.current!.setPointerCapture(ev.pointerId); k.input.pad = padFrom(ev); k.sendInput(); }}
-            onPointerMove={(ev) => { if (pedal.current!.hasPointerCapture(ev.pointerId)) { k.input.pad = padFrom(ev); k.sendInput(); } }}
-            onPointerUp={solta} onPointerCancel={solta}>
-            <div className="pedal-fill" id="pedalFill" ref={pedalFill} />
-            <span className="pedal-label">Manete</span>
-          </div>
+          {terra ? (
+            <div className="pedal" id="pedal" ref={pedal} role="slider" tabIndex={0} aria-label="Acelerador" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}
+              onPointerDown={(ev) => { pedal.current!.setPointerCapture(ev.pointerId); k.input.pad = padFrom(ev); k.sendInput(); }}
+              onPointerMove={(ev) => { if (pedal.current!.hasPointerCapture(ev.pointerId)) { k.input.pad = padFrom(ev); k.sendInput(); } }}
+              onPointerUp={solta} onPointerCancel={solta}>
+              <div className="pedal-fill" id="pedalFill" ref={pedalFill} />
+              <span className="pedal-label">Acelerador</span>
+            </div>
+          ) : <ManeteRadial k={k} />}
         </section>
 
         <section className="firing" aria-label="Ciclo de ignição">
@@ -97,6 +105,7 @@ function Interior({ k, e }: { k: ControleRadial; e: EstadoRadial }) {
         </section>
 
         <section className="drive">
+          {!terra && <Posicoes k={k} />}
           {terra && (
             <div className="gearbox">
               <button type="button" className="key" aria-label="Reduzir marcha" onClick={() => k.shift(-1)}>Q</button>
@@ -104,13 +113,33 @@ function Interior({ k, e }: { k: ControleRadial; e: EstadoRadial }) {
               <button type="button" className="key" aria-label="Subir marcha" onClick={() => k.shift(1)}>E</button>
             </div>
           )}
-          <p className="hints"><kbd>W</kbd>/<kbd>↑</kbd> manete · <kbd>Shift</kbd> meia manete · <kbd>I</kbd> partida (energizar, engatar, magnetos) · <kbd>M</kbd> magnetos · <kbd>[</kbd>/<kbd>]</kbd> mistura · <kbd>,</kbd>/<kbd>.</kbd> passo · <kbd>C</kbd> microfone{terra ? <> · <kbd>Q</kbd>/<kbd>E</kbd> câmbio</> : null}</p>
+          <p className="hints">{terra
+            ? <><kbd>W</kbd>/<kbd>↑</kbd>/<kbd>Espaço</kbd> acelera · <kbd>Shift</kbd> meio pé · <kbd>Q</kbd>/<kbd>E</kbd> câmbio</>
+            : <><kbd>W</kbd>/<kbd>↑</kbd> avança a manete · <kbd>S</kbd>/<kbd>↓</kbd> recua · <kbd>1</kbd>–<kbd>4</kbd> posições</>} · <kbd>I</kbd> partida (energizar, engatar, magnetos) · <kbd>M</kbd> magnetos · <kbd>[</kbd>/<kbd>]</kbd> mistura · <kbd>,</kbd>/<kbd>.</kbd> passo · <kbd>C</kbd> microfone</p>
         </section>
       </main>
 
       <aside className="controls" id="controls" aria-label="Parâmetros do motor" data-audio={estado} data-erro={erro ? String(erro) : undefined}>
         <Painel k={k} />
       </aside>
+    </div>
+  );
+}
+
+// manete de potência (a da Turbina): só ela re-renderiza quando a posição muda
+function ManeteRadial({ k }: { k: ControleRadial }) {
+  const v = useSyncExternalStore(k.assinarManete, k.obterManete);
+  return <Manete valor={v} marcas={MARCAS_MANETE} aoMudar={(x) => k.setManete(x)} obter={() => k.manete} passo={0.1} rotulo="Manete de potência" />;
+}
+
+// posições da manete (teclas 1–4)
+function Posicoes({ k }: { k: ControleRadial }) {
+  const v = useSyncExternalStore(k.assinarManete, k.obterManete);
+  return (
+    <div className="gearbox detentes" id="detents">
+      {POSICOES_MANETE.map(([x, , texto]) => (
+        <button key={texto} type="button" className={`key${Math.abs(x - v) < 0.01 ? ' at' : ''}`} data-manete={x} onClick={() => k.setManete(x)}>{texto}</button>
+      ))}
     </div>
   );
 }
