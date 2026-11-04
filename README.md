@@ -6,8 +6,9 @@ Simuladores de som de motor que rodam direto no navegador. O site começa num me
 - **Turbina**, motores de avião: https://ezenere.com/data/engine/turbina.html
 - **Diesel**, picapes, caminhões, geradores e locomotivas: https://ezenere.com/data/engine/diesel.html
 - **Radial**, motores em estrela de avião (Corsair, P-47, DC-3, T-6, Yak-52, R-4360), helicóptero S-55, Sherman, Monaco-Trossi e Megola: https://ezenere.com/data/engine/radial.html
+- **Vapor**, locomotivas (K4s, A4 Mallard, D51, UP 844, Big Boy, Y6b, Shay, Maria Fumaça, pannier, King), máquina de moinho Corliss, trator Aveling, Stanley Steamer e vapor de rodas de pás: https://ezenere.com/data/engine/vapor.html
 - **Passagem**, qualquer coisa passando por você (trem-bala, carro na rua, picape diesel, locomotiva, turboélice, jato, helicóptero R44, Corsair, Yak-52, Sherman) com o ouvinte livre em 3D: https://ezenere.com/data/engine/passagem.html
-- **Em construção:** rotativos (Wankel), vapor e elétrico.
+- **Em construção:** rotativos (Wankel) e elétrico.
 
 ![Ronco com uma Ferrari 458 no corte de giro](docs/ronco.png)
 
@@ -59,6 +60,12 @@ Também dá para pôr pós-combustão em qualquer jato, usar reversor e trocar p
 Motores em estrela: o R-2800 do Corsair e do P-47, o R-1830 do DC-3, o R-1820 do T-28, o R-1340 do T-6, o M-14P do Yak-52, o R-4360 de 28 cilindros, Rotec e Verner de ultraleve, o R-975 do tanque Sherman, o Monaco-Trossi, a moto Megola e o helicóptero S-55. A partida é como num avião: no DC-3 você energiza o volante do arranque (o apito sobe) e engata; nos outros o motor gira, você conta as pás e os magnetos ligam. Depois mexe na manete, na mistura, nos magnetos e no passo da hélice. Os motores planos de avião e de helicóptero (Cessna, Piper, Cirrus, Rotax, Robinson R22 e R44, Bell 47, Schweizer) ficam na família Aviação do Ronco.
 
 **Teclas:** `I` partida (energizar, engatar, magnetos) · `W` manete · `M` magnetos · `[` e `]` mistura · `,` e `.` manete de passo · `C` muda o microfone.
+
+## Vapor (locomotivas e outras máquinas)
+
+Locomotivas, uma máquina de moinho Corliss, um trator a vapor, o carro Stanley e um vapor de rodas de pás. Não há partida: a caldeira já começa quente e com pressão. Você abre o regulador, escolhe o corte no reverser e a máquina sai andando com o trem atrás; cada "chuff" é o vapor de um cilindro saindo pela chaminé, então eles aceleram com a roda e mudam com o corte. Parada, a locomotiva continua viva: bomba de ar, injetor, válvula de segurança quando a pressão passa do ajuste, sino e apito. No trilho molhado, abrir demais faz as rodas patinarem (a areia resolve). Os cenários (arrancada, cruzeiro, subida da Lickey, passagem) programam os comandos sozinhos.
+
+**Teclas:** `W` e `S` regulador · `X` fecha o regulador · `A` e `D` reverser · `H` apito (segure) · `B` sino · `E` areia (segure) · `T` torneiras dos cilindros · `Espaço` freio · `I` injetor.
 
 ## Dicas
 

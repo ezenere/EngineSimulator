@@ -149,6 +149,6 @@ export class Gerador extends PortadorComMotor {
 
   telemetria(): TelemetriaPortador {
     const w = this.motor ? this.motor.eixo.omega : this.omegaLivre;
-    return { v: 0, s: this.cinematica.s, rpmEixo: (w * 60) / (2 * Math.PI), torqueCarga: this.cargaG.torque(w), cargaFracao: this.cargaG.fracao, combustivel: this.gov.saida, frequencia: (this.cfg.fRede * w) / this.omegaNom };
+    return { v: 0, s: this.cinematica.s, rpmEixo: (w * 60) / (2 * Math.PI), torqueCarga: this.cargaG.torque(w), cargaFracao: this.cargaG.fracao, combustivel: this.gov.saida, frequencia: (this.cfg.fRede * w) / this.omegaNom, ...(this.motor?.familia === 'vapor' ? { motor: this.motor.telemetria() } : {}) };
   }
 }
