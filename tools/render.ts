@@ -21,6 +21,8 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { gravarWav } from './wav';
 import { TomDSP } from '../src/worklet/tom';
+import { ACESSORIOS_PADRAO as STOCK } from '../src/engines/ronco/presets';
+import { montarConfig } from '../src/engines/ronco/config';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const req = createRequire(import.meta.url);
@@ -38,18 +40,9 @@ function carregar(arquivo: string, nome: string) {
 const lista = (arquivo: string) => { const m = req(path.resolve(RAIZ, arquivo)); return m.default ?? m.PRESETS ?? m; };
 
 // ------------------------------------------------------------------ Ronco
-// acessórios que o preset não define voltam ao padrão (STOCK de loadPreset() em src/app.js)
-const STOCK = { valve: 'none', pipeD: 2.5, reso: false, twoStep: 'off', launchRpm: undefined, fuel: 'efi', shiftTime: undefined, driveMode: 'auto', limiter: 'ign', limiterBand: 70, limiterHold: 0.07, power: undefined, mass: undefined, wheelR: undefined, drag: undefined, ratios: undefined, finalDrive: undefined, overrun: 'cut', cat: true, tipD: undefined, cooling: 'water', engine: undefined, breakout: 'sealed', compression: undefined, scType: undefined, scRatio: undefined, scLobes: undefined, scWhine: undefined };
 
 type Evento = [number, (() => void) | null];
 type Cenario = Evento[] & { autoShift?: boolean };
-
-function engineConfig(G, spec) {
-  const engine = G.build(spec);
-  const cfg = { ...spec, N: engine.N, fire: engine.fire, bank: engine.bank, banks: engine.banks, axis: engine.axis, z: engine.z, tdcRel: engine.tdcRel, runners: engine.runners };
-  if (cfg.banks === 1 && (cfg.routing === 'xpipe' || cfg.routing === 'hpipe')) cfg.routing = 'dual';
-  return cfg;
-}
 
 // Cenários: lista de [tempo (s), ação]; a última entrada marca o fim
 const CEN_RONCO: Record<string, (d: any, spec: any) => Cenario> = {
@@ -111,7 +104,7 @@ function rodar(d: any, ev: Cenario, antes?: (t: number, i: number) => void, depo
 function renderRonco(EngineDSP, G, spec, scen: string, outdir: string, listener: string, formato) {
   const d = new EngineDSP(SR);
   d.params.listener = listener;
-  d.setConfig(engineConfig(G, spec));
+  d.setConfig(montarConfig(spec));
   const ev = CEN_RONCO[scen](d, spec);
   const tele: any[] = [];
   const { L, R } = rodar(d, ev, () => {
