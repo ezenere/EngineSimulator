@@ -113,3 +113,56 @@ export class MotorTeste implements Motor {
   }
   telemetria(): TelemetriaMotor { const w = this.eixo.omega; return { rpm: (w * 60) / (2 * Math.PI), torque: this.eixo.torque, potencia: this.eixo.torque * w, estado: this.estado }; }
 }
+
+// ---------------------------------------------------------------- bancada com motor (Elétrico, ELETRICO.md 4.3)
+/**
+ * Carga de bancada: constante (`frac·T_c`), quadrática (ventilador, facas na jarra: `T_c·(ω/ω_ref)²·(0,3 + 0,7·frac)`,
+ * 30% de base: o ar ou a água) ou degrau (furar: +`frac·T_c` com o motor girando). `inercia`: mandril, jarra, ventilador.
+ */
+export class CargaBancada implements Carga {
+  tipo: 'constante' | 'quadratica' | 'degrau';
+  Tc: number; inercia: number; wRef: number;
+  frac = 0;
+  constructor(tipo: CargaBancada['tipo'], Tc: number, inercia: number, wRef: number) { this.tipo = tipo; this.Tc = Tc; this.inercia = inercia; this.wRef = wRef; }
+  torque(w: number) {
+    if (this.tipo === 'quadratica') { const r = w / this.wRef; return this.Tc * r * r * (0.3 + 0.7 * this.frac); }
+    return w > 0.5 ? this.frac * this.Tc : 0;
+  }
+}
+
+/**
+ * Portador `nenhum` com motor: a bancada (ferramentas, liquidificador, motor industrial). As fontes ficam onde o preset as
+ * põe (a mesa, [0, 0, 1]); `pedal` = gatilho (na rede: o contator), `cargaFracao` = degrau de carga. O corpo é uma caixa
+ * pequena (0,6 × 0,4 × 0,9 m) que quase não faz sombra.
+ */
+export class PortadorBancada implements Portador {
+  readonly tipo = 'nenhum' as const;
+  readonly compat: readonly FamiliaMotor[] = ['pistao', 'turbina', 'turboelice', 'turboeixo', 'diesel', 'radial', 'rotativo', 'vapor', 'eletrico'];
+  corpo: Corpo = { segmentos: [{ comprimento: 0.6, vao: 0, altura: 0.9, largura: 0.4, zPiso: 0 }], comprimento: 0.6, nariz: 0, cauda: 0, areaFrontal: 0.3, cd: 1, cpNariz: 0, massaSuperficial: 5, fCabine: 200 };
+  cinematica: Cinematica = { s: 0, v: 0, a: 0, rumo: 0 };
+  motor: Motor | null = null;
+  carga: CargaBancada | null;
+  cmd: ComandoPortador = { pedal: 0, ignicao: true };
+  private lista: FonteSonora[] = [];
+  constructor(carga: CargaBancada | null) { this.carga = carga; }
+  acoplar(m: Motor | null) { this.motor = m; m?.acoplar(this.carga); this.lista = m ? [...m.fontes] : []; }
+  comandar(c: ComandoPortador) {
+    this.cmd = { ...this.cmd, ...c };
+    if (c.cargaFracao !== undefined && this.carga) this.carga.frac = c.cargaFracao;
+  }
+  fontes() { return this.lista; }
+  processar(saidas: Float32Array[], n: number, dt: number) {
+    const m = this.motor, c = this.cmd as ComandoPortador & Record<string, unknown>;
+    if (m) {
+      m.comandar({ ...c, acelerador: c.pedal ?? 0, ignicao: c.ignicao !== false, partida: false, v: 0 } as ComandoMotor);
+      m.processar(saidas, n);
+    }
+    const k = this.cinematica;
+    if (c.velocidadeFixa != null) k.v = c.velocidadeFixa as number;
+    k.s += k.v * n * dt;
+  }
+  telemetria(): TelemetriaPortador {
+    const t = this.motor ? this.motor.telemetria() : null;
+    return { ...(t || {}), v: this.cinematica.v, s: this.cinematica.s, rpmEixo: t ? t.rpm : 0, torqueCarga: this.carga && this.motor ? this.carga.torque(this.motor.eixo.omega) : 0, cargaFracao: this.carga?.frac ?? 0 };
+  }
+}
