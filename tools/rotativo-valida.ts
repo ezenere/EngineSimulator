@@ -23,14 +23,17 @@ const dentro = (x: number, a: number, b: number) => x >= a && x <= b;
 
 /** desvios conhecidos (nome da medida → por quê); TECNICO.md → Rotativos */
 const DESVIOS: Record<string, string> = {
-  'bandas lenta 2 rotores original 750 rpm (rx7fd, ext)': 'Só 400–1k fica 1,4 dB fora (−5,4 contra −1 ± 3): a janela periférica abre em rampa de 47°e (10 ms a 750 rpm) e o pulso de cada câmara sobe devagar; o grave, o 1–2,5k, o 2,5–6k e o centroide batem. O 400–1k da gravação (série harmônica limpa até 234 Hz e as ressonâncias do escape) pede um pulso mais íngreme que o trapézio da tabela 1.3.',
+  'bandas lenta 2 rotores original 750 rpm (rx7fd, ext)': 'O grave e o 2,5–6k batem; o 400–1k fica 4,5 dB abaixo (−5,5 contra −1) e o 1–2,5k 6 dB abaixo (−17 contra −11). O 400–1k: a janela periférica abre em rampa de 47°e (10 ms a 750 rpm) e o pulso de cada câmara sobe devagar; a gravação (série harmônica limpa até 234 Hz e as ressonâncias do escape) pede um pulso mais íngreme que o trapézio da tabela 1.3. O 1–2,5k: a pós-queima na boca foi atenuada 3,8 dB e presa ao evento (o "som de ar alto em lenta" que o ouvido apontou), e ela era ~90% dessa banda.',
   'rx7fd lenta, pré-silencioso retirado: 1–2,5 kHz e 2,5–6 kHz sobem (absoluto)': 'No modelo o agudo da lenta vem quase todo da pós-queima distribuída (decisão 5): a parte que queima na boca, onde o gás cru encontra o ar, não passa pelo pré-silencioso. Retirá-lo sobe 150–400 Hz em ~8 dB (a câmara de Helmholtz) e 400–1k em ~4 dB, e o agudo absoluto em 0–1 dB. A gravação do carro sem pré-silencioso (TJ Hunt) é, aliás, mais escura nas relativas (−31/−37), com o microfone afastado; o alvo de +6 dB é do texto, não de uma gravação.',
   'rx7fd lenta, pré-silencioso retirado: 2·ign sobe': 'A 750 rpm a 2·ign está em 50 Hz, abaixo da câmara de Helmholtz do pré-silencioso (150–300 Hz, tabela 2.2): ele não toca nela. Vale a 5 000 rpm (2·ign 333 Hz).',
   'bandas 5 000 rpm sustentados, Renesis (rx8hp, ext)': 'O 400–1k bate (−10,1 contra −10), o 1–2,5k e o 2,5–6k ficam 3–7 dB abaixo e o grave 6 dB abaixo: o RX-8 tem o abafador original (−40 dB acima de 2 kHz no Ronco) e a janela lateral de rampa lenta; o agudo que sobra é a pós-queima da carga leve na boca. A gravação Commons ("engine and exhaust sound") não diz onde estava o microfone (o cofre aberto daria esse agudo) e o operador oscila a rotação (vagar 11,6%, CVciclo 0,51).',
   'centroide 5 000 rpm sustentados, Renesis (rx8hp, ext)': 'Consequência do agudo baixo (ver as bandas do RX-8 a 5 000 rpm).',
   'bandas 7 700 rpm em neutro, 4 rotores megafone (r26b)': 'O grave bate; 400–1k fica 10 dB e 1–2,5k 17 dB abaixo do vídeo (6VCl, a 5 m): a gravação concentra a energia na ignição (516 Hz) e nos dois primeiros harmônicos a +19–20 dB rel. 150–400; no modelo o megafone em degraus e as frentes da onda dão os harmônicos (ign +29, 2·ign −9 da ign), mas o 150–400 (ordens 1–3 do eixo) fica mais forte que na gravação. Vídeo do YouTube (alvo interno, não entra na tabela pública).',
-  'bandas lenta 4 rotores periférica (r26b)': 'A lenta periférica do modelo fica 9–11 dB mais brilhante: a pós-queima (fHC ×2 pela sobreposição, sem catalisador nem abafador, a 127 eventos/s) vira um chiado quase contínuo, e o grave da ignição (127 Hz) fica 9 dB abaixo. Na gravação o agudo da lenta do 787B são os estalos isolados, não o chiado. Vídeo do YouTube (alvo interno).',
-  'centroide lenta 4 rotores periférica (r26b)': 'Consequência do agudo da pós-queima na lenta periférica (ver as bandas).',
+  'centroide lenta 2 rotores original 750 rpm (rx7fd, ext)': 'Consequência do agudo atenuado da boca e do 400–1k abaixo da gravação (ver as bandas do RX-7 na lenta): 299 Hz contra 336 Hz no limite de baixo.',
+  'lenta original quente (rx7fd): estalos/s': 'O detector (picos isolados da envoltória de 1–6 kHz mais de 10 dB sobre a mediana móvel de 0,3 s) conta o chiado de pós-queima de 1 em cada 10 pulsos, agora que ele está preso ao evento (espalhamento de 9 ms). A gravação do RX-7 (Opus, microfone desconhecido) tem o agudo quase liso (0,5/s, p90/p10 6,8 dB); com o espalhamento antigo de 15 ms o modelo dava 0,6/s, mas emendava os pulsos num chiado contínuo que o ouvido ouviu como "ar". 9 ms é o menor que deixa o p90/p10 dentro dos 7–13 dB e já passa o desvio/média ≥ 0,5 do ROTATIVO 8.1; com 0 ms seriam 25/s.',
+  'rx8std: lenta → plena carga a 55% (página)': '0,1 dB fora: a lenta perdeu o agudo da boca (atenuado 3,8 dB), o reforço de lenta da calibração mede o nível total.',
+  'bandas lenta 4 rotores periférica (r26b)': 'A lenta periférica do modelo fica 9–11 dB mais brilhante e o grave da ignição (127 Hz) 9 dB abaixo. O agudo são os estalos das falhas da sobreposição (13,5/s, como os 15,8/s do vídeo) e não a pós-queima: desligá-la muda o nível do agudo em menos de 1 dB e só enche o vão entre os estalos (p10 da envoltória de 1–2,5 kHz −27 dB sem ela, −15 com ela). O vídeo do YouTube tem o chiado da câmera em 6–12 kHz; alvo interno.',
+  'centroide lenta 4 rotores periférica (r26b)': 'Consequência do agudo dos estalos na lenta periférica (ver as bandas).',
   'bandas lenta 2 rotores moto 1 900 rpm (norton)': 'O grave fica 17 dB abaixo do vídeo (Fx7, ~2 m, celular): a gravação tem a ordem 3 e a ignição de 63 Hz fortíssimas no grave (+12 dB rel. 150–400) que o 2 em 1 curto da moto no modelo não dá; o agudo fica 6–10 dB abaixo. Vídeo do YouTube com o microfone muito perto (alvo interno).',
   'bandas lenta fria carburada 1 600 rpm (ro80)': 'O modelo fica 7–18 dB mais brilhante acima de 1 kHz: a gravação (1JOt) não tem nada acima de 6 kHz (codec) e é a partida a frio com o motor ainda engasgando; no modelo o carburado frio tem a fHC alta (vácuo) e o "classic" dianteiro deixa o agudo passar. Alvo interno.',
   'centroide lenta fria carburada 1 600 rpm (ro80)': 'Consequência do agudo da pós-queima no carburado frio (ver as bandas do Ro80).',
@@ -145,6 +148,19 @@ async function grupo(nome: string): Promise<Linha[]> {
     const sp = lenta('rx7fd', { escape: { ...preset('rx7fd').escape, presilencioso: false } });
     add('rx7fd lenta, pré-silencioso retirado: 1–2,5 kHz e 2,5–6 kHz sobem (absoluto)', '≥ 6 dB', `${sg(sp.m.abs[3] - l.m.abs[3])} / ${sg(sp.m.abs[4] - l.m.abs[4])} dB`, sp.m.abs[3] - l.m.abs[3] >= 6 && sp.m.abs[4] - l.m.abs[4] >= 6);
     add('rx7fd lenta, pré-silencioso retirado: 2·ign sobe', '≥ 4 dB', `${sg(sp.m.ign2 - l.m.ign2)} dB (linha sobre a mediana)`, sp.m.ign2 - l.m.ign2 >= 4);
+    // "som de ar" no Ø mínimo da saída (REVISAO-DE-SOM): fração da potência abaixo de 1 kHz que é o ruído de jato da ponta
+    // (diferença exata com o jato desligado), no Ø de fábrica e no mínimo do painel (25 mm), com a ponteira de fábrica
+    const jato = (D?: number) => {
+      const e0 = preset('rx7fd').escape, p = preset('rx7fd', D ? { escape: { ...e0, ponteira: e0.saidas[0].D, saidas: e0.saidas.map((x: any) => ({ ...x, D })) } } : {});
+      const run = (comJato: boolean) => { const d = novoDSP(p, { quente: true }); if (!comJato) d.jetGain = 0; const r = renderizar(d, 10, []); return mono(r.L, r.R, 4, 10); };
+      const a = run(true), b = run(false), dj = Float64Array.from(a, (v, i) => v - b[i]);
+      const op = { rotores: 2, fmin: 20, fmax: 40, fIgn: (p.idle * 2) / 60 };
+      const ma = B.medirRot(a, SR, op), mj = B.medirRot(dj, SR, op);
+      const pw = (m: any) => 10 ** (m.abs[1] / 10) + 10 ** (m.abs[2] / 10);
+      return 100 * pw(mj) / pw(ma);
+    };
+    const j76 = jato(), j25 = jato(25);
+    add('rx7fd lenta: ruído de jato da ponta em 150 Hz–1 kHz (Ø de fábrica / Ø 25 mm com a ponteira de fábrica)', '≤ 10% / ≤ 10%', `${f1(j76)}% / ${f1(j25)}%`, j76 <= 10 && j25 <= 10);
     // RX-8 a 5 000 rpm sustentados (Commons u-Lc2 20–24 s)
     const r8 = sustentado('rx8hp', 5000);
     conferirBandas('5 000 rpm sustentados, Renesis (rx8hp, ext)', r8.m, [-8, -10, -11, -10.5], [520, 520]);
@@ -195,6 +211,11 @@ async function grupo(nome: string): Promise<Linha[]> {
     add('lenta original quente (rx7fd): CVciclo', '0,20–0,30', f1(l.m.cvCiclo, 2), dentro(l.m.cvCiclo, 0.2, 0.3));
     add('lenta original quente (rx7fd): estalos/s', '≤ 1,5', f1(l.m.pops), l.m.pops <= 1.5);
     add('lenta original quente (rx7fd): p90/p10 de 1–6 kHz (pós-queima presa ao evento)', '7–13 dB', `${f1(l.m.p9010)} dB`, dentro(l.m.p9010, 7, 13));
+    // (o outro critério do ROTATIVO 8.1 contra a pós-queima virando chiado contínuo: desvio/média da envoltória de 1–6 kHz)
+    const e16 = B.envoltoria(mono(l.r.L, l.r.R, 8, 20), SR, 1000, 6000, 600);
+    let me = 0; for (const v of e16) me += v; me /= e16.length;
+    let ve = 0; for (const v of e16) ve += (v - me) ** 2; const dm = Math.sqrt(ve / e16.length) / me;
+    add('lenta original quente (rx7fd): desvio/média da envoltória de 1–6 kHz (pós-queima presa ao evento)', '≥ 0,5', f1(dm, 2), dm >= 0.5);
     // 787B: caça da lenta periférica, quente (60 s; mede 12 s depois de 20 s)
     const p = preset('r26b'), d = novoDSP(p, { quente: true });
     const r = renderizar(d, 44, []);
