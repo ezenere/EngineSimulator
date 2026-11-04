@@ -77,6 +77,7 @@ export interface ComandoPortador {
   freioDinamico?: number;        // locomotiva 0..1
   ignicao?: boolean; partida?: boolean;
   velocidadeFixa?: number | null;   // m/s; modo de testes: trava a cinemática independentemente do motor
+  rpmAlvo?: number;              // (extensão, RADIAL.md 3.3) manete de passo da hélice 0..1: alvo do governador entre nMin e nHelice
 }
 
 export interface Portador {

@@ -25,6 +25,13 @@ export interface ConfigHelice {
   cQ0: number;
   passoFixo: boolean;
   posCubo: Vec3; posMotor: Vec3;
+  // (RADIAL.md 3.3; todos opcionais, com o padrão = o comportamento de antes: os turboélices não mudam)
+  /** rpm da hélice com a manete de passo no mínimo (padrão `nHelice`): o alvo é nMin + (nHelice − nMin)·rpmAlvo */
+  nMin?: number;
+  /** passo fixo: β do preset (padrão βmin) */
+  beta0?: number;
+  /** piso da fonte na lenta (padrão 0): a fonte fica em max(onLenta, rampa de 5–30% da rotação) */
+  onLenta?: number;
 }
 
 /** tabela de 4.2 (BPF e M_t estático conferidos em tools/cena/portadores.ts) */
@@ -36,6 +43,21 @@ export const HELICES: Record<string, Partial<ConfigHelice> & { nome: string; B: 
   tu95: { nome: 'Tu-95 (NK-12, contrarrotativa 2×4)', B: 4, D: 5.6, nHelice: 750, i: 11 },
 };
 
+/** hélices dos radiais e da aviação a pistão (RADIAL.md 3.3; J_hel em kg·m², nHelice = rotação máxima da hélice). Tabela à
+ * parte da HELICES, que tools/cena/portadores.ts confere linha a linha contra a 4.2 do CENA.md */
+export const HELICES_PISTAO: Record<string, Partial<ConfigHelice> & { nome: string; B: number; D: number; nHelice: number; i: number }> = {
+  hamilton3: { nome: 'Hamilton Standard 3 pás (T-28)', B: 3, D: 3.05, nHelice: 1520, i: 1.778, J_hel: 45 },
+  hamilton3dc3: { nome: 'Hamilton Standard 3 pás (DC-3)', B: 3, D: 3.5, nHelice: 1520, i: 1.778, J_hel: 55 },
+  hamilton4f4u: { nome: 'Hamilton 4 pás (F4U-4)', B: 4, D: 4.01, nHelice: 1225, i: 2.286, J_hel: 120 },
+  curtiss4: { nome: 'Curtiss Electric 4 pás (P-47D)', B: 4, D: 3.96, nHelice: 1350, i: 2, J_hel: 110 },
+  hamilton4b50: { nome: 'Hamilton 4 pás (B-50, R-4360)', B: 4, D: 5.08, nHelice: 1012, i: 2.667, J_hel: 300 },
+  v530: { nome: 'V530TA-D35 (Yak-52)', B: 2, D: 2.4, nHelice: 1908, i: 1.52, J_hel: 7 },
+  mtv9: { nome: 'MTV-9 (Su-31)', B: 3, D: 2.5, nHelice: 1940, i: 1.52, J_hel: 5 },
+  hamilton12d40: { nome: 'Hamilton 12D40 (T-6)', B: 2, D: 2.74, nHelice: 2250, i: 1, J_hel: 16, nMin: 1800 },
+  hamilton2: { nome: 'Hamilton 2 pás (Trimotor)', B: 2, D: 2.6, nHelice: 2300, i: 1, J_hel: 12, passoFixo: true },
+  madeira: { nome: 'Madeira/compósito (Rotec)', B: 2, D: 1.75, nHelice: 3600, i: 1, J_hel: 1.5, passoFixo: true },
+};
+
 export const HELICE_PADRAO: ConfigHelice = {
   B: 6, D: 3.93, i: 17, nHelice: 1200, J_hel: 60, betaMin: 0.15, betaMax: 0.9, cQ0: 0.01, passoFixo: false, posCubo: [4, 0, 3], posMotor: [3, 0, 3],
 };
@@ -45,7 +67,7 @@ export const machPonta = (D: number, nHelice: number, v = 0) => Math.hypot((Math
 
 export class CargaHelice implements Carga {
   cfg: ConfigHelice; beta: number; v = 0; inercia: number;
-  constructor(c: ConfigHelice) { this.cfg = c; this.beta = c.betaMin; this.inercia = c.J_hel / (c.i * c.i); }
+  constructor(c: ConfigHelice) { this.cfg = c; this.beta = c.passoFixo && c.beta0 != null ? c.beta0 : c.betaMin; this.inercia = c.J_hel / (c.i * c.i); }
   cQ(nh: number) {
     const c = this.cfg;
     const b = Math.abs(this.beta);
@@ -98,6 +120,10 @@ export class FonteHelice implements GeradorCanal {
   pbb = new BiquadComPiso(); rng = new RNG(0x4e11c3);
   /** sem o ruído largo (teste da parte tonal) */
   semRuido = false;
+  /** piso da fonte na lenta (RADIAL.md 3.3; 0 = como no JetDSP) */
+  onLenta = 0;
+  /** abaixo de 10% da rotação, a contagem de pás (pulso de 20 ms de ruído grave por pá; RADIAL.md 3.3) */
+  pasLentas = false; pPa = 0; envPa = 0; lpPa = 0; kPa = 0;
   constructor(fs: number, B: number, D: number, propRpm: number) { this.fs = fs; this.B = B; this.D = D; this.propHz = propRpm / 60; }
   tique() {
     const fs = this.fs;
@@ -106,8 +132,9 @@ export class FonteHelice implements GeradorCanal {
     this.Mh = Mh;
     const rv = this.rv;
     const pload = (0.3 + 0.7 * this.u) * (1 + 0.8 * rv);
-    this.aProp = 9 * Math.pow(Mh / 0.75, 4) * pload * (this.D / 3.9) * smooth(0.05, 0.3, this.np) * this.fan;
-    this.aPbb = 0.55 * Math.pow(Mh / 0.75, 5) * (1 + 2 * rv) * (this.D / 3.9) * smooth(0.05, 0.3, this.np) * this.fan;
+    const on = Math.max(this.onLenta, smooth(0.05, 0.3, this.np));
+    this.aProp = 9 * Math.pow(Mh / 0.75, 4) * pload * (this.D / 3.9) * on * this.fan;
+    this.aPbb = 0.55 * Math.pow(Mh / 0.75, 5) * (1 + 2 * rv) * (this.D / 3.9) * on * this.fan;
     this.fPbb = 900 + 900 * Mh;
     if (++this.propBuild >= 8) { this.propBuild = 0; tabelaPassagemPa(this.tabB, Mh, pload); const t = this.tab; this.tab = this.tabB; this.tabB = t; }
     this.pbb.bp(fs, this.fPbb, 0.7);
@@ -124,8 +151,20 @@ export class FonteHelice implements GeradorCanal {
       const imb = 0.06 * sinr(pp) + 0.04 * sinr(2 * pp + 0.3);
       let y = this.aProp * (v + imb) * this.dprop;
       if (!this.semRuido && this.aPbb > 1e-4) y += this.pbb.run(this.rng.bi()) * this.aPbb * this.nPbb * this.dprop;
+      if (this.pasLentas) y += this.passagemDePa(pp, fp);
       out[i] = y;
     }
+  }
+  /** contagem de pás (só com `pasLentas`): cada pá que passa abaixo de 10% da rotação dá um sopro curto e grave */
+  passagemDePa(pp: number, fp: number) {
+    const pa = Math.floor(pp * this.B);
+    if (pa !== this.pPa) { this.pPa = pa; if (fp > 0.05 && this.np < 0.1) this.envPa = 1; }
+    if (this.envPa < 1e-3) return 0;
+    this.envPa *= Math.exp(-1 / (0.007 * this.fs));
+    if (!this.kPa) this.kPa = 1 - Math.exp((-2 * Math.PI * 300) / this.fs);
+    this.lpPa += this.kPa * (this.rng.bi() - this.lpPa);
+    // (pulso de ~20 ms de ruído abaixo de 300 Hz: o "vuff" da pá passando devagar; perto do avião se ouve)
+    return 0.6 * this.lpPa * this.envPa * (this.D / 3);
   }
 }
 
@@ -165,10 +204,12 @@ export class Helice extends PortadorComMotor {
     const w = m ? m.eixo.omega : this.omegaLivre;
     const nh = (w / c.i) * 60 / (2 * Math.PI);    // rpm da hélice
     if (m) m.comandar({ acelerador: this.cmd.pedal, ignicao: this.cmd.ignicao !== false, partida: !!this.cmd.partida });
-    // governador: erro positivo = rápida demais → mais passo
+    // governador: erro positivo = rápida demais → mais passo. A manete de passo (`rpmAlvo`, 0..1) escolhe o alvo entre
+    // nMin e nHelice; sem ela (turboélices) o alvo é nHelice
     if (!c.passoFixo) {
-      if (nh < 0.6 * c.nHelice) { this.gov.saida = c.betaMin; this.gov.i = c.betaMin; }
-      else this.gov.passo((100 * (nh - c.nHelice)) / c.nHelice, tb);
+      const ra = this.cmd.rpmAlvo, nAlvo = ra === undefined || c.nMin === undefined ? c.nHelice : c.nMin + (c.nHelice - c.nMin) * ra;
+      if (nh < 0.6 * nAlvo) { this.gov.saida = c.betaMin; this.gov.i = c.betaMin; }
+      else this.gov.passo((100 * (nh - nAlvo)) / nAlvo, tb);
       this.cargaH.beta = this.reverso > 0 ? -this.gov.saida * this.reverso : this.gov.saida;
     }
     // fonte: as entradas do tique de controle da Turbina (fração da rotação governada, potência, reverso, avanço)
