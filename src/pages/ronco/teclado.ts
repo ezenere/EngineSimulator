@@ -2,11 +2,14 @@
 //   W / ↑ / Espaço acelera (com Shift, meio pé) · Shift meio pé · S / ↓ freia
 //   E / PageUp sobe marcha · Q / PageDown reduz · M modo do câmbio automático · B escape ativo
 //   I ignição · C próximo microfone · V observador junto ao carro / parado na via
-// Perder o foco da janela solta acelerador, pedal e freio.
+// Família aviação: a manete de potência da Turbina no lugar do pedal (W / ↑ avança e S / ↓ recua enquanto seguradas,
+// 1–4 posições: lenta, cruzeiro, subida, decolagem); sem freio nem câmbio.
+// Perder o foco da janela solta acelerador, pedal e freio (a manete fica onde está).
 import { useEffect } from 'react';
-import type { ControleRonco } from './controle';
+import { POSICOES_MANETE, type ControleRonco } from './controle';
 
 const THROTTLE_KEYS = ['KeyW', 'ArrowUp', 'Space'];
+const POSICAO: Record<string, number> = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3 };
 
 export function usarTeclado(k: ControleRonco, setFreio: (on: boolean) => void) {
   useEffect(() => {
@@ -14,6 +17,12 @@ export function usarTeclado(k: ControleRonco, setFreio: (on: boolean) => void) {
       const alvo = e.target as HTMLInputElement | null;
       if (alvo && alvo.tagName === 'INPUT' && alvo.type === 'text') return;
       const input = k.input;
+      if (k.comManete) {
+        if (e.code === 'KeyW' || e.code === 'ArrowUp') { e.preventDefault(); k.teclas.up = 1; return; }
+        if (e.code === 'KeyS' || e.code === 'ArrowDown') { e.preventDefault(); k.teclas.down = 1; return; }
+        if (e.code === 'Space') { e.preventDefault(); return; }
+        if (!e.repeat && e.code in POSICAO) { k.setManete(POSICOES_MANETE[POSICAO[e.code]][0]); return; }
+      }
       if (THROTTLE_KEYS.includes(e.code)) {
         e.preventDefault();
         if (!k.estado.ignicao && !k.audio) return;
@@ -34,11 +43,13 @@ export function usarTeclado(k: ControleRonco, setFreio: (on: boolean) => void) {
     };
     const up = (e: KeyboardEvent) => {
       const input = k.input;
+      if (e.code === 'KeyW' || e.code === 'ArrowUp') k.teclas.up = 0;
+      if (e.code === 'KeyS' || e.code === 'ArrowDown') k.teclas.down = 0;
       if (THROTTLE_KEYS.includes(e.code)) { input.key = 0; k.sendInput(); }
       else if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { input.half = false; k.sendInput(); }
       else if (e.code === 'KeyS' || e.code === 'ArrowDown') { input.brake = 0; k.sendInput(); setFreio(false); }
     };
-    const blur = () => { k.input.key = 0; k.input.pad = 0; k.input.brake = 0; k.sendInput(); };
+    const blur = () => { k.teclas.up = 0; k.teclas.down = 0; k.input.key = 0; k.input.pad = 0; k.input.brake = 0; k.sendInput(); };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     window.addEventListener('blur', blur);

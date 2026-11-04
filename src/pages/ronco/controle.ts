@@ -9,7 +9,7 @@ import { build, CRANKS, LAYOUTS, type MotorMontado } from '../../engines/ronco/g
 import { PRESETS, ACESSORIOS_PADRAO, type PresetRonco } from '../../engines/ronco/presets';
 import { gearRatios } from '../../engines/ronco/dsp';
 import { configCalibrada } from '../../engines/ronco/config';
-import type { CadeiaDeAudio, Equalizacao } from '../../ui';
+import { segurarManete, type CadeiaDeAudio, type Equalizacao, type MarcaManete } from '../../ui';
 import { AV_PADRAO, proximoMagneto, type EstadoAv } from '../comum/Aviacao';
 
 export type Spec = PresetRonco & Record<string, any>;
@@ -55,6 +55,10 @@ export const DRIVE_MODES: [string, string, string][] = [
 
 export const familyFor = (layout: string, n: number) => CRANKS[`${layout}-${n}`];
 
+/** família aviação: posições da manete de potência (teclas 1–4 e botões), as mesmas do Radial */
+export const POSICOES_MANETE: [number, string, string][] = [[0, 'lenta', '1 · lenta'], [0.65, 'cruzeiro', '2 · cruzeiro'], [0.85, 'subida', '3 · subida'], [1, 'deco', '4 · decolagem']];
+export const MARCAS_MANETE: MarcaManete[] = POSICOES_MANETE.map(([v, r]) => [v, r]);
+
 export class ControleRonco {
   estado: EstadoRonco;
   lento: Lento = { agua: 20, escape: '' };
@@ -63,6 +67,9 @@ export class ControleRonco {
   iniciarAudio: (() => Promise<CadeiaDeAudio>) | null = null;
   tele: Telemetria = { rpm: 0, theta: 0, kmh: 0, gear: 0, boost: 0, thr: 0, limiter: false, state: 'off', torque: 0 };
   input = { key: 0, half: false, pad: 0, brake: 0 };
+  /** família aviação: a manete de potência da Turbina (fica onde foi deixada; W/S e ↑/↓ seguradas a movem aos poucos) */
+  manete = 0;
+  teclas = { up: 0, down: 0 };
   ignitionAt = 0;
   // pedal na tela (preenchimento e aria-valuenow), atualizado direto no DOM como no legado
   pedal: HTMLElement | null = null;
@@ -71,6 +78,7 @@ export class ControleRonco {
   private iniciando: Promise<CadeiaDeAudio> | null = null;
   private ouvintes = new Set<() => void>();
   private ouvintesLentos = new Set<() => void>();
+  private ouvintesManete = new Set<() => void>();
 
   constructor() {
     const spec = { ...PRESETS[0] } as Spec;
@@ -114,6 +122,7 @@ export class ControleRonco {
         this.enviarParams();
         this.enviarAv();
         a.send({ type: 'input', temp: { mode: this.estado.tempMode } });
+        if (this.comManete) this.sendInput();
         return a;
       })().catch((e) => { this.iniciando = null; throw e; });
     }
@@ -185,8 +194,11 @@ export class ControleRonco {
     // cada carro vem com o próprio escape: acessórios que ele não define voltam ao padrão
     const spec = { ...ACESSORIOS_PADRAO, ...p } as Spec;
     const av = { ...AV_PADRAO, magnetos: p.magnetosPadrao || 'ambos', mistura: p.misturaPadrao ?? 0.8 };
+    const eraManete = this.comManete;
     this.mudar({ spec, motor: build(spec), presetId: p.id, av }, true);
     this.pushConfig(true, true);
+    // (do carro para o avião e de volta: o comando de potência muda de pedal para manete)
+    if (eraManete || this.comManete) this.sendInput();
   }
 
   setFamilia(id: string) { this.mudar({ familia: id }); }
@@ -239,10 +251,31 @@ export class ControleRonco {
   sendInput() {
     if (!this.audio) return;
     const i = this.input;
-    const thr = Math.max(i.key * (i.half ? 0.4 : 1), i.pad);
+    const thr = this.comManete ? this.manete : Math.max(i.key * (i.half ? 0.4 : 1), i.pad);
     this.audio.send({ type: 'input', throttle: thr, brake: i.brake });
+    if (this.comManete) return;
     if (this.pedalFill) this.pedalFill.style.height = `${thr * 100}%`;
     this.pedal?.setAttribute('aria-valuenow', String(Math.round(thr * 100)));
+  }
+
+  // ---------------------------------------------------------------- manete (família aviação)
+  /** avião e helicóptero: o comando de potência é a manete; nos carros, o pedal */
+  get comManete() { return !!this.spec.aviation; }
+  assinarManete = (f: () => void) => { this.ouvintesManete.add(f); return () => { this.ouvintesManete.delete(f); }; };
+  obterManete = () => this.manete;
+  /** a posição fica até o usuário mudar (como a da Turbina) */
+  setManete(v: number) {
+    const m = Math.min(1, Math.max(0, v));
+    if (m === this.manete) return;
+    this.manete = m;
+    for (const f of this.ouvintesManete) f();
+    this.sendInput();
+  }
+  /** a cada quadro: W/S e ↑/↓ seguradas movem a manete aos poucos */
+  segurar(dt: number) {
+    if (!this.comManete) return;
+    const v = segurarManete(this.teclas, this.manete, dt);
+    if (v !== null) this.setManete(v);
   }
 
   async setIgnition(on: boolean) {
