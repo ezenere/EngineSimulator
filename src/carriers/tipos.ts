@@ -23,6 +23,8 @@ export interface Motor {
   /** Preenche uma saída mono por fonte (mesma ordem de `fontes`), n amostras, Pa a refDist. */
   processar(saidas: Float32Array[], n: number): void;
   telemetria(): TelemetriaMotor;
+  /** (extensão) o motor traz o governador de rotação (o diesel): o portador manda `rpmAlvo` em vez de `combustivel` */
+  readonly governadorProprio?: boolean;
 }
 
 /** Adaptador do DSP atual: expõe as fontes já separadas, e o estéreo legado quando a cena está em modo legado. */
@@ -33,7 +35,8 @@ export interface MotorLegado extends Motor {
 
 // ---------------------------------------------------------------- 1.4 Portador → Cena
 
-export type TipoPortador = 'carro' | 'helice' | 'rotor' | 'gerador' | 'locomotiva' | 'trem' | 'nenhum';
+/** (`aviao`: extensão, o avião a jato em passagem da tabela de comando de 1.6) */
+export type TipoPortador = 'carro' | 'helice' | 'rotor' | 'gerador' | 'locomotiva' | 'trem' | 'aviao' | 'nenhum';
 
 export interface Segmento {           // um vagão, uma carroceria, uma fuselagem
   comprimento: number;                // m, do corpo (sem o vão)
@@ -51,6 +54,11 @@ export interface Corpo {
   cpNariz: number;                    // coeficiente de pressão pico a pico a 1 m da lateral (seção 2.6)
   massaSuperficial: number;           // kg/m² da casca, para a cabine fechada (carro 12; trem 25; avião 8; helicóptero 5; gerador com carenagem 15)
   fCabine: number;                    // Hz, ressonância do habitáculo (carro 70; trem 45; avião 110; helicóptero 60)
+  /**
+   * (extensão) filtro próprio da cabine no lugar da lei da massa (3.3: "o carro mantém o filtro atual por decisão"):
+   * passa-baixas `[f, Q]` em cascata, ressonância `[f, Q, dB]` e um ganho. Sem ele, a lei da massa com `massaSuperficial`.
+   */
+  cabine?: { lp: readonly (readonly [number, number])[]; pico: readonly [number, number, number]; ganho: number };
 }
 
 export interface Cinematica {

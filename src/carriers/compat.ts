@@ -6,12 +6,31 @@ import type { FonteSonora, Vec3 } from '../scene/tipos';
 
 export const COMPAT: Record<TipoPortador, readonly FamiliaMotor[]> = {
   carro: ['pistao', 'diesel', 'rotativo', 'vapor', 'eletrico'],
-  helice: ['pistao', 'turboelice', 'turbina', 'radial', 'rotativo'],
+  // (o jato puro não tem hélice: a linha "turbina / turboélice × hélice" de 1.6 é a do turboélice)
+  helice: ['pistao', 'turboelice', 'radial', 'rotativo'],
   rotor: ['pistao', 'turboeixo', 'radial', 'nenhum'],
   gerador: ['diesel', 'vapor'],
   locomotiva: ['diesel', 'vapor'],
   trem: ['eletrico', 'nenhum'],
+  aviao: ['turbina'],
   nenhum: ['pistao', 'turbina', 'turboelice', 'turboeixo', 'diesel', 'radial', 'rotativo', 'vapor', 'eletrico'],
+};
+
+/**
+ * O que existe hoje (adaptadores de motor, docs/TECNICO.md): famílias com adaptador `Motor` e, por portador, os
+ * motores de verdade que a Passagem monta. O Ronco não tem pistão de aviação (etapa 3) e a Turbina não tem turboeixo
+ * (nenhum preset com `arch: 'turboeixo'`): o rotor fica sem motor (`nenhum`), com Nr imposto.
+ */
+export const ADAPTADORES: readonly FamiliaMotor[] = ['nenhum', 'pistao', 'diesel', 'turboelice', 'turbina'];
+export const USO_REAL: Record<TipoPortador, readonly FamiliaMotor[]> = {
+  carro: ['pistao', 'diesel'],          // carros e motos; picape, caminhão e ônibus
+  helice: ['turboelice'],
+  rotor: ['nenhum'],
+  gerador: ['diesel'],
+  locomotiva: ['diesel'],
+  trem: ['nenhum'],
+  aviao: ['turbina'],
+  nenhum: [],
 };
 
 /** lança erro se a combinação não estiver na tabela 1.6 */

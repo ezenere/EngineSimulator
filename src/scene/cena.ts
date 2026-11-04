@@ -16,6 +16,7 @@ import { expoenteEnvio } from './ambientes';
 import { Bq, k1, PonderacaoA } from './filtros';
 import { ondaNariz, OndaTunel, RuidoVento, ventoInduzido, ventoPistao } from './pressao';
 import { FundoAmbiente } from './fundo';
+import { Estrondo } from './estrondo';
 import { RNG } from '../acoustics/rng';
 
 /** pesos do cofre por tipo de fonte (3.3; os mesmos do `bay` do Ronco) */
@@ -65,6 +66,9 @@ export class CenaPassagem implements Cena {
   // local: cabine (lei da massa) e cofre
   cabK1 = 1; cabK2 = 1; cabPk: Bq[] = [new Bq(), new Bq()]; cabS = new Float64Array(4);
   cofreK = 1; cofreS = new Float64Array(2);
+  // cabine própria do portador (Corpo.cabine: o carro mantém a do Ronco) e vias estruturais das fontes `dentro` (3.3)
+  cabProp: Bq[][] = [[], []]; cabPropG = 0; cabPropOn = false;
+  viasC: number[] = []; viasG: number[] = []; viasBq: (Bq | null)[] = []; tmpV = new Float64Array(4096); tmpW = new Float64Array(4096);
   // medidores
   pa: PonderacaoA[]; eA = 0; eZ = 0; kMed = 1;
   // buffers
@@ -75,6 +79,11 @@ export class CenaPassagem implements Cena {
 
   semSombra = false;
   kPonte = K_PONTE;
+  /** estrondo sônico (scene/estrondo.ts), disparado quando o cone de Mach da primeira fonte alcança o ouvinte */
+  estrondo = new Estrondo(48000);
+  inCone = false;
+  /** instante (s, fim do trecho) em que o cone alcançou o ouvinte pela última vez */
+  tCone = NaN;
   constructor(op: OpcoesCena = {}) {
     if (op.ur) this.ur = op.ur;
     this.semSombra = !!op.semSombra;
@@ -94,6 +103,7 @@ export class CenaPassagem implements Cena {
     this.vento = new RuidoVento(fs);
     this.fundo = new FundoAmbiente(fs);
     this.pa = [new PonderacaoA(fs), new PonderacaoA(fs)];
+    this.estrondo = new Estrondo(fs); this.inCone = false;
     this.kMed = k1(fs, 1 / (2 * Math.PI * 0.125));   // constante 'F' (125 ms)
     this.hpP[0].hp(fs, 20, 0.7071); this.hpP[1].hp(fs, 20, 0.7071);
     this.ponteF[0].hp(fs, 31, 0.7071); this.ponteF[1].lp(fs, 125, 0.7071); this.ponteF[2].lp(fs, 125, 0.7071);
@@ -194,7 +204,7 @@ export class CenaPassagem implements Cena {
     const dm = this.via.distMax(this.traj.lateral + 50, this.traj.altitude) + portador.corpo.comprimento;
     this.hist = new Historico(dm / 343 + 0.5, BLOCO_CONTROLE / this.fs);
     this.hist.reiniciar(this.amostra / this.fs, c.s, c.v);
-    this.prop.preparar(this.fontesP, portador.corpo, this.via, this.hist, dm);
+    this.prop.preparar(this.fontesP, portador.corpo, this.via, this.hist, dm, portador.tipo === 'aviao');
     this.prop.alt = this.altitude;
     this.prop.definirSolo(this.soloG, SOLOS[this.amb.solo.tipo].fc);
     this.prop.soloLargura = this.amb.id === 'ponte' ? 3.7 : Infinity;
@@ -222,9 +232,24 @@ export class CenaPassagem implements Cena {
     this.local = local;
     const alvo = o.gimbal.alvo;
     let r: RegrasLocal;
+    // vias estruturais: fontes `dentro` com `vias` chegam à cabine e ao cofre só por elas (sem propagação)
+    this.viasC = []; this.viasG = []; this.viasBq = []; this.cabPropOn = false;
+    if (local === 'cabine' || local === 'cofre') {
+      this.fontesP.forEach((f, c) => {
+        if (!f.vias) return;
+        const v = local === 'cabine' ? f.vias.cabine : f.vias.cofre;
+        this.viasC.push(c); this.viasG.push(v.ganho); this.viasBq.push(v.fc > 0 ? new Bq().lp(this.fs, v.fc, 0.7) : null);
+      });
+    }
     if (local === 'fora') r = { diretividade: true, sombra: !this.semSombra, solo: true, binaural: o.binaural, rota: null, envio: 1 };
     else if (local === 'cabine') {
-      r = { diretividade: false, sombra: false, solo: false, binaural: o.binaural, rota: () => ({ bus: 1, peso: 1 }), envio: 0.25 };
+      r = { diretividade: false, sombra: false, solo: false, binaural: o.binaural, rota: (f) => ({ bus: 1, peso: f.vias ? 0 : 1 }), envio: 0.25 };
+      const cp = this.portador?.corpo.cabine;
+      if (cp) {
+        // filtro próprio da cabine (o carro: o `cab` do Ronco), no lugar da lei da massa
+        this.cabPropOn = true; this.cabPropG = cp.ganho;
+        this.cabProp = [0, 1].map(() => [...cp.lp.map(([f, q]) => new Bq().lp(this.fs, f, q)), new Bq().peak(this.fs, cp.pico[0], cp.pico[1], cp.pico[2])]);
+      }
       const ms = this.portador?.corpo.massaSuperficial ?? 25, fc = this.portador?.corpo.fCabine ?? 45;
       // Lei da massa TL = 20·log₁₀(f·m_s) − 47 dB, limitada a [5, 45]. O CENA.md (3.3) sugere dois polos em
       // 891/m_s e 2,6× isso, mas dois polos caem 12 dB/oitava contra os 6 da lei e erram 7 dB em 125 Hz e
@@ -234,7 +259,7 @@ export class CenaPassagem implements Cena {
       this.cabPk[0].peak(this.fs, fc, 1.1, 7); this.cabPk[1].peak(this.fs, fc, 1.1, 7);
     } else if (local === 'cofre') {
       r = { diretividade: false, sombra: false, solo: false, binaural: o.binaural, envio: 0.5,
-        rota: (f) => (f.dentro ? { bus: 0, peso: PESO_COFRE[f.tipo] ?? 0.8 } : { bus: 1, peso: 0.55 }) };
+        rota: (f) => (f.vias ? { bus: 0, peso: 0 } : f.dentro ? { bus: 0, peso: PESO_COFRE[f.tipo] ?? 0.8 } : { bus: 1, peso: 0.55 }) };
     } else {
       r = { diretividade: true, sombra: false, solo: false, binaural: o.binaural, envio: 0.5,
         rota: (f) => ({ bus: 0, peso: f.id === alvo ? 1 : 0.1 }) };
@@ -325,7 +350,16 @@ export class CenaPassagem implements Cena {
       const sj = c.s - c.v * dtj + 0.5 * c.a * dtj * dtj, vj = c.v - c.a * dtj;
       this.hist.empurrar(sj, vj);
       this.geometria(sj, vj);
+      // M ≥ 0,9 numa reta: o resolvedor fechado (2.1) e o estrondo no cone, como no flyby legado
+      P.supersonico = this.via.tipo === 'reta' && Math.abs(vj) >= 0.9 * P.c;
       P.trecho(ini, N, tj, this.geo);
+      const cone = P.supersonico && P.cone;
+      if (cone && !this.inCone && P.machSup > 1) {
+        const e = (portador as { estrondo?: { comprimento: number; forma: number } }).estrondo;
+        this.estrondo.disparar(P.machSup, Math.max(15, P.altSup), e?.comprimento ?? portador.corpo.comprimento, e?.forma ?? 0.09);
+        this.tCone = tj;
+      }
+      this.inCone = cone;
       // campo próximo: pressão e vento, no fim do trecho; a pressão é interpolada por amostra
       let p = 0, u = 0;
       let pTun = 0;
@@ -402,7 +436,12 @@ export class CenaPassagem implements Cena {
     const g = 1 / PA_FS;
     const km = this.kMed, ta = this.tmpA, tb = this.tmpB, tc = this.tmpC, td = this.tmpD;
     // barramento 1 pelo filtro do local: cabine = lei da massa (2 polos) + ressonância do habitáculo; cofre = lp 900 Hz
-    if (this.local === 'cabine') {
+    if (this.local === 'cabine' && this.cabPropOn) {
+      const gc = this.cabPropG;
+      for (let k = 0; k < n; k++) { tc[k] = gc * a1L[k]; td[k] = gc * a1R[k]; }
+      for (const b of this.cabProp[0]) b.bloco(tc, n);
+      for (const b of this.cabProp[1]) b.bloco(td, n);
+    } else if (this.local === 'cabine') {
       for (let k = 0; k < n; k++) {
         cs[0] += this.cabK1 * (a1L[k] - cs[0]); cs[2] += this.cabK1 * (a1R[k] - cs[2]);
         tc[k] = 0.5623 * (cs[0] + this.cabK2 * a1L[k]); td[k] = 0.5623 * (cs[2] + this.cabK2 * a1R[k]);
@@ -411,6 +450,18 @@ export class CenaPassagem implements Cena {
     } else if (this.local === 'cofre') {
       for (let k = 0; k < n; k++) { cf[0] += this.cofreK * (a1L[k] - cf[0]); cf[1] += this.cofreK * (a1R[k] - cf[1]); tc[k] = cf[0]; td[k] = cf[1]; }
     } else { for (let k = 0; k < n; k++) { tc[k] = a1L[k]; td[k] = a1R[k]; } }
+    // vias estruturais (mono nos dois ouvidos, como o `common` do int e o `b` do bay do Ronco)
+    if (this.viasC.length) {
+      const tv = this.tmpV, tw = this.tmpW;
+      tv.fill(0, 0, n);
+      for (let j = 0; j < this.viasC.length; j++) {
+        const x = canais[this.viasC[j]], gv = this.viasG[j], bq = this.viasBq[j];
+        for (let k = 0; k < n; k++) tw[k] = gv * x[k];
+        if (bq) bq.bloco(tw, n);
+        for (let k = 0; k < n; k++) tv[k] += tw[k];
+      }
+      for (let k = 0; k < n; k++) { tc[k] += tv[k]; td[k] += tv[k]; }
+    }
     let eZ = this.eZ;
     for (let k = 0; k < n; k++) {
       const l = a0L[k] + bL[k] + tc[k], r = a0R[k] + bR[k] + td[k];
@@ -418,6 +469,10 @@ export class CenaPassagem implements Cena {
       eZ += km * (0.5 * (l * l + r * r) - eZ);
     }
     for (let k = 0; k < n; k++) { outL[k] = ta[k] * g; outR[k] = tb[k] * g; sendL[k] = P.envL[k] * g; sendR[k] = P.envR[k] * g; }
+    // estrondo: em unidades do alto-falante, como no legado (o pico perto do máximo), fora da escala absoluta
+    const es = this.estrondo;
+    if (es.ativo) for (let k = 0; k < n && es.ativo; k++) { const bm = es.amostra(); outL[k] += bm; outR[k] += bm * 0.97; sendL[k] += bm * 0.6; sendR[k] += bm * 0.6; }
+    es.age += n / this.fs;
     // nível A com constante 'F': filtra em bloco
     this.pa[0].bloco(ta, n); this.pa[1].bloco(tb, n);
     let eA = this.eA;
@@ -447,6 +502,7 @@ export class CenaPassagem implements Cena {
     const ov = t.ouvinte as unknown as number[]; ov[0] = this.geo.x; ov[1] = this.geo.y; ov[2] = this.geo.z;
     t.ventoMs = this.ventoU;
     t.splDbA = 10 * Math.log10(this.eA / (P_REF * P_REF) + 1e-30);
+    if (this.estrondo.age < 30) t.boom = { dB: this.estrondo.dB, idade: this.estrondo.age }; else delete t.boom;
     t.splDb = 10 * Math.log10(this.eZ / (P_REF * P_REF) + 1e-30);
   }
 

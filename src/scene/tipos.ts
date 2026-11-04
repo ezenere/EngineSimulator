@@ -28,7 +28,24 @@ export interface FonteSonora {
   refDist: number;            // m: o canal é p(t) em Pa, campo livre, a esta distância (Ronco 5 m; Turbina 30 m; portadores 7,5 m)
   dentro: boolean;            // true = está dentro de um compartimento (cofre, nacele, casa de máquinas): sofre a casca antes de sair
   hCorpo?: number;            // altura do ponto de emissão (usa pos[2] se omitido)
+  /**
+   * (extensão) diretividade que depende da frequência: corte (Hz) de um passa-baixa a 0°, 30°, …, 180° do eixo,
+   * somado à absorção do ar (vale o menor dos dois cortes). É a sombra da carroceria sobre o escape do Ronco
+   * (`900 + 15000·traseira²` no road() legado), que a tabela de ganho sozinha não reproduz.
+   */
+  agudo?: readonly number[];
+  /** (extensão) vias estruturais de uma fonte `dentro` até a cabine e o cofre (3.3); ver `ViasEstruturais` */
+  vias?: ViasEstruturais;
 }
+
+/**
+ * Extensão do CENA.md 1.2 (adaptadores de motor, docs/TECNICO.md → Adaptadores de motor): por onde uma fonte
+ * `dentro` chega ao ouvinte que está na cabine ou no cofre. O canal da fonte está no nível de fora (Pa a refDist,
+ * campo livre); `ganho` o leva ao nível da via e `fc` é o passa-baixa dela (Hz, biquad Q 0,7; 0 = sem filtro).
+ * Com vias definidas a fonte não chega à cabine nem ao cofre pelo ar: só por elas, sem propagação (é o `int` e o
+ * `bay` do Ronco: admissão por lp 900 a 0,35, mecânica por lp 1200 a 0,2, vibração do bloco a 1,2…).
+ */
+export interface ViasEstruturais { cabine: { ganho: number; fc: number }; cofre: { ganho: number; fc: number } }
 
 export interface EixoSaida { omega: number; torque: number; inercia: number }   // rad/s, N·m (líquido que o motor entrega), kg·m² (do motor)
 
@@ -42,6 +59,11 @@ export interface ComandoMotor {
   ignicao: boolean;
   partida: boolean;
   combustivel?: number;    // 0..1, quando um governador externo manda no motor (rotor, gerador, locomotiva); se definido, substitui acelerador
+  /**
+   * (extensão) rotação-alvo (rpm) para um motor que traz o próprio governador (`Motor.governadorProprio`: o diesel,
+   * com o isócrono acertado por motor). O portador manda o alvo (notch, rede) e não o combustível.
+   */
+  rpmAlvo?: number;
 }
 
 // ---------------------------------------------------------------- 1.5 Cena → ouvinte

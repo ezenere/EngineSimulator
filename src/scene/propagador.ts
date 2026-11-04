@@ -14,6 +14,7 @@ import { k1 } from './filtros';
 import { corteAr, alfa1k, POLO_POR_CORTE } from './ar';
 import { CalculoSombra, ganhosShelf } from './sombra';
 import { PontoVia, type Via, type Historico } from './trajetoria';
+import { raizesEmissao } from './supersonico';
 
 const TAU = Math.PI * 2;
 const ITD_ANEL = 128;          // amostras (2,7 ms a 48 kHz)
@@ -89,6 +90,8 @@ export class EstadoFonte {
   bx: number; by: number; bz: number;           // posição no corpo
   ax: number; ay: number; az: number;           // eixo da diretividade
   tab: readonly number[]; expConv: number; refDist: number;
+  /** corte (Hz) de um passa-baixa por ângulo (FonteSonora.agudo), ou null */
+  agudo: readonly number[] | null;
   seg: Segmento;
   anel: Float32Array; mask: number; cap: number;
   // por caminho (0 direto, 1 imagem): atraso (amostras, inclui off) e derivada (amostra/amostra)
@@ -102,6 +105,8 @@ export class EstadoFonte {
    */
   s = new Float64Array(N_ESTADO);
   itd = new Float32Array(ITD_ANEL);             // anel curto do ITD
+  /** resolvedor fechado (M >= 0,9): por caminho e raiz, [atraso anterior (amostras), ganho anterior] */
+  sup = new Float64Array(8);
   bus = 0;
   iter = 0;                                     // iterações extras do ponto fixo (telemetria)
   get ex() { return this.s[S_EX]; } get ey() { return this.s[S_EY]; } get ez() { return this.s[S_EZ]; }
@@ -114,6 +119,7 @@ export class EstadoFonte {
     const e = f.dir.eixo, ne = Math.hypot(e[0], e[1], e[2]) || 1;
     this.ax = e[0] / ne; this.ay = e[1] / ne; this.az = e[2] / ne;
     this.tab = f.dir.tabela; this.expConv = f.dir.expConv; this.refDist = f.refDist;
+    this.agudo = f.agudo ?? null;
     let n = 1024; while (n < (distAnel / C_SOM + 0.1) * fs + 512) n <<= 1;
     this.anel = new Float32Array(n); this.mask = n - 1; this.cap = n - 512;
     const v = this.s;
@@ -156,11 +162,12 @@ export class Propagador {
   }
 
   /** Cria um anel por fonte (exceto 'pressao', que é campo próximo). Aloca: chamar fora do laço. */
-  preparar(fontes: readonly FonteSonora[], corpo: Corpo, via: Via, hist: Historico, distMax: number) {
+  preparar(fontes: readonly FonteSonora[], corpo: Corpo, via: Via, hist: Historico, distMax: number, anelCompleto = false) {
     this.corpo = corpo; this.via = via; this.hist = hist;
     const lista = fontes.filter((f) => f.tipo !== 'pressao');
     if (lista.length > MAX_FONTES) throw new Error(`Cena: ${lista.length} fontes com propagação, o máximo é ${MAX_FONTES}`);
-    const distAnel = Math.min(distMax, DIST_ANEL);
+    // (o avião, com poucas fontes, guarda o anel inteiro: o resolvedor fechado lê atrasos de vários segundos, 5.1)
+    const distAnel = anelCompleto ? distMax : Math.min(distMax, DIST_ANEL);
     this.fontes = lista.map((f) => new EstadoFonte(f, segmentoEm(corpo, f.pos[0]), this.fs, distAnel));
     this.indices = fontes.map((f) => lista.indexOf(f));
     this.primeiro = true;
@@ -218,13 +225,21 @@ export class Propagador {
    * Processa um trecho de N amostras (≤ 64) a partir de `ini` no bloco: atualiza a geometria para o
    * fim do trecho (tRec) e soma cada fonte nos acumuladores.
    */
+  /** M >= 0,9 numa reta: a Cena liga o resolvedor fechado (supersonico.ts) no lugar do ponto fixo */
+  supersonico = false;
+  /** o cone de Mach da primeira fonte alcançou o ouvinte neste trecho (o critério do estrondo do legado) */
+  cone = false;
+  /** M e altura da primeira fonte no último trecho supersônico (para o estrondo) */
+  machSup = 0; altSup = 0;
   trecho(ini: number, N: number, tRec: number, O: GeoOuvinte) {
+    if (this.supersonico) { this.trechoSuper(ini, N, tRec, O); return; }
     const fs = this.fs, F = this.fontes, R = this.regras;
     const usaSolo = R.solo && this.soloGanho > 0;
     const corpo = this.corpo;
     for (let i = 0; i < F.length; i++) {
       const es = F[i];
       // ---------------- geometria no fim do trecho
+      let fcDir = 1e9;
       for (let cam = 0; cam < 2; cam++) {
         if (cam === 1 && !usaSolo) { es.ativo[1] = 0; es.gAlvo[1] = 0; continue; }
         this.resolver(es, cam, tRec, O);
@@ -237,13 +252,17 @@ export class Propagador {
         const uvo = -(rs[3 /*ux*/] * O.vx + rs[4 /*uy*/] * O.vy + rs[5 /*uz*/] * O.vz);
         const dtau = (usv - uvo) / (this.c + usv);
         let gd = 1;
-        if (R.diretividade && !es.f.dentro) {
+        // (fora, a diretividade vale sempre, 3.3; as fontes `dentro` dos portadores são omni [0…0], e as do cofre
+        // de um motor de carro levam a do road() legado: para a frente ou para trás com o escape)
+        if (R.diretividade) {
           const cosD = es.ax * rs[7 /*cT*/] + es.ay * rs[8 /*uN*/] + es.az * rs[5 /*uz*/];
           const th = Math.acos(cosD < -1 ? -1 : cosD > 1 ? 1 : cosD) * 57.29577951308232;
           // dirDb embutido (tabela de 7 pontos, interpolação linear em dB)
           const tb = es.tab; let xd = th / 30; xd = xd < 0 ? 0 : xd > 5.999 ? 5.999 : xd;
           const id = xd | 0;
           gd = Math.pow(10, (tb[id] + (tb[id + 1] - tb[id]) * (xd - id)) / 20);
+          const ag = es.agudo;
+          if (ag !== null && cam === 0) fcDir = ag[id] + (ag[id + 1] - ag[id]) * (xd - id);
         }
         let g = conv * gd * es.refDist / rs[6 /*r*/];
         if (cam === 0) {
@@ -255,6 +274,7 @@ export class Propagador {
             if (this.urCache !== this.ur) { this.urCache = this.ur; this.a1kCache = corteAr(1000, this.ur) > 0 ? alfa1k(this.ur) : 0.0037; }
             let fc = 1000 * Math.pow(3 / (this.a1kCache * Math.max(rs[6], 0.1)), 0.625);
             fc = fc < 600 ? 600 : fc > 20000 ? 20000 : fc;
+            if (fcDir < fc) fc = fcDir;   // sombra do próprio corpo por ângulo (o `shade` do road() do Ronco)
             fc *= POLO_POR_CORTE; if (fc > 0.45 * fs) fc = 0.45 * fs;
             es.s[S_KARALVO] = 1 - Math.exp(-TAU * fc / fs);
           }
@@ -333,6 +353,123 @@ export class Propagador {
     void corpo;
   }
   alvoD = new Float64Array(2); alvoDD = new Float64Array(2);
+
+  /**
+   * Trecho com o resolvedor fechado do jet-dsp (CENA 2.1, decisão: M ≥ 0,9 numa reta). Para cada fonte e caminho
+   * (direto e imagem no solo), as raízes de (c² − v²)τ² + 2·A·v·τ − (A² + Q) = 0 (`raizesEmissao`, a cópia do
+   * `geom()` legado): antes do cone nenhuma, na cáustica duas iguais, depois duas (a de maior atraso, emitida
+   * chegando, toca de trás para frente). Como no legado: atraso e ganho em rampa linear dentro do trecho,
+   * |1 − M·cosθ|^−expConv limitado a 4, diretividade pelo ângulo de emissão, ar pelo caminho mais curto, imagem com o
+   * ganho e o passa-baixa do solo; sem ITD/ILD (o flyby não tem) e sem sombra. A primeira fonte decide o cone.
+   */
+  raiz = new Float64Array(2);
+  tmpS = new Float64Array(64); tmpI = new Float64Array(64);
+  private trechoSuper(ini: number, N: number, tRec: number, O: GeoOuvinte) {
+    const fs = this.fs, F = this.fontes, R = this.regras, h = this.hist, via = this.via, p = this.pv, pv = p.v, hr = h.res, c = this.c;
+    const usaSolo = R.solo && this.soloGanho > 0, invN = 1 / N;
+    hr[2] = tRec; h.lerV();
+    const sC = hr[0], v = hr[1], M = v / c;
+    this.cone = false;
+    const tmp = this.tmpS, tmpI = this.tmpI;
+    for (let i = 0; i < F.length; i++) {
+      const es = F[i], st = es.sup;
+      pv[6] = sC + es.bx; via.pontoV(p);
+      const tx = pv[2], ny = pv[5];
+      const sx = pv[0], sy = pv[1] + es.by * ny, sz = this.alt + es.bz;
+      const A = (sx - O.x) * tx;                       // ao longo da rota; positivo = já passou do ouvinte
+      if (i === 0) { this.machSup = M; this.altSup = sz; }
+      let rMin = 1e9, gDir = 0, cthP = 0, uyP = 0;
+      const a = es.anel, m = es.mask | 0, cap = es.cap | 0;
+      for (let k = 0; k < N; k++) { tmp[k] = 0; tmpI[k] = 0; }
+      for (let cam = 0; cam < (usaSolo ? 2 : 1); cam++) {
+        const oz = cam === 0 ? O.z : -O.z;
+        const Q = (sy - O.y) * (sy - O.y) + (sz - oz) * (sz - oz);
+        const rr = raizesEmissao(A, v, Q, this.raiz, c);
+        if (i === 0 && cam === 0) this.cone = rr.cone;
+        for (let slot = 0; slot < 2; slot++) {
+          // como no legado: com duas raízes, slot 0 = a de maior atraso; com uma, slot 1
+          const j = rr.n === 2 ? slot : rr.n === 1 && slot === 1 ? 0 : -1;
+          let D = 0, g = 0;
+          if (j >= 0) {
+            const tau = this.raiz[j], re = c * tau, Xe = A - v * tau;
+            if (tau * fs < cap - 4 && re >= 1) {
+              const cth = -Xe / re;                     // > 0: emitido com o ouvinte à frente
+              const uN = ((O.y - sy) * ny) / re, uz = (oz - sz) / re;
+              let gd = 1;
+              if (R.diretividade) {
+                const cosD = es.ax * cth + es.ay * uN + es.az * uz;
+                const th = Math.acos(cosD < -1 ? -1 : cosD > 1 ? 1 : cosD) * 57.29577951308232;
+                const tb = es.tab; let xd = th / 30; xd = xd < 0 ? 0 : xd > 5.999 ? 5.999 : xd;
+                const id = xd | 0;
+                gd = Math.pow(10, (tb[id] + (tb[id + 1] - tb[id]) * (xd - id)) / 20);
+              }
+              let conv = Math.pow(Math.max(0.05, Math.abs(1 - M * cth)), -es.expConv);
+              if (conv > 4) conv = 4;
+              g = conv * gd * Math.min(4, es.refDist / Math.max(re, R_MIN)) * es.s[S_FADE];
+              if (cam === 1) g *= this.soloGanho;
+              D = tau * fs;
+              if (cam === 0 && re < rMin) { rMin = re; gDir = g; cthP = cth; uyP = (O.y - sy) / re; }
+            }
+          }
+          const q = cam * 4 + slot * 2;
+          const gp = st[q + 1];
+          let d0 = st[q]; if (gp <= 0 && g > 0) d0 = D;     // raiz nova: o atraso salta, o ganho sobe do zero
+          if (g > 0 || gp > 0) {
+            const d1 = g > 0 ? D : d0, dd = (d1 - d0) * invN, dg = (g - gp) * invN;
+            let dk = d0, gk = gp, w = this.w + ini;
+            const out = cam === 0 ? tmp : tmpI;
+            for (let k = 0; k < N; k++) {
+              let d = dk; if (d < 2) d = 2; else if (d > cap) d = cap;
+              const pos = w - d, ip = Math.floor(pos), f = pos - ip;
+              const y0 = a[(ip - 1) & m], y1 = a[ip & m], y2 = a[(ip + 1) & m], y3 = a[(ip + 2) & m];
+              out[k] += gk * ((((0.5 * (y3 - y0) + 1.5 * (y1 - y2)) * f + (y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3)) * f + 0.5 * (y2 - y0)) * f + y1);
+              dk += dd; gk += dg; w++;
+            }
+          }
+          st[q] = g > 0 ? D : d0; st[q + 1] = g;
+        }
+      }
+      // ar pelo caminho mais curto, panorâmica e envio
+      if (rMin < 1e9) {
+        if (this.urCache !== this.ur) { this.urCache = this.ur; this.a1kCache = corteAr(1000, this.ur) > 0 ? alfa1k(this.ur) : 0.0037; }
+        let fc = 1000 * Math.pow(3 / (this.a1kCache * Math.max(rMin, 0.1)), 0.625);
+        fc = (fc < 600 ? 600 : fc > 20000 ? 20000 : fc) * POLO_POR_CORTE; if (fc > 0.45 * fs) fc = 0.45 * fs;
+        es.s[S_KARALVO] = 1 - Math.exp(-TAU * fc / fs);
+        // direção de chegada (ouvinte → ponto de emissão) na cabeça
+        const dx = -cthP * tx, dy = -uyP;
+        const lat = dx * O.lx + dy * O.ly;
+        if (R.binaural) { const pan = -lat * LARGURA_PAN, aa = (pan + 1) * Math.PI / 4; es.s[S_PLALVO] = Math.cos(aa) * Math.SQRT2; es.s[S_PRALVO] = Math.sin(aa) * Math.SQRT2; es.s[S_PSALVO] = 0.25 * Math.max(-1, Math.min(1, pan / LARGURA_PAN)); }
+        else { es.s[S_PLALVO] = 1; es.s[S_PRALVO] = 1; es.s[S_PSALVO] = 0; }
+        // envio: o mesmo do ponto fixo (1/r^e relativo ao direto), sem a diretividade
+        const gGeo = Math.min(4, es.refDist / Math.max(rMin, R_MIN));
+        const gEnvio = (es.refDist / 5) * 1.2 * Math.pow(Math.max(rMin, 3), -this.expEnvio) * Math.pow(3, this.expEnvio - 0.5);
+        es.s[S_GSALVO] = (R.envio * gEnvio) / gGeo;
+        es.s[S_EX] = sx; es.s[S_EY] = sy; es.s[S_EZ] = sz; es.s[S_R] = rMin; es.s[S_THETA] = Math.acos(Math.max(-1, Math.min(1, cthP))) * 57.29577951308232;
+        es.s[S_GANHODB] = 20 * Math.log10(gDir / es.refDist + 1e-12); es.s[S_ATRASOMS] = (rMin / c) * 1000;
+      } else es.s[S_GANHODB] = -120;
+      if (es.s[S_FADE] < 1) es.s[S_FADE] = Math.min(1, es.s[S_FADE] + N / (0.05 * fs));
+      // ar, solo e saída
+      const oL = this.accL[es.bus], oR = this.accR[es.bus], eL = this.envL, eR = this.envR;
+      const kAr = es.s[S_KARALVO], kGr = this.kGr, peso = es.s[S_PESO];
+      let a1 = es.s[S_A1], a2 = es.s[S_A2], gr = es.s[S_GR];
+      let pL = es.s[S_PL] * peso, pR = es.s[S_PR] * peso, gs = es.s[S_GS], ps = es.s[S_PS];
+      const dpL = (es.s[S_PLALVO] * peso - pL) * invN, dpR = (es.s[S_PRALVO] * peso - pR) * invN, dgs = (es.s[S_GSALVO] - gs) * invN, dps = (es.s[S_PSALVO] - ps) * invN;
+      for (let k = 0; k < N; k++) {
+        gr += kGr * (tmpI[k] - gr);
+        const x = tmp[k] + gr;
+        a1 += kAr * (x - a1); a2 += kAr * (a1 - a2);
+        const e = a2 * gs;
+        eL[ini + k] += e * (1 - ps); eR[ini + k] += e * (1 + ps);
+        oL[ini + k] += a2 * pL; oR[ini + k] += a2 * pR;
+        pL += dpL; pR += dpR; gs += dgs; ps += dps;
+      }
+      es.s[S_A1] = a1; es.s[S_A2] = a2; es.s[S_GR] = gr; es.s[S_KAR] = kAr;
+      es.s[S_PL] = es.s[S_PLALVO]; es.s[S_PR] = es.s[S_PRALVO]; es.s[S_GS] = es.s[S_GSALVO]; es.s[S_PS] = es.s[S_PSALVO];
+      // se o corpo voltar a ficar abaixo de M 0,9, o ponto fixo recomeça do zero
+      es.ativo[0] = 0; es.ativo[1] = 0;
+    }
+    this.primeiro = false;
+  }
 
   private ancorar(es: EstadoFonte, D: number, agora: boolean) {
     const novo = Math.max(0, Math.round(D - 0.6 * es.cap));

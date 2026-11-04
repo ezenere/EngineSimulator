@@ -35,15 +35,18 @@ export abstract class PortadorComMotor implements Portador {
   /** registra uma fonte própria (aloca; só na construção). Fontes de ruído calibradas em L_W sobem pelo índice de diretividade. */
   protected propria(f: FonteSonora, g: GeradorCanal) {
     if (g instanceof FonteRuido) { g.calibrar(); g.gCal /= Math.sqrt(fatorPotenciaDir(f.dir.tabela)); }
-    this.proprias.push(f); this.geradores.push(g);
-    this.lista = [...fontesDoMotor(this.motor, this.montagem), ...this.proprias];
+    this.proprias.push(f); this.geradores.push(g); this.usadas.push(this.proprias.length - 1);
+    this.lista = [...fontesDoMotor(this.motor, this.montagem), ...this.usadas.map((j) => this.proprias[j])];
   }
+  /** índices das fontes próprias em uso: uma fonte do motor substitui a própria de mesmo id (ou `id.k`) */
+  protected usadas: number[] = [];
   acoplar(motor: Motor | null) {
     validarCompat(this.tipo, motor);
     this.motor = motor;
     const fm = fontesDoMotor(motor, this.montagem);
     this.nMotor = fm.length;
-    this.lista = [...fm, ...this.proprias];
+    this.usadas = this.proprias.map((_, j) => j).filter((j) => { const id = this.proprias[j].id; return !fm.some((f) => f.id === id || f.id.startsWith(id + '.')); });
+    this.lista = [...fm, ...this.usadas.map((j) => this.proprias[j])];
     this.canaisMotor = [];
     motor?.acoplar(this.carga());
   }
@@ -58,12 +61,26 @@ export abstract class PortadorComMotor implements Portador {
       for (let i = 0; i < this.nMotor; i++) this.canaisMotor[i] = saidas[i];
       this.motor.processar(this.canaisMotor, n);
     }
-    for (let j = 0; j < this.geradores.length; j++) this.geradores[j].preencher(saidas[this.nMotor + j], n);
+    const u = this.usadas;
+    for (let j = 0; j < u.length; j++) this.geradores[u[j]].preencher(saidas[this.nMotor + j], n);
     const k = this.cinematica;
     if (this.cmd.velocidadeFixa != null) { k.v = this.cmd.velocidadeFixa; k.a = 0; }
     k.s += k.v * n * dt;
   }
   abstract telemetria(): TelemetriaPortador;
+}
+
+/**
+ * Ganho da planta do governador relativo ao motor de bancada com que os ganhos do portador foram acertados:
+ * (T_ref/J_ref)/(T_max/J_total), que multiplica Kp e Ki. Um motor de verdade (diesel) com metade da inércia por N·m reage o dobro ao
+ * mesmo comando e o mesmo PI caçava (±3% no grupo de 500 kVA com o QSX15). Sem `torqueMax` no motor, 1.
+ */
+export function ganhoRelativo(motor: Motor | null, Tref: number, Jref: number, Jcarga: number) {
+  const T = (motor as { torqueMax?: number } | null)?.torqueMax;
+  if (!motor || !T) return 1;
+  // (e a metade: o atraso da combustão por ciclo e o do turbo, que o motor de bancada não tem; com o ganho inteiro o
+  // grupo de 500 kVA caçava ±2% em vazio, com a metade assenta e o degrau de 50% volta em ~2 s)
+  return (0.5 * (Tref / Jref)) / (T / (motor.eixo.inercia + Jcarga));
 }
 
 /** Governador PI com limites e taxa máxima de variação da saída. */

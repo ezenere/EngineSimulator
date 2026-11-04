@@ -8,7 +8,7 @@
 //   freio dinâmico: motor em notch fixo (EMD: 8 na rotação, carga do gerador zero), grades e sopradores ligados
 import type { Carga, Vec3, Diretividade } from '../scene/tipos';
 import type { TelemetriaPortador, Corpo } from './tipos';
-import { PortadorComMotor, GovernadorPI, SerieHarmonica, Soma, calibrarSerieA, type GeradorCanal } from './base';
+import { PortadorComMotor, GovernadorPI, SerieHarmonica, Soma, calibrarSerieA, ganhoRelativo, type GeradorCanal } from './base';
 import { FonteRuido, FonteRolamento, Ramo, paDeLw, type EspecFonteRuido } from './ruido';
 import { Bq } from '../scene/filtros';
 import { REF_DIST_PORTADOR } from './trem';
@@ -118,6 +118,8 @@ export class Locomotiva extends PortadorComMotor {
     }
   }
   carga() { return this.cargaL; }
+  gRel = 0;
+  acoplar(m: import('./tipos').Motor | null) { this.gRel = 0; super.acoplar(m); }
 
   protected fisica(n: number, dt: number) {
     const c = this.cfg, tb = n * dt;
@@ -140,8 +142,13 @@ export class Locomotiva extends PortadorComMotor {
     // potência constante num eixo que perde rotação pede cada vez mais torque e apagaria o motor)
     const wAlvo = (this.rpmAlvo * 2 * Math.PI) / 60;
     this.cargaL.P = pAt * Math.max(0, Math.min(1, (w / wAlvo - 0.9) / 0.08));
-    if (m) {
+    if (m && m.governadorProprio) {
+      // motor com governador próprio (o diesel, isócrono com a rampa de 100 rpm/s dele): o alvo é o do notch
+      m.comandar({ acelerador: 0, ignicao: this.cmd.ignicao !== false, partida: false, rpmAlvo: alvo });
+    } else if (m) {
       const erro = (100 * ((this.rpmAlvo * 2 * Math.PI) / 60 - w)) / ((tabela[8] * 2 * Math.PI) / 60);
+      // ganhos acertados com o motor de bancada de tools/cena/portadores.ts (48 000 N·m, 60 + 120 kg·m²), escalados pela planta
+      if (this.gRel === 0) { this.gRel = ganhoRelativo(m, 48000, 60 + 120, this.cargaL.inercia); this.gov.kp = 0.6 * this.gRel; this.gov.ki = 0.3 * this.gRel; }
       m.comandar({ acelerador: 0, ignicao: this.cmd.ignicao !== false, partida: false, combustivel: this.gov.passo(erro, tb) });
     }
     // fontes próprias

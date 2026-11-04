@@ -13,7 +13,7 @@
 // nominal imposta (bancada sem motor) e só as fontes próprias soam.
 import type { Carga, Vec3 } from '../scene/tipos';
 import type { TelemetriaPortador, Corpo } from './tipos';
-import { PortadorComMotor, GovernadorPI, SerieHarmonica, Soma, calibrarSerieA } from './base';
+import { PortadorComMotor, GovernadorPI, SerieHarmonica, Soma, calibrarSerieA, ganhoRelativo } from './base';
 import { FonteRuido, Ramo, type EspecFonteRuido, paDeLw } from './ruido';
 import { Bq } from '../scene/filtros';
 import { REF_DIST_PORTADOR } from './trem';
@@ -86,6 +86,8 @@ export class Gerador extends PortadorComMotor {
     void rpm;
   }
   carga() { return this.cargaG; }
+  gRel = 0;
+  acoplar(m: import('./tipos').Motor | null) { this.gRel = 0; super.acoplar(m); }
 
   /**
    * Alternador: 2·f_rede e os harmônicos ímpares dele (100/300/500 Hz em 50 Hz; 120/360/600 em 60 Hz) e o
@@ -109,10 +111,17 @@ export class Gerador extends PortadorComMotor {
     this.cargaG.fracao += Math.max(-d, Math.min(d, alvo - this.cargaG.fracao));
     const m = this.motor;
     if (this.fila.length === 0) this.fila = new Float64Array(Math.max(1, Math.round(0.3 / tb)));
-    if (m) {
+    if (m && m.governadorProprio) {
+      // motor com governador próprio (o diesel): o portador manda a rotação da rede
+      const alvoW = this.omegaNom * (1 - c.droop * this.cargaG.fracao);
+      m.comandar({ acelerador: 0, ignicao: this.cmd.ignicao !== false, partida: false, rpmAlvo: (alvoW * 60) / (2 * Math.PI) });
+      this.atualizarFontes(m.eixo.omega);
+    } else if (m) {
       const w = m.eixo.omega;
       const alvoW = this.omegaNom * (1 - c.droop * this.cargaG.fracao);
       const erro = (100 * (alvoW - w)) / this.omegaNom;
+      // ganhos acertados com o motor de bancada de tools/cena/portadores.ts (4500 N·m, 60 + 20 kg·m²), escalados pela planta
+      if (this.gRel === 0) { this.gRel = ganhoRelativo(m, 4500, 80, this.cargaG.inercia); this.gov.kp = GOV_GERADOR.kp * this.gRel; this.gov.ki = GOV_GERADOR.ki * this.gRel; }
       const u = this.gov.passo(erro, tb);
       // atraso da bomba
       const k = this.filaI % this.fila.length;
