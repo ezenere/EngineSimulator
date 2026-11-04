@@ -24,8 +24,8 @@ export const PERDA_ADMISSAO = 0.92;
 export const V_NOCIVO = 0.08;
 /** área da haste sobre a área do pistão (a extremidade traseira perde 3–5%) */
 export const HASTE = 0.04;
-/** coeficiente de descarga do pórtico de escape (com 0,7 o esvaziamento do K4s dá os 30 ms de τ_bd, 1.2) */
-export const CD_PORTICO = 0.7;
+/** coeficiente de descarga do pórtico de escape (com 0,6 o esvaziamento do K4s dá os 30 ms de τ_bd, 1.2) */
+export const CD_PORTICO = 0.6;
 export const CD_BICO = 0.95;
 /** abertura do pórtico em graus de manivela (1.2: 20°) */
 export const ABERTURA_PORTICO = 20;

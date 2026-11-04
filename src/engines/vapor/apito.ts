@@ -25,15 +25,39 @@ export class TuboApito {
   /** atraso de ida e volta em amostras a quente, sem a afinação */
   D0: number;
   fAtual = 0;
-  saida = 0; hpS = 0; kHp: number;
+  saida = 0; hpS = 0; kHp: number; sai = 0;
   constructor(fs: number, f0: number, semente: number) {
     this.fs = fs; this.f0 = f0; this.rng = new RNG(semente);
-    // malha: inversão na boca e ida e volta D → f = fs/(2D)
-    this.D0 = fs / (2 * f0);
+    // malha: inversão na boca e ida e volta D → f = fs/(2D). O passa-baixa da malha (polo em 4·f) atrasa a fase em f e
+    // abaixaria a nota ~4%: o atraso de grupo dele em f sai da linha (D = fs/(2f) − τ_lp)
     this.kLp = onePole(fs, Math.min(0.4 * fs, 4 * f0));
+    const w = (2 * Math.PI * f0) / fs, pl = 1 - this.kLp;
+    const fase = Math.atan2(pl * Math.sin(w), 1 - pl * Math.cos(w));   // atraso de fase do y += k(x − y) em f
+    this.D0 = fs / (2 * f0) - fase / w;
+    // a malha saturada (onda quase quadrada, os harmônicos passando pelo passa-baixa com atrasos diferentes) não oscila
+    // exatamente na ressonância linear: afina-se o tubo uma vez, soprando-o 0,3 s a quente e corrigindo D pela nota medida
+    // (é o "afinar o apito" do fabricante; a nota a quente fica a ±0,2% da do catálogo)
+    for (let it = 0; it < 2; it++) {
+      const f = this.soprarMedir();
+      if (f > 0) this.D0 *= f / f0;
+    }
+    this.buf.fill(0); this.lp = 0; this.hpS = 0; this.saida = 0;
     // chiado do anel: largo em torno do tubo
     this.ruido.bp(fs, Math.min(0.4 * fs, 3 * f0), 0.6);
-    this.kHp = onePole(fs, 60);
+    this.kHp = onePole(fs, 1500);
+  }
+  /** sopra a quente com a válvula toda aberta e mede a frequência pelos cruzamentos por zero (na construção) */
+  private soprarMedir() {
+    this.buf.fill(0); this.lp = 0; this.hpS = 0;
+    const n = Math.round(0.3 * this.fs);
+    let ant = 0, t0 = -1, t1 = -1, k = 0;
+    for (let i = 0; i < n; i++) {
+      this.amostra(1, 1, 4);
+      const y = this.sai;
+      if (i > n / 2 && ant < 0 && y >= 0) { const t = i - 1 + -ant / (y - ant); if (t0 < 0) t0 = t; t1 = t; k++; }
+      ant = y;
+    }
+    return k > 3 ? ((k - 1) * this.fs) / (t1 - t0) : 0;
   }
   /**
    * uma amostra. `ps` 0..1 (pressão de sopro relativa), `afina` (fator de frequência: aquecimento × pressão), `g`
@@ -51,9 +75,10 @@ export class TuboApito {
     const chiado = ps * this.ruido.run(this.rng.next() * 2 - 1);
     const jato = Math.tanh(g * -volta * 1.6) / 1.6;
     const sai = -0.55 * volta + 0.6 * jato + 0.05 * chiado;
-    this.buf[this.w] = sai;
+    this.buf[this.w] = sai; this.sai = sai;
     this.w = (this.w + 1) & m;
     // irradiado pela boca: a vazão que sai (onda que sai menos a que volta), sem o DC
+    // (monopolo pequeno: a pressão é a derivada da vazão abaixo de c/(2πa) ≈ 1,5 kHz, o que põe o 3º harmônico a −3…−8 dB)
     const u = sai - volta;
     this.hpS += this.kHp * (u - this.hpS);
     this.saida = u - this.hpS;
@@ -77,8 +102,8 @@ export class Apito {
   constructor(fs: number, notas: number[], semente: number) {
     this.fs = fs; this.notas = notas;
     this.tubos = notas.map((f, k) => new TuboApito(fs, f, semente + 7919 * k));
-    // (válvula: 1ª ordem de 150 ms abrindo, o que dá o ataque de 100–300 ms do nível; 80 ms fechando)
-    this.kAbre = onePole(fs, 1 / (2 * Math.PI * 0.15));
+    // (válvula: 1ª ordem de 200 ms abrindo, o que dá o ataque de 100–300 ms do nível; 80 ms fechando)
+    this.kAbre = onePole(fs, 1 / (2 * Math.PI * 0.2));
     this.kFecha = onePole(fs, 1 / (2 * Math.PI * 0.08));
   }
   /** a cada bloco de controle (dt s): aquecimento */
@@ -91,11 +116,12 @@ export class Apito {
     this.ps += (alvo > this.ps ? this.kAbre : this.kFecha) * (alvo - this.ps);
     const ps = this.ps;
     if (ps < 1e-5 && Math.abs(this.tubos[0].saida) < 1e-7) return 0;
-    // afinação: −60 cents com sopro fraco → 0 cheio; × aquecimento
-    const afina = this.aq * Math.pow(2, (-60 * Math.max(0, 1 - ps / 0.6)) / 1200);
+    // afinação: −60 cents com sopro fraco → 0 cheio (2^(−0,05·x) ≈ 1 − 0,0341·x); × aquecimento
+    const afina = this.aq * (1 - 0.0341 * Math.max(0, 1 - ps / 0.6));
     this.afinaAtual = afina;
-    // ganho de realimentação: limiar em ps ≈ 0,15 (quilling abaixo)
-    const g = ps < 0.15 ? 1.5 * ps / 0.15 : 1.5 + 2.5 * Math.min(1, (ps - 0.15) / 0.5);
+    // ganho de realimentação: o limiar da malha é g ≈ 0,83 (0,955·(0,55 + 0,6·g) = 1); abaixo de ps 0,1 o jato não
+    // realimenta (quilling: só o chiado do anel, ressoado de leve pelo tubo), de 0,1 a 0,15 chega ao limiar, acima sobe até 4
+    const g = ps < 0.1 ? 0 : ps < 0.15 ? (0.83 * (ps - 0.1)) / 0.05 : 0.9 + 3.1 * Math.min(1, (ps - 0.15) / 0.5);
     let s = 0;
     const T = this.tubos;
     for (let k = 0; k < T.length; k++) s += T[k].amostra(ps, afina, g);
@@ -125,8 +151,10 @@ export class Sino {
       this.a1[k] = 2 * r * Math.cos(w); this.a2[k] = -r * r; this.amp[k] = Math.pow(10, A[k] / 20) * Math.sin(w);
     }
   }
+  quieto = true;
   amostra() {
     let ex = 0;
+    if (!this.ligado && this.quieto) return 0;
     if (this.ligado) {
       this.fase += (this.bps * this.ritmo) / this.fs;
       if (this.fase >= 1) {
@@ -135,11 +163,13 @@ export class Sino {
         this.ritmo = 1 + 0.03 * (this.rng.next() * 2 - 1);
       }
     }
-    let s = 0;
+    let s = 0, e = 0;
     for (let k = 0; k < 5; k++) {
       const y = this.a1[k] * this.y1[k] + this.a2[k] * this.y2[k] + ex * this.amp[k];
-      this.y2[k] = this.y1[k]; this.y1[k] = y; s += y;
+      this.y2[k] = this.y1[k]; this.y1[k] = y; s += y; e += y * y;
     }
+    // (desligado e já abaixo de −100 dB: para de calcular)
+    this.quieto = !this.ligado && e < 1e-10;
     return s;
   }
 }

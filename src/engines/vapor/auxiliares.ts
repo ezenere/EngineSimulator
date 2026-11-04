@@ -115,8 +115,9 @@ export class Injetor {
 export class Seguranca {
   fs: number; r: Ruido; lpk: number; lpS = 0; aberta = false; env = 0; pop = 0;
   kA: number; kF: number; kPop: number;
+  lpB = new Biquad();
   constructor(fs: number, semente: number) {
-    this.fs = fs; this.r = new Ruido(semente, [hp(fs, 300, 0.6)]); this.lpk = onePole(fs, 2000);
+    this.fs = fs; this.r = new Ruido(semente, [hp(fs, 300, 0.6)]); this.lpk = onePole(fs, 2000); this.lpB.lp(fs, 10000, 0.7071);
     this.kA = onePole(fs, 1 / (2 * Math.PI * 0.05)); this.kF = onePole(fs, 1 / (2 * Math.PI * 0.012)); this.kPop = Math.exp(-1 / (0.08 * fs));
   }
   controle(p: number, pNom: number) {
@@ -129,7 +130,7 @@ export class Seguranca {
     if (this.env < 1e-5 && this.pop < 1e-5) return 0;
     const x = this.r.amostra();
     this.lpS += this.lpk * (x - this.lpS);
-    const y = this.lpS + 0.3 * x;
+    const y = this.lpB.run(this.lpS + 0.3 * x);
     const s = y * (this.env * (1 + this.pop));
     this.pop *= this.kPop;
     return s;
@@ -151,7 +152,7 @@ export class Torneiras {
     this.fs = fs; this.rng = new RNG(semente);
     this.hiss = new Ruido(semente + 1, [hp(fs, 1000), lp(fs, 5000)]);
     this.agua = new Ruido(semente + 2, [bp(fs, 550, 1)]);
-    this.vaz = new Ruido(semente + 3, [hp(fs, 800)]);
+    this.vaz = new Ruido(semente + 3, [hp(fs, 800), lp(fs, 7000)]);
     this.pinga = new Ruido(semente + 4, [bp(fs, 3000, 2)]);
     this.kEnv = onePole(fs, 300); this.kA = Math.exp(-1 / (0.012 * fs)); this.kP = Math.exp(-1 / (0.002 * fs)); this.kVz = onePole(fs, 5000);
   }
@@ -189,7 +190,7 @@ export class Torneiras {
  */
 export class Bielas {
   fs: number; ress: Biquad; clique: Ruido; rolar: Ruido; dash: Ruido;
-  ex = 0; kEx: number; eD = 0; kD: number;
+  ex = 0; kEx: number; eD = 0; kD: number; lpS: Biquad;
   constructor(fs: number, semente: number) {
     this.fs = fs;
     this.ress = bp(fs, 900, 2);
@@ -197,17 +198,21 @@ export class Bielas {
     this.rolar = new Ruido(semente + 2, [hp(fs, 500), lp(fs, 2000)]);
     this.dash = new Ruido(semente + 3, [bp(fs, 2200, 1.5)]);
     this.kEx = Math.exp(-1 / (0.0015 * this.fs)); this.kD = Math.exp(-1 / (0.0012 * this.fs));
+    this.lpS = lp(fs, 7000);
   }
   /** impacto (amplitude relativa) */
   bater(a: number) { this.ex = Math.max(this.ex, a); }
   dashpot(a: number) { this.eD = Math.max(this.eD, a); }
-  amostra(rolarAmp: number, theta: number) {
+  /** `cosTheta`: cosseno do ângulo da manivela deste lado */
+  amostra(rolarAmp: number, cosTheta: number) {
     const c = this.clique.amostra();
     let s = this.ress.run(this.ex * c * 4) + 0.5 * this.ex * c;
     this.ex *= this.kEx;
-    s += rolarAmp * (1 + 0.5 * Math.cos(theta)) * this.rolar.amostra();
+    s += rolarAmp * (1 + 0.5 * cosTheta) * this.rolar.amostra();
     if (this.eD > 1e-4) { s += this.eD * this.dash.amostra() * 3; this.eD *= this.kD; }
-    return s;
+    // (o ferro do mancal e da cruzeta não irradia acima de ~8 kHz: sem este corte o clique punha o agudo acima de
+    // 16 kHz a −55 dB do total, e o teste de aliasing de 7.1 pede < −60)
+    return this.lpS.run(s);
   }
 }
 

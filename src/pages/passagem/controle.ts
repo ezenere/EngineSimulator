@@ -32,11 +32,9 @@ import { PRESETS_TURBINA } from '../../engines/turbina/presets';
 // (vapor, etapa 5)
 import { prepararMotorVapor } from '../../engines/vapor/motor';
 import { presetVapor } from '../../engines/vapor/presets';
+export { configPortadorVapor };
 import type { ComandoVapor } from '../../engines/vapor/dsp';
-import { configLocoVapor } from '../../carriers/locomotiva-vapor';
-import { configTrator } from '../../carriers/trator';
-import { configBarco } from '../../carriers/barco';
-import { configCarroDireto } from '../../carriers/carro-direto';
+import { configPortadorVapor } from '../../carriers/portadores-vapor';
 import {
   PRESETS_PASSAGEM, TREM_PAGINA_PADRAO, situacaoPortador, motoresProntos, presetsDoMotor, MOTOR_PADRAO,
   type IdAmbientePagina, type IdPortadorPagina, type PresetPassagem, type TremPagina,
@@ -555,17 +553,6 @@ export function soloPadrao(p: IdPortadorPagina): Solo['tipo'] | null {
   return p === 'carro' ? 'asfalto' : p === 'rotor' || p === 'helice' || p === 'aviao' ? 'grama' : p === 'gerador' ? 'concreto' : p === 'locomotiva' ? 'brita' : p === 'barco' ? 'agua' : p === 'trator' ? 'grama' : null;
 }
 
-/** (vapor) configuração do portador pelo preset da máquina (VAPOR.md 4.4) */
-export function configPortadorVapor(portador: IdPortadorPagina, id: string | null, vagoes: number): Record<string, any> {
-  const P = id ? presetVapor(id) : undefined;
-  if (!P) return {};
-  if (portador === 'locomotiva') return configLocoVapor(P, { vagoes });
-  if (portador === 'trator') return configTrator(P);
-  if (portador === 'barco') return configBarco(P);
-  if (portador === 'carro') return configCarroDireto(P);
-  if (portador === 'gerador') return { rpmNominal: P.rpmGovernado ?? 75, potenciaNominal: P.potenciaGerador ?? 500, eta: 0.95, J_alt: 50, semFontes: true, posMotor: [0, 0, 0], corpo: { comprimento: 12, largura: 6, altura: 6, massaSuperficial: 30 } };
-  return {};
-}
 
 export function clonarOuvinte(o: Ouvinte): Ouvinte { return { ...o, pos: [...o.pos] as unknown as Vec3, gimbal: { ...o.gimbal } }; }
 

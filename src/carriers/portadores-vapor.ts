@@ -8,6 +8,11 @@ import { Trator, type ConfigTrator } from './trator';
 import { Barco, type ConfigBarco } from './barco';
 import { CarroDireto, type ConfigCarroDireto } from './carro-direto';
 import { Gerador } from './gerador';
+import { configLocoVapor } from './locomotiva-vapor';
+import { configTrator } from './trator';
+import { configBarco } from './barco';
+import { configCarroDireto } from './carro-direto';
+import { presetVapor } from '../engines/vapor/presets';
 
 export function montarPortadorVapor(tipo: string, c: Record<string, any>, motor: Motor, fs: number): Portador | null {
   let p: Portador | null = null;
@@ -19,4 +24,16 @@ export function montarPortadorVapor(tipo: string, c: Record<string, any>, motor:
   if (!p) return null;
   p.acoplar(motor);
   return p;
+}
+
+/** (vapor) configuração do portador pelo preset da máquina (VAPOR.md 4.4) */
+export function configPortadorVapor(portador: string, id: string | null, vagoes: number): Record<string, any> {
+  const P = id ? presetVapor(id) : undefined;
+  if (!P) return {};
+  if (portador === 'locomotiva') return configLocoVapor(P, { vagoes });
+  if (portador === 'trator') return configTrator(P);
+  if (portador === 'barco') return configBarco(P);
+  if (portador === 'carro') return configCarroDireto(P);
+  if (portador === 'gerador') return { rpmNominal: P.rpmGovernado ?? 75, potenciaNominal: P.potenciaGerador ?? 500, eta: 0.95, J_alt: 50, semFontes: true, posMotor: [0, 0, 0], corpo: { comprimento: 12, largura: 6, altura: 6, massaSuperficial: 30 } };
+  return {};
 }

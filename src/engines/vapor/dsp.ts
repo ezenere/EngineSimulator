@@ -32,9 +32,18 @@ import {
 
 const TAU = Math.PI * 2;
 /** sopro da tiragem na chaminé, na escala do ruído de mistura (kg/s·M³), na vazão média = E_max */
-const K_TIRAGEM = 5;
+const K_TIRAGEM = 28;
+/** chiado do vapor entrando no condensador, na escala do ruído de mistura, por kg/s */
+const K_CONDENSADOR = 0.8;
+/** inércia térmica da fornalha e da água (s) */
+const TAU_FOGO = 60;
+/** governador de esferas: corte por % de erro de rotação e integral por %·s */
+const GOV_KP = 0.2, GOV_KI = 0.012;
+/** corte mínimo do governador (o 2.1 diz 10%; o disparo do Corliss corta bem antes, e com 10% a máquina de moinho
+ * em meia carga ficava forte demais e o governador tinha de estrangular o regulador) */
+const GOV_CMIN = 0.05;
 /** ruído de mistura do bico, Pa (unidades da linha) por kg/s·M³, num bico de 0,0177 m² (escala com 1/A_bico) */
-const K_MISTURA = 1000;
+const K_MISTURA = 1500;
 const DEG = Math.PI / 180;
 
 /** extensão de ComandoMotor (campos opcionais; os outros motores os ignoram) */
@@ -153,8 +162,10 @@ export class VaporDSP implements Motor {
   nCtl = 0; cntCtl = 0;
   TE = 1;                      // N, esforço de tração nominal (catálogo) para as escalas
   wRef = 1;                    // rad/s de referência das bielas (1 volta/s)
-  jMotorTotal = 0; jPreset = 0;
+  jMotorTotal = 0; jPreset = 0; kAtV = 0; kAtS = 0; cEventos = -1;
   tirR!: Ruido;
+  sM = new Float64Array(2); cM = new Float64Array(2); sPhi = new Float64Array(0); cPhi = new Float64Array(0);
+  condEnv = 0; condEnv2 = 0; kCondEnv = 0; momS = 0; kMom = 0;
 
   constructor(fs: number) { this.fs = fs; this.rng = new RNG(1); }
 
@@ -188,6 +199,7 @@ export class VaporDSP implements Motor {
     this.pChest = P0;
     if (P.compound) { this.vRec = P.compound.receptor; this.pRec = P0; }
     this.mAgua = 300 * P.evaporacaoMax;
+    this.evap = 0.2 * 0.15 * P.evaporacaoMax;   // (parada, foguista no mínimo, tiragem natural)
     this.estado = 'funcionando';
     this.fixar({ regulador: 0, cutoff: P.familia === 'estacionaria' ? 0.2 : 0.6 });
   }
@@ -214,7 +226,7 @@ export class VaporDSP implements Motor {
       for (let m = 0; m < nm; m++) for (let k = 0; k < n; k++) cils.push({ motor: m, d: P.cilindros.diametro, s, ang: angs[k] * DEG, lado: ladoDe(k, n), ap: false });
       this.nM = nm;
     }
-    this.nC = cils.length;
+    this.nC = cils.length; this.cEventos = -1;
     const nE = 2 * cils.length;
     this.nE = nE;
     this.eMotor = new Int32Array(nE); this.eCil = new Int32Array(nE); this.eLado = new Int32Array(nE); this.ePass = new Int32Array(nE);
@@ -222,6 +234,7 @@ export class VaporDSP implements Motor {
     this.eVcl = new Float64Array(nE); this.eAe = new Float64Array(nE); this.eP = new Float64Array(nE).fill(P0); this.eV = new Float64Array(nE);
     this.eFase = new Int32Array(nE); this.eMdot = new Float64Array(nE); this.ePerda = new Float64Array(nE).fill(PERDA_ADMISSAO);
     this.eAC = new Float64Array(nE); this.eAR = new Float64Array(nE); this.eAK = new Float64Array(nE);
+    this.sPhi = new Float64Array(nE); this.cPhi = new Float64Array(nE);
     this.cF = new Float64Array(this.nC); this.cDF = new Float64Array(this.nC); this.cLado = new Int32Array(this.nC); this.cA = new Float64Array(this.nC);
     let np = 0;
     cils.forEach((cl, k) => {
@@ -231,6 +244,7 @@ export class VaporDSP implements Motor {
         const e = 2 * k + j;
         this.eMotor[e] = cl.motor; this.eCil[e] = k; this.eLado[e] = cl.lado;
         this.ePhi[e] = cl.ang + j * Math.PI;              // a extremidade traseira está a 180°
+        this.sPhi[e] = Math.sin(this.ePhi[e]); this.cPhi[e] = Math.cos(this.ePhi[e]);
         this.eVs[e] = Vs * (j === 1 ? 1 - HASTE : 1);      // (a haste ocupa 4% da área do lado de trás)
         this.eVcl[e] = V_NOCIVO * Vs;
         // pórtico: 0,03 m² no K4s (V 0,26 m³), escalado por V^0,75 (0-6-0T: 0,08 m³ → 0,012 m²)
@@ -248,13 +262,14 @@ export class VaporDSP implements Motor {
     this.thM = new Float64Array(this.nM); this.wM = new Float64Array(this.nM); this.JM = new Float64Array(this.nM);
     this.wAd = new Float64Array(this.nM); this.patM = new Uint8Array(this.nM); this.epsM = new Float64Array(this.nM); this.tqM = new Float64Array(this.nM);
     // (com redução, o J do preset é o do lado da manivela: na roda vale J·redução²)
-    const jPorMotor = P.J != null ? (P.J * this.reducao * this.reducao) / this.nM : Math.max(1500, (40 * P.massaAderente) / this.nM);
+    const jPorMotor = P.J != null ? (P.J * this.reducao * this.reducao) / this.nM : Math.max(1500, (20 * P.massaAderente) / this.nM);
     this.jPreset = P.J ?? 0;
     for (let m = 0; m < this.nM; m++) {
       this.JM[m] = jPorMotor;
       // dois motores: a roda do traseiro gira ε mais depressa (diâmetros e desgaste diferentes; 0,5–2%)
       this.epsM[m] = m === 0 ? 0 : (P.derivaFase ?? 0.01) * (0.8 + 0.4 * this.rng.next());
-      this.thM[m] = m * 1.3;                                 // fase relativa inicial qualquer
+      // (fase inicial fora do ponto morto: a máquina de 1 cilindro parada no PM não sai sem ser girada à mão)
+      this.thM[m] = 0.9 + m * 1.3;
     }
     this.jMotorTotal = jPorMotor * this.nM;
     this.eixo.inercia = this.jMotorTotal;
@@ -263,6 +278,10 @@ export class VaporDSP implements Motor {
     const pares = P.compound ? P.compound.ap.n / 2 : (P.cilindros.n / 2) * (P.motores ?? 1);
     this.TE = (0.85 * P.pNominal * BAR * d * d * s * pares * this.reducao) / (2 * this.rRoda);
     this.wRef = TAU / this.reducao;
+    // atrito viscoso das bielas e dos mancais (2% do esforço nominal na velocidade máxima) mais um seco: 0,4% nas
+    // locomotivas, 3% nas estacionárias e 8% no trator (bombas, engrenagens e os mancais das rodas na embreagem solta)
+    this.kAtV = (0.02 * this.TE * this.rRoda) / Math.max(1, P.vMax / 3.6 / this.rRoda);
+    this.kAtS = (P.familia === 'locomotiva' ? 0.004 : P.familia === 'trator' ? 0.08 : 0.03) * this.TE * this.rRoda;
     // rede: uma passagem por extremidade
     this.rede = new RedeEscape(this.fs, {
       nPassagens: nE, aPortico: CD_PORTICO * this.eAe[0], dBico: P.escape.dBico, lDescarga: P.escape.lDescarga, vCaixa: P.escape.vCaixa,
@@ -272,9 +291,10 @@ export class VaporDSP implements Motor {
     // ganho do ruído de mistura relativo ao tom da chaminé (unidades da linha: Pa por kg/s·M³), acertado contra as
     // bandas de perto (3.3); o choque fica 6 dB acima da mistura quando pleno (controle "Ar")
     this.jato.gMistura = (K_MISTURA * 0.0177) / this.rede.aBico;
-    this.jato.gChoque = 0.4 * this.jato.gMistura;
-    this.lpCond.lp(this.fs, 300, 0.7071); this.lpCond2.lp(this.fs, 300, 0.7071);
-    this.tirR = new Ruido(P.semente ^ 0x7123, [new Biquad().hp(this.fs, 150, 0.6), new Biquad().lp(this.fs, 2500, 0.6)]);
+    this.jato.gChoque = 0.9 * this.jato.gMistura;
+    this.lpCond.lp(this.fs, 300, 0.7071); this.lpCond2.lp(this.fs, 300, 0.7071); this.kCondEnv = onePole(this.fs, 5); this.kMom = onePole(this.fs, 0.5);
+    // (tiragem: 200–1500 Hz; o 1.4 diz 300–1500)
+    this.tirR = new Ruido(P.semente ^ 0x7123, [new Biquad().hp(this.fs, 200, 0.7071), new Biquad().lp(this.fs, 1500, 0.7071), new Biquad().lp(this.fs, 4000, 0.7071)]);
     // volumes iniciais pela posição das manivelas
     for (let e = 0; e < nE; e++) { let a = this.thM[this.eMotor[e]] + this.ePhi[e]; a -= TAU * Math.floor(a / TAU); const sg = (e & 1) === 0 ? 1 : -1; this.eV[e] = this.eVcl[e] + this.eVs[e] * (0.5 * (1 - Math.cos(a)) + sg * LAMBDA4 * Math.sin(a) * Math.sin(a)); }
   }
@@ -373,6 +393,8 @@ export class VaporDSP implements Motor {
     // é isso (com a haste) que faz as duas batidas de um cilindro diferirem 1–2 dB (a linha de 2/volta, 1.3)
     // e a distribuição de cada lado não é igual (corte ±2,5% do curso entre os lados, ±1% entre as pontas: o ajuste da
     // Walschaerts; o maquinista ouve o "manco"): as duas batidas de um cilindro e os dois cilindros diferem 1–2 dB
+    if (c === this.cEventos) { this.dirMarcha = this.rev < -0.02 ? -1 : 1; return; }
+    this.cEventos = c;
     for (let e = 0; e < this.nE; e++) {
       const sg = (e & 1) === 0 ? 1 : -1, dc = (this.eLado[e] === 0 ? DC_LADO : -DC_LADO) + sg * 0.01;
       this.eAC[e] = angPistao(c + dc, sg); this.eAR[e] = angPistao(ev.r, sg); this.eAK[e] = TAU - angPistao(1 - ev.k, sg);
@@ -387,14 +409,23 @@ export class VaporDSP implements Motor {
     // regulador (1ª ordem 0,4 s) e reverser (1,5 s)
     this.reg += (this.regAlvo - this.reg) * (1 - Math.exp(-dt / 0.4));
     this.rev += (this.revAlvo - this.rev) * (1 - Math.exp(-dt / 1.5));
-    // governador de esferas sobre o corte (2.1): 0,02 de corte por % de erro, integral 0,01/(%·s), corte 10–60%
+    // governador de esferas sobre o corte (2.1). O 2.1 dá 0,02 de corte por % de erro e 0,01/(%·s); com o volante de
+    // 3·10⁴ kg·m² e o degrau de 50% isso derrubava 14% (o corte tem de ir de ~0,1 a ~0,3: 10% de erro só no
+    // proporcional). Com 0,2 e 0,012 a queda é a de 2.1 (2–4%) e a volta em 5–10 s; a borboleta do governador age sem o atraso de 0,4 s do
+    // regulador do maquinista (com ele o trator em lenta caçava de 90 a 170 rpm)
     if (this.govLigado && this.rpmAlvo > 0) {
       const w = Math.abs(this.wM[0]) * this.reducao, alvo = (this.rpmAlvo * TAU) / 60;
       const erro = (100 * (alvo - w)) / alvo;
-      this.govI = clamp(this.govI + 0.01 * erro * dt, -0.3, 0.6);
+      // (integrador limitado à faixa útil da saída: anti-windup na partida, que vem do repouso com erro de 100%)
+      const kp = P.governador?.kp ?? GOV_KP, ki = P.governador?.ki ?? GOV_KI;
+      // (integração condicional: só integra perto do alvo, senão a partida do repouso enchia o integrador e passava 30%)
+      if (Math.abs(erro) < 15) this.govI = clamp(this.govI + ki * erro * dt, -0.25, 0.45);
       const hunt = P.hunting ? P.hunting * Math.sin(TAU * 0.15 * this.nCtl * dt) : 0;
-      this.corte = clamp(0.2 + 0.02 * erro + this.govI + hunt, 0.1, 0.6);
-      if (this.reg < 0.05 && this.regAlvo < 0.05) this.regAlvo = 1;
+      // a saída do governador corta primeiro no corte (10–60%) e, abaixo do corte mínimo, fecha o regulador (a
+      // borboleta do governador de Watt): sem carga, com o corte no mínimo e o regulador aberto, a máquina disparava
+      const u = 0.2 + kp * erro + this.govI + hunt;
+      this.corte = clamp(u, GOV_CMIN, 0.6);
+      this.regAlvo = clamp(1 + (u - GOV_CMIN) / 0.15, 0, 1); this.reg = this.regAlvo;
     }
     this.atualizarEventos();
     // adesão: μ seco/molhado, areia sobe em 0,3 s
@@ -406,13 +437,15 @@ export class VaporDSP implements Motor {
     const vel = Math.abs(this.wTrem) * this.rRoda;
     const parado = vel < 0.2 && Math.abs(this.wM[0]) < 0.2;
     // tiragem: o jato do escape puxa o fogo; parado só a natural (0,15) e o soprador
-    const sopr = this.sopradorCmd === 'auto' ? (this.reg < 0.05 && parado ? 1 : 0) : this.sopradorCmd ? 1 : 0;
+    const sopr = this.sopradorCmd === 'auto' ? (this.reg < 0.05 && parado && P.familia === 'locomotiva' ? 1 : 0) : this.sopradorCmd ? 1 : 0;
     this.sopradorLigado = sopr;
     this.tiragem = clamp(0.15 + 0.3 * sopr + this.mCylS / (0.8 * P.evaporacaoMax), 0, 1);
     this.fogoAuto = this.fogoCmd === 'auto';
     if (this.fogoAuto) this.fogo = clamp(0.2 + (this.pNom - this.pCal) / 1, 0, 1);
     else this.fogo = clamp(this.fogoCmd as number, 0, 1);
-    this.evap = this.fogo * P.evaporacaoMax * this.tiragem;
+    // (a evaporação segue o fogo e a tiragem com a inércia térmica da fornalha e da água: 1ª ordem de 40 s. Sem ela o
+    // foguista repunha na hora e a arrancada não derrubava a caldeira os 1–2 bar de 1.9)
+    this.evap += (this.fogo * P.evaporacaoMax * this.tiragem - this.evap) * (1 - Math.exp(-dt / TAU_FOGO));
     const nSeg = P.evaporacaoMax >= 4 ? 2 : 1, descarga = clamp(0.25 * P.evaporacaoMax, 0.05, 1.5) * nSeg;
     this.seg.controle(this.pCal, this.pNom);
     const mInj = this.injetor.ligado ? clamp(0.15 * P.evaporacaoMax, 0.03, 1.5) : 0;
@@ -449,6 +482,10 @@ export class VaporDSP implements Motor {
   // ================================================================ laço de amostra
   processar(saidas: Float32Array[], n: number) {
     const P = this.P, fs = this.fs, dt = 1 / fs;
+    // (constantes e campos em locais: no Node, via tsx, cada constante importada é um getter dentro do laço)
+    const P0l = P0, CDP = CD_PORTICO, PERDA = PERDA_ADMISSAO, BARl = BAR, L4 = LAMBDA4;
+    const cPhi = this.cPhi, sPhi = this.sPhi, ePerda = this.ePerda;
+    const kAlivio = 1 - Math.exp(-dt / 0.15);
     const nE = this.nE, nM = this.nM, red = this.reducao, rede = this.rede;
     const eP = this.eP, eV = this.eV, ePhi = this.ePhi, eVs = this.eVs, eVcl = this.eVcl, eAe = this.eAe, eMotor = this.eMotor, eFase = this.eFase;
     const ePass = this.ePass, eDest = this.eDest, eFonte = this.eFonte, eLado = this.eLado, eCil = this.eCil, eMdot = this.eMdot;
@@ -464,32 +501,38 @@ export class VaporDSP implements Motor {
     const gChuff = g.chuff * mk.chuff, gSopr = g.soprador * mk.soprador, gTorn = g.torneiras * mk.torneiras * mixAr, gVaz = g.vazamentos * mk.vazamentos * mixAr;
     const gBiel = g.bielas * mk.bielas * mixMec, gApito = g.apito * mk.apito, gSeg = g.seguranca * mk.seguranca, gBomba = g.bomba * mk.bomba;
     const gInj = g.injetor * mk.injetor, gSino = g.sino * mk.sino, gQ = g.queimador * mk.queimador, gEng = g.engrenagens * mk.engrenagens * mixMec, gCor = g.correias * mk.correias * mixMec;
-    const pNomAbs = this.pNom * BAR + P0;
+    const pNomAbs = this.pNom * BARl + P0l;
     let mCylBloco = 0;
+    const sM = this.sM, cM = this.cM;
     for (let k = 0; k < n; k++) {
       if (--this.cntCtl < 0) { this.cntCtl = 63; this.controle(64 / fs); }
-      const pCalAbs = this.pCal * BAR + P0;
+      const pCalAbs = this.pCal * BARl + P0l;
       const aL = this.aL, d = this.dirMarcha, eAC = this.eAC, eAR = this.eAR, eAK = this.eAK;
       const aAdm0 = TAU - aL;
       // ---- caixa de válvulas: orifício do regulador a partir da caldeira
       const r = this.reg, aReg = r < 0.3 ? (0.08 * r) / 0.3 : 0.08 + 0.92 * ((r - 0.3) / 0.7) * ((r - 0.3) / 0.7);
       const mReg = vazaoV(aReg * this.aRegMax, pCalAbs, this.pChest, this.sRTv);
-      let mAdmChest = 0, mAdmRec = 0, mRecIn = 0;
+      let mAdmChest = 0, mAdmRec = 0, mRecIn = 0, mCond = 0;
+      for (let m = 0; m < nM; m++) { sM[m] = Math.sin(thM[m]); cM[m] = Math.cos(thM[m]); }
       rede.ler();
       let tqTot = 0, tornE = 0, tornD = 0;
       for (let e = 0; e < nE; e++) {
         const m = eMotor[e];
-        let a = d * (thM[m] + ePhi[e]);
+        const th0 = thM[m] + ePhi[e];
+        let a = d * th0;
         a -= TAU * Math.floor(a / TAU);
-        const j = e & 1, sg = j === 0 ? 1 : -1, sa = Math.sin(a), ca = Math.cos(a);
-        const Vs = eVs[e], V = eVcl[e] + Vs * (0.5 * (1 - ca) + sg * LAMBDA4 * sa * sa);
+        // (sen e cos pela soma de ângulos: dois por motor por amostra, não dois por extremidade)
+        const j = e & 1, sg = j === 0 ? 1 : -1, sMo = sM[m], cMo = cM[m];
+        const sa = d * (sMo * cPhi[e] + cMo * sPhi[e]), ca = cMo * cPhi[e] - sMo * sPhi[e];
+        void th0;
+        const Vs = eVs[e], V = eVcl[e] + Vs * (0.5 * (1 - ca) + sg * L4 * sa * sa);
         const dV = V - eV[e];
         let p = eP[e];
         let fase: number;
         const aC = eAC[e], aR = eAR[e], aK = eAK[e];
         if (a >= aAdm0 || a < aC) fase = 0; else if (a < aR) fase = 1; else if (a < aK) fase = 2; else fase = 3;
         // cada admissão um pouco diferente (pressão na caixa, água arrastada): ±1–2 dB por chuff
-        if (fase === 0 && eFase[e] === 3) this.ePerda[e] = PERDA_ADMISSAO * (1 + 0.05 * this.rng.gauss());
+        if (fase === 0 && eFase[e] === 3) ePerda[e] = PERDA * (1 + 0.05 * this.rng.gauss());
         // expansão/compressão politrópica incremental (todas as fases sentem o volume mudar)
         p *= 1 - (nPol * dV) / V;
         const pass = ePass[e];
@@ -499,17 +542,21 @@ export class VaporDSP implements Motor {
           // fechamento estrangula nos últimos 3° (wire drawing)
           const src = eFonte[e] === 1 ? this.pRec : this.pChest;
           const fim = a < aC ? Math.min(1, (aC - a) / (3 * DEG)) : 1;
-          const dp = kAdm * fim * (this.ePerda[e] * src - p);
+          // (a perda das passagens só vale entrando: com o cilindro entre 0,92·p_caixa e p_caixa não há escoamento, e
+          // acima de p_caixa o vapor volta para a caixa sem perda; com a perda simétrica a compressão empurrava vapor para
+          // uma caixa de pressão maior e a máquina de regulador fechado ganhava energia do nada)
+          const alvo = p < ePerda[e] * src ? ePerda[e] * src : p > src ? src : p;
+          const dp = kAdm * fim * (alvo - p);
           p += dp;
           const dm = (dp * V) / (nPol * RTv);
           if (eFonte[e] === 1) mAdmRec += dm; else mAdmChest += dm;
           if (pass >= 0) rede.fechar(pass);
-          if (this.torneirasAbertas) { const q = Math.max(0, p - P0) / pNomAbs; if (eLado[e] === 0) tornE += q; else tornD += q; }
+          if (this.torneirasAbertas) { const q = Math.max(0, p - P0l) / pNomAbs; if (eLado[e] === 0) tornE += q; else tornD += q; }
         } else if (fase === 2) {
           // escape: pórtico abrindo em 20° de manivela (^1,5) e fechando simétrico antes da compressão
           let u = Math.min((a - aR) / dAb, (aK - a) / dAb);
           if (u > 1) u = 1;
-          const A = eAe[e] * CD_PORTICO * u * Math.sqrt(u);
+          const A = eAe[e] * CDP * u * Math.sqrt(u);
           const paraRec = eDest[e] === 1 && !this.simplif;
           if (paraRec) {
             mE = vazaoV(A, p, this.pRec, sRTex);
@@ -517,20 +564,21 @@ export class VaporDSP implements Motor {
             rede.fechar(pass);
           } else if (cond) {
             mE = vazaoV(A, p, this.pCond, sRTex);
+            mCond += mE;
             rede.injetarFixo(pass, 0.15 * mE);
           } else mE = rede.injetar(pass, p, A, sRTex);
           p -= (nPol * RTex * mE * dt) / V;
           if (eFase[e] !== 2) { rede.gAlvo = Math.pow(10, (1.3 * this.rng.gauss() + (this.eLado[e] === 0 ? DB_LADO : -DB_LADO) + ((e & 1) === 0 ? DB_PONTA : -DB_PONTA)) / 20); this.pRelSoma += p; this.pRelN++; this.pRelUlt = p; this.nEscapes++; this.engasgado = p / rede.pPassagem(pass) > 1.83; }
         } else {
           if (pass >= 0) rede.fechar(pass);
-          if (fase === 1 && this.torneirasAbertas) { const q = Math.max(0, p - P0) / pNomAbs; if (eLado[e] === 0) tornE += q; else tornD += q; }
+          if (fase === 1 && this.torneirasAbertas) { const q = Math.max(0, p - P0l) / pNomAbs; if (eLado[e] === 0) tornE += q; else tornD += q; }
         }
         // dashpot do Corliss: o clique seco no corte da admissão
         if (fase === 1 && eFase[e] === 0 && this.correias) this.biel[eLado[e]].dashpot(Math.min(1, 0.3 + this.reg));
         if (p < 2000) p = 2000;
         eP[e] = p; eV[e] = V; eFase[e] = fase; eMdot[e] = mE;
         // torque na manivela: (p − p0)·dV/dθ; na roda, × redução
-        const tq = d * (p - P0) * Vs * sa * (0.5 + 2 * sg * LAMBDA4 * ca) * red;
+        const tq = d * (p - P0l) * Vs * sa * (0.5 + 2 * sg * L4 * ca) * red;
         tqM[m] += tq;
         tqTot += tq;
       }
@@ -539,12 +587,15 @@ export class VaporDSP implements Motor {
         let mSimp = 0;
         if (this.simplif) mSimp = vazaoV(0.12 * this.aRegMax * aReg, this.pChest, this.pRec, this.sRTv);
         this.pRec += ((RTex * (mRecIn + mSimp)) / this.vRec) * dt - (RTex * mAdmRec * fs * dt) / this.vRec;
-        if (this.pRec < 0.5 * P0) this.pRec = 0.5 * P0;
+        if (this.pRec < 0.5 * P0l) this.pRec = 0.5 * P0l;
+        // regulador fechado: a válvula de alívio do receptor (drifting) o deixa na atmosfera; sem ela as AP, com a caixa
+        // na atmosfera pelas válvulas de alívio, bombeavam ar no receptor e as BP davam chuffs descendo a serra
+        if (this.reg < 0.02 && this.pRec > P0l) this.pRec += (P0l - this.pRec) * kAlivio;
         mAdmChest += mSimp * dt;
       }
       // caixa de válvulas: volume entre o regulador e os cilindros (válvula de alívio: nunca abaixo da atmosfera)
       this.pChest += (RTv / this.vChest) * (mReg * dt - mAdmChest);
-      if (this.pChest < P0) this.pChest = P0;
+      if (this.pChest < P0l) this.pChest = P0l;
       if (this.pChest > pCalAbs) this.pChest = pCalAbs;
       mCylBloco += mAdmChest > 0 ? mAdmChest : 0;
       // ---- rede e jato
@@ -552,10 +603,19 @@ export class VaporDSP implements Motor {
       let jat = this.jato.amostra(rede.mJato * rede.gVar, rede.mach, rede.prBico);
       if (this.tap) this.tap(this);
       // tiragem: sopro contínuo de escoamento na chaminé ∝ U_ch² (a vazão média dos cilindros), 300–1500 Hz: enche o vale
-      const mr = this.mCylS / P.evaporacaoMax;
+      // (U_ch vem da quantidade de movimento do jato que arrasta o gás: ∝ média de ṁ_j·M_j; no corte curto, com o jato
+      // subsônico, a tiragem sopra menos e o espectro escurece, 3.3)
+      this.momS += this.kMom * (rede.mJato * rede.mach - this.momS);
+      const mr = this.momS / P.evaporacaoMax;
       if (!cond) jat += this.jato.gMistura * K_TIRAGEM * mr * mr * this.tirR.amostra();
       let chamine = tom + jat * mixAr;
-      if (cond) chamine = this.lpCond2.run(this.lpCond.run(chamine));
+      if (cond) {
+        // condensador e abafador: a rede só recebe o pulso abafado (passa-baixa de 300 Hz) e o que se ouve é o chiado do
+        // vapor entrando no condensador, com a envoltória alisada pelo volume dele (2 polos em 5 Hz): um ronronar de 2–4 dB
+        this.condEnv += this.kCondEnv * (mCond - this.condEnv);
+        this.condEnv2 += this.kCondEnv * (this.condEnv - this.condEnv2);
+        chamine = 0.03 * this.lpCond2.run(this.lpCond.run(chamine)) + K_CONDENSADOR * this.jato.gMistura * this.condEnv2 * this.tirR.amostra();
+      }
       const sopr = this.soprador.amostra(this.sopradorLigado * (1 - this.reg));
       S[ch.chamine][k] = gChuff * chamine + gSopr * sopr;
       // ---- cilindros: torneiras e vazamentos
@@ -570,7 +630,7 @@ export class VaporDSP implements Motor {
         cDF[c] += 0.02 * (dF * fs * 0.005 - cDF[c]);
         const lim = 0.02 * pNomAbs * cA[c];
         if ((F > lim && cF[c] <= lim && cF[c] > -lim) || (F < -lim && cF[c] >= -lim && cF[c] < lim)) {
-          const amp = P.folga * Math.sqrt(Math.min(4, cDF[c] / (this.pNom * BAR * cA[c] + 1)));
+          const amp = P.folga * Math.sqrt(Math.min(4, cDF[c] / (this.pNom * BARl * cA[c] + 1)));
           this.biel[cLado[c]].bater(amp);
         }
         cF[c] = F;
@@ -578,8 +638,8 @@ export class VaporDSP implements Motor {
       const wAbs = Math.abs(wM[0]);
       const rolar = Math.min(2, wAbs / this.wRef) * (0.45 + 0.55 * this.reg);
       const th = thM[0] * red;
-      S[ch.bielE][k] = gBiel * this.biel[0].amostra(rolar, th);
-      if (ch.bielD >= 0) S[ch.bielD][k] = gBiel * this.biel[1].amostra(rolar, th + Math.PI / 2);
+      S[ch.bielE][k] = gBiel * this.biel[0].amostra(rolar, cM[0]);
+      if (ch.bielD >= 0) S[ch.bielD][k] = gBiel * this.biel[1].amostra(rolar, -sM[0]);
       // ---- apito, segurança, bomba, injetor, sino, queimador, engrenagens, correias
       S[ch.apito][k] = gApito * this.apito.amostra(this.apitoCmd * Math.min(1.1, this.pCal / this.pNom));
       S[ch.seguranca][k] = gSeg * this.hpSeg.run(this.seg.amostra());
@@ -604,7 +664,7 @@ export class VaporDSP implements Motor {
   /** integra ω (uma vez por amostra); tqM ainda tem o torque desta amostra */
   private dinamica(dt: number) {
     const nM = this.nM, wM = this.wM, tqM = this.tqM, r = this.rRoda;
-    const atrito = (w: number) => 0.02 * this.TE * r * (w / Math.max(1, (this.P.vMax / 3.6) / r)) + 0.004 * this.TE * r * Math.tanh(w / 0.2);
+    const kAtV = this.kAtV, kAtS = this.kAtS;
     if (this.omegaImposto != null) {
       this.wTrem = this.omegaImposto;
       for (let m = 0; m < nM; m++) { wM[m] = this.omegaImposto * (1 + this.epsM[m]); this.thM[m] += wM[m] * this.reducao * dt; this.patM[m] = 0; }
@@ -615,7 +675,7 @@ export class VaporDSP implements Motor {
     let Jt = Jc, Tt = -(carga ? carga.torque(this.wTrem) : 0);
     for (let m = 0; m < nM; m++) {
       const k = 1 + this.epsM[m];
-      const T = tqM[m] - atrito(wM[m]);
+      const T = tqM[m] - (kAtV * wM[m] + kAtS * Math.tanh(wM[m] / 0.2));
       const F = Math.abs(tqM[m]) / r;
       if (!this.patM[m]) {
         // aderido: a roda segue o trem; passa da adesão (com carga de verdade atrás) → patina
@@ -667,18 +727,18 @@ export class VaporDSP implements Motor {
 
 function clamp(x: number, a: number, b: number) { return x < a ? a : x > b ? b : x; }
 
-/** r/(4·l): biela de 7 manivelas (x = (1 − cos α)/2 ± (r/4l)·sen²α) */
-const LAMBDA4 = 1 / 28;
+/** r/(4·l): biela de 8,5 manivelas (x = (1 − cos α)/2 ± (r/4l)·sen²α) */
+const LAMBDA4 = 1 / 34;
 /** desigualdade do corte entre os lados (fração do curso; ver atualizarEventos) */
 const DC_LADO = 0.025;
 /**
  * diferença sistemática de nível entre os escapes dos dois lados (dB, ±) e entre as pontas: a válvula de um lado
  * adiantada solta o escape mais cedo e mais forte, e as passagens até o bloco de escape não são iguais. O bico engasgado
  * comprime a diferença que viria só da pressão de release (+1,8 dB de p_rel viram 0,7 dB de envoltória), então ela
- * entra também como ganho por extremidade; com ±1,8 dB a linha de 2/volta fica a ~10 dB da de 4/volta (medido: 1225
+ * entra também como ganho por extremidade; com ±1,3 dB a linha de 2/volta fica 6–14 dB abaixo da de 4/volta (medido: 1225
  * −4, "enchanting" −10, 6024 −3 dB)
  */
-const DB_LADO = 1.8, DB_PONTA = 0.5;
+const DB_LADO = 1.3, DB_PONTA = 0.4;
 /** ângulo α ∈ [0, π] em que o pistão percorreu a fração x do curso, extremidade da tampa (sg +1) ou da manivela (−1) */
 function angPistao(x: number, sg: number) {
   x = clamp(x, 0, 1);

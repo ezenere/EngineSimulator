@@ -86,6 +86,8 @@ export class LocomotivaVapor extends PortadorComMotor {
   rodas: FonteRolamento[] = []; vaos: FonteVao[] = [];
   /** x (corpo) do centro da locomotiva, dos truques dos vagões e do tênder (cena 3D) */
   xLoco = 0; xTruques: number[] = [];
+  /** (bancada) rodas girando no lugar a este ω (rad/s), com a composição parada: a sonda e o teste de nível a 15 m */
+  omegaTeste: number | null = null;
   constructor(fs: number, cfg: ConfigLocomotivaVapor, fontesMotor = 14) {
     const c = cfg, L0 = c.loco, Lt = L0.tender?.comprimento ?? 0;
     const orc = orcamentoLocoVapor(c, fontesMotor);
@@ -161,8 +163,8 @@ export class LocomotivaVapor extends PortadorComMotor {
     const m = this.vapor, k = this.cinematica, r = this.cfg.loco.dRoda / 2;
     const vf = this.cmd.velocidadeFixa;
     if (m) {
-      m.impor(vf != null ? vf / r : null);
-      if (vf == null) { const v = m.wTrem * r; k.a = (v - k.v) / Math.max(1e-6, _n * _dt); k.v = v; }
+      m.impor(this.omegaTeste ?? (vf != null ? vf / r : null));
+      if (vf == null && this.omegaTeste == null) { const v = m.wTrem * r; k.a = (v - k.v) / Math.max(1e-6, _n * _dt); k.v = v; }
     }
     const v = vf ?? k.v;
     for (const f of this.rodas) f.ajustar(v);

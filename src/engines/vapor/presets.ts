@@ -44,6 +44,7 @@ export interface PresetVapor {
   vagao?: { massa: number };             // massa padrão do vagão (t)
   potenciaGerador?: number;              // kW (estacionária no portador gerador)
   hunting?: number;                      // governador mal ajustado (± fração), 0 por padrão
+  governador?: { kp: number; ki: number }; // ganhos do governador de esferas (corte por % de erro; por %·s)
   /** nota da ficha (o que conferir antes de nomear uma máquina específica) */
   nota?: string;
 }
@@ -158,7 +159,7 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
   {
     id: 'corliss', nome: 'Corliss de moinho (1 cil., ≈ 1 000 hp)', familia: 'estacionaria', tag: 'horizontal · 75 rpm · condensador',
     cilindros: { n: 1, diametro: pol(30), curso: pol(60) }, dRoda: 0, pNominal: psi(120), superaquecido: false, evaporacaoMax: 1.5,
-    massa: 120, massaAderente: 0, vMax: 75, J: 3e4, rpmGovernado: 75, potenciaGerador: 700,
+    massa: 120, massaAderente: 0, vMax: 75, J: 3e4, rpmGovernado: 75, potenciaGerador: 550,
     // (lwChuff: 105 dB(A) à atmosfera; com o condensador, o padrão, a vazão vai para 0,2 bar abs e a boca fica muda: 80)
     escape: { dBico: 0.2, lDescarga: 1.2, vCaixa: 2, lChamine: 2.5, dChamine: 0.4, destino: 'condensador', pCondensador: 0.2e5 },
     apito: { tubos: [250], tipo: 'simples', nivelDb: 135 }, folga: 0.3,
@@ -168,7 +169,7 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
   {
     id: 'aveling', nome: 'Aveling & Porter 8 nhp', familia: 'trator', tag: 'trator de estrada · nº 11630 ≈',
     cilindros: { n: 1, diametro: pol(8), curso: pol(10) }, reducao: 12, reducao2: 6, dRoda: 1.6, pNominal: psi(150), superaquecido: false, evaporacaoMax: 0.3,
-    massa: 10, massaAderente: 10, vMax: 8, J: 60, rpmGovernado: 75,
+    massa: 10, massaAderente: 10, vMax: 8, J: 60, rpmGovernado: 75, governador: { kp: 0.03, ki: 0.01 },
     escape: { dBico: 0.05, lDescarga: 0.4, vCaixa: 0.3, lChamine: 1.4, dChamine: 0.3 },
     apito: { tubos: [700], tipo: 'simples', nivelDb: 135 }, folga: 0.6,
     geometria: { comprimento: 6.5, largura: 2.4, altura: 3.5, xCilindros: 1.4, yCilindros: 0, xChamine: 2.6, xDomo: 0.8, xCabine: -2.4, zTopo: 2.4 },
