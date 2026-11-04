@@ -18,7 +18,7 @@ export function montarConfig(spec: Partial<PresetRadial> & Record<string, any>) 
     ...s,
     aviation: true, redline: s.rpmMax, compression: s.cr, inertia: J / (0.05 + 0.045 * s.displacement),
     fuel: s.carburador === 'pressao' ? 'efi' : 'carb',
-    aspiration: sa ? 'super' : 'na', boost: sa ? sa.boost : 0, scType: 'centrifugal', scRatio: sa?.relacao, scLobes: sa?.pas, scWhine: sa?.uivoDb ?? -18,
+    aspiration: sa ? 'super' : 'na', boost: sa ? sa.boost : 0, scType: 'centrifugal', scRatio: sa?.relacao, scLobes: sa?.pas, scWhine: sa?.uivoDb ?? -21,
     N: m.N, fire: m.fire, bank: m.grupo, banks: m.grupos, fileira: m.fileira, axis: m.phi, z: m.z, tdcRel: m.tdcRel,
     runners: m.runners, curso: m.curso, phi: m.phi, grupo: m.grupo, rows: m.rows,
   };

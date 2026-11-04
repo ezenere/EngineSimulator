@@ -53,6 +53,8 @@ export type EscapeRadial = {
   juntar?: number[][];
   /** tubos: grupos por fileira, cada um num radiador (Corsair: 3 por fileira) */
   agrupar?: number;
+  /** os grupos de cada fileira saem de um lado da carenagem (fileira 0 à esquerda, 1 à direita) */
+  ladoPorFileira?: boolean;
   /** dupla fileira 'single' (P-47): as saídas dos anéis → tubo longo → turbina → cauda */
   turbina?: { Lantes: number; Ldepois: number; Oantes: number; Odepois: number };
 };
@@ -185,7 +187,9 @@ function gruposEPrimarios(esc: EscapeRadial | undefined, phi: number[], fileira:
       const pos = naFileira.indexOf(c);
       grupo.push(g === per ? fileira[c] * per + pos : fileira[c] * g + Math.floor((pos * g) / per));
       const Lt = e.Lt ?? 0.6;
-      const L = Array.isArray(Lt) ? Lt[0] + (Lt[1] - Lt[0]) * (1 - Math.cos(phi[c] * RAD)) / 2 : Lt;
+      // (faixa [a, b]: com um sistema por fileira, cada fileira com o seu comprimento, a traseira com os curtos; senão, de
+      // cima a baixo. As fileiras com estaques diferentes é que deixam a 4,5ª ordem do R-2800 aparecer: RADIAL.md 4.2)
+      const L = Array.isArray(Lt) ? (e.porFileira ? Lt[Math.min(fileira[c], 1)] : Lt[0] + (Lt[1] - Lt[0]) * (1 - Math.cos(phi[c] * RAD)) / 2) : Lt;
       runners.push(L * varia(c));
     }
   } else if (e.tipo === 'aranha') {

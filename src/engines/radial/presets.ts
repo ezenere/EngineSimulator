@@ -34,6 +34,12 @@ export type PresetRadial = Partial<PresetRonco> & {
   aproximacao?: string;
   /** volante (kg·m²) somado ao J do motor (Sherman) */
   volante?: number;
+  /** rolagem (fração de m·g; padrão a do pneu do Ronco, 0,012): as esteiras do Sherman, 0,06 */
+  rolagem?: number;
+  /** vazamento do anel e das juntas em dB relativos ao `breakout` (acerto da instalação; RADIAL.md 2.1) */
+  vazamento?: number;
+  /** galope: multiplica a dispersão explosão a explosão do Ronco (padrão 1,8 com carburador de pressão, 2,6 de boia; 4.3) */
+  galope?: number;
 };
 
 export type FamiliaRadial = { id: string; name: string };
@@ -73,17 +79,17 @@ export const PRESETS_RADIAL: PresetRadial[] & { families: FamiliaRadial[] } = Ob
   { ...R14, id: 'r1830', family: 'classicos', name: 'P&W R-1830 Twin Wasp', tag: 'DC-3 / C-47 · 14 cil. em 2 fileiras · 30 L · 1 200 hp',
     displacement: 30.0, cr: 6.7, idle: 600, rpmMax: 2700, power: 895, J: 2.3, reducao: 0.5625, helice: { B: 3, D: 3.5, J: 55, nMax: 1520 },
     carburador: 'pressao', superalimentador: { relacao: 7.15, pas: 12, boost: 0.3 }, partida: 'inercia',
-    escape: { tipo: 'anel', Danel: 1.15, Oanel: 90, Lp: 0.18, saidas: [{ L: 1.2, O: 100, phi: 180 }] }, breakout: 'old',
+    escape: { tipo: 'anel', Danel: 1.15, Oanel: 90, Lp: 0.18, saidas: [{ L: 1.2, O: 100, phi: 180 }] }, breakout: 'old', vazamento: -8,
     nivelEscape: 145, ...aviao, aeronave: { massa: 11800, comprimento: 19.4, envergadura: 29, motores: 2 } },
   { ...R18, id: 'r2800', family: 'classicos', name: 'P&W R-2800-18W Double Wasp', tag: 'F4U-4 Corsair · 18 cil. · 45,9 L · 2 100 hp',
     displacement: 45.9, cr: 6.75, idle: 650, rpmMax: 2800, power: 1566, J: 3.2, reducao: 0.4375, helice: { B: 4, D: 4.01, J: 120, nMax: 1225 },
     carburador: 'pressao', superalimentador: { relacao: 7.6, pas: 16, boost: 0.5, duasVelocidades: { relacao: 9.5, boost: 0.7 } }, partida: 'inercia',
-    escape: { tipo: 'tubos', Lt: [0.55, 0.8], Ot: 70, agrupar: 3, porFileira: true }, breakout: 'old',
+    escape: { tipo: 'tubos', Lt: [0.55, 0.8], Ot: 70, agrupar: 3, porFileira: true, ladoPorFileira: true }, breakout: 'old', vazamento: -14,
     nivelEscape: 148, ...aviao, aeronave: { massa: 5600, comprimento: 10.3, envergadura: 12.5 } },
   { ...R18, id: 'r2800turbo', family: 'classicos', name: 'P&W R-2800-59 (turbo)', tag: 'P-47D Thunderbolt · 18 cil. · coletor único e turbina',
     displacement: 45.9, cr: 6.65, idle: 650, rpmMax: 2700, power: 1490, J: 3.2, reducao: 0.5, helice: { B: 4, D: 3.96, J: 110, nMax: 1350 },
     carburador: 'pressao', superalimentador: { relacao: 7.6, pas: 16, boost: 0.5 }, partida: 'direta',
-    escape: { tipo: 'anel', Danel: 1.3, Oanel: 100, Lp: 0.2, saidas: [{ L: 0.3, O: 100, phi: 180 }], turbina: { Lantes: 3.8, Oantes: 90, Ldepois: 1.0, Odepois: 110 } }, breakout: 'sealed',
+    escape: { tipo: 'anel', Danel: 1.3, Oanel: 100, Lp: 0.2, saidas: [{ L: 0.3, O: 100, phi: 180 }], turbina: { Lantes: 3.8, Oantes: 90, Ldepois: 1.0, Odepois: 110 } }, breakout: 'old', vazamento: -17,
     nivelEscape: 148, ...aviao, aeronave: { massa: 6600, comprimento: 11, envergadura: 12.4 } },
   { ...R28, id: 'r4360', family: 'classicos', name: 'P&W R-4360 Wasp Major', tag: 'B-50 / C-124 · 28 cil. em 4 fileiras · 71,5 L · 3 500 hp',
     displacement: 71.5, cr: 6.7, idle: 700, rpmMax: 2700, power: 2610, J: 5.5, reducao: 0.375, helice: { B: 4, D: 5.08, J: 300, nMax: 1012 },
@@ -91,9 +97,9 @@ export const PRESETS_RADIAL: PresetRadial[] & { families: FamiliaRadial[] } = Ob
     escape: { tipo: 'anel', Danel: 1.35, Oanel: 100, Lp: 0.2, juntar: [[0, 1], [2, 3]], saidas: [{ L: 1.5, O: 110, phi: 90 }, { L: 1.5, O: 110, phi: 270 }] }, breakout: 'sealed',
     nivelEscape: 151, ...aviao, aeronave: { massa: 80000, comprimento: 40, envergadura: 53, motores: 4 } },
   { ...R9, id: 'r1340', family: 'classicos', name: 'P&W R-1340 Wasp', tag: 'T-6 Texan · 9 cil. · 22 L · 600 hp · direto',
-    displacement: 22.0, cr: 6.0, idle: 600, rpmMax: 2250, power: 447, J: 1.6, reducao: 1, helice: { B: 2, D: 2.74, J: 16, nMin: 1800, nMax: 2250 },
+    displacement: 22.0, cr: 6.0, idle: 620, rpmMax: 2250, power: 447, J: 1.6, reducao: 1, helice: { B: 2, D: 2.74, J: 16, nMin: 1800, nMax: 2250 },
     carburador: 'boia', superalimentador: { relacao: 10, pas: 12, boost: 0.2 }, partida: 'direta',
-    escape: { tipo: 'anel', Danel: 1.1, Oanel: 76, Lp: 0.18, saidas: [{ L: 1.0, O: 76, phi: 90 }] }, breakout: 'leaky',
+    escape: { tipo: 'anel', Danel: 1.1, Oanel: 76, Lp: 0.18, saidas: [{ L: 1.0, O: 76, phi: 90 }] }, breakout: 'leaky', vazamento: -6,
     nivelEscape: 142, ...aviao, aeronave: { massa: 2550, comprimento: 8.8, envergadura: 12.8 } },
   { ...R9, id: 'r985', family: 'classicos', name: 'P&W R-985 Wasp Junior', tag: 'Ford Trimotor · 9 cil. · 16,1 L · 450 hp · passo fixo',
     displacement: 16.1, cr: 6.0, idle: 600, rpmMax: 2300, power: 336, J: 1.1, reducao: 1, helice: { B: 2, D: 2.6, J: 12, passoFixo: true, nMax: 2300 },
@@ -104,7 +110,7 @@ export const PRESETS_RADIAL: PresetRadial[] & { families: FamiliaRadial[] } = Ob
   { ...R9, id: 'm14p', family: 'sovieticos', name: 'Vedeneyev M-14P', tag: 'Yak-52 · 9 cil. · 10,2 L · 360 hp · partida a ar',
     displacement: 10.16, cr: 6.3, idle: 760, rpmMax: 2900, power: 265, J: 0.7, reducao: 0.658, helice: { B: 2, D: 2.4, J: 7, nMax: 1908 },
     carburador: 'boia', superalimentador: { relacao: 8.26, pas: 14, boost: 0.25 }, partida: 'ar',
-    escape: { tipo: 'anel', Danel: 0.9, Oanel: 60, Lp: 0.15, saidas: [{ L: 0.4, O: 60, phi: 120 }, { L: 0.4, O: 60, phi: 240 }] }, breakout: 'old',
+    escape: { tipo: 'anel', Danel: 0.9, Oanel: 60, Lp: 0.15, saidas: [{ L: 0.4, O: 60, phi: 120 }, { L: 0.4, O: 60, phi: 240 }] }, breakout: 'old', vazamento: -10,
     nivelEscape: 140, ...aviao, aeronave: { massa: 1300, comprimento: 7.7, envergadura: 9.3 } },
   { ...R9, id: 'm14pf', family: 'sovieticos', name: 'Vedeneyev M-14PF', tag: 'Su-31 / Yak-55M · 400 hp · estaques acrobáticos',
     displacement: 10.16, cr: 6.3, idle: 700, rpmMax: 2950, power: 294, J: 0.7, reducao: 0.658, helice: { B: 3, D: 2.5, J: 5, nMax: 1940 },
@@ -114,14 +120,14 @@ export const PRESETS_RADIAL: PresetRadial[] & { families: FamiliaRadial[] } = Ob
   // ---- Pequenos modernos
   { ...R7, id: 'rotec2800', family: 'pequenos', name: 'Rotec R2800', tag: 'Kitfox, Pietenpol · 7 cil. · 2,8 L · 110 hp',
     displacement: 2.8, cr: 8.5, idle: 1000, rpmMax: 3600, power: 82, J: 0.15, reducao: 1, helice: { B: 2, D: 1.75, J: 1.5, passoFixo: true, nMax: 3600 },
-    carburador: 'boia', partida: 'direta', escape: { tipo: 'tubos', Lt: 0.6, Ot: 38 }, breakout: 'leaky',
+    carburador: 'boia', partida: 'direta', escape: { tipo: 'tubos', Lt: 0.6, Ot: 38 }, breakout: 'leaky', vazamento: -20,
     nivelEscape: 130, ...aviao, aeronave: { massa: 550, comprimento: 5.8, envergadura: 9.8 } },
   { ...R9, id: 'rotec3600', family: 'pequenos', name: 'Rotec R3600', tag: 'Pietenpol, réplicas · 9 cil. · 3,6 L · 150 hp',
     displacement: 3.6, cr: 8.5, idle: 950, rpmMax: 3600, power: 112, J: 0.2, reducao: 1, helice: { B: 3, D: 1.8, J: 1.8, passoFixo: true, nMax: 3600 },
     carburador: 'boia', partida: 'direta', escape: { tipo: 'tubos', Lt: 0.6, Ot: 38 }, breakout: 'leaky',
     nivelEscape: 130, ...aviao, aeronave: { massa: 700, comprimento: 6, envergadura: 9 } },
   { ...R3, id: 'verner3', family: 'pequenos', name: 'Verner Scarlett 3V', tag: 'ultraleves · 3 cil. · 1,6 L · 42 hp',
-    displacement: 1.6, cr: 8.0, idle: 700, rpmMax: 2500, power: 31, J: 0.05, reducao: 1, helice: { B: 2, D: 1.7, J: 1.0, passoFixo: true, nMax: 2500 },
+    displacement: 1.6, cr: 8.0, idle: 760, rpmMax: 2500, power: 31, J: 0.05, reducao: 1, helice: { B: 2, D: 1.7, J: 1.0, passoFixo: true, nMax: 2500 },
     carburador: 'boia', partida: 'direta', escape: { tipo: 'tubos', Lt: 0.45, Ot: 35 }, breakout: 'leaky',
     nivelEscape: 124, ...aviao, aeronave: { massa: 380, comprimento: 5.6, envergadura: 9.1 } },
   { ...R5, id: 'verner5', family: 'pequenos', name: 'Verner Scarlett 5S', tag: 'Savage, Kitfox · 5 cil. · 2,3 L · 103 hp',
@@ -133,7 +139,7 @@ export const PRESETS_RADIAL: PresetRadial[] & { families: FamiliaRadial[] } = Ob
     displacement: 15.9, cr: 5.7, idle: 600, rpmMax: 2400, power: 298, J: 1.4, volante: 2.5,
     carburador: 'boia', superalimentador: { relacao: 10, pas: 12, boost: 0.15 }, partida: 'direta',
     escape: { tipo: 'lados', Lp: 0.2, saidas: [{ L: 1.5, O: 90, phi: 160 }, { L: 1.5, O: 90, phi: 200 }] }, breakout: 'sealed',
-    gears: 5, ratios: [7.56, 3.11, 1.78, 1.11, 0.73], finalDrive: 2.84, wheelR: 0.32, mass: 30300, drag: 4.5,
+    gears: 5, ratios: [7.56, 3.11, 1.78, 1.11, 0.73], finalDrive: 2.84, wheelR: 0.32, mass: 30300, drag: 4.5, rolagem: 0.06,
     nivelEscape: 138, portadores: ['carro', 'nenhum'], veiculo: { massa: 30300, comprimento: 5.9, largura: 2.6, altura: 2.7 },
     aproximacao: 'sem o ruído da esteira' },
   { ...R16, id: 'trossi', family: 'terra', name: 'Monaco-Trossi', tag: 'carro de GP 1935 · 16 cil. em 2 fileiras · 4 L',

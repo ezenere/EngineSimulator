@@ -23,6 +23,9 @@ import { paLw5 } from '../ronco/aviacao';
 /** diretividades (CENA 1.3; 0° = eixo): bloco exposto na boca da carenagem e as bocas do escape (para trás e para baixo) */
 const T_BLOCO = [0, -1, -3, -6, -8, -10, -12] as const;
 const T_BOCA = [0, -0.5, -1.5, -3, -4.5, -6, -7] as const;
+/** boca de lado na carenagem (estaques, saídas do anel): sopra para fora e para trás; do outro lado a fuselagem e o
+ *  motor ficam no caminho (aproximação sem frequência: a sombra de verdade só vale acima de ~300 Hz) */
+const T_LADO = [0, -1, -3, -5, -7, -9, -10] as const;
 const T_DENTRO = [0, -1, -2, -4, -6, -8, -9] as const;
 
 const dir = (tabela: readonly number[], eixo: Vec3) => ({ tabela: tabela as any, eixo, expConv: 2 });
@@ -35,7 +38,8 @@ export function fontesRadial(dsp: RadialDSP, cfg: any) {
   dsp.rads.forEach((_r: any, k: number) => {
     const ph = ((dsp.radPhi?.[k] ?? 180) * Math.PI) / 180;
     const pos: Vec3 = terra ? [-2.6, 0.5 * Math.sin(ph), 0.4] : [-1.0, 0.6 * Math.sin(ph), 0.6 * Math.cos(ph) - 0.1];
-    fontes.push({ id: `escape.${k}`, tipo: 'escape', pos, dir: dir(T_BOCA, [-1, 0, -0.3]), refDist: 5, dentro: false });
+    const lado = !terra && Math.abs(Math.sin(ph)) > 0.5;
+    fontes.push({ id: `escape.${k}`, tipo: 'escape', pos, dir: lado ? dir(T_LADO, [-0.5, Math.sign(Math.sin(ph)), 0]) : dir(T_BOCA, [-1, 0, -0.3]), refDist: 5, dentro: false });
   });
   const expostos = !terra; // (no Sherman e no Trossi o motor fica num compartimento)
   const especs: { id: any; peso: number; vias: any }[] = [];

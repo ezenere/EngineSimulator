@@ -32,6 +32,9 @@ export interface ConfigHelice {
   beta0?: number;
   /** piso da fonte na lenta (padrão 0): a fonte fica em max(onLenta, rampa de 5–30% da rotação) */
   onLenta?: number;
+  /** fator no decaimento κ dos harmônicos (padrão 1) e no ruído largo de pá (padrão 1): as hélices metálicas de pá fina
+   *  dos aviões a pistão (T-6, Yak) têm harmônicos até a 9ª e mais ruído largo que a do turboélice */
+  kapK?: number; largoK?: number;
 }
 
 /** tabela de 4.2 (BPF e M_t estático conferidos em tools/cena/portadores.ts) */
@@ -86,9 +89,9 @@ export class CargaHelice implements Carga {
  * Uma passagem de pá da hélice: espessura (pulso negativo) + carga (dipolo), exatamente o `buildPropTab` do JetDSP
  * (src/engines/turbina/dsp.ts), com a mesma tabela de seno (`sinr`): mesma aritmética, mesma tabela de 1024 pontos.
  */
-export function tabelaPassagemPa(tab: Float32Array, Mh: number, load: number) {
+export function tabelaPassagemPa(tab: Float32Array, Mh: number, load: number, kapK = 1) {
   const N = 1024;
-  const kap = 0.1 + 2.6 * Math.pow(Math.max(0.02, 1 - Mh), 1.3);
+  const kap = (0.1 + 2.6 * Math.pow(Math.max(0.02, 1 - Mh), 1.3)) * kapK;
   tab.fill(0);
   for (let h = 1; h <= 16; h++) {
     const a = Math.exp(-(h - 1) * kap);
@@ -120,8 +123,8 @@ export class FonteHelice implements GeradorCanal {
   pbb = new BiquadComPiso(); rng = new RNG(0x4e11c3);
   /** sem o ruído largo (teste da parte tonal) */
   semRuido = false;
-  /** piso da fonte na lenta (RADIAL.md 3.3; 0 = como no JetDSP) */
-  onLenta = 0;
+  /** piso da fonte na lenta (RADIAL.md 3.3; 0 = como no JetDSP), decaimento dos harmônicos e ruído largo (1 = JetDSP) */
+  onLenta = 0; kapK = 1; largoK = 1;
   /** abaixo de 10% da rotação, a contagem de pás (pulso de 20 ms de ruído grave por pá; RADIAL.md 3.3) */
   pasLentas = false; pPa = 0; envPa = 0; lpPa = 0; kPa = 0;
   constructor(fs: number, B: number, D: number, propRpm: number) { this.fs = fs; this.B = B; this.D = D; this.propHz = propRpm / 60; }
@@ -135,8 +138,10 @@ export class FonteHelice implements GeradorCanal {
     const on = Math.max(this.onLenta, smooth(0.05, 0.3, this.np));
     this.aProp = 9 * Math.pow(Mh / 0.75, 4) * pload * (this.D / 3.9) * on * this.fan;
     this.aPbb = 0.55 * Math.pow(Mh / 0.75, 5) * (1 + 2 * rv) * (this.D / 3.9) * on * this.fan;
+    // (o ruído largo extra das pás finas é o do escoamento quase sônico na ponta: entra de M 0,5 a 0,85)
+    if (this.largoK !== 1) this.aPbb *= 1 + (this.largoK - 1) * smooth(0.5, 0.85, Mh);
     this.fPbb = 900 + 900 * Mh;
-    if (++this.propBuild >= 8) { this.propBuild = 0; tabelaPassagemPa(this.tabB, Mh, pload); const t = this.tab; this.tab = this.tabB; this.tabB = t; }
+    if (++this.propBuild >= 8) { this.propBuild = 0; tabelaPassagemPa(this.tabB, Mh, pload, this.kapK); const t = this.tab; this.tab = this.tabB; this.tabB = t; }
     this.pbb.bp(fs, this.fPbb, 0.7);
     this.nPbb = 1.732 / Math.sqrt(clamp(1.57 * (this.fPbb || 1000) / 0.7, 5, fs / 2) / (fs / 2));
   }
@@ -186,6 +191,7 @@ export class Helice extends PortadorComMotor {
     this.gov = new GovernadorPI(0.02, 0.01, c.betaMin, c.betaMax, (5 * Math.PI) / 180, c.betaMin);
     this.omegaLivre = (c.nHelice * c.i * 2 * Math.PI) / 60;
     this.fonte = new FonteHelice(fs, c.B, c.D, c.nHelice);
+    this.fonte.onLenta = c.onLenta ?? 0; this.fonte.kapK = c.kapK ?? 1; this.fonte.largoK = c.largoK ?? 1; this.fonte.pasLentas = !!c.nMin || !!c.onLenta;
     this.propria({ id: 'helice', tipo: 'pa', pos: c.posCubo, dir: { tabela: [-18, -8, -3, 0, -1, -6, -18], eixo: [1, 0, 0], expConv: 3 }, refDist: 30, dentro: false }, this.fonte);
   }
   carga() { return this.cargaH; }

@@ -29,7 +29,7 @@ const T_ENERGIZAR = 16;
 export class RadialDSP extends EngineDSP {
   declare fase: any; declare tFase: any; declare tGiro: any; declare pas: any; declare magAuto: any; declare encharque: any; declare fumaca: any;
   declare radPhi: any; declare rotAng: any; declare apF: any; declare apPh: any; declare apHz: any; declare apAmp: any; declare apNz: any;
-  declare Aar: any; declare blowerAlta: any; declare engateT: any; declare falhaMedia: any;
+  declare Aar: any; declare blowerAlta: any; declare engateT: any; declare falhaMedia: any; declare galL: any; declare galN: any; declare falhaLenta: any; declare qMix0: any;
   // (da aviação, postos por instalarAviacao: src/engines/ronco/aviacao.ts)
   declare heliceSom: any; declare magnetos: any; declare mistura: any; declare partidaTipo: any; declare prime: any; declare cargaAv: any; declare falhaMix: any; declare nivelEscape: any;
 
@@ -41,6 +41,7 @@ export class RadialDSP extends EngineDSP {
     this.avControle = this.controleRadial; this.avMensagem = this.mensagemRadial; this.avTelemetria = this.telemetriaRadial; this.avSomExtra = this.somExtraRadial;
     this.fase = 'parado'; this.tFase = 0; this.tGiro = 0; this.pas = 0; this.magAuto = true; this.encharque = new Float64Array(1); this.fumaca = 0;
     this.apPh = 0; this.apHz = 0; this.apAmp = 0; this.engateT = -1; this.falhaMedia = 0; this.blowerAlta = false;
+    this.galL = 0; this.galN = new RNG(0x9a10); this.falhaLenta = 0;
   }
 
   // ------------------------------------------------------------------ configuração
@@ -56,6 +57,12 @@ export class RadialDSP extends EngineDSP {
     super.tune(cfg);
     // tanque: a rolagem das esteiras (0,06·m·g) no lugar da do pneu
     if (cfg.rolagem) this.roll = cfg.rolagem * this.mass * 9.81;
+    // galope (RADIAL.md 4.3): a variação explosão a explosão dos radiais na lenta (CVciclo 0,30–0,42) é maior que a dos
+    // carros do Ronco com a mesma alimentação; `galope` multiplica a dispersão do Ronco (varScale)
+    this.varScale = cfg.galope ?? (cfg.carburador === 'boia' ? 2.6 : 1.8);
+    // borboleta: a do carburador de avião é grande (o ar de lenta é uma fração dela): com a do Ronco o controle de lenta
+    // não tinha ar para segurar a lenta contra a hélice
+    this.Athr *= clamp(cfg.displacement / 10, 1, 1.6); // (nos pequenos, Rotec e Verner, a do Ronco já basta)
     // vazamento do anel de chapa e das juntas (breakout do Ronco), com o acerto da instalação em dB (`vazamento`, RADIAL.md 2.1)
     this.breakK = ({ sealed: 0, old: 1, leaky: 2.2 }[cfg.breakout] || 0) * Math.pow(10, (cfg.vazamento || 0) / 20);
     // superalimentador de duas velocidades (R-2800): a relação e a pressão da marcha alta
@@ -95,7 +102,9 @@ export class RadialDSP extends EngineDSP {
         const sh = L(0.05, cs.length, 12000);
         const j = new Junction([...cs.map((c) => port(runners[c], 1)), port(sh, 0)]);
         nodes.push(j); this.bankJ[g] = j;
-        radiar(sh, angMedio(cs), O);
+        // (Corsair: os estaques de cada fileira saem de um lado da carenagem, 3 por lado)
+        const gr = e.agrupar || 1, k = g % gr;
+        radiar(sh, e.ladoPorFileira ? (fil[cs[0]] ? 90 : 270) + 25 * (k - (gr - 1) / 2) : angMedio(cs), O);
       }
     } else if (e.tipo === 'aranha') {
       const s = e.saidas?.[0] ?? { L: 0.5, O: 70, phi: 180 }, A2 = ds(s.O) ** 2; A2out = A2;
@@ -239,7 +248,8 @@ export class RadialDSP extends EngineDSP {
     const t = this.sonda({ ...cfg, limiter: 'none', power: undefined }, this.redline * 0.6);
     t.thrTarget = 1; t.thr = 1; t.boost = cfg.boost; t.maxBoost = cfg.boost; t.params.master = 0;
     let kw = 0, tq = 0, fr = 0;
-    for (const f of [0.6, 0.75, 0.9]) {
+    // (a ficha dos motores de avião é a potência na rotação máxima: os pontos ficam perto dela)
+    for (const f of [0.8, 0.9, 1.0]) {
       t.omega = (this.redline * f * TAU) / 60; t.rpmAvg = this.redline * f; t.tqMean = 0; t.frMean = 0;
       for (let i = 0; i < 0.35 * fs; i += B) t.process(L, R, B);
       const k = (t.tqMean * t.omega) / 1000;
@@ -273,14 +283,14 @@ export class RadialDSP extends EngineDSP {
     const rt = this.runT || 0, en = this.encharque[c] * (1 + 0.3 * (this.prime || 0));
     const umMag = this.magnetos === 'esq' || this.magnetos === 'dir' ? 0.02 * en : 0;
     // 0,55·encharque·e^(−t/8) nos de baixo; 0,12·e^(−t/15) em todos (menos com o primer nos de cima)
-    return 0.55 * en * Math.exp(-rt / 8) + 0.12 * Math.exp(-rt / 15) * (1 - 0.15 * (this.prime || 0) * (1 - this.encharque[c])) + this.falhaMix + umMag;
+    return 0.55 * en * Math.exp(-rt / 8) + 0.12 * Math.exp(-rt / 15) * (1 - 0.15 * (this.prime || 0) * (1 - this.encharque[c])) + this.falhaMix + umMag + this.falhaLenta;
   }
 
   torqueRadial(rpm: number) {
     if (this.state !== 'crank') return 0;
     const tipo = this.partidaTipo, T0 = arranqueBase(this);
-    // inércia: a energia do volante vai acabando em ~7 s (o motor gira a 60–100 rpm); a ar e a manivela: sem motor
-    if (tipo === 'inercia') return 1.15 * T0 * Math.max(0, 1 - this.tGiro / 7) * Math.max(0, 1 - rpm / 250);
+    // inércia: a energia do volante vai acabando em ~9 s (o motor gira a 60–100 rpm); a ar e a manivela: sem motor
+    if (tipo === 'inercia') return 1.1 * T0 * Math.max(0, 1 - this.tGiro / 9) * Math.max(0, 1 - rpm / 250);
     if (tipo === 'direta') return T0 * Math.max(0, 1 - rpm / 220);
     return 0;
   }
@@ -301,6 +311,12 @@ export class RadialDSP extends EngineDSP {
   controleRadial(dtc: number) {
     AV.controleAv.call(this, dtc);
     const tipo = this.partidaTipo;
+    // galope da lenta (RADIAL.md 4.3–4.4): uma falha de vela de vez em quando (2–4%, mais com carburador de boia) e o
+    // balanço lento da mistura (ruído abaixo de ~0,4 Hz, ±20%) que, com a inércia alta, dá o vagar de 2–4% da rotação
+    const lento = this.state === 'run' && !this.lockOmega ? clamp(1 - (this.rpmAvg - this.idle) / 1200, 0, 1) : 0;
+    this.falhaLenta = lento * (this.cfg?.carburador === 'boia' ? 0.045 : 0.025);
+    this.galL += (1 - Math.exp(-dtc * TAU * 0.4)) * (this.galN.bi() * 4 - this.galL);
+    this.qMix *= 1 + 0.2 * lento * clamp(this.galL, -1.5, 1.5);
     if (this.fase === 'energizar') {
       this.tFase += dtc;
       if (this.tFase >= T_ENERGIZAR) this.engatar();
@@ -311,7 +327,8 @@ export class RadialDSP extends EngineDSP {
       const c = this.cargaAv?.hcfg ?? (this.carga?.cfg?.nHelice ? this.carga.cfg : null);
       if (c) this.pas += ((this.omega / c.i) / TAU) * c.B * dtc;
       else this.pas += ((this.omega / TAU) * 3) * dtc;
-      if (this.magAuto && this.magnetos === 'desligado' && this.pas >= 9) this.magnetos = 'ambos';
+      // (no de inércia o volante perde força em poucos segundos: se as 9 pás não vieram em 4,5 s, o piloto liga os magnetos assim mesmo)
+      if (this.magAuto && this.magnetos === 'desligado' && (this.pas >= 9 || (tipo === 'inercia' && this.tGiro >= 4.5))) this.magnetos = 'ambos';
     }
     if (this.state === 'run' && this.fase === 'girar') this.fase = 'pegou';
     if (this.state === 'off' && (this.fase === 'girar' || this.fase === 'pegou')) this.fase = 'parado';

@@ -29,7 +29,7 @@ export const paLw5 = (lw: number) => 2e-5 * Math.pow(10, (lw - 20 * Math.log10(5
 export type Magnetos = 'ambos' | 'esq' | 'dir' | 'desligado';
 
 /** hélice do preset (RADIAL.md 5.1): pás, diâmetro (m), inércia (kg·m²), passo fixo, β0, rpm mínima e máxima da hélice */
-export type HelicePreset = { B: number; D: number; J: number; passoFixo?: boolean; beta0?: number; nMin?: number; nMax?: number };
+export type HelicePreset = { B: number; D: number; J: number; passoFixo?: boolean; beta0?: number; nMin?: number; nMax?: number; kapK?: number; largoK?: number };
 
 /**
  * Configuração da hélice do portador a partir do preset. O c_Q é escolhido pela potência da ficha, P = 2π·c_Q·ρ·n³·D⁵:
@@ -48,7 +48,10 @@ export function configHelice(spec: any): ConfigHelice {
   const fixo = !!h.passoFixo;
   return {
     ...HELICE_PADRAO, B: h.B, D: h.D, i, nHelice: nMax, J_hel: h.J, passoFixo: fixo,
-    cQ0: fixo ? cq(0.92 * nMax) : 0.25 * cq(nMax), nMin: h.nMin ?? (fixo ? nMax : 0.65 * nMax), beta0: h.beta0, onLenta: spec.onLenta ?? 0.35,
+    // (passo variável: no passo mínimo a hélice absorve 90% da potência na rotação máxima, como no chão com a manete
+    // toda; com 25%, como o RADIAL.md sugeria, o R-2800 subia de 650 a 2 800 rpm em 1 s)
+    cQ0: fixo ? cq(0.92 * nMax) : 0.9 * cq(nMax), nMin: h.nMin ?? (fixo ? nMax : 0.65 * nMax), beta0: h.beta0, onLenta: spec.onLenta ?? 0.35,
+    kapK: h.kapK ?? 0.5, largoK: h.largoK ?? 10,
   } as ConfigHelice;
 }
 
@@ -151,7 +154,7 @@ export function instalarAviacao(d: any, cfg: any) {
   // som da hélice na página (só sem portador externo: na Cena a hélice é do portador)
   const h = d.cargaAv?.hcfg;
   d.heliceSom = h && !d.cargaExterna ? new FonteHelice(d.fs, h.B, h.D, h.nHelice) : null;
-  if (d.heliceSom) d.heliceSom.onLenta = h.onLenta ?? 0;
+  if (d.heliceSom) { d.heliceSom.onLenta = h.onLenta ?? 0; d.heliceSom.kapK = h.kapK ?? 1; d.heliceSom.largoK = h.largoK ?? 1; }
   d.helBuf = new Float32Array(128); d.helK = 128; d.kHel = 0;
 }
 
@@ -188,7 +191,8 @@ function controleAv(this: any, dtc: number) {
   // mistura (RADIAL.md 2.2 e 3.6): corte abaixo de 0,25; auto-rica (0,8) é o ponto de potência; rica (1) perde 8%;
   // pobre (0,55–0,65) perde 3–7% (o fator pobre não está na fórmula do 2.2, que dava 1 com 0,55: ver TECNICO → Radial)
   this.qMix = smooth(0, 0.25, mx) * (1 - 0.08 * clamp((mx - 0.7) / 0.3, 0, 1)) * (1 - 0.25 * clamp((0.7 - mx) / 0.6, 0, 1));
-  this.burnAv = (this.magnetos === 'esq' || this.magnetos === 'dir' ? 1.2 : 1) * (1 + 0.3 * clamp((0.6 - mx) / 0.3, 0, 1));
+  // (um magneto só: o RADIAL.md dá ×1,2 na queima; com ele o mag check a 1 700 rpm caía 18 rpm, contra 60 ± 30: ×1,6)
+  this.burnAv = (this.magnetos === 'esq' || this.magnetos === 'dir' ? 1.6 : 1) * (1 + 0.3 * clamp((0.6 - mx) / 0.3, 0, 1));
   this.falhaMix = mx < 0.45 ? 0.3 * (0.45 - mx) / 0.15 : 0;
   const rt = this.runT || 0;
   if (this.radial) { this.avHot = 0.8 * Math.exp(-rt / 20); this.prAv = 0.015 + 0.35 * Math.exp(-rt / 20); }
