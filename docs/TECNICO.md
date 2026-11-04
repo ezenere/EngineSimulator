@@ -27,7 +27,7 @@ O site é compilado com Vite (TypeScript + React) e publicado como páginas est�
 | `turbina.html`, `src/pages/turbina/` | Página da Turbina, migrada de `jato.html` + `jet-app.js`: `controle.ts` (estado e mensagens para o DSP, fora do React), `Painel.tsx` (controles), `Turbina.tsx` (barra, presets, manete, instrumentos, laço de desenho), `desenho.ts` (EICAS, fan, osciloscópio, mapa e leituras em canvas) |
 | `src/engines/turbina/` | DSP da Turbina em TypeScript: `dsp.ts` (`JetDSP`), `presets.ts` (os aviões, tipo `PresetTurbina`), `constantes.ts` (tabela de seno, diretividade, volta da passagem); o worklet é `src/worklet/processador-turbina.ts` (`turbina-engine`) |
 | `tools/turbina-paridade.ts`, `tools/turbina-testa-navegador.mjs` | Prova de som idêntico ao legado (todos os aviões) e teste da página no Chromium e no Firefox headless |
-| `src/pages/comum/` | Casca comum das páginas durante a migração e leitura dos presets legados |
+| `src/pages/comum/` | Casca comum das páginas durante a migração |
 | `src/ui/` | Componentes React compartilhados (`Slider`, `ChipGroup`, `Field`, `Section`, `FamilyNav`, `PresetNav`, `Barra`) e os estilos (`estilo.css`, ex-`style.css`; `turbina.css`, ex-`jet.css`) |
 | `src/ui/audio/` | `AudioShell` (contexto React) e `CadeiaDeAudio`: AudioContext, carga do worklet e a cadeia compressor → EQ → seco/molhado → ambiente → analisador; ambientes e respostas ao impulso; perfis de Ronco e Turbina |
 | `src/acoustics/` | Blocos de acústica compartilhados: `RNG`, `Biquad`/`BiquadComPiso`, guias de onda (`Line`, `Junction`, `TwoPort`, `Radiator`, `Cutout`, `ClosedEnd`), escoamento compressível, constantes físicas |
@@ -498,7 +498,7 @@ O que foi medido nas simulações offline (Node) durante o desenvolvimento:
 
 ## Como adicionar um carro ou avião
 
-**Carro:** acrescente uma linha em `src/presets.js` usando uma das bases (`V8X`, `V8F`, `I6`, `B6`…) e o auxiliar `car(id, família, nome, descrição, base, campos)`. Os campos:
+**Carro:** acrescente uma linha em `src/engines/ronco/presets.ts` usando uma das bases (`V8X`, `V8F`, `I6`, `B6`…) e o auxiliar `car(id, família, nome, descrição, base, campos)`. Os campos:
 
 | Campo | Significado |
 |---|---|
@@ -522,4 +522,4 @@ O que foi medido nas simulações offline (Node) durante o desenvolvimento:
 
 A ordem de ignição precisa ser válida para o virabrequim. Ela é verificada por `EngineGeometry.build(preset).valid`.
 
-**Avião:** acrescente uma linha em `src/jet-presets.js` usando as bases `FAN`, `GTF`, `JET`, `MIL`, `TP` ou `PT6` e o auxiliar `plane(...)`. O significado de cada campo está comentado no topo do arquivo.
+**Avião:** acrescente uma linha em `src/engines/turbina/presets.ts` usando as bases `FAN`, `GTF`, `JET`, `MIL`, `TP` ou `PT6` e o auxiliar `plane(...)`. O significado de cada campo está comentado no topo do arquivo.

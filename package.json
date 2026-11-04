@@ -9,7 +9,12 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "render": "tsx tools/render.ts",
-    "compare-wav": "tsx tools/compare-wav.ts"
+    "compare-wav": "tsx tools/compare-wav.ts",
+    "paridade:ronco": "tsx tools/ronco-paridade.ts",
+    "paridade:turbina": "tsx tools/turbina-paridade.ts",
+    "paridade:acoustics": "tsx tools/acoustics-paridade.ts",
+    "navegador:ronco": "node tools/ronco-navegador.mjs",
+    "navegador:turbina": "node tools/turbina-testa-navegador.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",
