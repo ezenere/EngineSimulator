@@ -64,6 +64,7 @@ export class CenaPassagem implements Cena {
   bL: Float64Array; bR: Float64Array;
   tele: TelemetriaCena = { fontes: [], corpo: { s: 0, v: 0, pose: [0, 0, 0], rumo: 0 }, ouvinte: [0, 0, 0], pressaoPa: 0, ventoMs: 0, splDbA: 0, splDb: 0 };
   ventoU = 0;
+  tmpP = new Float64Array(64); tmpQ = new Float64Array(64); tmpA = new Float64Array(4096); tmpB = new Float64Array(4096); tmpC = new Float64Array(4096); tmpD = new Float64Array(4096);
 
   semSombra = false;
   constructor(op: OpcoesCena = {}) {
@@ -311,18 +312,18 @@ export class CenaPassagem implements Cena {
           this.ponteGAlvo = K_PONTE * s * Math.pow(Math.max(0, vj) / (300 / 3.6), 1.5);
         } else this.ponteGAlvo = 0;
       }
-      // resíduo > 20 Hz da pressão no alto-falante (mono, os dois ouvidos)
-      const p0 = this.pAnt, dp = (p - p0) / N;
-      let pp = p0;
-      const hp0 = this.hpP[0], hp1 = this.hpP[1];
-      let pg = this.ponteG; const dpg = (this.ponteGAlvo - pg) / N;
-      const pf = this.ponteF, pr = this.ponteR;
-      for (let k = 0; k < N; k++) {
-        pp += dp;
-        let x = hp1.run(hp0.run(pp));
-        if (pg > 0 || dpg !== 0) { x += pg * pf[2].run(pf[1].run(pf[0].run(pr.bi()))); pg += dpg; }
-        bL[ini + k] += x; bR[ini + k] += x;
+      // resíduo > 20 Hz da pressão no alto-falante (mono, os dois ouvidos); ponte: ronco em 31–125 Hz
+      const p0 = this.pAnt, dp = (p - p0) / N, tp = this.tmpP, tq = this.tmpQ;
+      for (let k = 0; k < N; k++) tp[k] = p0 + dp * (k + 1);
+      this.hpP[0].bloco(tp, N); this.hpP[1].bloco(tp, N);
+      const pg0 = this.ponteG, dpg = (this.ponteGAlvo - pg0) / N;
+      if (pg0 > 0 || dpg !== 0) {
+        const pr = this.ponteR;
+        for (let k = 0; k < N; k++) tq[k] = pr.bi();
+        this.ponteF[0].bloco(tq, N); this.ponteF[1].bloco(tq, N); this.ponteF[2].bloco(tq, N);
+        for (let k = 0; k < N; k++) tp[k] += (pg0 + dpg * (k + 1)) * tq[k];
       }
+      for (let k = 0; k < N; k++) { bL[ini + k] += tp[k]; bR[ini + k] += tp[k]; }
       this.ponteG = this.ponteGAlvo;
       this.pAnt = p;
       this.tele.pressaoPa = p;
@@ -337,27 +338,32 @@ export class CenaPassagem implements Cena {
     // barramentos do local
     const a0L = P.accL[0], a0R = P.accR[0], a1L = P.accL[1], a1R = P.accR[1], cs = this.cabS, cf = this.cofreS;
     const g = 1 / PA_FS;
-    const pa0 = this.pa[0], pa1 = this.pa[1], km = this.kMed;
-    let eA = this.eA, eZ = this.eZ;
-    for (let k = 0; k < n; k++) {
-      let l = a0L[k] + bL[k], r = a0R[k] + bR[k];
-      if (this.local === 'cabine') {
+    const km = this.kMed, ta = this.tmpA, tb = this.tmpB, tc = this.tmpC, td = this.tmpD;
+    // barramento 1 pelo filtro do local: cabine = lei da massa (2 polos) + ressonância do habitáculo; cofre = lp 900 Hz
+    if (this.local === 'cabine') {
+      for (let k = 0; k < n; k++) {
         cs[0] += this.cabK1 * (a1L[k] - cs[0]); cs[1] += this.cabK2 * (cs[0] - cs[1]);
         cs[2] += this.cabK1 * (a1R[k] - cs[2]); cs[3] += this.cabK2 * (cs[2] - cs[3]);
-        l += this.cabPk[0].run(cs[1]); r += this.cabPk[1].run(cs[3]);
-      } else if (this.local === 'cofre') {
-        cf[0] += this.cofreK * (a1L[k] - cf[0]); cf[1] += this.cofreK * (a1R[k] - cf[1]);
-        l += cf[0]; r += cf[1];
-      } else { l += a1L[k]; r += a1R[k]; }
-      outL[k] = l * g; outR[k] = r * g;
-      sendL[k] = P.envL[k] * g; sendR[k] = P.envR[k] * g;
-      const al = pa0.run(l), ar = pa1.run(r);
-      eA += km * (0.5 * (al * al + ar * ar) - eA);
+        tc[k] = cs[1]; td[k] = cs[3];
+      }
+      this.cabPk[0].bloco(tc, n); this.cabPk[1].bloco(td, n);
+    } else if (this.local === 'cofre') {
+      for (let k = 0; k < n; k++) { cf[0] += this.cofreK * (a1L[k] - cf[0]); cf[1] += this.cofreK * (a1R[k] - cf[1]); tc[k] = cf[0]; td[k] = cf[1]; }
+    } else { for (let k = 0; k < n; k++) { tc[k] = a1L[k]; td[k] = a1R[k]; } }
+    let eZ = this.eZ;
+    for (let k = 0; k < n; k++) {
+      const l = a0L[k] + bL[k] + tc[k], r = a0R[k] + bR[k] + td[k];
+      ta[k] = l; tb[k] = r;
       eZ += km * (0.5 * (l * l + r * r) - eZ);
     }
+    for (let k = 0; k < n; k++) { outL[k] = ta[k] * g; outR[k] = tb[k] * g; sendL[k] = P.envL[k] * g; sendR[k] = P.envR[k] * g; }
+    // nível A com constante 'F': filtra em bloco
+    this.pa[0].bloco(ta, n); this.pa[1].bloco(tb, n);
+    let eA = this.eA;
+    for (let k = 0; k < n; k++) eA += km * (0.5 * (ta[k] * ta[k] + tb[k] * tb[k]) - eA);
     this.eA = eA; this.eZ = eZ;
     this.amostra += n;
-    this.atualizarTelemetria(portador);
+    this.tele.ventoMs = this.ventoU;
   }
 
   private reduzir(x: number) {
@@ -383,5 +389,6 @@ export class CenaPassagem implements Cena {
     t.splDb = 10 * Math.log10(this.eZ / (P_REF * P_REF) + 1e-30);
   }
 
-  telemetria(): TelemetriaCena { return this.tele; }
+  /** telemetria montada sob demanda (o worklet pede a cada 1024 amostras; escrever doubles em objetos aloca) */
+  telemetria(): TelemetriaCena { if (this.portador) this.atualizarTelemetria(this.portador); return this.tele; }
 }

@@ -5,11 +5,16 @@
 
 const TAU = Math.PI * 2;
 
-/** Biquad (transposta direta II) com coeficientes recalculáveis sem alocar. */
+/**
+ * Biquad (transposta direta II) com coeficientes recalculáveis sem alocar. Coeficientes e estado num
+ * Float64Array [b0, b1, b2, a1, a2, z1, z2]: escrever doubles em campos de objeto pode alocar no V8.
+ */
 export class Bq {
-  b0 = 1; b1 = 0; b2 = 0; a1 = 0; a2 = 0; z1 = 0; z2 = 0;
+  c = new Float64Array(7);
+  constructor() { this.c[0] = 1; }
+  get b0() { return this.c[0]; } get b1() { return this.c[1]; } get b2() { return this.c[2]; } get a1() { return this.c[3]; } get a2() { return this.c[4]; }
   private def(b0: number, b1: number, b2: number, a0: number, a1: number, a2: number) {
-    this.b0 = b0 / a0; this.b1 = b1 / a0; this.b2 = b2 / a0; this.a1 = a1 / a0; this.a2 = a2 / a0; return this;
+    const c = this.c; c[0] = b0 / a0; c[1] = b1 / a0; c[2] = b2 / a0; c[3] = a1 / a0; c[4] = a2 / a0; return this;
   }
   lp(fs: number, f: number, q = 0.7071) {
     const w = TAU * Math.min(f, fs * 0.45) / fs, c = Math.cos(w), al = Math.sin(w) / (2 * q);
@@ -29,14 +34,22 @@ export class Bq {
     return this.def(1 + al * A, -2 * c, 1 - al * A, 1 + al / A, -2 * c, 1 - al / A);
   }
   /** coeficientes diretos (z⁻¹), a0 = 1 */
-  coef(b0: number, b1: number, b2: number, a1: number, a2: number) { this.b0 = b0; this.b1 = b1; this.b2 = b2; this.a1 = a1; this.a2 = a2; return this; }
-  run(x: number) { const y = this.b0 * x + this.z1; this.z1 = this.b1 * x - this.a1 * y + this.z2; this.z2 = this.b2 * x - this.a2 * y; return y; }
-  zerar() { this.z1 = 0; this.z2 = 0; }
+  coef(b0: number, b1: number, b2: number, a1: number, a2: number) { const c = this.c; c[0] = b0; c[1] = b1; c[2] = b2; c[3] = a1; c[4] = a2; return this; }
+  run(x: number) { const c = this.c; const y = c[0] * x + c[5]; c[5] = c[1] * x - c[3] * y + c[6]; c[6] = c[2] * x - c[4] * y; return y; }
+  /** filtra n amostras no lugar (um laço só: chamar run() por amostra de dentro de funções grandes, que o
+   * V8 não embute, devolve o double numa caixa e aloca) */
+  bloco(x: Float64Array, n: number) {
+    const c = this.c, b0 = c[0], b1 = c[1], b2 = c[2], a1 = c[3], a2 = c[4];
+    let z1 = c[5], z2 = c[6];
+    for (let k = 0; k < n; k++) { const v = x[k], y = b0 * v + z1; z1 = b1 * v - a1 * y + z2; z2 = b2 * v - a2 * y; x[k] = y; }
+    c[5] = z1; c[6] = z2;
+  }
+  zerar() { this.c[5] = 0; this.c[6] = 0; }
   /** |H(f)|² */
   mag2(fs: number, f: number) {
-    const w = TAU * f / fs, c1 = Math.cos(w), s1 = Math.sin(w), c2 = Math.cos(2 * w), s2 = Math.sin(2 * w);
-    const nr = this.b0 + this.b1 * c1 + this.b2 * c2, ni = -(this.b1 * s1 + this.b2 * s2);
-    const dr = 1 + this.a1 * c1 + this.a2 * c2, di = -(this.a1 * s1 + this.a2 * s2);
+    const k = this.c, w = TAU * f / fs, c1 = Math.cos(w), s1 = Math.sin(w), c2 = Math.cos(2 * w), s2 = Math.sin(2 * w);
+    const nr = k[0] + k[1] * c1 + k[2] * c2, ni = -(k[1] * s1 + k[2] * s2);
+    const dr = 1 + k[3] * c1 + k[4] * c2, di = -(k[3] * s1 + k[4] * s2);
     return (nr * nr + ni * ni) / (dr * dr + di * di);
   }
 }
@@ -83,6 +96,8 @@ export class PonderacaoA {
     this.g = 1 / Math.sqrt(m);
   }
   run(x: number) { return this.s[2].run(this.s[1].run(this.s[0].run(x * this.g))); }
+  /** filtra n amostras no lugar */
+  bloco(x: Float64Array, n: number) { const g = this.g; for (let k = 0; k < n; k++) x[k] *= g; this.s[0].bloco(x, n); this.s[1].bloco(x, n); this.s[2].bloco(x, n); }
 }
 
 /** Atraso fracionário: Hermite cúbica de 4 pontos, a mesma do `readProp` do Ronco. */

@@ -107,18 +107,30 @@ export class RuidoVento {
   }
   /** pressão RMS (Pa) do vento a u m/s */
   static rms(u: number) { if (u < 0.3) return 0; return 2e-5 * Math.pow(10, (70 + 60 * Math.log10(u / 10)) / 20); }
-  /** soma n amostras do vento em L e R (Pa) */
+  /** soma n amostras do vento em L e R (Pa). O nível segue u por bloco (u muda devagar: 4 Hz). */
   somar(L: Float64Array, R: Float64Array, n: number) {
     const s3 = Math.pow(10, -12 / 20);
-    for (let k = 0; k < n; k++) {
-      this.u += this.kU * (this.uAlvo - this.u);
-      const g = RuidoVento.rms(this.u) * this.norma;
-      if (g === 0) continue;
-      const nl = this.rL.bi(), nr = this.rR.bi();
-      L[k] += g * this.hp[0].run(this.lp[0].run(nl) + s3 * this.om[0].run(nl));
-      R[k] += g * this.hp[1].run(this.lp[1].run(nr) + s3 * this.om[1].run(nr));
+    const g0 = this.g;
+    // u suavizado com constante de 4 Hz, avançado o bloco inteiro
+    this.u += (1 - Math.pow(1 - this.kU, n)) * (this.uAlvo - this.u);
+    const g1 = RuidoVento.rms(this.u) * this.norma;
+    this.g = g1;
+    if (g0 === 0 && g1 === 0) return;
+    const dg = (g1 - g0) / n;
+    // em blocos: ruído → (lp + ombro) → passa-alta, por ouvido
+    const a = this.tA, b = this.tB;
+    for (let ch = 0; ch < 2; ch++) {
+      const rng = ch ? this.rR : this.rL, O = ch ? R : L;
+      for (let k = 0; k < n; k++) { const v = rng.bi(); a[k] = v; b[k] = v; }
+      this.lp[ch].bloco(a, n); this.om[ch].bloco(b, n);
+      for (let k = 0; k < n; k++) a[k] += s3 * b[k];
+      this.hp[ch].bloco(a, n);
+      let g = g0;
+      for (let k = 0; k < n; k++) { g += dg; O[k] += g * a[k]; }
     }
   }
+  tA = new Float64Array(4096); tB = new Float64Array(4096);
+  g = 0;
 }
 
 /** Vento induzido a céu aberto (2.8): u = u₀·(v/v_ref)·(1 m/d)^0,7·w(t), u₀ = 10 m/s a 300 km/h. */

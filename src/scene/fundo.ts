@@ -15,7 +15,6 @@ export class FundoAmbiente {
   vento: Bq[][]; vent: Bq[][]; mur: Bq[][];
   gV = 0; gVe = 0; gM = 0;
   nV: number; nVe: number; nM: number;
-  rafada = 0; rafAlvo = 0; t = 0; mFase = 0;
   constructor(fs: number, semente = 0xf0d0) {
     this.fs = fs;
     this.r = [new RNG(semente), new RNG(semente + 101), new RNG(semente + 202), new RNG(semente + 303)];
@@ -29,24 +28,37 @@ export class FundoAmbiente {
     this.nM = 1 / rmsCadeia(fs, this.mur[0]);
   }
   definir(f: EspecFundo) { this.gV = pa(f.vento); this.gVe = pa(f.ventilacao); this.gM = pa(f.murmurio); }
-  /** soma n amostras (Pa) em L e R */
+  /** soma n amostras (Pa) em L e R (filtros em bloco: nada é alocado) */
   somar(L: Float64Array, R: Float64Array, n: number) {
     if (!this.gV && !this.gVe && !this.gM) return;
-    const r = this.r;
+    const r = this.r, gV = this.gV * this.nV, gVe = this.gVe * this.nVe, gM = this.gM * this.nM, dt = 1 / this.fs;
+    const e = this.est, a = this.tA, b = this.tB, c = this.tC, m = this.tM;
+    // envoltórias (rajada e murmúrio) por amostra, num buffer
+    let t = e[0], raf = e[1], alvo = e[2], fase = e[3];
     for (let k = 0; k < n; k++) {
-      // rajadas: alvo aleatório a cada ~2 s
-      this.t += 1 / this.fs;
-      if (this.t > 2) { this.t = 0; this.rafAlvo = r[3].next(); }
-      this.rafada += 0.00005 * (this.rafAlvo - this.rafada);
-      this.mFase += 0.7 / this.fs; if (this.mFase > 1) this.mFase -= 1;
-      for (let ch = 0; ch < 2; ch++) {
-        const n0 = r[ch].bi(), n1 = r[ch + 1 === 2 ? 2 : ch + 1].bi();
-        let y = 0;
-        if (this.gV) { const v = this.vento[ch]; y += this.gV * this.nV * (0.6 + 0.8 * this.rafada) * v[1].run(v[0].run(n0)); }
-        if (this.gVe) { const v = this.vent[ch]; y += this.gVe * this.nVe * (v[0].run(n1) + v[1].run(n1) + 0.5 * v[2].run(n1)); }
-        if (this.gM) { const v = this.mur[ch]; y += this.gM * this.nM * (0.8 + 0.2 * Math.sin(6.2832 * this.mFase + ch)) * v[1].run(v[0].run(n0)); }
-        if (ch === 0) L[k] += y; else R[k] += y;
+      t += dt;
+      if (t > 2) { t = 0; alvo = r[3].next(); }
+      raf += 0.00005 * (alvo - raf);
+      fase += 0.7 * dt; if (fase > 1) fase -= 1;
+      m[k] = raf; m[2048 + k] = fase;
+    }
+    e[0] = t; e[1] = raf; e[2] = alvo; e[3] = fase;
+    for (let ch = 0; ch < 2; ch++) {
+      const O = ch === 0 ? L : R, r0 = r[ch], r1 = r[ch === 0 ? 1 : 2];
+      if (gV || gM) {
+        for (let k = 0; k < n; k++) { const v = r0.bi(); a[k] = v; c[k] = v; }
+        if (gV) { const f = this.vento[ch]; f[0].bloco(a, n); f[1].bloco(a, n); for (let k = 0; k < n; k++) O[k] += gV * (0.6 + 0.8 * m[k]) * a[k]; }
+        if (gM) { const f = this.mur[ch]; f[0].bloco(c, n); f[1].bloco(c, n); for (let k = 0; k < n; k++) O[k] += gM * (0.8 + 0.2 * Math.sin(6.2832 * m[2048 + k] + ch)) * c[k]; }
+      }
+      if (gVe) {
+        const f = this.vent[ch];
+        for (let k = 0; k < n; k++) { const v = r1.bi(); a[k] = v; b[k] = v; c[k] = v; }
+        f[0].bloco(a, n); f[1].bloco(b, n); f[2].bloco(c, n);
+        for (let k = 0; k < n; k++) O[k] += gVe * (a[k] + b[k] + 0.5 * c[k]);
       }
     }
   }
+  /** [t, rajada, alvo da rajada, fase do murmúrio] */
+  est = new Float64Array(4);
+  tA = new Float64Array(2048); tB = new Float64Array(2048); tC = new Float64Array(2048); tM = new Float64Array(4096);
 }

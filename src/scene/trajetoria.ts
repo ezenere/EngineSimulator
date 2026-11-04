@@ -13,8 +13,14 @@
 // L²/8R: 3,9 m num trem de 250 m numa curva de 2 km).
 import type { Trajetoria } from './tipos';
 
-/** Ponto da via: posição do eixo (x, y), tangente (tx, ty) e normal à esquerda (nx, ny). */
-export class PontoVia { x = 0; y = 0; tx = 1; ty = 0; nx = 0; ny = 1; }
+/**
+ * Ponto da via: posição do eixo (x, y), tangente (tx, ty) e normal à esquerda (nx, ny), num Float64Array
+ * v = [x, y, tx, ty, nx, ny] (escrever doubles em campos de objeto aloca no V8; isto roda no laço).
+ */
+export class PontoVia {
+  v = new Float64Array([0, 0, 1, 0, 0, 1, 0]);   // + v[6]: abscissa de entrada de pontoV
+  get x() { return this.v[0]; } get y() { return this.v[1]; } get tx() { return this.v[2]; } get ty() { return this.v[3]; } get nx() { return this.v[4]; } get ny() { return this.v[5]; }
+}
 
 export class Via {
   tipo: Trajetoria['tipo'] = 'reta';
@@ -42,10 +48,18 @@ export class Via {
   }
 
   /** ponto da via na abscissa s (qualquer valor; a via é periódica) */
-  ponto(s: number, p: PontoVia) {
-    const u = this.reduzir(s), sg = this.sentido;
+  ponto(s: number, p: PontoVia) { p.v[6] = s; return this.pontoV(p); }
+  /**
+   * O mesmo, com a abscissa em p.v[6]: no laço do propagador passar um double como argumento de uma
+   * função que o V8 não embute aloca a caixa dele; pelo Float64Array não.
+   */
+  pontoV(p: PontoVia) {
+    // (reduzir() embutido, pelo mesmo motivo)
+    const s = p.v[6], L = this.comp, sg = this.sentido;
+    let u: number;
+    if (this.tipo === 'reta') { u = (s + L / 2) % L; if (u < 0) u += L; u -= L / 2; } else { u = s % L; if (u < 0) u += L; }
     if (this.tipo === 'reta') {
-      p.x = sg * u; p.y = 0; p.tx = sg; p.ty = 0; p.nx = 0; p.ny = sg;
+      const v = p.v; v[0] = sg * u; v[1] = 0; v[2] = sg; v[3] = 0; v[4] = 0; v[5] = sg;
       return p;
     }
     // volta anti-horária (sentido 1): reta de baixo de −ls/2 a ls/2 em y = −R, semicírculo direito,
@@ -62,7 +76,7 @@ export class Via {
     else if (w < 2 * ls + arco) { const q = w - ls - arco; x = h - q; y = R; tx = -1; ty = 0; }
     else { const a = (w - 2 * ls - arco) / R + Math.PI / 2; x = -h + R * Math.cos(a); y = R * Math.sin(a); tx = -Math.sin(a); ty = Math.cos(a); }
     if (sg < 0) { tx = -tx; ty = -ty; }
-    p.x = x; p.y = y; p.tx = tx; p.ty = ty; p.nx = -ty; p.ny = tx;
+    const v = p.v; v[0] = x; v[1] = y; v[2] = tx; v[3] = ty; v[4] = -ty; v[5] = tx;
     return p;
   }
 
@@ -99,6 +113,20 @@ export class Historico {
   empurrar(s: number, v: number) {
     this.k++; this.t0 += this.dtb;
     this.s[this.k & this.mask] = s; this.v[this.k & this.mask] = v;
+  }
+
+  /** s e v no tempo t em this.res = [s, v] (sem devolver double: chamada que não é embutida aloca o retorno) */
+  res = new Float64Array(3);
+  ler(t: number) { this.res[2] = t; this.lerV(); }
+  /** idem, com t em res[2] (sem argumento double) */
+  lerV() {
+    const t = this.res[2];
+    const x = (t - this.t0) / this.dtb, m = this.mask, S = this.s, V = this.v, r = this.res;
+    if (x >= 0) { const j = this.k & m; r[0] = S[j] + V[j] * x * this.dtb; r[1] = V[j]; return; }
+    const fl = Math.floor(x), f = x - fl;
+    if (-fl >= this.n - 1) { const j = (this.k - this.n + 2) & m, xa = x + this.n - 2; r[0] = S[j] + V[j] * xa * this.dtb; r[1] = V[j]; return; }
+    const i0 = (this.k + fl) & m, i1 = (this.k + fl + 1) & m;
+    r[0] = S[i0] + (S[i1] - S[i0]) * f; r[1] = V[i0] + (V[i1] - V[i0]) * f;
   }
 
   /** s no tempo t (≤ t0); antes do início do histórico, extrapola com a v mais antiga */

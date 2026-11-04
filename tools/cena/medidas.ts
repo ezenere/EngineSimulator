@@ -10,6 +10,7 @@ import { gerarRespostaPorBanda, ambientePassagem, BANDAS_RT, rt60Efetivo } from 
 import { CalculoSombra, maekawaDb } from '../../src/scene/sombra';
 import { atenuacaoIso } from '../../src/scene/ar';
 import { FonteVao } from '../../src/carriers/ruido';
+import { laco, medirAlocacao } from './cpu';
 import type { FonteTeste } from '../../src/carriers/teste';
 import type { IdAmbiente } from '../../src/scene/tipos';
 
@@ -319,7 +320,11 @@ export function medirCpu(): Linha[] {
   const frac = r.cpuFracao!;
   const tr = r.portador as unknown as object; void tr;
   const trem = passagemTrem('tunel');
+  const la = laco(10), gc = medirAlocacao();
   return [
+    linha('5 #3', 'CPU por bloco no laço do worklet (trem no túnel, só portador + cena)', '< 50% do quantum de 2,67 ms', `média ${f1(la.mediaMs * 1000, 0)} µs, p99 ${f1(la.p99Ms * 1000, 0)} µs, máx ${f1(la.maxMs * 1000, 0)} µs (${f1(100 * la.fracao)}%)`, la.fracao < 0.5, la.fracao),
+    linha('5 #3', 'alocação no laço (--trace-gc, 10 s)', 'sem alocação', `${gc.coletas} coletas jovens (${f1(gc.mbColetados, 0)} MB), pausa média ${f1(gc.pausaMediaMs, 2)} ms, máx ${f1(gc.pausaMaxMs, 2)} ms`, gc.coletas === 0, gc.coletas,
+      gc.coletas === 0 ? undefined : 'Os laços por amostra (anel, Hermite, filtros, fontes) não alocam. Sobra o encaixotamento de doubles uma vez por bloco de controle no Cena.processar (argumentos de funções que o V8 não embute, campos de objeto) e nos geradores de fundo: poucos MB/s, coletas de ~0,06 ms contra o quantum de 2,67 ms.'),
     linha('5 #3', 'CPU: 48 fontes, 10 s (Node, render offline)', '< 25% do tempo real', `${f1(frac * 100)}% (${f1(r.cpuMsPorBloco! * 1000, 0)} µs por bloco de 128)`, frac < 0.25, frac),
     linha('5 #3', 'CPU: trem 10×25 m no túnel (63 fontes + campo próximo)', '< 50% do quantum (5.1)', `${f1(trem.cpuFracao! * 100)}% (${f1(trem.cpuMsPorBloco! * 1000, 0)} µs por bloco)`, trem.cpuFracao! < 0.5, trem.cpuFracao!),
   ];
@@ -375,7 +380,7 @@ export function medirVento(): Linha[] {
   const v = new RuidoVento(SR);
   v.uAlvo = 10; v.u = 10;
   const n = SR * 3, L = new Float64Array(n), R = new Float64Array(n);
-  v.somar(L, R, n);
+  for (let i = 0; i < n; i += 128) v.somar(L.subarray(i, i + 128), R.subarray(i, i + 128), 128);
   let s = 0; for (let i = SR; i < n; i++) s += L[i] * L[i];
   const db = 10 * Math.log10(s / (n - SR) / 4e-10);
   return [linha('5 #6', 'nível do vento a 10 m/s', '70 ± 2 dB', `${f1(db)} dB`, dentro(db, 70, 2), db)];

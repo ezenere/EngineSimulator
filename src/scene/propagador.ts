@@ -10,8 +10,8 @@
 import type { FonteSonora } from './tipos';
 import type { Corpo, Segmento } from '../carriers/tipos';
 import { C_SOM, MAX_FONTES, R_MIN, DIST_ANEL, ITD_MAX } from './constantes';
-import { k1, dirDb } from './filtros';
-import { corteAr, POLO_POR_CORTE } from './ar';
+import { k1 } from './filtros';
+import { corteAr, alfa1k, POLO_POR_CORTE } from './ar';
 import { CalculoSombra, ganhosShelf } from './sombra';
 import { PontoVia, type Via, type Historico } from './trajetoria';
 
@@ -35,6 +35,55 @@ export interface RegrasLocal {
   envio: number;                    // fração do envio para a reverberação
 }
 
+// índices do estado mutável de cada fonte
+const S_OFF = 0;
+const S_OFFVELHO = 1;
+const S_XF = 2;
+const S_XFN = 3;
+const S_FADE = 4;
+const S_GR = 5;
+const S_A1 = 6;
+const S_A2 = 7;
+const S_KAR = 8;
+const S_KARALVO = 9;
+const S_SL = 10;
+const S_SA = 11;
+const S_SB = 12;
+const S_SAALVO = 13;
+const S_SBALVO = 14;
+const S_HB = 15;
+const S_CB = 16;
+const S_CBALVO = 17;
+const S_ITDW = 18;
+const S_DL = 19;
+const S_DR = 20;
+const S_DLALVO = 21;
+const S_DRALVO = 22;
+const S_LPL = 23;
+const S_LPR = 24;
+const S_IL = 25;
+const S_IR = 26;
+const S_ILALVO = 27;
+const S_IRALVO = 28;
+const S_PL = 29;
+const S_PR = 30;
+const S_PLALVO = 31;
+const S_PRALVO = 32;
+const S_GS = 33;
+const S_GSALVO = 34;
+const S_PS = 35;
+const S_PSALVO = 36;
+const S_PESO = 37;
+const S_EX = 38;
+const S_EY = 39;
+const S_EZ = 40;
+const S_R = 41;
+const S_THETA = 42;
+const S_GANHODB = 43;
+const S_ATRASOMS = 44;
+const N_ESTADO = 45;
+export const S_ESTADO = { sa: S_SA, sb: S_SB, fade: S_FADE, ganhoDb: S_GANHODB };
+
 export class EstadoFonte {
   f: FonteSonora;
   bx: number; by: number; bz: number;           // posição no corpo
@@ -46,21 +95,18 @@ export class EstadoFonte {
   D0 = new Float64Array(2); dD0 = new Float64Array(2); tau = new Float64Array(2);
   g = new Float64Array(2); gAlvo = new Float64Array(2);
   ativo = new Uint8Array(2);
-  off = 0; offVelho = 0; xf = 0; xfN = 0;       // deslocamento inteiro e crossfade da reancoragem
-  fade = 1;                                     // 0..1 depois de um salto do atraso
-  // filtros
-  gr = 0; kGr = 1; a1 = 0; a2 = 0; kAr = 1; kArAlvo = 1;
-  sl = 0; sa = 1; sb = 1; saAlvo = 1; sbAlvo = 1;  // shelf da sombra (a abaixo, b acima de 400 Hz)
-  hb = 0; cb = 0; cbAlvo = 0;                      // sombra da cabeça para trás (> 3 kHz)
-  itd = new Float32Array(ITD_ANEL); itdW = 0;
-  dL = 0; dR = 0; dLAlvo = 0; dRAlvo = 0;
-  lpL = 0; lpR = 0; iL = 1; iR = 1; iLAlvo = 1; iRAlvo = 1;   // ILD (shelf > 1,5 kHz no ouvido oposto)
-  pL = 1; pR = 1; pLAlvo = 1; pRAlvo = 1;
-  gs = 0; gsAlvo = 0; ps = 0; psAlvo = 0;       // envio e panorâmica do envio
-  bus = 0; peso = 1;
+  /**
+   * Estado mutável em ponto flutuante (índices S_*): num Float64Array, não em campos do objeto. Com ~50
+   * campos numéricos o V8 deixava a representação deles como `Any` (marcada) e cada escrita de um double
+   * alocava um HeapNumber (~100 MB/s de lixo com 63 fontes); escrever num Float64Array não aloca.
+   */
+  s = new Float64Array(N_ESTADO);
+  itd = new Float32Array(ITD_ANEL);             // anel curto do ITD
+  bus = 0;
   iter = 0;                                     // iterações extras do ponto fixo (telemetria)
-  // telemetria (caminho direto)
-  ex = 0; ey = 0; ez = 0; r = 1; theta = 90; ganhoDb = -120; atrasoMs = 0;
+  get ex() { return this.s[S_EX]; } get ey() { return this.s[S_EY]; } get ez() { return this.s[S_EZ]; }
+  get r() { return this.s[S_R]; } get theta() { return this.s[S_THETA]; } get ganhoDb() { return this.s[S_GANHODB]; } get atrasoMs() { return this.s[S_ATRASOMS]; }
+  get sa() { return this.s[S_SA]; } get sb() { return this.s[S_SB]; } get fade() { return this.s[S_FADE]; }
 
   constructor(f: FonteSonora, seg: Segmento, fs: number, distAnel: number) {
     this.f = f; this.seg = seg;
@@ -70,6 +116,10 @@ export class EstadoFonte {
     this.tab = f.dir.tabela; this.expConv = f.dir.expConv; this.refDist = f.refDist;
     let n = 1024; while (n < (distAnel / C_SOM + 0.1) * fs + 512) n <<= 1;
     this.anel = new Float32Array(n); this.mask = n - 1; this.cap = n - 512;
+    const v = this.s;
+    v[S_FADE] = 1; v[S_KAR] = 1; v[S_KARALVO] = 1; v[S_SA] = 1; v[S_SB] = 1; v[S_SAALVO] = 1; v[S_SBALVO] = 1;
+    v[S_IL] = 1; v[S_IR] = 1; v[S_ILALVO] = 1; v[S_IRALVO] = 1; v[S_PL] = 1; v[S_PR] = 1; v[S_PLALVO] = 1; v[S_PRALVO] = 1;
+    v[S_PESO] = 1; v[S_R] = 1; v[S_THETA] = 90; v[S_GANHODB] = -120;
   }
 }
 
@@ -79,7 +129,7 @@ export class Propagador {
   via!: Via; hist!: Historico; corpo!: Corpo;
   pv = new PontoVia();
   sombra = new CalculoSombra();
-  shelf = { a: 1, b: 1 };
+  shelf = new Float64Array(2);   // ganhos do shelf da sombra (a, b)
   w = 0;                     // índice de escrita (absoluto) da próxima amostra
   alt = 0;
   ur = 60;
@@ -91,6 +141,7 @@ export class Propagador {
   regras: RegrasLocal = { diretividade: true, sombra: true, solo: true, binaural: true, rota: null, envio: 1 };
   kSh: number; kHb: number; kIld: number;
   iteracoesExtra = 0;
+  urCache = -1; a1kCache = 0.0037;
   // acumuladores por barramento (0 e 1) e envio
   accL: Float64Array[]; accR: Float64Array[]; envL: Float64Array; envR: Float64Array;
 
@@ -132,18 +183,20 @@ export class Propagador {
    * Resolve o tempo de emissão de uma fonte por um caminho (0 direto, 1 imagem) para um ouvinte em O
    * no instante tRec. Preenche o rascunho `rs` com a geometria no instante de emissão. Devolve τ (s).
    */
-  rs = { sx: 0, sy: 0, sz: 0, ux: 0, uy: 0, uz: 0, r: 1, cT: 0, uN: 0, v: 0, tx: 1, ty: 0, nx: 0, ny: 1 };
+  /** rascunho do resolvedor (Float64Array: escrever doubles em campos de objeto aloca no V8) */
+  rs = new Float64Array(15);   // sx sy sz ux uy uz r cT uN v tx ty nx ny τ
   resolver(es: EstadoFonte, cam: number, tRec: number, O: GeoOuvinte) {
-    const h = this.hist, via = this.via, p = this.pv, rs = this.rs;
-    const oz = cam === 0 ? O.z : -O.z;
+    const h = this.hist, via = this.via, p = this.pv, pv = p.v, rs = this.rs, hr = h.res;
+    const oz = cam === 0 ? O.z : -O.z, ox = O.x, oy = O.y;
+    const bx = es.bx, by = es.by, bz = es.bz;
     let tau = es.tau[cam], r = 1, sx = 0, sy = 0, sz = 0;
     const lim = 1 / this.fs;
     let it = 0;
     for (; it < 6; it++) {
-      const se = h.sEm(tRec - tau);
-      via.ponto(se + es.bx, p);
-      sx = p.x + es.by * p.nx; sy = p.y + es.by * p.ny; sz = this.alt + es.bz;
-      const dx = O.x - sx, dy = O.y - sy, dz = oz - sz;
+      hr[2] = tRec - tau; h.lerV();
+      pv[6] = hr[0] + bx; via.pontoV(p);
+      sx = pv[0] + by * pv[4]; sy = pv[1] + by * pv[5]; sz = this.alt + bz;
+      const dx = ox - sx, dy = oy - sy, dz = oz - sz;
       r = Math.sqrt(dx * dx + dy * dy + dz * dz);
       const tn = r / C_SOM, d = Math.abs(tn - tau);
       tau = tn;
@@ -151,12 +204,12 @@ export class Propagador {
     }
     if (it > 3) this.iteracoesExtra++;
     if (r < R_MIN) r = R_MIN;
-    const ux = (O.x - sx) / r, uy = (O.y - sy) / r, uz = (oz - sz) / r;   // fonte → ouvinte
-    rs.sx = sx; rs.sy = sy; rs.sz = sz; rs.ux = ux; rs.uy = uy; rs.uz = uz; rs.r = r;
-    rs.tx = p.tx; rs.ty = p.ty; rs.nx = p.nx; rs.ny = p.ny;
-    rs.cT = ux * p.tx + uy * p.ty; rs.uN = ux * p.nx + uy * p.ny;
-    rs.v = h.vEm(tRec - tau);
-    return tau;
+    const ux = (ox - sx) / r, uy = (oy - sy) / r, uz = (oz - sz) / r;   // fonte → ouvinte
+    rs[0] = sx; rs[1] = sy; rs[2] = sz; rs[3] = ux; rs[4] = uy; rs[5] = uz; rs[6] = r;
+    rs[10] = pv[2]; rs[11] = pv[3]; rs[12] = pv[4]; rs[13] = pv[5];
+    rs[7] = ux * pv[2] + uy * pv[3]; rs[8] = ux * pv[4] + uy * pv[5];
+    rs[9] = hr[1];   // v no instante de emissão (h.ler já leu s e v juntos)
+    rs[14] = tau;
   }
 
   /**
@@ -172,90 +225,102 @@ export class Propagador {
       // ---------------- geometria no fim do trecho
       for (let cam = 0; cam < 2; cam++) {
         if (cam === 1 && !usaSolo) { es.ativo[1] = 0; es.gAlvo[1] = 0; continue; }
-        const tau = this.resolver(es, cam, tRec, O);
-        const rs = this.rs;
-        const M = rs.v / C_SOM, mc = M * rs.cT;            // M·cosθ_e (velocidade · direção fonte→ouvinte)
+        this.resolver(es, cam, tRec, O);
+        const rs = this.rs, tau = rs[14];
+        const M = rs[9 /*v*/] / C_SOM, mc = M * rs[7 /*cT*/];            // M·cosθ_e (velocidade · direção fonte→ouvinte)
         let conv = Math.pow(Math.max(0.05, Math.abs(1 - mc)), -es.expConv);
         if (conv > 4) conv = 4;
         // dτ/dt = û·(v_s − v_O)/(c + û·v_s), û = ouvinte → fonte
-        const usv = -rs.v * rs.cT;
-        const uvo = -(rs.ux * O.vx + rs.uy * O.vy + rs.uz * O.vz);
+        const usv = -rs[9 /*v*/] * rs[7 /*cT*/];
+        const uvo = -(rs[3 /*ux*/] * O.vx + rs[4 /*uy*/] * O.vy + rs[5 /*uz*/] * O.vz);
         const dtau = (usv - uvo) / (C_SOM + usv);
         let gd = 1;
         if (R.diretividade && !es.f.dentro) {
-          const cosD = es.ax * rs.cT + es.ay * rs.uN + es.az * rs.uz;
+          const cosD = es.ax * rs[7 /*cT*/] + es.ay * rs[8 /*uN*/] + es.az * rs[5 /*uz*/];
           const th = Math.acos(cosD < -1 ? -1 : cosD > 1 ? 1 : cosD) * 57.29577951308232;
-          gd = Math.pow(10, dirDb(es.tab, th) / 20);
+          // dirDb embutido (tabela de 7 pontos, interpolação linear em dB)
+          const tb = es.tab; let xd = th / 30; xd = xd < 0 ? 0 : xd > 5.999 ? 5.999 : xd;
+          const id = xd | 0;
+          gd = Math.pow(10, (tb[id] + (tb[id + 1] - tb[id]) * (xd - id)) / 20);
         }
-        let g = conv * gd * es.refDist / rs.r;
+        let g = conv * gd * es.refDist / rs[6 /*r*/];
         if (cam === 0) {
           // telemetria, envio, ar, sombra e cabeça vêm do caminho direto
-          es.ex = rs.sx; es.ey = rs.sy; es.ez = rs.sz; es.r = rs.r; es.atrasoMs = tau * 1000;
-          es.theta = Math.acos(Math.max(-1, Math.min(1, rs.v >= 0 ? rs.cT : -rs.cT))) * 57.29577951308232;
-          es.kArAlvo = k1(fs, Math.min(0.45 * fs, corteAr(rs.r, this.ur) * POLO_POR_CORTE));
+          es.s[S_EX] = rs[0 /*sx*/]; es.s[S_EY] = rs[1 /*sy*/]; es.s[S_EZ] = rs[2 /*sz*/]; es.s[S_R] = rs[6 /*r*/]; es.s[S_ATRASOMS] = tau * 1000;
+          es.s[S_THETA] = Math.acos(Math.max(-1, Math.min(1, rs[9 /*v*/] >= 0 ? rs[7 /*cT*/] : -rs[7 /*cT*/]))) * 57.29577951308232;
+          {
+            // f_c(r) = 1000·(3/(α₁ₖ·r))^(1/1,6), limitado a [600, 20000] (ar.ts), com o α₁ₖ da umidade atual
+            if (this.urCache !== this.ur) { this.urCache = this.ur; this.a1kCache = corteAr(1000, this.ur) > 0 ? alfa1k(this.ur) : 0.0037; }
+            let fc = 1000 * Math.pow(3 / (this.a1kCache * Math.max(rs[6], 0.1)), 0.625);
+            fc = fc < 600 ? 600 : fc > 20000 ? 20000 : fc;
+            fc *= POLO_POR_CORTE; if (fc > 0.45 * fs) fc = 0.45 * fs;
+            es.s[S_KARALVO] = 1 - Math.exp(-TAU * fc / fs);
+          }
           let A100 = 0, A1k = 0;
           if (R.sombra && !es.f.dentro) {
             const sg = es.seg;
-            const lyO = es.by + rs.r * rs.uN, lzO = es.bz + rs.r * rs.uz;
-            this.sombra.calcular(es.by, es.bz, lyO, lzO, rs.r * rs.cT, sg.largura, sg.altura, sg.zPiso);
+            const lyO = es.by + rs[6 /*r*/] * rs[8 /*uN*/], lzO = es.bz + rs[6 /*r*/] * rs[5 /*uz*/];
+            const se = this.sombra.ent;
+            se[0] = es.by; se[1] = es.bz; se[2] = lyO; se[3] = lzO; se[4] = rs[6] * rs[7]; se[5] = sg.largura; se[6] = sg.altura; se[7] = sg.zPiso;
+            this.sombra.calcularV();
             A100 = this.sombra.a100; A1k = this.sombra.a1k;
           }
           ganhosShelf(A100, A1k, this.shelf);
-          es.saAlvo = this.shelf.a; es.sbAlvo = this.shelf.b;
-          es.ganhoDb = 20 * Math.log10(g * Math.pow(10, -A100 / 20) / es.refDist + 1e-12);
+          es.s[S_SAALVO] = this.shelf[0]; es.s[S_SBALVO] = this.shelf[1];
+          es.s[S_GANHODB] = 20 * Math.log10(g * Math.pow(10, -A100 / 20) / es.refDist + 1e-12);
           // envio: 1/√r como o roadS do Ronco (1,2/√r com a fonte a 5 m); sem a diretividade (o campo
           // reverberante recebe a potência irradiada em todas as direções). Em ambientes que guiam o som
           // (túnel) o expoente da distância é menor: `expEnvio`.
           // (o envio é tirado do sinal já com o ganho direto g = conv·D·refDist/r, então aqui vai a razão)
-          const gEnvio = conv * (es.refDist / 5) * 1.2 * Math.pow(Math.max(rs.r, 3), -this.expEnvio) * Math.pow(3, this.expEnvio - 0.5);
-          es.gsAlvo = g > 1e-12 ? (R.envio * gEnvio) / g : 0;
+          const gEnvio = conv * (es.refDist / 5) * 1.2 * Math.pow(Math.max(rs[6 /*r*/], 3), -this.expEnvio) * Math.pow(3, this.expEnvio - 0.5);
+          es.s[S_GSALVO] = g > 1e-12 ? (R.envio * gEnvio) / g : 0;
           // cabeça: direção de chegada = ouvinte → ponto de emissão
-          const dx = -rs.ux, dy = -rs.uy;
+          const dx = -rs[3 /*ux*/], dy = -rs[4 /*uy*/];
           const lat = dx * O.lx + dy * O.ly, fr = dx * O.fx + dy * O.fy;   // seno lateral (com elevação) e frente
           if (R.binaural) {
             const az = Math.atan2(lat, fr);                 // + = esquerda
             const pan = -lat * LARGURA_PAN;                 // + = direita
             const a = (pan + 1) * Math.PI / 4;
-            es.pLAlvo = Math.cos(a) * Math.SQRT2; es.pRAlvo = Math.sin(a) * Math.SQRT2;
+            es.s[S_PLALVO] = Math.cos(a) * Math.SQRT2; es.s[S_PRALVO] = Math.sin(a) * Math.SQRT2;
             const itd = ITD_MAX * fs * Math.abs(lat);
-            es.dLAlvo = lat < 0 ? itd : 0; es.dRAlvo = lat > 0 ? itd : 0;
+            es.s[S_DLALVO] = lat < 0 ? itd : 0; es.s[S_DRALVO] = lat > 0 ? itd : 0;
             // shelf de 1 polo em 1,5 kHz com o ganho resolvido para dar −6·|sin az| dB em 4 kHz
             const T = Math.pow(10, (-6 * Math.abs(lat)) / 20), u2 = (4000 / 1500) * (4000 / 1500);
             const gi = Math.sqrt(Math.max(0, (T * T * (1 + u2) - 1) / u2));
-            es.iLAlvo = lat < 0 ? gi : 1; es.iRAlvo = lat > 0 ? gi : 1;
+            es.s[S_ILALVO] = lat < 0 ? gi : 1; es.s[S_IRALVO] = lat > 0 ? gi : 1;
             const tras = Math.abs(az) * 57.29577951308232;
             const w = tras <= 110 ? 0 : tras >= 130 ? 1 : (tras - 110) / 20;
-            es.cbAlvo = w * (1 - Math.pow(10, -3 / 20));
-            es.psAlvo = 0.25 * Math.max(-1, Math.min(1, pan / LARGURA_PAN));
+            es.s[S_CBALVO] = w * (1 - Math.pow(10, -3 / 20));
+            es.s[S_PSALVO] = 0.25 * Math.max(-1, Math.min(1, pan / LARGURA_PAN));
           } else {
-            es.pLAlvo = 1; es.pRAlvo = 1; es.dLAlvo = 0; es.dRAlvo = 0; es.iLAlvo = 1; es.iRAlvo = 1; es.cbAlvo = 0; es.psAlvo = 0;
+            es.s[S_PLALVO] = 1; es.s[S_PRALVO] = 1; es.s[S_DLALVO] = 0; es.s[S_DRALVO] = 0; es.s[S_ILALVO] = 1; es.s[S_IRALVO] = 1; es.s[S_CBALVO] = 0; es.s[S_PSALVO] = 0;
           }
         } else {
           // reflexão: só onde o ponto de reflexão cai sobre o solo refletor (ponte: tabuleiro)
           let ok = 1;
           if (this.soloLargura < Infinity) {
             const fr = es.bz + this.alt, fo = O.z, t = fr / Math.max(1e-6, fr + fo);
-            const yr = rs.sy + (O.y - rs.sy) * t - this.via.yOuvinte;
+            const yr = rs[1 /*sy*/] + (O.y - rs[1 /*sy*/]) * t - this.via.yOuvinte;
             ok = Math.abs(yr) <= this.soloLargura ? 1 : 0;
           }
           g *= this.soloGanho * ok;
         }
-        es.gAlvo[cam] = g * es.fade;
+        es.gAlvo[cam] = g * es.s[S_FADE];
         // atraso em amostras no fim do trecho; salto (fonte que reapareceu do outro lado da reta) → fade
         const D1 = tau * fs;
         if (this.primeiro || !es.ativo[cam]) {
-          es.D0[cam] = D1 - dtau * N; es.dD0[cam] = dtau; es.g[cam] = cam === 0 || this.primeiro ? g * es.fade : 0;
+          es.D0[cam] = D1 - dtau * N; es.dD0[cam] = dtau; es.g[cam] = cam === 0 || this.primeiro ? g * es.s[S_FADE] : 0;
           if (cam === 0) this.ancorar(es, D1, true);
           es.ativo[cam] = 1;
         } else if (Math.abs(D1 - es.D0[cam]) > 2 * N + 8) {
-          es.D0[cam] = D1 - dtau * N; es.dD0[cam] = dtau; es.fade = 0; es.g[cam] = 0; es.gAlvo[cam] = 0;
+          es.D0[cam] = D1 - dtau * N; es.dD0[cam] = dtau; es.s[S_FADE] = 0; es.g[cam] = 0; es.gAlvo[cam] = 0;
           if (cam === 0) this.ancorar(es, D1, true);
         }
         es.tau[cam] = tau;
         // guarda o alvo e a derivada no fim; o laço usa D0/dD0 do início
         this.alvoD[cam] = D1; this.alvoDD[cam] = dtau;
       }
-      if (es.fade < 1) es.fade = Math.min(1, es.fade + N / (0.05 * fs));
+      if (es.s[S_FADE] < 1) es.s[S_FADE] = Math.min(1, es.s[S_FADE] + N / (0.05 * fs));
       // reancoragem do deslocamento (fontes a mais de DIST_ANEL)
       this.verificarAncora(es, this.alvoD[0], usaSolo ? this.alvoD[1] : this.alvoD[0]);
       this.somar(es, ini, N, usaSolo);
@@ -269,21 +334,23 @@ export class Propagador {
 
   private ancorar(es: EstadoFonte, D: number, agora: boolean) {
     const novo = Math.max(0, Math.round(D - 0.6 * es.cap));
-    if (agora) { es.off = novo; es.xfN = 0; }
-    else { es.offVelho = es.off; es.off = novo; es.xfN = Math.round(0.05 * this.fs); es.xf = 0; }
+    if (agora) { es.s[S_OFF] = novo; es.s[S_XFN] = 0; }
+    else { es.s[S_OFFVELHO] = es.s[S_OFF]; es.s[S_OFF] = novo; es.s[S_XFN] = Math.round(0.05 * this.fs); es.s[S_XF] = 0; }
   }
   private verificarAncora(es: EstadoFonte, D1: number, D2: number) {
-    if (es.xfN > 0) return;
-    const lo = D1 - es.off, hi = D2 - es.off;
-    if ((es.off > 0 && lo < 0.25 * es.cap) || hi > 0.9 * es.cap) {
+    if (es.s[S_XFN] > 0) return;
+    const lo = D1 - es.s[S_OFF], hi = D2 - es.s[S_OFF];
+    if ((es.s[S_OFF] > 0 && lo < 0.25 * es.cap) || hi > 0.9 * es.cap) {
       const novo = Math.max(0, Math.round(D1 - 0.6 * es.cap));
-      if (novo !== es.off) this.ancorar(es, D1, false);
+      if (novo !== es.s[S_OFF]) this.ancorar(es, D1, false);
     }
   }
 
   /** laço por amostra de uma fonte num trecho */
   private somar(es: EstadoFonte, ini: number, N: number, usaSolo: boolean) {
-    const a = es.anel, m = es.mask, invN = 1 / N;
+    // (|0: o V8 não sabe o tipo dos campos de EstadoFonte; sem a coerção o clamp do atraso mistura um
+    // valor marcado e o double vira HeapNumber a cada amostra)
+    const a = es.anel, m = es.mask | 0, invN = 1 / N;
     const bus = es.bus, oL = this.accL[bus], oR = this.accR[bus], eL = this.envL, eR = this.envR;
     // parábolas do atraso: D(u) = D0 + D'0·u + C·u²
     let D1 = es.D0[0], inc1 = es.dD0[0];
@@ -294,23 +361,23 @@ export class Propagador {
     // rampas lineares de ganho e filtros ao longo do trecho
     let g1 = es.g[0], g2 = es.g[1];
     const dg1 = (es.gAlvo[0] - g1) * invN, dg2 = (es.gAlvo[1] - g2) * invN;
-    let sa = es.sa, sb = es.sb; const dsa = (es.saAlvo - sa) * invN, dsb = (es.sbAlvo - sb) * invN;
-    let pL = es.pL, pR = es.pR; const dpL = (es.pLAlvo - pL) * invN * es.peso, dpR = (es.pRAlvo - pR) * invN * es.peso;
-    pL *= es.peso; pR *= es.peso;
-    let dL = es.dL, dR = es.dR; const ddL = (es.dLAlvo - dL) * invN, ddR = (es.dRAlvo - dR) * invN;
-    let iL = es.iL, iR = es.iR; const diL = (es.iLAlvo - iL) * invN, diR = (es.iRAlvo - iR) * invN;
-    let cb = es.cb; const dcb = (es.cbAlvo - cb) * invN;
-    let gs = es.gs; const dgs = (es.gsAlvo - gs) * invN;
-    let ps = es.ps; const dps = (es.psAlvo - ps) * invN;
-    const kAr = es.kArAlvo, kGr = this.kGr, kSh = this.kSh, kHb = this.kHb, kI = this.kIld;
-    let gr = es.gr, a1 = es.a1, a2 = es.a2, sl = es.sl, hb = es.hb, lpL = es.lpL, lpR = es.lpR;
-    const itd = es.itd; let iw = es.itdW;
+    let sa = es.s[S_SA], sb = es.s[S_SB]; const dsa = (es.s[S_SAALVO] - sa) * invN, dsb = (es.s[S_SBALVO] - sb) * invN;
+    let pL = es.s[S_PL], pR = es.s[S_PR]; const dpL = (es.s[S_PLALVO] - pL) * invN * es.s[S_PESO], dpR = (es.s[S_PRALVO] - pR) * invN * es.s[S_PESO];
+    pL *= es.s[S_PESO]; pR *= es.s[S_PESO];
+    let dL = es.s[S_DL], dR = es.s[S_DR]; const ddL = (es.s[S_DLALVO] - dL) * invN, ddR = (es.s[S_DRALVO] - dR) * invN;
+    let iL = es.s[S_IL], iR = es.s[S_IR]; const diL = (es.s[S_ILALVO] - iL) * invN, diR = (es.s[S_IRALVO] - iR) * invN;
+    let cb = es.s[S_CB]; const dcb = (es.s[S_CBALVO] - cb) * invN;
+    let gs = es.s[S_GS]; const dgs = (es.s[S_GSALVO] - gs) * invN;
+    let ps = es.s[S_PS]; const dps = (es.s[S_PSALVO] - ps) * invN;
+    const kAr = es.s[S_KARALVO], kGr = this.kGr, kSh = this.kSh, kHb = this.kHb, kI = this.kIld;
+    let gr = es.s[S_GR], a1 = es.s[S_A1], a2 = es.s[S_A2], sl = es.s[S_SL], hb = es.s[S_HB], lpL = es.s[S_LPL], lpR = es.s[S_LPR];
+    const itd = es.itd; let iw = es.s[S_ITDW];
     let w = this.w + ini;
     // crossfade da reancoragem
-    const xfOn = es.xfN > 0;
-    const off = es.off, offV = es.offVelho;
-    let xf = es.xf; const dxf = xfOn ? 1 / es.xfN : 0;
-    const cap = es.cap;
+    const xfOn = es.s[S_XFN] > 0;
+    const off = es.s[S_OFF], offV = es.s[S_OFFVELHO];
+    let xf = es.s[S_XF]; const dxf = xfOn ? 1 / es.s[S_XFN] : 0;
+    const cap = es.cap | 0;
     for (let k = 0; k < N; k++) {
       // caminho direto
       let d = D1 - off; if (d < 2) d = 2; else if (d > cap) d = cap;
@@ -364,10 +431,10 @@ export class Propagador {
       w++;
     }
     es.g[0] = es.gAlvo[0]; es.g[1] = es.gAlvo[1];
-    es.sa = es.saAlvo; es.sb = es.sbAlvo; es.pL = es.pLAlvo; es.pR = es.pRAlvo; es.dL = es.dLAlvo; es.dR = es.dRAlvo;
-    es.iL = es.iLAlvo; es.iR = es.iRAlvo; es.cb = es.cbAlvo; es.gs = es.gsAlvo; es.ps = es.psAlvo; es.kAr = kAr;
-    es.gr = gr; es.a1 = a1; es.a2 = a2; es.sl = sl; es.hb = hb; es.lpL = lpL; es.lpR = lpR; es.itdW = iw;
-    if (xfOn) { es.xf = xf; es.xfN = xf >= 1 ? 0 : es.xfN; }
+    es.s[S_SA] = es.s[S_SAALVO]; es.s[S_SB] = es.s[S_SBALVO]; es.s[S_PL] = es.s[S_PLALVO]; es.s[S_PR] = es.s[S_PRALVO]; es.s[S_DL] = es.s[S_DLALVO]; es.s[S_DR] = es.s[S_DRALVO];
+    es.s[S_IL] = es.s[S_ILALVO]; es.s[S_IR] = es.s[S_IRALVO]; es.s[S_CB] = es.s[S_CBALVO]; es.s[S_GS] = es.s[S_GSALVO]; es.s[S_PS] = es.s[S_PSALVO]; es.s[S_KAR] = kAr;
+    es.s[S_GR] = gr; es.s[S_A1] = a1; es.s[S_A2] = a2; es.s[S_SL] = sl; es.s[S_HB] = hb; es.s[S_LPL] = lpL; es.s[S_LPR] = lpR; es.s[S_ITDW] = iw;
+    if (xfOn) { es.s[S_XF] = xf; es.s[S_XFN] = xf >= 1 ? 0 : es.s[S_XFN]; }
   }
 
   /** ganho do solo (tabela 2.4) */
@@ -377,7 +444,7 @@ export class Propagador {
   /** aplica as regras de local a cada fonte (barramento e peso) */
   aplicarRegras(r: RegrasLocal) {
     this.regras = r;
-    this.fontes.forEach((es, i) => { const x = r.rota ? r.rota(es.f, i) : { bus: 0, peso: 1 }; es.bus = x.bus; es.peso = x.peso; });
+    this.fontes.forEach((es, i) => { const x = r.rota ? r.rota(es.f, i) : { bus: 0, peso: 1 }; es.bus = x.bus; es.s[S_PESO] = x.peso; });
   }
 
   zerarAcumuladores(n: number) {

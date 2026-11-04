@@ -27,7 +27,7 @@ export function maekawaDb(delta: number, f: number, c = C_SOM) {
 }
 
 /** Ganhos do shelf (a abaixo, b acima de 400 Hz) que reproduzem A100 e A1k na resposta. */
-export function ganhosShelf(a100Db: number, a1kDb: number, out: { a: number; b: number }) {
+export function ganhosShelf(a100Db: number, a1kDb: number, out: Float64Array) {
   const u1 = 100 / 400, u2 = 1000 / 400;
   const T1 = Math.pow(10, -a100Db / 20), T2 = Math.pow(10, -a1kDb / 20);
   let b2 = (T2 * T2 * (1 + u2 * u2) - T1 * T1 * (1 + u1 * u1)) / (u2 * u2 - u1 * u1);
@@ -35,7 +35,7 @@ export function ganhosShelf(a100Db: number, a1kDb: number, out: { a: number; b: 
   if (b2 < piso) b2 = piso;
   let a2 = T1 * T1 * (1 + u1 * u1) - b2 * u1 * u1;
   if (a2 < 0) a2 = 0;
-  out.a = Math.min(1, Math.sqrt(a2)); out.b = Math.min(1, Math.sqrt(b2));
+  out[0] = Math.min(1, Math.sqrt(a2)); out[1] = Math.min(1, Math.sqrt(b2));
 }
 
 /** Calcula δ e A(100), A(1k) para uma fonte e um ouvinte no referencial local do corpo. Sem alocação. */
@@ -45,21 +45,30 @@ export class CalculoSombra {
   private pz = new Float64Array(6);
   private ord = new Int32Array(6);
   private hull = new Int32Array(14);
-  delta = -1;          // m, o menor dos dois caminhos (negativo: iluminado)
-  a100 = 0; a1k = 0;   // dB
-  sombreado = false;
+  /** saída: [δ (m, o menor dos dois caminhos; negativo = iluminado), A(100 Hz), A(1 kHz) (dB), sombreado (0/1)] */
+  out = new Float64Array(4);
+  get delta() { return this.out[0]; } get a100() { return this.out[1]; } get a1k() { return this.out[2]; } get sombreado() { return this.out[3] > 0; }
 
+  /** entradas de calcularV: [ys, zs, yo, zo, dx, largura, altura, zPiso] */
+  ent = new Float64Array(8);
   calcular(ys: number, zs: number, yo: number, zo: number, dx: number, largura: number, altura: number, zPiso: number) {
+    const e = this.ent; e[0] = ys; e[1] = zs; e[2] = yo; e[3] = zo; e[4] = dx; e[5] = largura; e[6] = altura; e[7] = zPiso;
+    this.calcularV();
+  }
+  /** idem, com as entradas em this.ent (sem argumentos double: não aloca no laço) */
+  calcularV() {
+    const e = this.ent, ys = e[0], zs = e[1], yo = e[2], zo = e[3], dx = e[4], largura = e[5], altura = e[6], zPiso = e[7];
     const hw = largura / 2;
-    this.sombreado = false; this.delta = -1; this.a100 = 0; this.a1k = 0;
+    const o = this.out;
+    o[0] = -1; o[1] = 0; o[2] = 0; o[3] = 0;
     // um corpo muito menor que os comprimentos de onda de interesse não faz sombra (Maekawa supõe barreira grande)
     if (largura < 0.1 || altura - zPiso < 0.1) return;
-    const dentro = (y: number, z: number) => y > -hw && y < hw && z > zPiso && z < altura;
-    if (dentro(ys, zs) || dentro(yo, zo)) return;
+    // (sem closures nem Math.hypot: isto roda por fonte a cada bloco de controle e não pode alocar)
+    if ((ys > -hw && ys < hw && zs > zPiso && zs < altura) || (yo > -hw && yo < hw && zo > zPiso && zo < altura)) return;
     const D2 = (yo - ys) * (yo - ys) + (zo - zs) * (zo - zs), D = Math.sqrt(D2);
     const dx2 = dx * dx, direto = Math.sqrt(dx2 + D2);
     const temBaixo = zPiso >= 0.05;
-    if (!this.cruza(ys, zs, yo, zo, -hw, hw, zPiso, altura)) {
+    if (!this.cruza()) {
       // iluminado: δ < 0 medido pelo canto mais próximo da linha de visada, na SEÇÃO (2D). Com o
       // desdobramento 3D o δ de qualquer canto encolhe com Δx e uma fonte na face, vista de longe ao
       // longo da via, ganharia uma atenuação de borda que não existe (a borda não está no caminho).
@@ -67,13 +76,12 @@ export class CalculoSombra {
       for (let k = 0; k < 4; k++) {
         const cy = k & 1 ? hw : -hw, cz = k & 2 ? altura : zPiso;
         if (!temBaixo && !(k & 2)) continue;
-        const p = Math.hypot(cy - ys, cz - zs) + Math.hypot(yo - cy, zo - cz);
+        const p = Math.sqrt((cy - ys) * (cy - ys) + (cz - zs) * (cz - zs)) + Math.sqrt((yo - cy) * (yo - cy) + (zo - cz) * (zo - cz));
         const d2 = p - D;
         if (d2 < melhor) melhor = d2;
       }
-      if (!isFinite(melhor)) return;
-      this.delta = -melhor;
-      this.a100 = maekawaDb(-melhor, 100); this.a1k = maekawaDb(-melhor, 1000);
+      if (melhor === Infinity) return;
+      o[0] = -melhor; o[1] = maekawaDb(-melhor, 100); o[2] = maekawaDb(-melhor, 1000);
       return;
     }
     // sombra: as duas correntes do fecho convexo entre a fonte e o ouvinte
@@ -91,7 +99,8 @@ export class CalculoSombra {
       let p = 0, k = iS, usaBaixo = false;
       while (k !== iO) {
         const k2 = (k + sentido + n) % n;
-        p += Math.hypot(py[H[k2]] - py[H[k]], pz[H[k2]] - pz[H[k]]);
+        const ddy = py[H[k2]] - py[H[k]], ddz = pz[H[k2]] - pz[H[k]];
+        p += Math.sqrt(ddy * ddy + ddz * ddz);
         if (H[k2] === 2 || H[k2] === 3) usaBaixo = true;
         k = k2;
       }
@@ -99,15 +108,14 @@ export class CalculoSombra {
       const d3 = Math.sqrt(dx2 + p * p) - direto;
       if (d3 < best) best = d3;
     }
-    if (!isFinite(best)) best = 10;   // sem caminho: bloqueio total
-    this.sombreado = true;
-    this.delta = best;
-    this.a100 = maekawaDb(best, 100); this.a1k = maekawaDb(best, 1000);
+    if (best === Infinity) best = 10;   // sem caminho: bloqueio total
+    o[0] = best; o[1] = maekawaDb(best, 100); o[2] = maekawaDb(best, 1000); o[3] = 1;
     void D;
   }
 
   /** o segmento S–O cruza o interior do retângulo? (Liang–Barsky) */
-  private cruza(y0: number, z0: number, y1: number, z1: number, ya: number, yb: number, za: number, zb: number) {
+  private cruza() {
+    const e = this.ent, y0 = e[0], z0 = e[1], y1 = e[2], z1 = e[3], yb = e[5] / 2, ya = -yb, za = e[7], zb = e[6];
     const dy = y1 - y0, dz = z1 - z0;
     let t0 = 0, t1 = 1;
     // (sem arrays: isto roda por fonte a cada bloco de controle)
@@ -131,10 +139,10 @@ export class CalculoSombra {
       while (j >= 0 && (py[o[j]] > py[v] || (py[o[j]] === py[v] && pz[o[j]] > pz[v]))) { o[j + 1] = o[j]; j--; }
       o[j + 1] = v;
     }
-    const cross = (a: number, b: number, c: number) => (py[b] - py[a]) * (pz[c] - pz[a]) - (pz[b] - pz[a]) * (py[c] - py[a]);
     let k = 0;
-    for (let i = 0; i < 6; i++) { while (k >= 2 && cross(H[k - 2], H[k - 1], o[i]) <= 1e-12) k--; H[k++] = o[i]; }
-    for (let i = 4, t = k + 1; i >= 0; i--) { while (k >= t && cross(H[k - 2], H[k - 1], o[i]) <= 1e-12) k--; H[k++] = o[i]; }
+    for (let i = 0; i < 6; i++) { while (k >= 2 && this.cross(H[k - 2], H[k - 1], o[i]) <= 1e-12) k--; H[k++] = o[i]; }
+    for (let i = 4, t = k + 1; i >= 0; i--) { while (k >= t && this.cross(H[k - 2], H[k - 1], o[i]) <= 1e-12) k--; H[k++] = o[i]; }
     return k - 1;
   }
+  private cross(a: number, b: number, c: number) { const py = this.py, pz = this.pz; return (py[b] - py[a]) * (pz[c] - pz[a]) - (pz[b] - pz[a]) * (py[c] - py[a]); }
 }
