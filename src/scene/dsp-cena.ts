@@ -31,6 +31,9 @@ import { MotorDiesel } from '../engines/diesel/motor';
 import { MotorTurbina } from '../engines/turbina/motor';
 import { MotorRadial } from '../engines/radial/motor';
 import type { Motor } from '../carriers/tipos';
+// (vapor, etapa 5)
+import { MotorVapor } from '../engines/vapor/motor';
+import { montarPortadorVapor } from '../carriers/portadores-vapor';
 
 /** monta o motor de uma mensagem `portador` (fora do laço: aloca) */
 export function montarMotor(m: { familia: string; cfg: Record<string, any> } | undefined, fs: number): Motor | null {
@@ -39,12 +42,14 @@ export function montarMotor(m: { familia: string; cfg: Record<string, any> } | u
   if (m.familia === 'diesel') { const x = new MotorDiesel(fs); x.configurar(m.cfg, fs); return x; }
   if (m.familia === 'turboelice' || m.familia === 'turbina') { const x = new MotorTurbina(fs); x.configurar(m.cfg, fs); return x; }
   if (m.familia === 'radial') { const x = new MotorRadial(fs); x.configurar(m.cfg, fs); return x; }
+  if (m.familia === 'vapor') { const x = new MotorVapor(fs); x.configurar(m.cfg, fs); return x; }
   return null;
 }
 
 /** portador com motor de uma mensagem `portador` (a página monta o mesmo na thread principal, para a geometria) */
 export function montarPortadorComMotor(tipo: string, config: Record<string, any> | undefined, motor: Motor | null, fs: number): Portador | null {
   const c = config || {};
+  if (motor?.familia === 'vapor') return montarPortadorVapor(tipo, c, motor, fs);
   let p: Portador | null = null;
   if (tipo === 'carro') p = new CarroLegado();
   else if (tipo === 'helice') p = new Helice(fs, c);

@@ -29,6 +29,14 @@ import { configHelice, configRotor } from '../../engines/ronco/aviacao';
 import { PRESETS as PRESETS_RONCO, ACESSORIOS_PADRAO } from '../../engines/ronco/presets';
 import { PRESETS as PRESETS_DIESEL, PADRAO_DIESEL } from '../../engines/diesel/presets';
 import { PRESETS_TURBINA } from '../../engines/turbina/presets';
+// (vapor, etapa 5)
+import { prepararMotorVapor } from '../../engines/vapor/motor';
+import { presetVapor } from '../../engines/vapor/presets';
+import type { ComandoVapor } from '../../engines/vapor/dsp';
+import { configLocoVapor } from '../../carriers/locomotiva-vapor';
+import { configTrator } from '../../carriers/trator';
+import { configBarco } from '../../carriers/barco';
+import { configCarroDireto } from '../../carriers/carro-direto';
 import {
   PRESETS_PASSAGEM, TREM_PAGINA_PADRAO, situacaoPortador, motoresProntos, presetsDoMotor, MOTOR_PADRAO,
   type IdAmbientePagina, type IdPortadorPagina, type PresetPassagem, type TremPagina,
@@ -51,6 +59,9 @@ export const PADROES: Record<IdPortadorPagina, PadroesPortador> = {
   aviao: { traj: { tipo: 'reta', comprimento: 6000, raioCurva: 2000, lateral: 0, altitude: 150, sentido: 1 }, vKmh: 300, ambiente: 'ceu', x0: 2000 },
   gerador: { traj: { tipo: 'reta', comprimento: 400, raioCurva: 2000, lateral: 7.5, altitude: 0, sentido: 1 }, vKmh: 0, ambiente: 'ceu', x0: 0 },
   locomotiva: { traj: { tipo: 'volta', comprimento: 2000, raioCurva: 400, lateral: 5, altitude: 0, sentido: 1 }, vKmh: 60, ambiente: 'ceu', x0: 300 },
+  // (vapor: trator numa estrada de terra a 8 km/h; barco num canal a 20 m)
+  trator: { traj: { tipo: 'reta', comprimento: 600, raioCurva: 2000, lateral: 5, altitude: 0, sentido: 1 }, vKmh: 6, ambiente: 'ceu', x0: 40 },
+  barco: { traj: { tipo: 'reta', comprimento: 2000, raioCurva: 2000, lateral: 20, altitude: 0, sentido: 1 }, vKmh: 20, ambiente: 'ceu', x0: 200 },
 };
 export const AR_PADRAO = { ur: 60, temperatura: 20 };
 export const OUVINTE_PADRAO: Ouvinte = { modo: 'fixo', pos: [0, 0, 1.6], gimbal: { az: 90, el: 0, r: 8, alvo: 'corpo' }, local: 'auto', binaural: true };
@@ -73,6 +84,8 @@ export class ControlePassagem {
   marcha = 3;
   notch = 8;
   cargaFracao = 0.5;
+  /** (vapor) comando da máquina e vagões da composição */
+  vapor: Partial<ComandoVapor> & { vagoes?: number } = { regulador: 1, cutoff: 0.3, vagoes: 8 };
   /** mensagem do motor para o worklet: o cfg calibrado aqui (Ronco e Diesel: ~1 s de sonda, guardado por preset) */
   private motorMsg: { familia: FamiliaMotor; cfg: Record<string, any> } | null = null;
   private cacheMotor = new Map<string, Record<string, any>>();
@@ -177,6 +190,7 @@ export class ControlePassagem {
       if (fam === 'pistao') cfg = prepararMotorRonco({ ...ACESSORIOS_PADRAO, ...[...PRESETS_RONCO, ...PRESETS_AVIACAO].find((x) => x.id === id)! }, fs);
       else if (fam === 'radial') cfg = prepararMotorRadial({ ...PADRAO_RADIAL, ...PRESETS_RADIAL.find((x) => x.id === id)! }, fs);
       else if (fam === 'diesel') cfg = prepararMotorDiesel({ ...PADRAO_DIESEL, ...PRESETS_DIESEL.find((x) => x.id === id)! }, fs, this.portador as UsoDiesel);
+      else if (fam === 'vapor') cfg = prepararMotorVapor(presetVapor(id)!, fs) as unknown as Record<string, any>;
       else cfg = { ...PRESETS_TURBINA.find((x) => x.id === id)! };
       this.cacheMotor.set(chave, cfg);
     }
@@ -185,6 +199,7 @@ export class ControlePassagem {
   /** configuração do portador que vem do preset do motor (hélice do turboélice, alternador, tabela de notches) */
   configPortador(): Record<string, any> {
     const id = this.motorPreset;
+    if (this.motor === 'vapor') return configPortadorVapor(this.portador, id, this.vapor.vagoes ?? 8);
     // hélice e rotor dos motores a pistão (radial, aviação do Ronco): a do preset (RADIAL.md 3.3 e 5.2), no nariz do avião
     const pist: any = this.motor === 'radial' ? PRESETS_RADIAL.find((x) => x.id === id) : this.motor === 'pistao' ? PRESETS_AVIACAO.find((x) => x.id === id) : null;
     if (pist && this.portador === 'helice' && pist.helice) return { ...configHelice(pist), posMotor: [2.5, 0, 1.5], posCubo: [3.3, 0, 1.5] };
@@ -196,6 +211,7 @@ export class ControlePassagem {
   }
   /** comando do motor pelo portador (CENA 1.6): o carro parado fica em ponto morto e em lenta */
   comandoMotor() {
+    if (this.motor === 'vapor') return { pedal: this.vapor.regulador ?? 1, ...this.vapor, marcha: this.portador === 'trator' ? 1 : undefined, cargaFracao: this.portador === 'gerador' ? this.cargaFracao : undefined };
     if (this.portador === 'carro') return this.andando ? { pedal: this.pedal, marcha: this.marcha } : { pedal: 0, marcha: 0 };
     if (this.portador === 'locomotiva') return { pedal: 0, notch: this.notch as 0 };
     if (this.portador === 'gerador') return { pedal: 0, cargaFracao: this.cargaFracao };
@@ -440,6 +456,7 @@ export class ControlePassagem {
     if (p.marcha != null) this.marcha = p.marcha;
     if (p.notch != null) this.notch = p.notch;
     if (p.cargaFracao != null) this.cargaFracao = p.cargaFracao;
+    if (p.vapor) this.vapor = { ...p.vapor };
     const d = PADROES[p.portador];
     // (presets de passagem andam numa reta: o corpo vem de longe, passa e some)
     this.traj = { ...d.traj, tipo: p.portador === 'trem' || p.portador === 'rotor' ? d.traj.tipo : 'reta', comprimento: p.portador === 'carro' ? 800 : p.portador === 'locomotiva' ? 2000 : d.traj.comprimento, lateral: p.lateral, altitude: p.altitude ?? d.traj.altitude };
@@ -535,7 +552,19 @@ export class ControlePassagem {
 
 /** solo padrão por portador (null = o do ambiente): asfalto na rua, grama sob o que voa, brita na via, concreto na bancada */
 export function soloPadrao(p: IdPortadorPagina): Solo['tipo'] | null {
-  return p === 'carro' ? 'asfalto' : p === 'rotor' || p === 'helice' || p === 'aviao' ? 'grama' : p === 'gerador' ? 'concreto' : p === 'locomotiva' ? 'brita' : null;
+  return p === 'carro' ? 'asfalto' : p === 'rotor' || p === 'helice' || p === 'aviao' ? 'grama' : p === 'gerador' ? 'concreto' : p === 'locomotiva' ? 'brita' : p === 'barco' ? 'agua' : p === 'trator' ? 'grama' : null;
+}
+
+/** (vapor) configuração do portador pelo preset da máquina (VAPOR.md 4.4) */
+export function configPortadorVapor(portador: IdPortadorPagina, id: string | null, vagoes: number): Record<string, any> {
+  const P = id ? presetVapor(id) : undefined;
+  if (!P) return {};
+  if (portador === 'locomotiva') return configLocoVapor(P, { vagoes });
+  if (portador === 'trator') return configTrator(P);
+  if (portador === 'barco') return configBarco(P);
+  if (portador === 'carro') return configCarroDireto(P);
+  if (portador === 'gerador') return { rpmNominal: P.rpmGovernado ?? 75, potenciaNominal: P.potenciaGerador ?? 500, eta: 0.95, J_alt: 50, semFontes: true, posMotor: [0, 0, 0], corpo: { comprimento: 12, largura: 6, altura: 6, massaSuperficial: 30 } };
+  return {};
 }
 
 export function clonarOuvinte(o: Ouvinte): Ouvinte { return { ...o, pos: [...o.pos] as unknown as Vec3, gimbal: { ...o.gimbal } }; }

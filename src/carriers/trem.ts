@@ -95,6 +95,23 @@ export function maxVagoes(c: Pick<ConfigTrem, 'pantografos' | 'faces' | 'tom'>) 
   return n;
 }
 
+/**
+ * x (referencial do corpo) dos truques de N vagões de passo `Lc` (corpo `Lc − vao`), o primeiro começando em `xFrente`:
+ * dois por vagão, a `te` de cada ponta. É a geometria do `Trem`; a composição a vapor (locomotiva-vapor.ts) a reusa para
+ * os vagões atrás do tênder.
+ */
+export function xTruquesVagoes(N: number, Lc: number, vao: number, te: number, xFrente: number) {
+  const lc = Lc - vao, x: number[] = [];
+  for (let k = 0; k < N; k++) { const xf = xFrente - k * Lc; x.push(xf - te, xf - lc + te); }
+  return x;
+}
+/** x do meio de cada vão entre vagões (o mesmo padrão) */
+export function xVaosVagoes(N: number, Lc: number, vao: number, xFrente: number) {
+  const lc = Lc - vao, x: number[] = [];
+  for (let k = 0; k < N - 1; k++) x.push(xFrente - k * Lc - lc - vao / 2);
+  return x;
+}
+
 /** níveis de potência (4.6, ajustados contra gravações: ver o cabeçalho) */
 export const LW_TREM = { rolamento: 130, truqueAero: 105, corpo: 119, vao: 119, pantografo: 125, pantografoCarenado: 115, narizCauda: 116 } as const;
 export const V_REF_TREM = 300 / 3.6;
@@ -148,8 +165,7 @@ export class Trem implements Portador {
     const prox = () => (sem = (sem + 0x9e3779b9) >>> 0);
     const d = (tabela: Diretividade['tabela'], eixo: Vec3, expConv: number): Diretividade => ({ tabela, eixo, expConv });
     const xf = (k: number) => L / 2 - k * c.Lc;
-    this.xTruques = [];
-    for (let k = 0; k < c.N; k++) this.xTruques.push(xf(k) - te, xf(k) - lc + te);
+    this.xTruques = xTruquesVagoes(c.N, c.Lc, c.vao, te, L / 2);
     // rolamento por truque
     this.xTruques.forEach((x, k) => {
       lista.push({ id: `truque.${k}`, tipo: 'rolamento', pos: [x, 0, 0.3], hCorpo: 0.3, dir: d(DIP_LATERAL, [0, 1, 0], 2), refDist: R, dentro: false });

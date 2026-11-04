@@ -13,6 +13,9 @@ export const COMPAT: Record<TipoPortador, readonly FamiliaMotor[]> = {
   locomotiva: ['diesel', 'vapor'],
   trem: ['eletrico', 'nenhum'],
   aviao: ['turbina'],
+  // (vapor, VAPOR.md 4.4: trator a vapor e barco; o diesel marítimo fica para depois, sem preset)
+  trator: ['vapor'],
+  barco: ['vapor', 'diesel'],
   nenhum: ['pistao', 'turbina', 'turboelice', 'turboeixo', 'diesel', 'radial', 'rotativo', 'vapor', 'eletrico'],
 };
 
@@ -21,15 +24,17 @@ export const COMPAT: Record<TipoPortador, readonly FamiliaMotor[]> = {
  * motores de verdade que a Passagem monta. A Turbina não tem turboeixo (nenhum preset com `arch: 'turboeixo'`); o rotor
  * leva o pistão de aviação do Ronco (R22, R44, Bell 47, S300) ou o radial do S-55 (etapa 3), ou fica sem motor (`nenhum`).
  */
-export const ADAPTADORES: readonly FamiliaMotor[] = ['nenhum', 'pistao', 'diesel', 'turboelice', 'turbina', 'radial'];
+export const ADAPTADORES: readonly FamiliaMotor[] = ['nenhum', 'pistao', 'diesel', 'turboelice', 'turbina', 'radial', 'vapor'];
 export const USO_REAL: Record<TipoPortador, readonly FamiliaMotor[]> = {
-  carro: ['pistao', 'diesel', 'radial'], // carros e motos; picape, caminhão e ônibus; Sherman, Monaco-Trossi e Megola
+  carro: ['pistao', 'diesel', 'radial', 'vapor'], // carros e motos; picape, caminhão e ônibus; Sherman, Monaco-Trossi e Megola; Stanley
   helice: ['turboelice', 'radial', 'pistao'], // turboélices; radiais e motores planos de avião (RADIAL.md 5.3 e 6)
   rotor: ['pistao', 'radial', 'nenhum'],      // R22, R44, Bell 47, S300 (pistão de aviação), S-55 (radial); ou o rotor sozinho
-  gerador: ['diesel'],
-  locomotiva: ['diesel'],
+  gerador: ['diesel', 'vapor'],       // (vapor: Corliss de moinho e o trator na polia)
+  locomotiva: ['diesel', 'vapor'],    // (vapor: as 10 locomotivas do VAPOR.md 5)
   trem: ['nenhum'],
   aviao: ['turbina'],
+  trator: ['vapor'],
+  barco: ['vapor'],
   nenhum: [],
 };
 

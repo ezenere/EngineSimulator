@@ -153,7 +153,7 @@ export class VaporDSP implements Motor {
   nCtl = 0; cntCtl = 0;
   TE = 1;                      // N, esforço de tração nominal (catálogo) para as escalas
   wRef = 1;                    // rad/s de referência das bielas (1 volta/s)
-  jMotorTotal = 0;
+  jMotorTotal = 0; jPreset = 0;
   tirR!: Ruido;
 
   constructor(fs: number) { this.fs = fs; this.rng = new RNG(1); }
@@ -247,7 +247,9 @@ export class VaporDSP implements Motor {
     });
     this.thM = new Float64Array(this.nM); this.wM = new Float64Array(this.nM); this.JM = new Float64Array(this.nM);
     this.wAd = new Float64Array(this.nM); this.patM = new Uint8Array(this.nM); this.epsM = new Float64Array(this.nM); this.tqM = new Float64Array(this.nM);
-    const jPorMotor = P.J != null ? P.J / this.nM : Math.max(1500, (40 * P.massaAderente) / this.nM);
+    // (com redução, o J do preset é o do lado da manivela: na roda vale J·redução²)
+    const jPorMotor = P.J != null ? (P.J * this.reducao * this.reducao) / this.nM : Math.max(1500, (40 * P.massaAderente) / this.nM);
+    this.jPreset = P.J ?? 0;
     for (let m = 0; m < this.nM; m++) {
       this.JM[m] = jPorMotor;
       // dois motores: a roda do traseiro gira ε mais depressa (diâmetros e desgaste diferentes; 0,5–2%)
@@ -327,7 +329,12 @@ export class VaporDSP implements Motor {
   }
   /** velocidade imposta à roda (modo de testes e passagem): ω em rad/s, null = livre */
   impor(omega: number | null) { this.omegaImposto = omega; }
-  definirReducao(r: number) { this.reducao = r; this.wRef = TAU / r; }
+  definirReducao(r: number) {
+    if (r === this.reducao) return;
+    // a roda continua com a mesma velocidade; o J do volante refletido muda com a relação
+    this.reducao = r; this.wRef = TAU / r;
+    if (this.jPreset) { for (let m = 0; m < this.nM; m++) this.JM[m] = (this.jPreset * r * r) / this.nM; this.jMotorTotal = this.jPreset * r * r; }
+  }
 
   comandar(c0: ComandoMotor & Partial<ComandoVapor>) {
     const c = c0 as Partial<ComandoVapor> & ComandoMotor;

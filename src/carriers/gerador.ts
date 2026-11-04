@@ -28,6 +28,13 @@ export interface ConfigGerador {
   droop: number;               // 0–0,04 (0 = isócrono)
   ranhuras: number;            // ranhuras do estator (tom z_r·rpm/60)
   posMotor: Vec3;
+  /**
+   * (extensões do vapor, VAPOR.md 2.1) máquina de moinho: rotação nominal direta (60–100 rpm, sem polos), sem as fontes
+   * de alternador e ventilador (a carga é o eixo de transmissão) e o corpo da casa de máquinas (12 × 6 × 6, alvenaria)
+   */
+  rpmNominal?: number;
+  semFontes?: boolean;
+  corpo?: { comprimento: number; largura: number; altura: number; massaSuperficial: number };
 }
 
 export const GERADOR_PADRAO: ConfigGerador = {
@@ -66,11 +73,14 @@ export class Gerador extends PortadorComMotor {
   alt: SerieHarmonica; vent: SerieHarmonica;
   constructor(fs: number, cfg: Partial<ConfigGerador> = {}) {
     const c = { ...GERADOR_PADRAO, ...cfg };
-    const corpo: Corpo = { segmentos: [{ comprimento: 3, vao: 0, altura: 1.8, largura: 1.2, zPiso: 0.1 }], comprimento: 3, nariz: 0, cauda: 0, areaFrontal: 2.2, cd: 1, cpNariz: 0, massaSuperficial: c.carenagem ? 15 : 0, fCabine: 90 };
+    const k = c.corpo;
+    const corpo: Corpo = k
+      ? { segmentos: [{ comprimento: k.comprimento, vao: 0, altura: k.altura, largura: k.largura, zPiso: 0 }], comprimento: k.comprimento, nariz: 0, cauda: 0, areaFrontal: k.largura * k.altura, cd: 1, cpNariz: 0, massaSuperficial: k.massaSuperficial, fCabine: 40 }
+      : { segmentos: [{ comprimento: 3, vao: 0, altura: 1.8, largura: 1.2, zPiso: 0.1 }], comprimento: 3, nariz: 0, cauda: 0, areaFrontal: 2.2, cd: 1, cpNariz: 0, massaSuperficial: c.carenagem ? 15 : 0, fCabine: 90 };
     super(fs, 'gerador', corpo, { posMotor: c.posMotor, rotMotor: 'frente' });
     this.cfg = c;
     this.cargaG = new CargaGerador(c);
-    this.omegaNom = (rpmGerador(c.polos, c.fRede) * 2 * Math.PI) / 60;
+    this.omegaNom = ((c.rpmNominal ?? rpmGerador(c.polos, c.fRede)) * 2 * Math.PI) / 60;
     this.omegaLivre = this.omegaNom;
     this.gov = new GovernadorPI(GOV_GERADOR.kp, GOV_GERADOR.ki, 0, 1, Infinity, 0.02);
     // fontes próprias (refDist 7,5 m)
@@ -79,10 +89,10 @@ export class Gerador extends PortadorComMotor {
     this.alt = new SerieHarmonica(fs, nr);
     this.relAlt = new Float64Array(nr);
     this.relAlt[0] = 1; this.relAlt[2] = 0.5; this.relAlt[4] = 0.3; this.relAlt[nr - 1] = 0.35;
-    this.propria({ id: 'alternador', tipo: 'eletrica', pos: [-0.8, 0, 0.8], dir: { tabela: [0, 0, 0, 0, 0, 0, 0], eixo: [1, 0, 0], expConv: 2 }, refDist: R, dentro: true }, this.alt);
+    if (!c.semFontes) this.propria({ id: 'alternador', tipo: 'eletrica', pos: [-0.8, 0, 0.8], dir: { tabela: [0, 0, 0, 0, 0, 0, 0], eixo: [1, 0, 0], expConv: 2 }, refDist: R, dentro: true }, this.alt);
     this.vent = new SerieHarmonica(fs, 3);
     const ruidoVent = new RuidoLargo(fs, { lw: 95 - 3, n: 0, vRef: 1, refDist: R }, 0x6e7, 1000, 0.7);
-    this.propria({ id: 'ventilador', tipo: 'pa', pos: [1.3, 0, 0.8], dir: { tabela: [0, 0, 0, 0, 0, 0, 0], eixo: [1, 0, 0], expConv: 3 }, refDist: R, dentro: true }, new Soma([this.vent, ruidoVent]));
+    if (!c.semFontes) this.propria({ id: 'ventilador', tipo: 'pa', pos: [1.3, 0, 0.8], dir: { tabela: [0, 0, 0, 0, 0, 0, 0], eixo: [1, 0, 0], expConv: 3 }, refDist: R, dentro: true }, new Soma([this.vent, ruidoVent]));
     void rpm;
   }
   carga() { return this.cargaG; }
@@ -96,6 +106,7 @@ export class Gerador extends PortadorComMotor {
    */
   private relAlt: Float64Array; private relVent = new Float64Array([1, Math.exp(-0.6), Math.exp(-1.2)]);
   private atualizarFontes(omega: number) {
+    if (this.cfg.semFontes) return;
     const c = this.cfg, rpm = (omega * 60) / (2 * Math.PI), R = REF_DIST_PORTADOR, rpmN = rpmGerador(c.polos, c.fRede);
     this.alt.f0 = 2 * c.fRede * (omega / this.omegaNom);
     // (o alternador só tem campo com o regulador de tensão ligado, perto da rotação: entra entre 50% e 90%)

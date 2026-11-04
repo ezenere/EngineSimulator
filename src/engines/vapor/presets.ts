@@ -168,7 +168,7 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
   {
     id: 'aveling', nome: 'Aveling & Porter 8 nhp', familia: 'trator', tag: 'trator de estrada · nº 11630 ≈',
     cilindros: { n: 1, diametro: pol(8), curso: pol(10) }, reducao: 12, reducao2: 6, dRoda: 1.6, pNominal: psi(150), superaquecido: false, evaporacaoMax: 0.3,
-    massa: 10, massaAderente: 10, vMax: 8, J: 900, rpmGovernado: 75,
+    massa: 10, massaAderente: 10, vMax: 8, J: 60, rpmGovernado: 75,
     escape: { dBico: 0.05, lDescarga: 0.4, vCaixa: 0.3, lChamine: 1.4, dChamine: 0.3 },
     apito: { tubos: [700], tipo: 'simples', nivelDb: 135 }, folga: 0.6,
     geometria: { comprimento: 6.5, largura: 2.4, altura: 3.5, xCilindros: 1.4, yCilindros: 0, xChamine: 2.6, xDomo: 0.8, xCabine: -2.4, zTopo: 2.4 },
