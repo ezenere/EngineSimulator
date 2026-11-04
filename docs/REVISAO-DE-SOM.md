@@ -15,6 +15,7 @@ qualquer veículo, antigo ou novo.
 - [Caso: o Mustang](#caso-o-mustang)
 - [Caso: a Fórmula 1](#caso-a-fórmula-1)
 - [Caso: o compressor do Hellcat](#caso-o-compressor-do-hellcat)
+- [Caso: o som de ar dos Rotativos](#caso-o-som-de-ar-dos-rotativos)
 - [Ferramentas](#ferramentas)
 - [O que olhar em cada tipo de veículo](#o-que-olhar-em-cada-tipo-de-veículo)
 
@@ -399,6 +400,31 @@ de cada acelerada o real faz um "tó roouummm", um tom grave que varre até o ui
   demais e o uivo presente na hora errada. Pergunte cedo qual dos três, e descreva o que mudou em termos de ouvido.
 - **Uivo preso só ao giro.** O nível segue a pressão que os rotores fazem: forte com o pé embaixo, um fundo tirando o pé.
   Olhar só o espectro numa rotação não mostra isso; acompanhe o nível ao longo de uma acelerada.
+
+## Caso: o som de ar dos Rotativos
+
+**Queixa:** "tem som de ar, a mesma coisa que acontecia no Fusca"; "com o Ø da saída no mínimo é só som de ar"; "o som de ar
+fica bem alto em lenta".
+
+**Como se achou:** cada fonte de ruído desligada de cada vez (pós-queima no primário, no ponto quente e na boca; `turb` da
+janela; jato da ponta; vedações; chiado da admissão e do turbo), na lenta e a 3 000 rpm, no Ø de fábrica, no mínimo e no
+máximo. O jato da ponta só soma na saída: a diferença entre o render com ele e sem ele é a contribuição exata, sem
+aproximação. Detalhes e tabelas em `TECNICO.md` → Rotativos.
+
+- **Na lenta**, o agudo acima de 1 kHz era ~100% a pós-queima que o modelo queima na boca, com uma envoltória quase lisa (um
+  polo de 15 ms emendava os 25 eventos/s).
+- **No Ø mínimo**, o jato da ponta era 80–90% do nível abaixo de 1 kHz: ele seguia o Ø da saída (∝ 1/área², com limite mais
+  largo que o do Ronco) enquanto o tubo fino tirava ~30 dB do tom. Era o erro do Fusca de novo: um só controle mexia no tubo
+  e na ponteira. A ponteira virou um campo próprio, como a `tipD` do Ronco.
+- O `turb` da janela, que era suspeito, não passava de 0,2 dB em nenhum caso de rua.
+
+**Armadilha:** a gravação de referência (RX-7 em lenta, Opus) tem o agudo **liso** (p90/p10 6,8 dB, modulação na ignição
+0,06, 0,5 estalo/s), e o modelo antigo batia com ela nesses números, mas o ouvido ouviu "ar". Prender a pós-queima ao
+evento puro (p90/p10 21 dB, 25 "estalos"/s) contrariava a gravação. Ficou um meio-termo com unidade física (o espalhamento
+do gás até a boca, 9 ms, com controle no painel de 0 a 20 ms), escolhido pelo critério que o projeto já tinha escrito
+(desvio/média ≥ 0,5 **e** p90/p10 dentro do medido) e uma atenuação de 3,8 dB na boca. Lições: um número que bate não
+prova o caráter (o espectro fino do agudo da gravação tem estrutura que o ruído do modelo não tem); quando gravação e
+ouvido discordam, ponha o parâmetro no painel e deixe o ouvido decidir.
 
 ## Ferramentas
 
