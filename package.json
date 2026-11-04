@@ -2,7 +2,7 @@
   "name": "engine",
   "private": true,
   "version": "0.0.0",
-  "description": "Ronco, Turbina, Diesel e Radial: síntese física de som de motores no navegador",
+  "description": "Ronco, Turbina, Diesel, Radial e Rotativos: síntese física de som de motores no navegador",
   "scripts": {
     "dev": "vite",
     "build": "npm run typecheck && vite build",
@@ -26,7 +26,10 @@
     "teste:radial": "tsx tools/radial-valida.ts",
     "lenta:radial": "tsx tools/radial-lenta.ts",
     "geometria:radial": "tsx tools/radial-geometria.ts",
-    "navegador:radial": "node tools/radial-navegador.mjs"
+    "navegador:radial": "node tools/radial-navegador.mjs",
+    "teste:rotativo": "tsx tools/rotativo-valida.ts",
+    "lenta:rotativo": "tsx tools/rotativo-lenta.ts",
+    "navegador:rotativo": "node tools/rotativo-navegador.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",

@@ -79,6 +79,10 @@ export class EngineDSP implements DSPDeAudio {
   declare av: any; declare radial: any; declare carga: any; declare cargaExterna: any; declare qMix: any; declare burnAv: any; declare avHot: any; declare prAv: any;
   declare arPartida: any; declare crankMax: any; declare falhaAv: any; declare torquePartida: any; declare partidaAr: any; declare somPartidaAv: any;
   declare avControle: any; declare avMensagem: any; declare avTelemetria: any; declare avSomExtra: any;
+  // rotativo (ROTATIVO.md 1.6; src/engines/rotativo/dsp.ts, RotativoDSP): flag, ciclo da câmara (720 no pistão, 1080 no
+  // Wankel) e o que os ganchos `if (this.rot)` leem (o EngineDSP só os declara; a subclasse os põe na instância)
+  declare rot: any; declare cyc: any; declare kBurn: any; declare falhaRot: any; declare prRot: any; declare Vh: any; declare kVol: any; declare runRot: any;
+  declare rotQueima: any; declare rotJanelas: any; declare rotEscape: any; declare rotAdmissao: any; declare rotDens: any; declare posQueima: any; declare mechRot: any; declare rotTBurn: any; declare rotTelemetria: any;
 
   constructor(fs) {
     this.fs = fs; this.dt = 1 / fs;
@@ -117,6 +121,7 @@ export class EngineDSP implements DSPDeAudio {
     this.cc = false; this.tempos = 4; // gasolina; o DieselDSP põe cc = true e o ciclo do preset
     this.tap = null;
     this.av = false; this.radial = false; this.carga = null; // (RADIAL.md 1.6, gancho 1: gasolina sem aviação)
+    this.rot = false; this.cyc = 720; // (rotativo, gancho 1: pistão de 4 tempos; o RotativoDSP põe rot = true e cyc = 1080)
   }
 
   message(m) {
@@ -187,8 +192,9 @@ export class EngineDSP implements DSPDeAudio {
     this.blower = cfg.aspiration === 'super'; // compressor mecânico, tocado por correia
 
     // geometria do cilindro (curso = diâmetro)
-    const Vd = (cfg.displacement / N) * 1e-3;
-    const bore = Math.cbrt((4 * Vd) / Math.PI);
+    let Vd = (cfg.displacement / N) * 1e-3;
+    let bore = Math.cbrt((4 * Vd) / Math.PI);
+    if (this.rot) { Vd = cfg.Vcam * 1e-6; bore = Math.cbrt((4 * Vd) / Math.PI); } // (rotativo, gancho 2: a câmara de R/e/b, boreEq)
     this.Vd = Vd; this.bore = bore;
     this.Ap = (Math.PI / 4) * bore * bore;
     this.rCrank = bore / 2; this.lRod = this.rCrank / 0.3;
@@ -224,7 +230,7 @@ export class EngineDSP implements DSPDeAudio {
     }
     if (this.radial) for (let c = 0; c < N; c++) { this.cylIn[c] *= cfg.curso[c]; this.cylQ[c] *= cfg.curso[c]; } // (gancho 2: curso das articuladas)
     for (let c = 0; c < N; c++) {
-      const a = ((this.theta - this.fire[c]) % 720 + 720) % 720;
+      const a = ((this.theta - this.fire[c]) % this.cyc + this.cyc) % this.cyc; // (gancho 3: ciclo da câmara)
       this.aPrev[c] = a;
       const V = this.volume(a);
       this.Vprev[c] = V; this.p[c] = pinit; this.m[c] = (pinit * V) / (RGAS * T_MAN);
@@ -596,7 +602,8 @@ export class EngineDSP implements DSPDeAudio {
     // temperatura da parede do coletor (é ela, em brasa, que acende a mistura): segue o gás (lenta ~320 °C, carga
     // total ~850 °C) com a inércia do ferro, aquecendo em ~4 s e esfriando em ~20 s. Ciclo cortado só bombeia ar
     // e esfria o escape, a não ser que leve combustível que queima lá dentro
-    const tBurn = Math.min(950, 180 + 720 * Math.sqrt(clamp(rpm / this.redline, 0, 1.1)) * Math.pow(clamp(this.pMan / P0, 0, 1.6), 0.6));
+    let tBurn = Math.min(950, 180 + 720 * Math.sqrt(clamp(rpm / this.redline, 0, 1.1)) * Math.pow(clamp(this.pMan / P0, 0, 1.6), 0.6));
+    if (this.rot) tBurn = this.rotTBurn(rpm); // (rotativo, gancho 17: gás de escape a 900–1 000 °C em carga)
     const tWant = this.state === 'run' ? this.ambientT + (tBurn - this.ambientT) * this.burnHeat : this.ambientT;
     this.exhT += (tWant - this.exhT) * (1 - Math.exp(-dtc / (tWant > this.exhT ? 4 : 20)));
 
@@ -821,6 +828,7 @@ export class EngineDSP implements DSPDeAudio {
     const nL = lines.length, nN = nodes.length, nR = rads.length;
     const r = this.rCrank, l = this.lRod, Ap = this.Ap, Vc = this.Vc, Zr = this.Zr, hw = this.hw;
     const g1 = GAM - 1;
+    const cyc = this.cyc, cyc2 = cyc / 2, cyc3 = (3 * cyc) / 4, cyc4 = cyc / 4; // (gancho 3: 720/360/540/180 no pistão, os mesmos doubles)
 
     for (let s = 0; s < n; s++) {
       if (this.ctrl-- <= 0) { this.control(16 * dt); this.ctrl = 15; }
@@ -846,15 +854,17 @@ export class EngineDSP implements DSPDeAudio {
       const deg = (omega * dt) / DEG;
       const rf = clamp(rpmFrac, 0, 1.1);
       const adv = Math.max(-20, 10 + 24 * rf + this.advTrim - (this.shiftRetard ? 26 : 0) - this.catRetard - (this.limRetard || 0));
-      const aSp = 720 - adv;
+      const aSp = cyc - adv;
       // com o coletor em vácuo, o gás queimado que sobra no cilindro dilui a mistura e a chama anda devagar: em lenta
       // a queima (10–90%) leva ~45–50°, contra ~20° em carga. Rápida demais, o motor ficava eficiente demais em carga
       // leve, pedia pouco ar e chegava à abertura do escape sem pressão (sem o estalo do jato em cada cilindro)
       const slowB = 1 + 1.4 * clamp((0.6 - this.pMan / P0) / 0.4, 0, 1);
-      const burn = (42 + 26 * rf) * slowB;
+      let burn = (42 + 26 * rf) * slowB;
+      if (this.rot) burn *= this.kBurn; // (rotativo, gancho 4: curso de 270°e e as velas)
       // (o gás rarefeito do vácuo troca menos calor com a parede, como na correlação de Woschni: em lenta a perda fica
       // em ~20–25% do calor da queima, como num motor real, e em carga não muda)
-      const hwr = hw * Math.max(0.06, rpm / 3000) * Math.min(1, Math.pow(this.pMan / P0, 0.4));
+      let hwr = hw * Math.max(0.06, rpm / 3000) * Math.min(1, Math.pow(this.pMan / P0, 0.4));
+      if (this.rot) hwr *= 1.6; // (rotativo, gancho 5: câmara alongada, superfície/volume ≈ 2×)
 
       // ---- coletor de admissão (borboleta + soma das válvulas)
       const pUp = P0 * (1 + this.boost);
@@ -863,13 +873,14 @@ export class EngineDSP implements DSPDeAudio {
       const pMan = this.pMan;
 
       for (let i = 0; i < nL; i++) lines[i].read();
+      if (this.rot) for (const run of this.runRot) run.out0 = 0.985 * run.in0; // (rotativo, gancho 13: um primário por rotor, as 3 câmaras somam)
 
       const wn = rng.bi();
       this.tzLP += this.tzK * (wn - this.tzLP);
       const hiN = (wn - this.tzLP) * 1.4;
       let Tgas = 0, mInSum = 0, vib = 0, intake = 0, brkIn = 0;
       for (let c = 0; c < N; c++) {
-        let a = this.theta - fire[c]; if (a < 0) a += 720;
+        let a = this.theta - fire[c]; if (a < 0) a += cyc;
         if (this.cc && a >= this.ciclo) a -= this.ciclo; // (2 tempos: ciclo de 360°)
         const ap = aPrev[c];
         // ---- centelha (diesel: injeção e atraso de ignição no DieselDSP; o ramo a gasolina segue sem reindentar)
@@ -877,8 +888,8 @@ export class EngineDSP implements DSPDeAudio {
         else {
         // a centelha é armada no curso de admissão e dispara uma única vez por ciclo,
         // mesmo que o avanço mude de repente (com atraso grande, depois do ponto morto superior)
-        if (a >= 360 && a < 540) this.armed[c] = 1;
-        if (this.armed[c] && (aSp < 720 ? a >= aSp || a < 180 : a >= aSp - 720 && a < 180)) {
+        if (a >= cyc2 && a < cyc3) this.armed[c] = 1;
+        if (this.armed[c] && (aSp < cyc ? a >= aSp || a < cyc4 : a >= aSp - cyc && a < cyc4)) {
           this.armed[c] = 0;
           this.spk[c] = a;
           let cutNow = cut;
@@ -900,6 +911,7 @@ export class EngineDSP implements DSPDeAudio {
           // (e na desaceleração, com o vácuo alto, a mistura rala falha muito mais: até ~15% das explosões)
           let misfire = rng.next() < this.cam * this.cam * 0.02 * idleness + 0.5 * float + (this.fuelVar > 1 ? (this.carbMis * idleness + 0.15 * clamp((0.3 - this.pMan / P0) / 0.15, 0, 1)) * this.varScale : 0);
           if (this.av) misfire = misfire || rng.next() < this.falhaAv(c); // (gancho 5: encharque, mistura, magnetos)
+          if (this.rot) misfire = misfire || rng.next() < this.falhaRot; // (rotativo, gancho 6: sobreposição, velas T, vedações)
           if (combust && !misfire) {
             this.burnHeat += (1 - this.burnHeat) * 0.05;
             // carburador em carga leve: com a borboleta quase fechada a mistura chega mal vaporizada e mal dividida
@@ -910,6 +922,7 @@ export class EngineDSP implements DSPDeAudio {
             const light = this.fuelVar > 1 ? clamp((0.8 - this.pMan / P0) / 0.5, 0, 1) * this.varScale : 0;
             this.Q[c] = Math.max(0, this.air[c]) * 2.6e6 * this.cylQ[c] * (1 - 0.7 * float) * (0.45 + 0.55 * this.fuelRamp) * clamp(1 + (sigma * this.varScale * this.fuelVar + this.carbVar * light) * rng.gauss(), 0.25, 1.6);
             if (this.av) this.Q[c] *= this.qMix; // (gancho 6: mistura)
+            if (this.rot) this.rotQueima(c, idleness, slowB); // (rotativo, gancho 7: a fração fHC vai ao escape como pós-queima)
             // (mistura pobre queima devagar e chega mais quente no escape; a variação é em graus, então não cresce
             // com a queima mais lenta do vácuo)
             this.burnK[c] = light ? 1 + 0.1 * light * clamp(rng.gauss(), -1.5, 2) / slowB : 1;
@@ -937,6 +950,7 @@ export class EngineDSP implements DSPDeAudio {
                 else if (ov === 'popbang' && this.popWindow > 0) { rate = 20 * Math.min(1, this.popWindow); k = 1.2; floor = 0.5; lit = true; }
               }
             }
+            if (this.rot && running && combust) { pr = this.prRot; k = 0.8; } // (rotativo, gancho 8: mistura crua de qualquer falha estoura)
             if (rate) pr = Math.min(0.9, rate / (N * Math.max(rpm, 300) / 120));
             this.burnHeat += ((wet && (pr || rate) ? 0.5 : 0) - this.burnHeat) * 0.05;
             // (nos mapas de estouro a ignição atrasada manda a chama acesa para o escape: não precisa da parede em
@@ -953,6 +967,7 @@ export class EngineDSP implements DSPDeAudio {
         }
         // ---- válvulas (cliques do trem de válvulas)
         if (this.cc) this.ccValvulas(c, a, ap);
+        else if (this.rot) this.rotJanelas(c, a, ap); // (rotativo, gancho 9: tiques do ápice nas bordas das janelas e nas velas)
         else {
         if ((ap < evo && a >= evo) || (ap < evc && a >= evc) || (ap < ivo && a >= ivo) || (ap < ivc && a >= ivc)) this.clickEnv += 0.5 + 0.5 * rng.next();
         if (ap < ivo && a >= ivo) this.air[c] = 0;
@@ -962,8 +977,9 @@ export class EngineDSP implements DSPDeAudio {
         // ---- volume
         const th = a * DEG, sn = Math.sin(th), cs = Math.cos(th);
         const q = Math.sqrt(l * l - r * r * sn * sn);
-        const V = Vc + Ap * (r * (1 - cs) + l - q);
-        const dxdth = r * sn * (1 + (r * cs) / q);
+        let V, dxdth;
+        if (this.rot) { const kv = this.kVol; V = Vc + this.Vh * (1 - Math.cos(kv * th)); dxdth = (this.Vh * kv * Math.sin(kv * th)) / Ap; } // (rotativo, gancho 11: V(α) da câmara)
+        else { V = Vc + Ap * (r * (1 - cs) + l - q); dxdth = r * sn * (1 + (r * cs) / q); }
         const dV = V - this.Vprev[c];
         this.Vprev[c] = V;
 
@@ -974,10 +990,10 @@ export class EngineDSP implements DSPDeAudio {
         let dQ = 0;
         if (this.cc) dQ = this.ccQueima(c, a, p, V, deg);
         else if (this.xb[c] < 1) {
-          let d = a - this.spk[c]; if (d < -360) d += 720;
+          let d = a - this.spk[c]; if (d < -cyc2) d += cyc;
           if (d < 0) d = 0;
           const u = d / (burn * this.burnK[c]);
-          const x = u >= 1 || d > 360 ? 1 : 1 - Math.exp(-5 * u * u * u);
+          const x = u >= 1 || d > cyc2 ? 1 : 1 - Math.exp(-5 * u * u * u);
           dQ = this.Q[c] * (x - this.xb[c]);
           this.xb[c] = x;
         }
@@ -988,6 +1004,7 @@ export class EngineDSP implements DSPDeAudio {
         let mEx = 0;
         const run = runners[c];
         if (this.cc) mEx = this.ccEscape(c, a, p, T, run, Zr);
+        else if (this.rot) mEx = this.rotEscape(c, a, p, T, run, Zr); // (rotativo, gancho 12: janela trapezoidal)
         else if (a > evo && a < evc) {
           const sv = Math.sin(Math.PI * (a - evo) / (evc - evo));
           const A = this.AexMax * this.cylEx[c] * Math.min(1, 2.5 * sv * sv); // (área efetiva satura cedo: perfil "quadrado")
@@ -1014,16 +1031,19 @@ export class EngineDSP implements DSPDeAudio {
         // (referência = ciclo queimado em carga, ~1650 K: a amplitude no tubo em carga fica como foi acertada; a lenta
         // sai a ~950 K (−5 dB, que a calibração repõe) e o ciclo cortado ou de freio-motor a ~350 K (piso −20 dB))
         if (this.cc) { if (ap <= evo && a > evo) this.densC[c] = this.ccDens(T); } // (diesel: p' = c·ṁ/A, ∝ √T)
+        else if (this.rot) { if (ap <= evo && a > evo) this.densC[c] = this.rotDens(T); } // (rotativo: referência do gás mais quente)
         else if (ap <= evo && a > evo) this.densC[c] = clamp(T / T_EXREF, 0.1, 1.3);
         const dens = mEx > 0 ? this.densC[c] : 1;
         // (o chiado do jato na válvula não entra na correção: é o escoamento sônico, não o empurrão do gás)
-        run.out0 = 0.985 * run.in0 + Zr * mEx * (dens + turb * hiN);
+        if (this.rot) run.out0 += Zr * mEx * (dens + turb * hiN) + this.posQueima(c, a, Zr); // (rotativo, gancho 13: acumula no primário do rotor)
+        else run.out0 = 0.985 * run.in0 + Zr * mEx * (dens + turb * hiN);
         this.mEx[c] = mEx;
         if (mEx > 0) brkIn += this.brkW[c] * Zr * mEx * dens;
 
         // ---- válvula de admissão
         let mIn = 0;
         if (this.cc) mIn = this.ccAdmissao(c, a, pMan, p, T);
+        else if (this.rot) mIn = this.rotAdmissao(c, a, pMan, p, T); // (rotativo, gancho 14: janelas de admissão)
         else if (a > ivo && a < ivc) {
           const sv = Math.sin(Math.PI * (a - ivo) / (ivc - ivo));
           const A = this.AinMax * this.cylIn[c] * Math.min(1, 1.5 * sv * sv);
@@ -1051,7 +1071,8 @@ export class EngineDSP implements DSPDeAudio {
         // ---- forças de inércia (vibração)
         const ph = (this.theta - this.tdcRel[c]) * DEG;
         const acc = Math.cos(ph) + 0.3 * Math.cos(2 * ph);
-        if (this.radial) vib += (0.6 * this.ux[c] + this.uy[c]) * 0.3 * Math.cos(2 * ph) + 0.35 * this.dz[c] * (this.ux[c] + this.uy[c]) * Math.cos(ph); // (gancho 9: sem a 1ª ordem)
+        if (this.rot) vib += 0.1 * Math.cos(ph); // (rotativo, gancho 15: rotor balanceado, só a ordem 1 residual)
+        else if (this.radial) vib += (0.6 * this.ux[c] + this.uy[c]) * 0.3 * Math.cos(2 * ph) + 0.35 * this.dz[c] * (this.ux[c] + this.uy[c]) * Math.cos(ph); // (gancho 9: sem a 1ª ordem)
         else vib += (0.6 * this.ux[c] + this.uy[c] + 0.35 * this.dz[c] * (this.ux[c] + this.uy[c])) * acc;
       }
       this.pMan = clamp(pMan + ((mThr - mInSum) * dt * RGAS * T_MAN) / this.Vman, 3000, pUp * 1.05);
@@ -1093,7 +1114,7 @@ export class EngineDSP implements DSPDeAudio {
       const Tld = this.carga ? this.carga.torque(omega) : 0, Jt = this.J + (this.carga ? this.carga.inercia : 0); // (gancho 11: carga do portador)
       const w = Math.max(0, omega + ((Tgas * this.tqS + Tst - Tfr - Tcl - Tld) / Jt) * dt);
       if (!this.lockOmega) this.omega = w;
-      this.theta += deg; if (this.theta >= 720) this.theta -= 720;
+      this.theta += deg; if (this.theta >= cyc) this.theta -= cyc;
       this.tqGas += (Tgas - this.tqGas) * 0.002;
       this.tqMean += (Tgas * this.tqS - Tfr - this.tqMean) * 0.0004;
       this.frMean += (Tfr - this.frMean) * 0.0004;
@@ -1169,7 +1190,8 @@ export class EngineDSP implements DSPDeAudio {
         mech += (this.knockF[0].run(kn) + 0.6 * this.knockF[1].run(kn) + 0.25 * this.knockF[2].run(kn)) * 0.07;
         }
         this.phW += omega * dt; if (this.phW > 1e4) this.phW -= TAU * 1000;
-        mech += (Math.sin(this.phW * 23) * 0.6 + Math.sin(this.phW * 2.9 * 12) * 0.4) * 0.002 * rf * rf;
+        if (this.rot) mech += this.mechRot(omega, rf); // (rotativo, gancho 16: engrenagem fixa / coroa do rotor)
+        else mech += (Math.sin(this.phW * 23) * 0.6 + Math.sin(this.phW * 2.9 * 12) * 0.4) * 0.002 * rf * rf;
         if (this.state === 'crank') {
           this.phS += (omega * 11 * dt) / TAU; this.phS -= Math.floor(this.phS);
           mech += this.starterLP.run((this.phS * 2 - 1) * 0.05 + rng.bi() * 0.02) * (0.6 + 0.4 * Math.sin(this.phW * 2));
@@ -1423,6 +1445,7 @@ export class EngineDSP implements DSPDeAudio {
       carX: this.carX, dist: this.rDist, vRad: this.vRad, loop: ENV_LOOP[this.params.env] || 800,
     };
     if (this.av) this.avTelemetria(t); // (gancho 14)
+    if (this.rot) this.rotTelemetria(t); // (rotativo, gancho 19)
     return t;
   }
 }
