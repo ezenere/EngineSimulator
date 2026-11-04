@@ -68,6 +68,9 @@ export class EngineDSP implements DSPDeAudio {
   declare scHiss: any; declare bovF: any; declare cabL: any; declare cabR: any; declare cabIn: any; declare cabMech: any; declare extMech: any; declare bayEx: any; declare inPrev: any; declare clickEnv: any;
   declare knockEnv: any; declare alsArm: any; declare shiftRetard: any; declare limPrev: any; declare limI: any; declare limRetard: any; declare limFrac: any; declare limT: any; declare lacc: any; declare scJit: any;
   declare phB: any; declare scIn: any; declare ambL: any; declare ambR: any; declare ambSpec: any; declare ambHum: any;
+  // ignição por compressão (src/engines/diesel/dsp.ts, DieselDSP): flag, ciclo e os ramos que a subclasse implementa
+  declare cc: any; declare tempos: any; declare ciclo: any; declare tParede: any; declare fmepK: any; declare pmeCarga: any; declare rpmPartida: any;
+  declare ccInjecao: any; declare ccValvulas: any; declare ccQueima: any; declare ccEscape: any; declare ccAdmissao: any; declare ccMecanica: any; declare ccTurbo: any;
 
   constructor(fs) {
     this.fs = fs; this.dt = 1 / fs;
@@ -103,6 +106,7 @@ export class EngineDSP implements DSPDeAudio {
     this.coolant = 20; this.ambientT = 20; this.tempMode = 'real'; this.tempSet = 90; this.warm = 0;
     this.fanOn = false; this.fanSpin = 0; this.secAir = 0; this.catRetard = 0; this.idleTarget = 0; this.phFan = 0; this.phSA = 0;
     this.arcE = 0; this.arcG = 1; this.arcP = 0; // nivelador do modo arcade
+    this.cc = false; this.tempos = 4; // gasolina; o DieselDSP põe cc = true e o ciclo do preset
   }
 
   message(m) {
@@ -178,7 +182,7 @@ export class EngineDSP implements DSPDeAudio {
     this.rCrank = bore / 2; this.lRod = this.rCrank / 0.3;
     // taxa de compressão: motor antigo, feito para gasolina de baixa octanagem, comprime pouco (Fusca 7,5:1) e
     // expande pouco: o gás chega à abertura do escape mais quente e com pressão, e o pulso sai mais forte e estalado
-    this.CR = clamp(cfg.compression || (this.turbo || this.blower ? 9.5 : 11), 6, 15);
+    this.CR = clamp(cfg.compression || (this.turbo || this.blower ? 9.5 : 11), 6, this.cc ? 24 : 15);
     this.Vc = Vd / (this.CR - 1);
     this.Ar = 0.16 * bore * bore;           // seção do tubo primário
     this.Zr = SOUND_SPEED / this.Ar;         // impedância: Pa por kg/s
@@ -838,7 +842,7 @@ export class EngineDSP implements DSPDeAudio {
 
       // ---- coletor de admissão (borboleta + soma das válvulas)
       const pUp = P0 * (1 + this.boost);
-      const thrA = this.Athr * (1 - Math.cos(this.thr * Math.PI / 2) + this.iac + 0.00005);
+      const thrA = this.cc ? this.Athr : this.Athr * (1 - Math.cos(this.thr * Math.PI / 2) + this.iac + 0.00005); // (diesel: sem borboleta)
       const mThr = flow(thrA, pUp, T_MAN, this.pMan, T_MAN);
       const pMan = this.pMan;
 
@@ -850,8 +854,11 @@ export class EngineDSP implements DSPDeAudio {
       let Tgas = 0, mInSum = 0, vib = 0, intake = 0, brkIn = 0;
       for (let c = 0; c < N; c++) {
         let a = this.theta - fire[c]; if (a < 0) a += 720;
+        if (this.cc && a >= this.ciclo) a -= this.ciclo; // (2 tempos: ciclo de 360°)
         const ap = aPrev[c];
-        // ---- centelha
+        // ---- centelha (diesel: injeção e atraso de ignição no DieselDSP; o ramo a gasolina segue sem reindentar)
+        if (this.cc) this.ccInjecao(c, a, ap, running, cranking, cut, rpm);
+        else {
         // a centelha é armada no curso de admissão e dispara uma única vez por ciclo,
         // mesmo que o avanço mude de repente (com atraso grande, depois do ponto morto superior)
         if (a >= 360 && a < 540) this.armed[c] = 1;
@@ -923,9 +930,13 @@ export class EngineDSP implements DSPDeAudio {
             }
           }
         }
+        }
         // ---- válvulas (cliques do trem de válvulas)
+        if (this.cc) this.ccValvulas(c, a, ap);
+        else {
         if ((ap < evo && a >= evo) || (ap < evc && a >= evc) || (ap < ivo && a >= ivo) || (ap < ivc && a >= ivc)) this.clickEnv += 0.5 + 0.5 * rng.next();
         if (ap < ivo && a >= ivo) this.air[c] = 0;
+        }
         aPrev[c] = a;
 
         // ---- volume
@@ -941,7 +952,8 @@ export class EngineDSP implements DSPDeAudio {
 
         // ---- combustão (Wiebe)
         let dQ = 0;
-        if (this.xb[c] < 1) {
+        if (this.cc) dQ = this.ccQueima(c, a, p, V, deg);
+        else if (this.xb[c] < 1) {
           let d = a - this.spk[c]; if (d < -360) d += 720;
           if (d < 0) d = 0;
           const u = d / (burn * this.burnK[c]);
@@ -949,12 +961,14 @@ export class EngineDSP implements DSPDeAudio {
           dQ = this.Q[c] * (x - this.xb[c]);
           this.xb[c] = x;
         }
-        dQ -= hwr * (T - T_WALL) * dt;
+        if (this.cc) dQ -= hwr * (T - this.tParede) * dt; // (diesel: a parede segue a água)
+        else dQ -= hwr * (T - T_WALL) * dt;
 
         // ---- válvula de escape -> tubo primário
         let mEx = 0;
         const run = runners[c];
-        if (a > evo && a < evc) {
+        if (this.cc) mEx = this.ccEscape(c, a, p, T, run, Zr);
+        else if (a > evo && a < evc) {
           const sv = Math.sin(Math.PI * (a - evo) / (evc - evo));
           const A = this.AexMax * this.cylEx[c] * Math.min(1, 2.5 * sv * sv); // (área efetiva satura cedo: perfil "quadrado")
           mEx = this.exhaustFlow(A, p, T, P0 + 2 * run.in0, Zr);
@@ -988,7 +1002,8 @@ export class EngineDSP implements DSPDeAudio {
 
         // ---- válvula de admissão
         let mIn = 0;
-        if (a > ivo && a < ivc) {
+        if (this.cc) mIn = this.ccAdmissao(c, a, pMan, p, T);
+        else if (a > ivo && a < ivc) {
           const sv = Math.sin(Math.PI * (a - ivo) / (ivc - ivo));
           const A = this.AinMax * this.cylIn[c] * Math.min(1, 1.5 * sv * sv);
           mIn = flow(A, pMan, T_MAN, p, T);
@@ -1021,10 +1036,11 @@ export class EngineDSP implements DSPDeAudio {
       // ---- dinâmica: virabrequim + embreagem + veículo
       const nk = (rpm / this.redline) * 7;
       // óleo frio é grosso: mais atrito
-      const fmep = (0.95e5 + 0.12e5 * nk + 0.02e5 * nk * nk) * (1 + 0.5 * (1 - this.warm));
+      let fmep = (0.95e5 + 0.12e5 * nk + 0.02e5 * nk * nk) * (1 + 0.5 * (1 - this.warm));
+      if (this.cc) fmep = fmep * this.fmepK + this.pmeCarga; // (diesel: atrito maior + a carga do portador como pressão média de freio)
       const Tfr = (fmep * this.dispL * 1e-3) / (4 * Math.PI) * (omega > 0.5 ? 1 : 0.6);
       let Tst = 0;
-      if (this.state === 'crank') Tst = (70 * this.dispL / Math.sqrt(this.N) * 2 + 40) * Math.max(0, 1 - rpm / 330);
+      if (this.state === 'crank') Tst = (70 * this.dispL / Math.sqrt(this.N) * 2 + 40) * Math.max(0, 1 - rpm / (this.cc ? this.rpmPartida : 330));
       let Tcl = 0;
       // segurando o 2-step a embreagem fica aberta (pedal pisado / dupla embreagem esperando)
       if (this.gear > 0 && this.clutch > 0 && !this.launching) {
@@ -1119,9 +1135,12 @@ export class EngineDSP implements DSPDeAudio {
         const coldN = 1 - this.warm;
         const cn = rng.bi() * this.clickEnv * (0.15 + rf) * (1 + 1.6 * coldN);
         mech += (this.clickF[0].run(cn) + 0.35 * this.clickF[1].run(cn)) * 0.05;
+        if (this.cc) mech += this.ccMecanica(rf, coldN, pMan); // (diesel: knock por dp/dθ, injeção, bomba)
+        else {
         this.knockEnv *= 0.93;
         const kn = rng.bi() * this.knockEnv * (0.3 + 0.7 * pMan / P0) * (1 + 1.2 * coldN);
         mech += (this.knockF[0].run(kn) + 0.6 * this.knockF[1].run(kn) + 0.25 * this.knockF[2].run(kn)) * 0.07;
+        }
         this.phW += omega * dt; if (this.phW > 1e4) this.phW -= TAU * 1000;
         mech += (Math.sin(this.phW * 23) * 0.6 + Math.sin(this.phW * 2.9 * 12) * 0.4) * 0.002 * rf * rf;
         if (this.state === 'crank') {
@@ -1156,7 +1175,8 @@ export class EngineDSP implements DSPDeAudio {
 
       // ---- turbo
       let tur = 0, sc = 0;
-      if (this.turbo) {
+      if (this.cc) tur = this.ccTurbo(pMan, pUp, P);
+      else if (this.turbo) {
         const tw = this.turboW;
         const f = 500 + 6200 * tw;
         this.phT += TAU * f * dt; if (this.phT > TAU) this.phT -= TAU;
