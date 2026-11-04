@@ -68,7 +68,7 @@ function Interior({ k, e }: { k: ControleDiesel; e: EstadoDiesel }) {
         <PresetNav presets={PRESETS} familia={e.familia} atual={e.presetId} aoEscolher={(p) => k.loadPreset(p)} />
       </nav>
 
-      <main className="cluster">
+      <main className="cluster cluster-diesel">
         <section className="tach-wrap" aria-label="Conta-giros">
           <canvas id="tach" />
           <div className="pedal" id="pedal" ref={pedal} role="slider" tabIndex={0} aria-label="Acelerador" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}
@@ -89,6 +89,10 @@ function Interior({ k, e }: { k: ControleDiesel; e: EstadoDiesel }) {
           <canvas id="scope" />
         </section>
 
+        <section className="diesel-wrap" aria-label="Combustão e escape">
+          <PainelDiesel e={e} />
+        </section>
+
         <section className="drive">
           {carro ? (
             <div className="gearbox">
@@ -100,7 +104,6 @@ function Interior({ k, e }: { k: ControleDiesel; e: EstadoDiesel }) {
               <button type="button" className="valve-tag" id="valveTag" title="Troca o modo do escape ativo (B)" onClick={() => k.cycleValve()} hidden>válvula fechada</button>
             </div>
           ) : <ComandoDaCarga k={k} e={e} />}
-          <PainelDiesel e={e} />
           <p className="hints">{carro
             ? <><kbd>W</kbd>/<kbd>↑</kbd> acelera · <kbd>Shift</kbd> meio pé · <kbd>S</kbd> freia · <kbd>Q</kbd>/<kbd>E</kbd> câmbio · <kbd>J</kbd> freio-motor · <kbd>I</kbd> ignição · <kbd>C</kbd> microfone · <kbd>V</kbd> observador · <kbd>M</kbd> modo do câmbio</>
             : e.portador === 'locomotiva' ? <><kbd>0</kbd>–<kbd>8</kbd> notch · <kbd>+</kbd>/<kbd>−</kbd> sobe e desce · <kbd>I</kbd> ignição · <kbd>C</kbd> microfone</>
@@ -140,22 +143,25 @@ function ComandoDaCarga({ k, e }: { k: ControleDiesel; e: EstadoDiesel }) {
   );
 }
 
-// leituras do diesel (texto preenchido pelo laço dos mostradores) e o traço p–θ
+// leituras do diesel (texto preenchido pelo laço dos mostradores) e o traço p–θ: uma faixa entre a onda e o câmbio,
+// com o traço à esquerda e as leituras em colunas (no câmbio elas empurravam o conta-giros para cima da onda)
 function PainelDiesel({ e }: { e: EstadoDiesel }) {
   const linha = (id: string, k: string) => <div className="ro-row"><span className="k">{k}</span><span className="v mono" id={id}>—</span></div>;
   return (
-    <div className="readout diesel-leituras" aria-label="Combustão e escape">
-      <canvas id="ptheta" style={{ width: '100%', maxWidth: 200, height: 120, display: 'block' }} aria-label="Pressão no cilindro 1 em função do ângulo" />
-      {linha('dPmax', 'Pico no cilindro')}
-      {linha('dTau', 'Atraso de ignição')}
-      {linha('dLambda', 'Ar/combustível')}
-      <div className="ro-row"><span className="k">Opacímetro</span><span className="v"><span className="meter" style={{ display: 'inline-block', width: 80, verticalAlign: 'middle' }}><i id="dOpac" style={{ width: '0%' }} /></span></span></div>
-      {linha('dFumaca', 'Fumaça')}
-      {linha('dTurbo', e.spec.soprador ? 'Soprador e turbo' : 'Turbo')}
-      {linha('dEgt', 'Gás de escape')}
-      {linha('dPot', 'Potência')}
-      {linha('dCarga', e.portador === 'locomotiva' ? 'Locomotiva' : e.portador === 'gerador' ? 'Gerador' : e.portador === 'nenhum' ? 'Bancada' : 'Velocidade')}
-    </div>
+    <>
+      <canvas id="ptheta" className="ptheta" aria-label="Pressão no cilindro 1 em função do ângulo" />
+      <div className="readout diesel-leituras">
+        {linha('dPmax', 'Pico no cilindro')}
+        {linha('dTau', 'Atraso de ignição')}
+        {linha('dLambda', 'Ar/combustível')}
+        <div className="ro-row"><span className="k">Opacímetro</span><span className="v"><span className="meter"><i id="dOpac" style={{ width: '0%' }} /></span></span></div>
+        {linha('dFumaca', 'Fumaça')}
+        {linha('dTurbo', e.spec.soprador ? 'Soprador e turbo' : 'Turbo')}
+        {linha('dEgt', 'Gás de escape')}
+        {linha('dPot', 'Potência')}
+        {linha('dCarga', e.portador === 'locomotiva' ? 'Locomotiva' : e.portador === 'gerador' ? 'Gerador' : e.portador === 'nenhum' ? 'Bancada' : 'Velocidade')}
+      </div>
+    </>
   );
 }
 

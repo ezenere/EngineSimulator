@@ -167,6 +167,47 @@ export function analisar(x: Float64Array | Float32Array, sr: number, rpm = 0, N 
   };
 }
 
+// Envoltória de uma banda (REVISAO-DE-SOM.md: "ruído contínuo que sobe com o giro e enche o silêncio entre as
+// explosões soa como mar: exigir modulação"). Passa-faixa Butterworth de ordem 4 em ida e volta, |Hilbert|, passa-baixa
+// de 600 Hz, decimada a 2,4 kHz. Devolve o contraste p90/p10 (dB), a modulação na ignição m1 (amplitude da linha da
+// envoltória em f_ign ±3%, menos o piso vizinho, sobre a média: 0 = ruído liso, 1 = 100%), o p10 relativo à banda
+// 150–400 Hz (o "vão" entre as explosões) e o nível da banda relativo a 150–400 Hz. É a mesma conta do script de
+// análise das gravações do real3 (modul.py, na pasta de rascunho da revisão).
+export function envoltoriaBanda(x: Float64Array | Float32Array, sr: number, lo: number, hi: number, fIgn: number) {
+  const { y, env } = bandaEEnvoltoria(x, sr, lo, hi, 600);
+  const r = bandaEEnvoltoria(x, sr, 150, 400, 600).y;
+  let er = 0, eb = 0; for (let i = 0; i < y.length; i++) { er += r[i] * r[i]; eb += y[i] * y[i]; }
+  const lref = 10 * Math.log10(er / y.length + 1e-30);
+  const q = Math.max(1, Math.round(sr / 2400)), fe = sr / q, e = new Float64Array(Math.floor(env.length / q));
+  for (let i = 0; i < e.length; i++) e[i] = env[i * q];
+  const p90 = percentil(e, 90), p10 = percentil(e, 10);
+  let m = 0; for (const v of e) m += v; m /= e.length;
+  // Welch da envoltória sem a média (Hann, 8192 pontos ≈ 3,4 s, 50%): a linha de amplitude A soma A²·N·Σw²/4 no lóbulo
+  const nper = 8192, hop = nper / 2, w = Float64Array.from({ length: nper }, (_, i) => 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / nper));
+  let sw2 = 0; for (const v of w) sw2 += v * v;
+  const P = new Float64Array(nper / 2 + 1), re = new Float64Array(nper), im = new Float64Array(nper);
+  let ns = 0;
+  for (let s = 0; s + nper <= e.length; s += hop) {
+    for (let i = 0; i < nper; i++) { re[i] = (e[s + i] - m) * w[i]; im[i] = 0; }
+    fft(re, im);
+    for (let k = 0; k <= nper / 2; k++) P[k] += re[k] * re[k] + im[k] * im[k];
+    ns++;
+  }
+  let m1 = NaN;
+  if (ns && fIgn > 0 && fIgn < 550) {
+    const df = fe / nper, sel: number[] = [], viz: number[] = [];
+    for (let k = 0; k <= nper / 2; k++) {
+      const f = k * df;
+      if (f >= fIgn * 0.97 && f <= fIgn * 1.03) sel.push(P[k] / ns);
+      else if ((f >= fIgn * 0.85 && f < fIgn * 0.93) || (f > fIgn * 1.07 && f <= fIgn * 1.15)) viz.push(P[k] / ns);
+    }
+    const piso = viz.length ? percentil(viz, 50) : 0;
+    const lin = sel.reduce((a, b) => a + b, 0) - piso * sel.length;
+    m1 = Math.sqrt(Math.max(0, (4 * lin) / (nper * sw2))) / (m + 1e-30);
+  }
+  return { p9010: 20 * Math.log10(p90 / (p10 + 1e-30)), m1, p10ref: 20 * Math.log10(p10 + 1e-30) - lref, rel: 10 * Math.log10(eb / y.length + 1e-30) - lref };
+}
+
 // leitura de WAV (PCM 16/24/32 ou float 32), mono pela média dos canais
 export function lerWavMono(arq: string): { x: Float64Array; sr: number } {
   const buf = fs.readFileSync(arq);
