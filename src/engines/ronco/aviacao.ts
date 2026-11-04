@@ -28,9 +28,19 @@ export const paLw5 = (lw: number) => 2e-5 * Math.pow(10, (lw - 20 * Math.log10(5
 
 export type Magnetos = 'ambos' | 'esq' | 'dir' | 'desligado';
 
-/** estouros da partida do radial (RADIAL.md 3.4): chance extra de uma falha estourar no escape e o "coletor quente"
- *  que ela dispensa, os dois caindo com o tempo de funcionamento; e o tamanho do estouro (o `k` do EngineDSP) */
-export const ESTOURO_PARTIDA = { p: 0.35, tau: 20, quente: 0.8, k: 0.9, kPlano: 0.9 };
+/**
+ * Estouros da partida do radial (RADIAL.md 3.4): chance extra de uma falha estourar no escape (`p`) e o "coletor quente"
+ * que ela dispensa (`quente`), os dois caindo com o tempo de funcionamento (`tau`, s); e o tamanho do estouro (o `k` do
+ * EngineDSP; `kPlano` nos motores planos da família aviação, que não têm estouro de partida).
+ *
+ * Medido (tools/radial-estouros.ts contra as gravações, REVISAO-DE-SOM.md): com os valores do RADIAL.md (35% de chance,
+ * τ 20 s, k 0,9) o R-1830 dava 21 estouros nos 3 s depois de pegar e 32 nos primeiros 20 s, 28–34 dB acima da envoltória
+ * de 1–6 kHz, e quem acelerava no primeiro minuto ouvia 2–7 estouros por segundo; nas gravações (DC-3, P-47, Corsair, T-28,
+ * R-2800, Rotec, Sh-14) os primeiros 20 s têm 0–6 picos acima de 20 dB (o mais alto 14–27 dB) e 0–0,7 por segundo acima de
+ * 16 dB, e o próprio RADIAL.md pedia 3–8 estouros nos primeiros 10 s. A mistura com óleo é a dos cilindros encharcados:
+ * a chance cai com a constante do encharque (8 s), e o estouro de uma carga de lenta fica 11 dB menor.
+ */
+export const ESTOURO_PARTIDA = { p: 0.06, tau: 8, quente: 0.8, k: 0.25, kPlano: 0.9 };
 
 /** hélice do preset (RADIAL.md 5.1): pás, diâmetro (m), inércia (kg·m²), passo fixo, β0, rpm mínima e máxima da hélice */
 export type HelicePreset = { B: number; D: number; J: number; passoFixo?: boolean; beta0?: number; nMin?: number; nMax?: number; kapK?: number; largoK?: number };

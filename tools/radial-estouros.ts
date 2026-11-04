@@ -84,7 +84,7 @@ const criar = (id: string, quente: boolean) => (eAv(id) ? novoAv(id, 15, quente)
 export type Regime = { regime: string; t0: number; t1: number; m: MedidaEstouros; inj: number; falha: number; rpm: number };
 
 /** um cenário: eventos, duração e as janelas medidas (relativas ao início, ou a quando pegou com `dePega`) */
-function cenario(id: string, quente: boolean, dur: number, eventos: [number, (d: any) => void][], janelas: [string, number, number][], dePega = false): Regime[] {
+export function cenario(id: string, quente: boolean, dur: number, eventos: [number, (d: any) => void][], janelas: [string, number, number][], dePega = false): Regime[] {
   const d = criar(id, quente);
   const k = instrumentar(d);
   const r = renderizar(d, dur, eventos as any, k.cada);
@@ -97,9 +97,9 @@ function cenario(id: string, quente: boolean, dur: number, eventos: [number, (d:
   });
 }
 
-const ign = (d: any) => d.message({ type: 'input', ignition: true });
-const eng = (d: any) => { if (d.engatar) d.engatar(); };
-const thr = (v: number) => (d: any) => d.message({ type: 'input', throttle: v });
+export const ign = (d: any) => d.message({ type: 'input', ignition: true });
+export const eng = (d: any) => { if (d.engatar) d.engatar(); };
+export const thr = (v: number) => (d: any) => d.message({ type: 'input', throttle: v });
 
 /** todos os regimes de um preset */
 export function regimes(id: string): Regime[] {
