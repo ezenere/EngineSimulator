@@ -28,6 +28,10 @@ export const paLw5 = (lw: number) => 2e-5 * Math.pow(10, (lw - 20 * Math.log10(5
 
 export type Magnetos = 'ambos' | 'esq' | 'dir' | 'desligado';
 
+/** estouros da partida do radial (RADIAL.md 3.4): chance extra de uma falha estourar no escape e o "coletor quente"
+ *  que ela dispensa, os dois caindo com o tempo de funcionamento; e o tamanho do estouro (o `k` do EngineDSP) */
+export const ESTOURO_PARTIDA = { p: 0.35, tau: 20, quente: 0.8, k: 0.9, kPlano: 0.9 };
+
 /** hélice do preset (RADIAL.md 5.1): pás, diâmetro (m), inércia (kg·m²), passo fixo, β0, rpm mínima e máxima da hélice */
 export type HelicePreset = { B: number; D: number; J: number; passoFixo?: boolean; beta0?: number; nMin?: number; nMax?: number; kapK?: number; largoK?: number };
 
@@ -142,7 +146,7 @@ export function instalarAviacao(d: any, cfg: any) {
     d.mistura = cfg.misturaPadrao ?? 0.8;
     d.prime = 0;
   }
-  d.qMix = 1; d.burnAv = 1; d.avHot = 0; d.prAv = 0.015; d.arPartida = false; d.falhaMix = 0;
+  d.qMix = 1; d.burnAv = 1; d.avHot = 0; d.prAv = 0.015; d.kEstouroAv = d.radial ? ESTOURO_PARTIDA.k : ESTOURO_PARTIDA.kPlano; d.arPartida = false; d.falhaMix = 0;
   d.crankMax = cfg.crankMax || (d.radial ? 25 : 8);
   d.partidaTipo = cfg.partida || 'direta';
   d.nivelEscape = cfg.nivelEscape || 135;
@@ -195,7 +199,7 @@ function controleAv(this: any, dtc: number) {
   this.burnAv = (this.magnetos === 'esq' || this.magnetos === 'dir' ? 1.6 : 1) * (1 + 0.3 * clamp((0.6 - mx) / 0.3, 0, 1));
   this.falhaMix = mx < 0.45 ? 0.3 * (0.45 - mx) / 0.15 : 0;
   const rt = this.runT || 0;
-  if (this.radial) { this.avHot = 0.8 * Math.exp(-rt / 20); this.prAv = 0.015 + 0.35 * Math.exp(-rt / 20); }
+  if (this.radial) { const E = ESTOURO_PARTIDA, f = Math.exp(-rt / E.tau); this.avHot = E.quente * f; this.prAv = 0.015 + E.p * f; this.kEstouroAv = E.k; }
   // carga de bancada
   const ca = this.cargaAv;
   if (ca && this.carga === ca && !this.lockOmega) { // (nas sondas de calibração o acelerador é o da sonda)

@@ -76,7 +76,7 @@ export class EngineDSP implements DSPDeAudio {
   declare tap: any;
   // aviação e radial (RADIAL.md 1.6; src/engines/ronco/aviacao.ts e src/engines/radial/dsp.ts): flags, carga no eixo e o que os
   // ganchos `if (this.av)` / `if (this.radial)` leem (o EngineDSP só os declara; instalarAviacao os põe na instância)
-  declare av: any; declare radial: any; declare carga: any; declare cargaExterna: any; declare qMix: any; declare burnAv: any; declare avHot: any; declare prAv: any;
+  declare av: any; declare radial: any; declare carga: any; declare cargaExterna: any; declare qMix: any; declare burnAv: any; declare avHot: any; declare prAv: any; declare kEstouroAv: any;
   declare arPartida: any; declare crankMax: any; declare falhaAv: any; declare torquePartida: any; declare partidaAr: any; declare somPartidaAv: any;
   declare avControle: any; declare avMensagem: any; declare avTelemetria: any; declare avSomExtra: any;
   // rotativo (ROTATIVO.md 1.6; src/engines/rotativo/dsp.ts, RotativoDSP): flag, ciclo da câmara (720 no pistão, 1080 no
@@ -938,7 +938,7 @@ export class EngineDSP implements DSPDeAudio {
             let rate = 0, k = 0, pr = 0, wet = true, floor = 0.15, lit = false;
             if (running && this.rpmAvg > this.idle * 1.4) {
               const ov = this.overrun;
-              if (combust) { pr = 0.015; k = 0.7; if (this.av) { pr = this.prAv; k = 0.9; } } // falha de ignição (válvulas flutuando, comando bravo): mistura inteira, mas quase nunca acende
+              if (combust) { pr = 0.015; k = 0.7; if (this.av) { pr = this.prAv; k = this.kEstouroAv; } } // falha de ignição (válvulas flutuando, comando bravo): mistura inteira, mas quase nunca acende
               else if (this.launching && this.limiter) { rate = 20; k = 0.8; } // 2-step com corte
               else if (this.limiter) [rate, k, wet] = { ign: [25, 0.7, true], partial: [8, 0.6, true] }[this.limType] || [0.5, 0.3, false]; // (corte de injeção: só o filme de combustível do coletor)
               else if (this.shifting && this.shiftCut) [rate, k] = this.ignCut ? [40, 0.8] : [5, 0.5];
