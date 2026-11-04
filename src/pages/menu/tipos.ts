@@ -20,7 +20,7 @@ export const TIPOS: TipoDeMotor[] = [
   { id: 'rotativo', nome: 'Rotativos',
     descricao: 'Wankel, X-Engine e motor de palhetas.',
     exemplos: 'Mazda 13B e Renesis, 787B, NSU Ro80, Norton' },
-  { id: 'diesel', nome: 'Diesel',
+  { id: 'diesel', nome: 'Diesel', pagina: './diesel.html',
     descricao: 'Ignição por compressão, 4 e 2 tempos.',
     exemplos: 'Picapes, caminhões, locomotiva EMD 710, geradores' },
   { id: 'vapor', nome: 'Vapor',

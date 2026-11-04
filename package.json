@@ -16,7 +16,11 @@
     "navegador:ronco": "node tools/ronco-navegador.mjs",
     "navegador:turbina": "node tools/turbina-testa-navegador.mjs",
     "navegador:passagem": "node tools/passagem-navegador.mjs",
-    "teste:cena": "tsx tools/cena/valida.ts"
+    "teste:cena": "tsx tools/cena/valida.ts",
+    "teste:diesel": "tsx tools/diesel-valida.ts",
+    "lenta:diesel": "tsx tools/diesel-lenta.ts",
+    "governador:diesel": "tsx tools/diesel-governador.ts",
+    "navegador:diesel": "node tools/diesel-navegador.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",

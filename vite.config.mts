@@ -23,6 +23,7 @@ export default defineConfig({
         ronco: resolve(raiz, 'ronco.html'),
         turbina: resolve(raiz, 'turbina.html'),
         passagem: resolve(raiz, 'passagem.html'),
+        diesel: resolve(raiz, 'diesel.html'),
       },
     },
   },

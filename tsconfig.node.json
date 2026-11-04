@@ -14,5 +14,5 @@
     "isolatedModules": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["tools/**/*.ts", "vite.config.mts", "src/acoustics/**/*.ts", "src/worklet/tom.ts", "src/engines/turbina/**/*.ts", "src/engines/ronco/**/*.ts", "src/worklet/tipos.ts", "src/scene/**/*.ts", "src/carriers/**/*.ts"]
+  "include": ["tools/**/*.ts","vite.config.mts","src/acoustics/**/*.ts","src/worklet/tom.ts","src/engines/turbina/**/*.ts","src/engines/ronco/**/*.ts","src/worklet/tipos.ts","src/scene/**/*.ts","src/carriers/**/*.ts","src/engines/diesel/**/*.ts"]
 }

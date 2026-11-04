@@ -9,6 +9,7 @@ Este documento explica a física e o processamento de áudio por trás dos dois 
 - [Turbina: motor a jato](#turbina-motor-a-jato)
 - [Cena e portadores](#cena-e-portadores)
 - [Página Passagem e modo de testes](#página-passagem-e-modo-de-testes)
+- [Diesel: ignição por compressão](#diesel-ignição-por-compressão)
 - [Validação](#validação)
 - [Limitações conhecidas](#limitações-conhecidas)
 - [Como adicionar um carro ou avião](#como-adicionar-um-carro-ou-avião)
@@ -784,6 +785,39 @@ Um clique numa esfera faz da fonte o alvo do gimbal e mostra a ficha dela: tipo,
 9. **Console sem erros.**
 
 **Resultado:** passa em Chromium (worklet e reserva) e em Firefox.
+## Diesel: ignição por compressão
+
+O projeto está em [`DIESEL.md`](DIESEL.md); aqui fica o que foi feito, como e o que se mediu. Página `diesel.html` (`src/pages/diesel/`), DSP em `src/engines/diesel/`, worklet `src/worklet/processador-diesel.ts` (`diesel-engine`).
+
+### Como estende o Ronco
+
+`DieselDSP extends EngineDSP`. O `EngineDSP` ganhou uma flag `this.cc` (falsa no Ronco), `this.tempos`/`this.ciclo`, o teto 24 no `clamp` da taxa de compressão com `cc` e ramos `if (this.cc) {…} else {linha original}` nos pontos da tabela 1.2 do DIESEL.md: injeção, cliques de válvula, Wiebe, perda de calor na parede, válvulas de escape e de admissão, atrito (mais a carga do portador como pressão média de freio), motor de partida, knock e turbo. Os ramos chamam métodos que a subclasse põe como propriedades da instância (`ccInjecao`, `ccQueima`…; o `EngineDSP` só os declara). `git diff --stat` do `dsp.ts` do Ronco: 30 linhas a mais, 10 trocadas. O `control()` do Ronco roda inteiro e a subclasse corrige depois (`ccDepois`): o controle de lenta por ar, o turbo do Ronco e a temperatura do escape rodam mas não mandam em nada. `npm run paridade:ronco` (200 cenários, WAV e JSON) e `--dist` saem idênticos; render de `v16 rev` e `muscle wot` com o mesmo tempo (2,2 s e 2,6 s).
+
+`tune()` troca a geometria pela da ficha (diâmetro e curso reais, mesmo volume), abre o duto de admissão (8× a área), põe os eventos de válvula do diesel (4T) ou as janelas (2T, escape ×1,3, janelas ×1,6), o torque, a inércia e o combustível máximo por ciclo `mfMax = P·bsfc/(3600·injeções/s)`. `buildExhaust()` monta coletores por bancada → uma turbina (`TwoPort 'turbo'`) → DPF (`DoisPortasDiesel`) → abafador (original, de caminhão ou só a chaminé) → boca com o raio da chaminé; os comprimentos são escalados por `520/c` do gás (470, 500, 560 m/s).
+
+### Combustão
+
+- **Injeção** armada no curso de compressão; piloto 12° antes do principal (8% do combustível, mínimo 1,5 mg escalado), início pelo mapa do DIESEL.md 2.2 (common-rail, mecânica, IDI) ou fixo (EMD 10°, GE 14°). Combustível `fuelCmd·mfMax·mapa(rpm)`, limitado por `λ_min` quando a bomba tem limitador.
+- **Atraso** de Hardenberg–Hase com `p` e `T` do cilindro na injeção, `kAtraso` 1,6, cetano do preset; o principal com piloto usa 0,6×.
+- **Wiebe dupla** (pré-misturada `φ_p = clamp(τ/θ_inj)·k_pre`, 6–10°; difusão 40–90°) com `dQ` limitado a 6 bar por amostra. `θ_inj` vem da vazão do injetor, escalada para a plena carga durar ~32° na rotação de potência (com a vazão fixa por mg do DIESEL.md o EMD injetava em 11° e queimava quase tudo pré-misturado).
+- **Frio**: parede `430 + 0,9·(água − 90)` K; queima parcial quando `τ > 4 ms` ou a temperatura alcançada no atraso (a maior entre a da injeção e a estimada no PMS, mais o ponto quente da vela) passa abaixo de 620 K; queimas parciais `0,3·frio·e^(−t/40 s)`; σ de 2,5% a 8%.
+- **Knock**: `dp/dθ` medido no cilindro em cada amostra de queima (±5% fixo por cilindro) → 2 passa-altas de 2ª ordem em `700·√(0,1/B)` Hz → banco de 5 ressonadores (bloco ×3 pelo diâmetro, tampa, câmara) → passa-baixa de 6 kHz → 70% determinístico + 30% ruído pela envoltória. Toda a mecânica (knock, tiques de injeção por tipo da tabela 2.7, trem de válvulas, bombas e um fundo mecânico contínuo) é referida ao pico do knock de lenta quente do próprio motor, medido na sonda de calibração (`refKnock`), e escalada por `K_MEC` e pelo `mecanica` do preset (dB).
+
+### Governadores, carga e partida
+
+- **min-max** (eletrônico): pedal manda combustível, PI isócrono de lenta (integrador até 0,6), governador de máxima em rampa de 120 rpm; **todas-as-rotações** (mecânico): droop estático `1/droop` (0,15 na lenta) realizado com ganho rápido baixo e um atraso de 0,5 s; **isócrono** no gerador, na locomotiva e na bancada, alvo em rampa (100 rpm/s na locomotiva). Sobrevelocidade: corta acima de 112%, volta abaixo de 105%.
+- **Ganhos normalizados por motor** (desvio do DIESEL.md): os do documento (Kp 6, Ki 1,5/s na lenta) davam caça de ±12% a 2,4 Hz na Hilux. Aqui `P = Kt/(J·ω)` é a aceleração relativa por unidade de combustível e `Kp = ω_c/P` (lenta 9 rad/s, gerador 2,7, locomotiva 2,5, bancada 8; no EMD em N8 isso dá Kp ≈ 6). A rotação medida é a média do ω no último intervalo de ignição.
+- **Portadores internos ("bancada")**: carro (o câmbio do Ronco), gerador (P = degrau·kWe/η, rampa de 0,1 s, AVR com queda por subfrequência abaixo de 97%), locomotiva (tabela de notches; o regulador de carga segue a rotação já alcançada e alivia se o combustível satura), dinamômetro (torque em fração do nominal). A carga entra como pressão média de freio somada ao atrito. `acoplar(carga)` e `{ type: 'diesel', combustivel }` estão prontos para os portadores de `carriers/` (marcados `TODO(integração carriers/)`).
+- **Atrito diesel**: +0,57 bar sobre o do Ronco (o ×1,6 do DIESEL.md no polinômio inteiro dava 4,4 bar na rotação máxima). **Motor de partida** de redução (torque de travamento ~2,5× o atrito frio, gira a 150–250 rpm; o do Ronco girava um 15 L a 30–60 rpm). **Velas**: espera `(1 + 8·frio)·glowK` s antes de girar, com o relé estalando.
+- **Turbo**: rotação pela energia do escape `√(rpm·combustível)`, τ do preset, mínimo 0,15 no VGT, engrenado do EMD `max(livre, rpm·18,3)`, wastegate com chiado; apito `z·N/60` (2º harmônico, queda acima de 16 kHz), chiado modulado pelos pulsos do escape. **Freio-motor**: borboleta (3 bar, atenua a boca e o jato), VGT (2,5 bar, turbo acelera), Jake (janela de −8° a +40° em volta do PMS de compressão, 0,35·AexMax, cilindros 2/4/6; o sopro gira a turbina), VEB. (A janela 350–390° do DIESEL.md cai no PMS de troca de gases, onde não há ar comprimido: foi entendida como "em volta do PMS de compressão".)
+
+### Ferramentas e portões
+
+- `npm run teste:diesel` (`tools/diesel-valida.ts`): lenta, governadores, pressões (tabela 2.5), bandas por família (Apêndice A, tabela 4.4), fumaça, freio-motor, potência, veículo e NaN, em paralelo; sai ≠ 0 em falha nova; os desvios conhecidos (abaixo) aparecem como "desvio". `npm run lenta:diesel`: 16 presets × 20 °C e −5 °C, partida de verdade, aceleradas aos 8 s e 13 s (notch 4 na locomotiva, degrau de 50% no gerador), zero apagamentos, rotação final ±3% do alvo do governador (±8% nos mecânicos com a água fria). `npm run governador:diesel`. `tools/diesel-bandas.ts` é a porta de `analyze2.py` (conferida nas gravações: Hilux 1GD, Cat C15 e EMD 710 dão os números do Apêndice A). `tools/diesel-render.ts <preset> <cenário> <pasta> [ouvinte] [--resumo]`, `tools/diesel-medir.ts`. `npm run navegador:diesel` serve o `dist/` em `/data/engine/` e testa a página no Chromium e no Firefox (`… dist firefox`).
+
+### Desvios conhecidos
+
+Os números medidos estão no relatório da etapa e em `npm run teste:diesel`. Ficaram fora do alvo: a temperatura na abertura do escape em lenta (480–540 K contra 600–750: zona única com a lenta pobre), o ângulo do pico (2–7° adiantado) e o `dp/dθ` de plena carga (10 bar/° contra 5–8); a fumaça preta no transiente (aspirado com ar sobrando, regulador de carga da locomotiva subindo junto com o giro); o EMD 710 mais escuro que a gravação (faltam fontes do 2 tempos: engrenagens, ventiladores, sopradores) e o GE agudo demais em lenta; o Jake e o freio de descarga sem o agudo e a atenuação pedidos; o droop do OM617 (3,6% contra 7–9%, pelo atrito em vazio); a caça do mecânico em lenta maior que ±2%; potência na rotação de potência até 15% acima da ficha nos leves aspirados e no Ranger; Hilux a 100 km/h em 6ª a 1542 rpm com as relações da ficha. O MAN B&W marítimo (opcional) não entrou.
 
 ## Validação
 
