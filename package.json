@@ -14,7 +14,11 @@
     "paridade:turbina": "tsx tools/turbina-paridade.ts",
     "paridade:acoustics": "tsx tools/acoustics-paridade.ts",
     "navegador:ronco": "node tools/ronco-navegador.mjs",
-    "navegador:turbina": "node tools/turbina-testa-navegador.mjs"
+    "navegador:turbina": "node tools/turbina-testa-navegador.mjs",
+    "teste:diesel": "tsx tools/diesel-valida.ts",
+    "lenta:diesel": "tsx tools/diesel-lenta.ts",
+    "governador:diesel": "tsx tools/diesel-governador.ts",
+    "navegador:diesel": "node tools/diesel-navegador.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",

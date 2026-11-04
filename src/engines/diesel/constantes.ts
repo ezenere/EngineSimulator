@@ -41,5 +41,8 @@ export const NOTCH_RPM = {
 // peso do trem de válvulas e do fundo mecânico; acertados nas bandas do ouvinte `bay` (DIESEL.md 2.6, Apêndice A)
 export const K_MEC = 0.045;
 export const K_VALV = 0.3;
-export const K_FUNDO = 0.025;
+export const K_FUNDO = 0.02;
 export const K_VIB = 0.1;
+// perda de calor para a parede no diesel, sobre a do Ronco: a mistura pobre da lenta (λ 4–8) queima mais fria e a
+// perda ×1 deixava o gás a 480–520 K na abertura do escape em lenta (alvo 600–750 K)
+export const K_CALOR = 0.6;

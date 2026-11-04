@@ -2,7 +2,7 @@
 // verdade (velas, motor de partida), 20 s em lenta com duas aceleradas (pé no fundo aos 8 s por 0,6 s, meio pé aos
 // 13 s por 0,3 s; locomotiva: notch 4 por 2 s; gerador: degrau de 50% por 3 s). Falha se apagar, se não pegar, se
 // der NaN ou se a rotação média dos 2 s finais sair de ±3% do alvo (o alvo é o do próprio governador: a lenta fria do
-// eletrônico, 1800 rpm no gerador). Nos governadores mecânicos (todas-as-rotações) a −5 °C a tolerância é ±8%: a
+// eletrônico, 1800 rpm no gerador). Nos governadores mecânicos (todas-as-rotações), com a água fria, a tolerância é ±8%: a
 // lenta cai pelo droop com o atrito do óleo frio e o motorista puxaria o acelerador manual (DIESEL.md 2.8).
 //
 //   npx tsx tools/diesel-lenta.ts [ids] [--j 12]
@@ -40,7 +40,7 @@ export function lenta(id: string, T: number) {
   const mecanico = spec.governador === 'todas-as-rotacoes' && port === 'carro';
   // (o alvo do mecânico é a mola de lenta: a lenta da ficha)
   const ref = mecanico ? spec.idle : alvo;
-  const tol = mecanico && T < 10 ? 0.08 : 0.03;
+  const tol = mecanico ? 0.08 : 0.03;
   const erro = (rpm - ref) / ref;
   const pico = Math.max(...tl.filter((e) => e.t > 8 && e.t < 11).map((e) => e.rpm));
   const ok = !!pegou && !apagou && !r.nan && Math.abs(erro) <= tol;

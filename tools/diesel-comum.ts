@@ -103,7 +103,7 @@ export function renderizar(spec: PresetDiesel, cen: string | Cenario, op: { ouvi
     if (i - ultTele >= passo) {
       ultTele = i;
       const m = d.telemetry();
-      tele.push({ t: +t.toFixed(4), rpm: m.rpm, fuel: m.fuel, lambda: m.lambda, pMax: m.pMax, dpdth: m.dpdth, ang: m.angPk, tauId: m.tauId, tInj: m.tInj, boost: m.boost, map: m.map,
+      tele.push({ t: +t.toFixed(4), rpm: m.rpm, fuel: m.fuel, lambda: m.lambda, lambdaInst: m.lambdaInst, pMax: m.pMax, dpdth: m.dpdth, ang: m.angPk, tauId: m.tauId, tInj: m.tInj, boost: m.boost, map: m.map,
         fumaca: m.fumaca, branca: m.fumacaBranca, state: m.state, gear: m.gear, kmh: m.kmh, coolant: m.coolant, exhT: m.exhT, tEvo: m.tEvo, turboRpm: m.turboRpm,
         kW: m.kW, cargaKW: m.cargaKW, torque: m.torque, velas: m.velas, notch: m.notch, rpmAlvo: m.rpmAlvo, jake: m.jake, pBack: m.pBack, fuelInj: m.fuelInj });
     }

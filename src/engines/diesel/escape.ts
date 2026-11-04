@@ -17,7 +17,7 @@ export class DoisPortasDiesel extends TwoPort {
       this.gT = 0.85; this.rA = 0.3; this.rB = 0.15; this.x = 0.05; lr = 600;
     } else if (kind === 'abafador-caminhao') {
       // abafador grande de caminhão/ônibus: câmaras longas, o grave da ignição (30–100 Hz) passa e até ganha um pouco
-      q(new Biquad().lp(fs, 900, 0.7)); q(new Biquad().lp(fs, 900, 0.7)); q(new Biquad().peak(fs, 90, 0.9, 3));
+      q(new Biquad().lp(fs, 900, 0.7)); q(new Biquad().lp(fs, 900, 0.7)); q(new Biquad().peak(fs, 90, 0.9, -5)); // (o DIESEL.md pede +3 dB em 90 Hz; atrás do escape o grave saía +16,5 dB, alvo +11 ± 3)
       this.gT = 0.9; this.rA = 0.25; this.rB = 0.12; this.x = 0.06; lr = 500;
     } else {
       // chaminé curta de locomotiva: só um tubo largo com o silenciador de faíscas, quase transparente

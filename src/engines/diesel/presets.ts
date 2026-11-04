@@ -44,7 +44,9 @@ export type PresetDiesel = PresetRonco & {
   escape: EscapeDiesel;
   janelas?: { evo: number; ipo: number; ipc: number; evc: number }; // só 2T
   J?: number; // kg·m² (sobrepõe a fórmula do Ronco)
-  glow: boolean; glowK?: number; // velas: espera = (1 s + 8 s·frio)·glowK (moderno 0,3)
+  glow: boolean; glowK?: number;
+  turboChiado?: number; // dB no chiado do turbo
+  mecanica?: number; // dB sobre a mecânica referida ao knock do próprio motor (acerto contra as gravações) // velas: espera = (1 s + 8 s·frio)·glowK (moderno 0,3)
   portadores: Portador[];
   gerador?: { fRede: number; polos: number; eta: number; Jalt: number; pas: number; kWe: number };
   locomotiva?: { notchRpm: number[]; kW: number; lentaBaixa: number; eta: number };
@@ -108,7 +110,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     idle: 750, redline: 3200, rpmMax: 3200, rpmPotencia: 2800, power: 276, torque: 1152, inertia: 1.3,
     injecao: 'common-rail', piloto: true, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.9, turboTipo: 'vgt', turboRpmMax: 130000, turboPas: 7, turboApito: 2, turboTau: [1.0, 1.8],
-    freioMotor: 'vgt', escape: leve(4.6, 4), muffler: 'stock', pipeLen: 4.6, pipeD: 4, glow: true, glowK: 0.3,
+    freioMotor: 'vgt', escape: leve(4.6, 4), muffler: 'stock', pipeLen: 4.6, pipeD: 4, glow: true, glowK: 0.3, mecanica: 3,
     gears: 6, transmission: 'auto', shiftTime: 0.55, ratios: [3.23, 1.84, 1.41, 1.0, 0.82, 0.63], finalDrive: 3.73, wheelR: 0.4, mass: 3500, drag: 0.85,
     portadores: ['carro', 'nenhum'],
   },
@@ -172,7 +174,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     injecao: 'unitaria', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.6, turboTipo: 'wastegate', turboRpmMax: 110000, turboPas: 7, turboApito: 0, turboTau: [1.5, 2.5],
     freioMotor: 'descarga', escape: { turbina: true, dpf: false, abafador: 'abafador-caminhao', comprimento: 3.5, diametro: 5, chamine: { altura: 0.8, diametro: 5 }, tempGas: 500 },
-    muffler: 'stock', pipeLen: 3.5, pipeD: 5, glow: false,
+    muffler: 'stock', pipeLen: 3.5, pipeD: 5, glow: false, mecanica: 13, engine: 'mid',
     gears: 12, transmission: 'auto', shiftTime: 1.0, driveMode: 'eco', ratios: [11.32, 9.14, 7.19, 5.8, 4.63, 3.74, 3.02, 2.44, 1.92, 1.55, 1.24, 1.0], finalDrive: 3.08, wheelR: 0.52, mass: 40000, drag: 3.6,
     portadores: ['carro', 'gerador', 'nenhum'],
     gerador: { fRede: 60, polos: 4, eta: 0.95, Jalt: 10, pas: 10, kWe: 300 },
@@ -184,7 +186,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     injecao: 'unitaria', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.7, turboTipo: 'wastegate', turboRpmMax: 110000, turboPas: 7, turboApito: 0, turboTau: [1.5, 2.5],
     freioMotor: 'veb', escape: { turbina: true, dpf: false, abafador: 'abafador-caminhao', comprimento: 3.2, diametro: 5, chamine: { altura: 1.0, diametro: 5 }, tempGas: 500 },
-    muffler: 'stock', pipeLen: 3.2, pipeD: 5, glow: false,
+    muffler: 'stock', pipeLen: 3.2, pipeD: 5, glow: false, mecanica: 13, engine: 'mid',
     gears: 12, transmission: 'auto', shiftTime: 0.9, driveMode: 'eco', ratios: [14.94, 11.73, 9.04, 7.09, 5.54, 4.35, 3.44, 2.7, 2.08, 1.63, 1.27, 1.0], finalDrive: 2.85, wheelR: 0.52, mass: 40000, drag: 3.6,
     portadores: ['carro', 'gerador', 'nenhum'],
     gerador: { fRede: 60, polos: 4, eta: 0.95, Jalt: 10, pas: 10, kWe: 300 },
@@ -197,7 +199,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     aspiration: 'turbo', boost: 1.7, turboTipo: 'wastegate', turboRpmMax: 110000, turboPas: 7, turboApito: 0, turboTau: [1.5, 2.5],
     freioMotor: 'jake', jakeCilindros: [2, 4, 6],
     escape: { turbina: true, dpf: false, abafador: 'abafador-caminhao', comprimento: 2.6, diametro: 5, chamine: { altura: 3.5, diametro: 5 }, saidas: 2, tempGas: 500 },
-    muffler: 'stock', pipeLen: 2.6, pipeD: 5, glow: false,
+    muffler: 'stock', pipeLen: 2.6, pipeD: 5, glow: false, mecanica: 13, engine: 'mid',
     gears: 10, transmission: 'auto', shiftTime: 1.1, driveMode: 'eco', ratios: [14.4, 8.56, 6.05, 4.38, 3.2, 1.95, 1.38, 1.0, 0.86, 0.73], finalDrive: 3.55, wheelR: 0.52, mass: 36000, drag: 3.8,
     portadores: ['carro', 'gerador', 'nenhum'],
     gerador: { fRede: 60, polos: 4, eta: 0.95, Jalt: 10, pas: 10, kWe: 350 },
@@ -209,7 +211,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     injecao: 'common-rail', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.6, turboTipo: 'vgt', turboRpmMax: 110000, turboPas: 7, turboApito: 0, turboTau: [1.5, 2.5],
     freioMotor: 'vgt', escape: { turbina: true, dpf: true, abafador: 'abafador-caminhao', comprimento: 6, diametro: 5, chamine: null, tempGas: 500 },
-    muffler: 'stock', pipeLen: 6, pipeD: 5, glow: false,
+    muffler: 'stock', pipeLen: 6, pipeD: 5, glow: false, mecanica: 15,
     gears: 6, transmission: 'auto', shiftTime: 0.8, driveMode: 'eco', ratios: [3.36, 1.91, 1.42, 1.0, 0.72, 0.62], finalDrive: 5.74, wheelR: 0.51, mass: 18000, drag: 3.2,
     portadores: ['carro', 'gerador', 'nenhum'],
     gerador: { fRede: 60, polos: 4, eta: 0.95, Jalt: 8, pas: 10, kWe: 180 },
@@ -224,7 +226,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     soprador: { relacao: 1.95, lobulos: 3, uivo: 0, pressao: 0.45 },
     freioMotor: 'nenhum', escape: { turbina: true, dpf: false, abafador: 'abafador-caminhao', comprimento: 3.0, diametro: 4, chamine: null, tempGas: 500 },
     janelas: { evo: 95, ipo: 130, ipc: 230, evc: 225 },
-    muffler: 'stock', pipeLen: 3, pipeD: 4, glow: false,
+    muffler: 'stock', pipeLen: 3, pipeD: 4, glow: false, mecanica: 12,
     gears: 4, transmission: 'auto', shiftTime: 0.9, driveMode: 'eco', ratios: [3.69, 2.01, 1.36, 1.0], finalDrive: 4.11, wheelR: 0.5, mass: 16000, drag: 3.0,
     portadores: ['carro', 'nenhum'],
   },
@@ -236,7 +238,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     injecao: 'unitaria', piloto: false, idi: false, eletronico: true, governador: 'isocrono', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.6, turboTipo: 'wastegate', turboRpmMax: 110000, turboPas: 7, turboApito: 0, turboTau: [1.5, 2.5],
     freioMotor: 'nenhum', escape: { turbina: true, dpf: false, abafador: 'stock', comprimento: 2.0, diametro: 6, chamine: null, tempGas: 500 },
-    muffler: 'stock', pipeLen: 2, pipeD: 6, glow: false,
+    muffler: 'stock', pipeLen: 2, pipeD: 6, glow: false, mecanica: 12, engine: 'mid',
     gears: 0, transmission: 'manual', mass: 5000,
     portadores: ['gerador', 'nenhum'],
     gerador: { fRede: 60, polos: 4, eta: 0.95, Jalt: 12, pas: 10, kWe: 400 },
@@ -249,10 +251,10 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     classe: 'locomotiva', tempos: 2, displacement: 186, diametro: 230.2, curso: 279.4, cr: 16.0,
     idle: 269, redline: 904, rpmMax: 904, rpmPotencia: 904, power: 3356, torque: 35400, inertia: 1, J: 400,
     injecao: 'unitaria', piloto: false, idi: false, eletronico: true, avanco: 10, governador: 'isocrono', limiteFumaca: 1.2,
-    aspiration: 'turbo', boost: 1.4, turboTipo: 'engrenado', turboEngrenagem: 18.3, turboRpmMax: 18000, turboPas: 27, turboApito: 2, turboTau: [3, 5],
+    aspiration: 'turbo', boost: 1.4, turboTipo: 'engrenado', turboEngrenagem: 18.3, turboRpmMax: 18000, turboPas: 27, turboApito: 24, turboTau: [3, 5],
     freioMotor: 'nenhum', escape: { turbina: true, dpf: false, abafador: 'nenhum', comprimento: 1.2, diametro: 17.7, chamine: { altura: 0.8, diametro: 17.7 }, tempGas: 560 },
     janelas: { evo: 100, ipo: 134, ipc: 226, evc: 232 },
-    muffler: 'straight', pipeLen: 1.2, pipeD: 17.7, glow: false,
+    muffler: 'straight', pipeLen: 1.2, pipeD: 17.7, glow: false, mecanica: 18, engine: 'mid', turboChiado: 18,
     gears: 0, transmission: 'manual', mass: 190000,
     portadores: ['locomotiva', 'nenhum'],
     locomotiva: { notchRpm: [269, 269, 343, 490, 568, 651, 729, 820, 904], kW: 3356, lentaBaixa: 200, eta: 0.93 },
@@ -266,7 +268,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     injecao: 'em-linha', piloto: false, idi: false, eletronico: false, avanco: 14, governador: 'isocrono', limiteFumaca: 1.0,
     aspiration: 'turbo', boost: 1.6, turboTipo: 'fixo', turboRpmMax: 15500, turboPas: 20, turboApito: -6, turboTau: [4, 6],
     freioMotor: 'nenhum', escape: { turbina: true, dpf: false, abafador: 'nenhum', comprimento: 1.5, diametro: 17.7, chamine: { altura: 0.8, diametro: 17.7 }, tempGas: 560 },
-    muffler: 'straight', pipeLen: 1.5, pipeD: 17.7, glow: false,
+    muffler: 'straight', pipeLen: 1.5, pipeD: 17.7, glow: false, mecanica: -6, engine: 'mid',
     gears: 0, transmission: 'manual', mass: 180000,
     portadores: ['locomotiva', 'nenhum'],
     locomotiva: { notchRpm: [440, 440, 511, 585, 672, 764, 846, 950, 1050], kW: 2240, lentaBaixa: 440, eta: 0.93 },
