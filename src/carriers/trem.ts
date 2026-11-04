@@ -5,11 +5,20 @@
 // em x_c = L/2 − c·L_c e tem L_c − vão de corpo; L = N·L_c − vão. Truques a `truqueExtremidade` de cada
 // ponta (8 m de um ao outro através do vão, L_c − 8 dentro do vagão), vãos no meio da junção.
 //
-// Fontes (refDist 7,5 m; v_ref 300 km/h; L_W dB(A) re 1 pW), tabela de 4.6:
-//   truque.k (rolamento) ×2N, 123 dB(A), n 3 · truque.k.aero ×2N, 119, n 6 (pico 160 Hz)
-//   corpo.k (aero) ×N, 122, n 6, na face voltada ao ouvinte, z 1,8
+// Fontes (refDist 7,5 m; v_ref 300 km/h; L_W dB(A) re 1 pW; entre parênteses o valor da tabela de 4.6):
+//   truque.k (rolamento) ×2N, 130 (123) dB(A), n 3 · truque.k.aero ×2N, 105 (119), n 6 (pico 160 Hz)
+//   corpo.k (aero) ×N, 119 (122), n 6, na face voltada ao ouvinte, z 1,8
 //   vao.k ×(N−1), 119, n 6 · pantografo.k ×2, 125 (115 carenado), n 6, z 5
-//   nariz / cauda (aero, pico 300 Hz) 119, n 6, mais as fontes 'pressao' (campo próximo, calculado pela Cena)
+//   nariz / cauda (aero, pico 300 Hz) 116 (119), n 6, mais as fontes 'pressao' (campo próximo, calculado pela Cena)
+//
+// Orçamento ajustado contra gravações de passagem a 265–320 km/h (E5, Tohoku, Velaro E a 300 e 265, Velaro,
+// ICE 3; docs/TECNICO.md, Validação). Com os L_W de 4.6 o aero dominava o nível A a 7,5 m por 7 dB (o
+// rolamento, sob o piso, chega com a sombra de 2.5: 92 dB(A) contra os 97 que 4.6 dá para "só rolamento a
+// 7,5 m e 300 km/h"), e o pico tinha 1–2,5 kHz a −6 dB e centroide de 510 Hz, contra +4 dB e 1,5 kHz nas
+// gravações. Agora: só rolamento 98,8 dB(A) a 7,5 m (97 ± 2 de 4.6), aero + vãos + pantógrafos 95,8, total
+// 100,6. O aero do truque (pico 160 Hz) é o que mais enchia 60–400 Hz e caiu mais; o corpo, na face, segura
+// o nível a 3 m (o rolamento sombreado sobe só ~2 dB de 7,5 para 3 m): L_Aeq,tp 105,5 dB(A) a 3 m/350 km/h
+// e túnel − céu +8,7 dB, dentro dos alvos de 2.10–2.11.
 //
 // Diretividade: o CENA.md não dá tabela para essas fontes. O rolamento é um dipolo lateral (eixo y,
 // cos θ limitado a −20 dB ao longo da via: a roda vibra na direção do eixo do rodeiro); as fontes
@@ -56,8 +65,8 @@ export const TREM_PADRAO: ConfigTrem = {
   ladoOuvinte: -1, semente: 0x7a11, tom: null, soTom: false,
 };
 
-/** níveis de potência (4.6) */
-export const LW_TREM = { rolamento: 123, truqueAero: 119, corpo: 122, vao: 119, pantografo: 125, pantografoCarenado: 115, narizCauda: 119 } as const;
+/** níveis de potência (4.6, ajustados contra gravações: ver o cabeçalho) */
+export const LW_TREM = { rolamento: 130, truqueAero: 105, corpo: 119, vao: 119, pantografo: 125, pantografoCarenado: 115, narizCauda: 116 } as const;
 export const V_REF_TREM = 300 / 3.6;
 export const REF_DIST_PORTADOR = 7.5;
 

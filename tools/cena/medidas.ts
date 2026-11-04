@@ -60,11 +60,14 @@ export function medirTrem(): Linha[] {
     const seg = env.slice(Math.round(r.tNarizAbeam / 0.005), Math.round(r.tCaudaAbeam / 0.005));
     // fundamental do ritmo dos vãos (o padrão duplo dos truques põe energia no 2º harmônico, 7,8 Hz)
     const fpk = A.picoDaSerie(seg, 200, 2, 6), prof = A.percentil(seg, 90) - A.percentil(seg, 10);
-    const okF = dentro(fpk, 3.89, 0.1), okP = prof >= 6;
+    // profundidade: alvo das gravações (docs/TECNICO.md, Validação). Seis passagens a 265–320 km/h (ICE 3,
+    // E5, Velaro E a 300 e 265, Velaro, Tohoku) dão p90−p10 de 2,4 a 5,6 dB em 1–4 kHz, com o pico em
+    // v/L_c ± 4%; o ≥ 6 dB de 2.9 não aparece em nenhuma. A 3 m o simulado deve ficar ao menos no meio da faixa.
+    const okF = dentro(fpk, 3.89, 0.1), okP = prof >= 3;
     L.push(linha('2.11', `modulação 1–4 kHz (${nomeAmb}): frequência`, '3,89 ± 0,1 Hz', `${f1(fpk, 3)} Hz`, okF, fpk,
       okF ? undefined : `Com ${f1(prof)} dB de profundidade o pico da envoltória se perde: no túnel o campo reverberante (RT60 2,8 s em 2 kHz, +7 dB sobre o direto) enche os vales. No céu aberto, com o mesmo trem, dá 3,9 Hz.`));
-    L.push(linha('2.11', `modulação 1–4 kHz (${nomeAmb}): profundidade p90−p10`, '≥ 6 dB', `${f1(prof)} dB`, okP, prof,
-      okP ? undefined : 'Na banda 1–4 kHz o ruído aerodinâmico (corpo, truques, vãos: espectro de 2.7 com níveis de 4.6) fica ~15 dB acima do rolamento, que a sombra do piso (2.5) atenua 8–10 dB acima de 1 kHz; o rolamento sozinho modula ' + f1(rolamentoProf()) + ' dB. O orçamento de 4.6 (rolamento ≈ aero a 7,5 m) supõe rolamento sem sombra.'));
+    L.push(linha('2.11', `modulação 1–4 kHz (${nomeAmb}): profundidade p90−p10`, '≥ 3 dB (gravações: 2,4–5,6)', `${f1(prof)} dB`, okP, prof,
+      okP ? undefined : 'O campo reverberante do túnel (RT60 2,8 s em 2 kHz, +7 dB sobre o direto) enche os vales da envoltória; o rolamento sozinho, a céu aberto, modula ' + f1(rolamentoProf()) + ' dB.'));
   }
   // padrão duplo dos truques: envoltória do rolamento sozinho dobrada no passo do vagão (L_c/v);
   // os dois maiores picos da envoltória média ficam a 8 m/v um do outro
@@ -119,7 +122,7 @@ export function medirTrem(): Linha[] {
     }
     const ok = nOk === N - 1;
     L.push(linha('2.11', 'pulsos de vão 50–200 Hz (túnel) ≥ 8 dB sobre o meio do vagão', `${N - 1} pulsos`, `${nOk} (${acima.map((x) => f1(x)).join(' ')} dB; −3 dB: ${larg.map((x) => x.toFixed(0)).join(' ')} ms)`, ok, nOk,
-      ok ? undefined : 'Os vãos são fontes de 119 dB(A) com energia em 50–400 Hz, mas na banda 50–200 Hz os truques (aero com pico em 160 Hz, 2×119 dB(A) a ±4 m do vão) e o corpo enchem o meio do vagão; a diferença fica abaixo de 8 dB.'));
+      ok ? undefined : 'Na banda 50–200 Hz o corpo e o rolamento enchem o meio do vagão e a diferença fica abaixo de 8 dB. As gravações também não mostram pulsos de vão: em seis passagens a 265–320 km/h a envoltória de 50–200 Hz não tem pico em v/L_c (picos espalhados entre 2,3 e 5,3 Hz, p90−p10 de 6–8 dB, o que janelas de 20 ms dão com ruído estacionário nessa banda).'));
   }
   // Doppler: tom de 1 kHz no nariz, só o tom, sem solo
   {
@@ -190,7 +193,7 @@ export function medirTrem(): Linha[] {
       return { mx, l100, leq, tmx: imx / 100 };
     };
     const nc = nivel(ceu), nt = nivel(tun);
-    const crista = `Com o ruído aerodinâmico, uniforme ao longo do corpo, dominando o nível A, o L_AF varia pouco na passagem: L_AFmax − L_Aeq,tp = ${f1(nc.mx - nc.leq)} dB, contra os 5 dB implícitos na tabela (113 − 108). O L_Aeq,tp bate.`;
+    const crista = `Com as fontes repetidas ao longo do corpo (rolamento dos 20 truques, aero dos vagões), o L_AF varia pouco na passagem: L_AFmax − L_Aeq,tp = ${f1(nc.mx - nc.leq)} dB, contra os 5 dB implícitos na tabela (113 − 108). As gravações a 265–320 km/h dão 0,7–1,8 dB (a do ICE 3, com rajadas de vento no microfone, 4,1). O L_Aeq,tp bate.`;
     const dCeu = nc.mx - nc.l100, dTun = nt.mx - nt.l100;
     L.push(linha('2.11', 'pico − nariz a 100 m (céu aberto)', '23 ± 4 dB', `${f1(dCeu)} dB`, dentro(dCeu, 23, 4), dCeu));
     L.push(linha('2.11', 'pico − nariz a 100 m (túnel)', '10–12 dB', `${f1(dTun)} dB`, dTun >= 10 && dTun <= 12, dTun));
@@ -203,16 +206,18 @@ export function medirTrem(): Linha[] {
     L.push(linha('2.11', 'L_AFmax túnel', '120 ± 3 dB(A)', `${f1(nt.mx)} dB(A)`, dentro(nt.mx, 120, 3), nt.mx, dentro(nt.mx, 120, 3) ? undefined : crista));
     // balanço espectral no pico (céu aberto, mono, sem ponderação), 0,5 s em torno do L_AFmax
     const b = A.balanco([ceu.L, ceu.R], SR, Math.round((nc.tmx - 0.25) * SR), Math.round((nc.tmx + 0.25) * SR));
-    const alvo = [4, 0, -1, 1, -2, -10];
+    // 60–150 Hz: −3 (o CENA dava +4). As quatro gravações sem vento no microfone (E5 a 320, Velaro E a 265,
+    // Velaro a 300, Tohoku a 300 km/h) dão −2,0 a −4,4 dB; as demais bandas do CENA ficam a ≤ 4 dB da média delas.
+    const alvo = [-3, 0, -1, 1, -2, -10];
     const nomes = ['60–150', '150–400', '400–1k', '1–2,5k', '2,5–6k', '6–12k'];
     for (let i = 0; i < 6; i++) {
       if (i === 1) continue;
       const ok = dentro(b.rel[i], alvo[i], 4);
       L.push(linha('2.11', `balanço no pico ${nomes[i]} Hz (rel. 150–400)`, `${alvo[i] > 0 ? '+' : ''}${alvo[i]} ± 4 dB`, `${f1(b.rel[i])} dB`, ok, b.rel[i],
-        ok ? undefined : 'Mesma causa da modulação: acima de 1 kHz o espectro é do ruído aerodinâmico (2.7), que cai 3–9 dB/oitava, e o rolamento chega 8–10 dB atenuado pela sombra do piso.'));
+        ok ? undefined : 'O rolamento domina acima de 1 kHz e a sombra do piso (2.5) o atenua mais a 3 m (9,8 dB em 1 kHz) que a 7,5 m (5,8 dB): o pico a 3 m fica mais escuro que as gravações, feitas mais longe da via; a 7,5 m e 300 km/h o balanço fica dentro da faixa delas.'));
     }
     L.push(linha('2.11', 'centroide no pico', '≈ 1,2 kHz', `${f1(b.centroide, 0)} Hz`, b.centroide > 800 && b.centroide < 1800, b.centroide,
-      b.centroide > 800 && b.centroide < 1800 ? undefined : 'Idem (espectro aerodinâmico dominante).'));
+      b.centroide > 800 && b.centroide < 1800 ? undefined : 'Idem (sombra do piso sobre o rolamento a 3 m).'));
   }
   return L;
 }

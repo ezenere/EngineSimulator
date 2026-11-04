@@ -118,9 +118,13 @@ export abstract class FonteRuido {
 
 /**
  * Rolamento roda-trilho (CENA.md 4.6): 1/3 de oitava relativo ao pico (2 kHz a 300 km/h, sobe com v^0,5):
- * 250 Hz −15, 500 −8, 1k −3, 2k 0, 4k −2, 8k −10. Realização: passa-banda Q 0,5 em 2,2 kHz·√(v/v_ref)
- * mais 1 polo em 7 kHz (erro < 1,5 dB nas seis bandas). Modulação dos dormentes a v/dormente com 2 dB
- * (±1 dB) e, com `achatamento` > 0, um pulso por volta da roda (v/πD).
+ * 250 Hz −15, 500 −8, 1k −3, 2k 0, 4k −2, 8k −10. Realização: passa-banda Q 0,5 em 1,5 kHz·√(v/v_ref)
+ * mais 1 polo em 2,5 kHz·√(v/v_ref), que em potência por 1/3 de oitava dá −16/−8/−2/0/−4/−11 (a anterior,
+ * passa-banda em 2,2 kHz e polo em 7 kHz, punha o pico de 1/3 de oitava em 3,2 kHz, com 4k −0,3 e 8k −4).
+ * As gravações de passagem com rolamento claro (E5, Tohoku, Velaro, CRH, AVE S-103; docs/TECNICO.md) têm o
+ * pico do rolamento recebido em 1,6–2,5 kHz e caem 6–9 dB até 4 kHz e 10–16 dB até 8 kHz; esta forma, com
+ * a propagação até 3 m, erra 0,7 dB (rms) contra a média delas de 500 Hz a 8 kHz. Modulação dos dormentes
+ * a v/dormente com 2 dB (±1 dB) e, com `achatamento` > 0, um pulso por volta da roda (v/πD).
  */
 export class FonteRolamento extends FonteRuido {
   dormente: number; achatamento: number; diametro: number;
@@ -128,12 +132,15 @@ export class FonteRolamento extends FonteRuido {
   constructor(fs: number, esp: EspecFonteRuido, semente: number, dormente = 0.6, achatamento = 0, diametro = 0.86) {
     super(fs, esp, semente);
     this.dormente = dormente; this.achatamento = achatamento; this.diametro = diametro;
-    this.ramos = [new Ramo(semente, [new Bq()], 7000)];
+    this.ramos = [new Ramo(semente, [new Bq()], 2500)];
   }
   montar(v: number) {
-    const r = this.ramos[0];
-    r.bq[0].bp(this.fs, 2200 * Math.sqrt(v / this.esp.vRef), 0.5);
-    this.definirLp(r, 7000);
+    const r = this.ramos[0], k = Math.sqrt(v / this.esp.vRef);
+    r.bq[0].bp(this.fs, 1500 * k, 0.5);
+    this.definirLp(r, 2500 * k);
+    // a forma inteira escala com k: a potência do ruído filtrado cresce com a largura de banda (∝ k);
+    // o ganho 1/√k a mantém, e a lei de velocidade fica só no gV (30·log v, não 35·log v)
+    r.g = 1 / Math.sqrt(k);
     this.fD = v / this.dormente; this.fR = v / (Math.PI * this.diametro);
   }
   protected modular(_k: number) {
