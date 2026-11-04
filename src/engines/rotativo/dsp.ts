@@ -56,7 +56,7 @@ export class RotativoDSP extends EngineDSP {
   declare kVelas: number; declare trailingOn: boolean; declare velas: number; declare tipoRot: string; declare fHCextra: number; declare fHCcat: number;
   declare seq: boolean; declare trocaRpm: number; declare transT: number; declare seqW: number; declare boostBase: number; declare rpmPrevSeq: number; declare phT2: number;
   declare pEO: Float64Array; declare TEO: Float64Array; declare MjEO: Float64Array; declare nEstouros: number; declare estourosS: number; declare tEst: number; declare fumaca: number;
-  declare iacLenta: number; declare magnetos: any; declare mistura: any; declare kBurn0: number; declare gastas: boolean; declare reator: boolean; declare rotFase: Float64Array; declare densMax: number;
+  declare traco: Float32Array; declare iacLenta: number; declare magnetos: any; declare mistura: any; declare kBurn0: number; declare gastas: boolean; declare reator: boolean; declare rotFase: Float64Array; declare densMax: number;
 
   constructor(fs: number) {
     super(fs);
@@ -67,7 +67,7 @@ export class RotativoDSP extends EngineDSP {
     this.kBurn = 1.5 * 1.15; this.falhaRot = 0; this.prRot = 0.04; this.runRot = [];
     this.hcN = new RNG(0x4c0b); this.hcS = new Float64Array(4); this.hcBoca = 0; this.kBoca = 0.1; this.kQuente = 0.6; this.hcKh = 0; this.hcKl = 0; this.bocas = []; this.bocasF = []; this.kHC = 1; this.fHCatual = 0; this.ov = 0; this.rotores = 2;
     this.seq = false; this.trocaRpm = 4500; this.transT = -1; this.seqW = 0; this.boostBase = 0; this.rpmPrevSeq = 0; this.phT2 = 0;
-    this.iacLenta = 0; this.nEstouros = 0; this.estourosS = 0; this.tEst = 0; this.fumaca = 0; this.densMax = 0;
+    this.traco = new Float32Array(64); this.iacLenta = 0; this.nEstouros = 0; this.estourosS = 0; this.tEst = 0; this.fumaca = 0; this.densMax = 0;
     // (conta os estouros: o mecanismo é o do Ronco, que põe cada um em `pops`)
     const pops = this.pops;
     pops.push = (...xs: any[]) => { this.nEstouros += xs.length; return Array.prototype.push.apply(pops, xs); };
@@ -159,6 +159,7 @@ export class RotativoDSP extends EngineDSP {
   /** gancho 9: tiques das vedações de ápice nas bordas das janelas (peso 0,3) e nos furos das velas (0,15); o ar zera no IO */
   janelasRot(c: number, a: number, ap: number) {
     const jE = this.jEx, jA = this.jAd, rng = this.rng;
+    if (c === 0) this.traco[Math.min(63, (a / this.cyc * 64) | 0)] = this.p[0]; // (traço p–α da câmara 0 para o mostrador)
     if (ap < jE.abre && a >= jE.abre) {
       this.clickEnv += 0.3 * (0.5 + 0.5 * rng.next());
       // (sonda: pressão e temperatura na abertura do escape)
@@ -504,6 +505,8 @@ export class RotativoDSP extends EngineDSP {
     t.pAbertura = this.pEO[0]; t.tAbertura = this.TEO[0]; t.machAbertura = this.MjEO[0]; t.densMax = this.densMax;
     t.queima1090 = 0.496 * (42 + 26 * rf) * slowB * this.kBurn;
     t.falha = this.falhaRot; t.fumaca = this.fumaca; t.vedacoes = this.gastas ? 'gastas' : 'novas';
+    t.traco = Array.from(this.traco, (x) => Math.round(x / 100) / 10); // bar, 64 pontos do ciclo da câmara 0
+    t.pPico = Math.max(...t.traco);
   }
 }
 

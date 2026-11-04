@@ -8,8 +8,8 @@ export const COMPAT: Record<TipoPortador, readonly FamiliaMotor[]> = {
   carro: ['pistao', 'diesel', 'radial', 'rotativo', 'vapor', 'eletrico'],
   // (o jato puro não tem hélice: a linha "turbina / turboélice × hélice" de 1.6 é a do turboélice)
   helice: ['pistao', 'turboelice', 'radial', 'rotativo'],
-  rotor: ['pistao', 'turboeixo', 'radial', 'nenhum'],
-  gerador: ['diesel', 'vapor'],
+  rotor: ['pistao', 'turboeixo', 'radial', 'rotativo', 'nenhum'],
+  gerador: ['diesel', 'rotativo', 'vapor'],
   locomotiva: ['diesel', 'vapor'],
   trem: ['eletrico', 'nenhum'],
   aviao: ['turbina'],
@@ -21,12 +21,12 @@ export const COMPAT: Record<TipoPortador, readonly FamiliaMotor[]> = {
  * motores de verdade que a Passagem monta. A Turbina não tem turboeixo (nenhum preset com `arch: 'turboeixo'`); o rotor
  * leva o pistão de aviação do Ronco (R22, R44, Bell 47, S300) ou o radial do S-55 (etapa 3), ou fica sem motor (`nenhum`).
  */
-export const ADAPTADORES: readonly FamiliaMotor[] = ['nenhum', 'pistao', 'diesel', 'turboelice', 'turbina', 'radial'];
+export const ADAPTADORES: readonly FamiliaMotor[] = ['nenhum', 'pistao', 'diesel', 'turboelice', 'turbina', 'radial', 'rotativo'];
 export const USO_REAL: Record<TipoPortador, readonly FamiliaMotor[]> = {
-  carro: ['pistao', 'diesel', 'radial'], // carros e motos; picape, caminhão e ônibus; Sherman, Monaco-Trossi e Megola
-  helice: ['turboelice', 'radial', 'pistao'], // turboélices; radiais e motores planos de avião (RADIAL.md 5.3 e 6)
-  rotor: ['pistao', 'radial', 'nenhum'],      // R22, R44, Bell 47, S300 (pistão de aviação), S-55 (radial); ou o rotor sozinho
-  gerador: ['diesel'],
+  carro: ['pistao', 'diesel', 'radial', 'rotativo'], // carros e motos; picape, caminhão e ônibus; Sherman, Monaco-Trossi e Megola; Mazda, Ro80, Norton
+  helice: ['turboelice', 'radial', 'pistao', 'rotativo'], // turboélices; radiais e motores planos de avião (RADIAL.md 5.3 e 6); Wankel de aviação e UAV (ROTATIVO.md 6.3)
+  rotor: ['pistao', 'radial', 'rotativo', 'nenhum'], // R22, R44, Bell 47, S300 (pistão de aviação), S-55 (radial), Camcopter S-100 (AE50R); ou o rotor sozinho
+  gerador: ['diesel', 'rotativo'],                 // grupos diesel; X-Engine (LiquidPiston, aproximação)
   locomotiva: ['diesel'],
   trem: ['nenhum'],
   aviao: ['turbina'],

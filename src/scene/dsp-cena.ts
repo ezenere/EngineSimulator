@@ -30,6 +30,7 @@ import { MotorRonco } from '../engines/ronco/motor';
 import { MotorDiesel } from '../engines/diesel/motor';
 import { MotorTurbina } from '../engines/turbina/motor';
 import { MotorRadial } from '../engines/radial/motor';
+import { MotorRotativo } from '../engines/rotativo/motor';
 import type { Motor } from '../carriers/tipos';
 
 /** monta o motor de uma mensagem `portador` (fora do laço: aloca) */
@@ -39,6 +40,7 @@ export function montarMotor(m: { familia: string; cfg: Record<string, any> } | u
   if (m.familia === 'diesel') { const x = new MotorDiesel(fs); x.configurar(m.cfg, fs); return x; }
   if (m.familia === 'turboelice' || m.familia === 'turbina') { const x = new MotorTurbina(fs); x.configurar(m.cfg, fs); return x; }
   if (m.familia === 'radial') { const x = new MotorRadial(fs); x.configurar(m.cfg, fs); return x; }
+  if (m.familia === 'rotativo') { const x = new MotorRotativo(fs); x.configurar(m.cfg, fs); return x; }
   return null;
 }
 

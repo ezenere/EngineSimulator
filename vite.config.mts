@@ -25,6 +25,7 @@ export default defineConfig({
         passagem: resolve(raiz, 'passagem.html'),
         diesel: resolve(raiz, 'diesel.html'),
         radial: resolve(raiz, 'radial.html'),
+        rotativo: resolve(raiz, 'rotativo.html'),
       },
     },
   },

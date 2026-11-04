@@ -56,7 +56,8 @@ export type PresetRotativo = Partial<PresetRonco> & {
   portadores: PortadorRotativo[];
   aproximacao?: string;
   palhetas?: PalhetasPreset;
-  gerador?: { polos: number; fRede: number; kWe: number; eta: number };
+  /** portador gerador (X-Engine): polos, frequência da rede (o inversor deixa a rotação livre), kWe, rendimento, J do alternador */
+  gerador?: { polos: number; fRede: number; kWe: number; eta: number; J: number };
   aeronave?: { massa: number; comprimento: number; envergadura: number };
   /** dispersão por flanco (× a do Ronco) e por rotor (× ±4% energia, ±6% janela); 1 e 1,5 por padrão */
   dispersao?: number; dispersaoRotor?: number;
@@ -191,14 +192,14 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     janelas: { admissao: 'x', escape: 'x' }, velas: 1, idle: 3000, rpmMax: 15000, power: 3, J: 0.002, fuel: 'carb',
     escape: { tipo: '2em1', Lp: 0.15, Dp: 20, presilencioso: false, cat: false, saidas: [{ L: 0.15, D: 20, phi: 90 }] },
     muffler: 'stock', pipeD: pol(20), gears: 0, overrun: 'cut', cat: false, limiter: 'fuel', limiterBand: 150,
-    nivelEscape: 108, portadores: ['nenhum', 'gerador'], gerador: { polos: 2, fRede: 200, kWe: 1.5, eta: 0.85 },
+    nivelEscape: 108, portadores: ['nenhum', 'gerador'], gerador: { polos: 2, fRede: 200, kWe: 1.5, eta: 0.85, J: 0.002 },
     aproximacao: 'X-Engine: sem gravação; geometria e janelas da documentação pública' },
   { id: 'xts210', family: 'x', name: 'LiquidPiston XTS-210', tag: 'grupo gerador / protótipos militares · HEHC · 210 cm³ · 25 hp',
     tipo: 'x', rotores: 1, Vcam: 70, cilindradaCamara: 70, displacement: 0.21, cr: 18,
     janelas: { admissao: 'x', escape: 'x' }, velas: 1, idle: 2500, rpmMax: 7500, power: 19, J: 0.01,
     escape: { tipo: '2em1', Lp: 0.5, Dp: 35, presilencioso: false, cat: false, saidas: [{ L: 0.4, D: 35, phi: 90 }] },
     muffler: 'stock', pipeD: pol(35), gears: 0, overrun: 'cut', cat: false, limiter: 'fuel', limiterBand: 150,
-    nivelEscape: 118, portadores: ['gerador', 'nenhum'], gerador: { polos: 2, fRede: 100, kWe: 15, eta: 0.9 },
+    nivelEscape: 118, portadores: ['gerador', 'nenhum'], gerador: { polos: 2, fRede: 100, kWe: 15, eta: 0.9, J: 0.03 },
     aproximacao: 'X-Engine diesel (HEHC) feito a centelha com CR 18: aproximação do ciclo SI' },
   // ---- Palhetas (17), aproximação
   { id: 'palhetas', family: 'palhetas', name: 'Motor pneumático de palhetas', tag: 'retífica / parafusadeira · motor de arranque a ar',
@@ -210,7 +211,7 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
       modo: 'ferramenta',
       ferramenta: { z: 8, pIn: 6.3, nLivre: 20000, J: 1e-5, potencia: 0.7 },
       arranque: { z: 7, pIn: 8, nLivre: 4000, J: 5e-4, potencia: 8, reducao: 10,
-        hospedeiro: { id: 'catc15', nome: 'Cat C15 (diesel 6 cil.)', idle: 600, eventosPorVolta: 3, J: 3.2, Tcomp: 160 } },
+        hospedeiro: { id: 'catc15', nome: 'Cat C15 (diesel 6 cil.)', idle: 600, eventosPorVolta: 3, J: 6, Tcomp: 250 } },
     },
     aproximacao: 'palhetas: sintetizador próprio, sem gravação de referência no acervo; hospedeiro do arranque simplificado' },
 ] as PresetRotativo[], { families: FAMILIAS_ROTATIVO });
