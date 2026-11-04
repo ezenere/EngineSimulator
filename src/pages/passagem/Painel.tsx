@@ -4,7 +4,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { ChipGroup, Field, Section, Slider } from '../../ui';
 import { COMPAT } from '../../carriers/compat';
-import { TREM_PAGINA_PADRAO, AMBIENTES, SOLOS, PORTADORES, NOME_MOTOR, MOTORES_PRONTOS, ESPERA_MOTOR, situacaoPortador } from './presets';
+import { TREM_PAGINA_PADRAO, AMBIENTES, SOLOS, PORTADORES, NOME_MOTOR, MOTORES_PRONTOS, ESPERA_MOTOR, situacaoPortador, motoresProntos, presetsDoMotor } from './presets';
 import { fmt, useTopico, AR_PADRAO, PADROES, type ControlePassagem } from './controle';
 import { COR_TIPO } from './cena3d-cores';
 
@@ -27,7 +27,8 @@ const m = (d = 1) => (v: number) => `${fmt(v, d)} m`;
 function Conteudo({ c }: { c: ControlePassagem }) {
   const trem = c.portador === 'trem';
   const amb = c.ambienteCena();
-  const padrao = PADROES[c.portador as 'trem' | 'rotor'];
+  const padrao = PADROES[c.portador];
+  const prontos = motoresProntos(c.portador);
   return (
     <>
       <Section titulo="Portador">
@@ -36,11 +37,16 @@ function Conteudo({ c }: { c: ControlePassagem }) {
             opcoes={PORTADORES.map((p) => { const s = situacaoPortador(p.id); return { valor: p.id, rotulo: p.nome, desabilitado: !s.ok, titulo: `${p.descricao}. ${s.motivo}` }; })} />
         </Field>
         <Field rotulo="Motor">
-          <ChipGroup id="motor" atual={c.motor} aoEscolher={() => {}}
-            opcoes={COMPAT[c.portador].map((f) => ({ valor: f, rotulo: NOME_MOTOR[f], desabilitado: !MOTORES_PRONTOS.includes(f), titulo: MOTORES_PRONTOS.includes(f) ? '' : `Espera o ${ESPERA_MOTOR[f] ?? 'adaptador'}` }))} />
+          <ChipGroup id="motor" atual={c.motor} aoEscolher={(f) => c.setMotor(f)}
+            opcoes={COMPAT[c.portador].map((f) => ({ valor: f, rotulo: NOME_MOTOR[f], desabilitado: !prontos.includes(f),
+              titulo: prontos.includes(f) ? '' : MOTORES_PRONTOS.includes(f) ? 'Sem preset deste motor neste portador (só onde foi usado de verdade)' : `Espera o ${ESPERA_MOTOR[f] ?? 'adaptador'}` }))} />
         </Field>
-        <p className="note">{trem ? `Sem motor próprio na etapa 1 (o elétrico entra na etapa 6): o som é do trem andando. ${c.fontes.filter((f) => f.tipo !== 'pressao').length} fontes com propagação.` : 'Rotor sem motor: Nr imposto (408 rpm), o coletivo muda a tração e o tapa das pás.'}</p>
+        <p className="note">{trem ? `Sem motor próprio na etapa 1 (o elétrico entra na etapa 6): o som é do trem andando. ${c.fontes.filter((f) => f.tipo !== 'pressao').length} fontes com propagação.`
+          : c.portador === 'rotor' ? 'Rotor sem motor: Nr imposto (408 rpm), o coletivo muda a tração e o tapa das pás. O pistão de aviação (Lycoming do R44) e o turboeixo ainda não existem.'
+          : `${c.fontes.filter((f) => f.tipo !== 'pressao').length} fontes: as do motor (canais do DSP da família, em Pa a ${c.fontes[0] ? fmt(c.fontes[0].refDist) : '—'} m) e as do portador.`}</p>
       </Section>
+
+      {!trem && c.portador !== 'rotor' && <Motor c={c} />}
 
       <Passagem c={c} />
 
@@ -83,10 +89,41 @@ function Conteudo({ c }: { c: ControlePassagem }) {
       </Section>
 
       <Section titulo="Modo de testes">
-        <p className="note">{`Padrões do CENA para ${trem ? 'o trem' : 'o helicóptero'}: via ${padrao.traj.tipo} de ${fmt(padrao.traj.comprimento)} m, ${fmt(padrao.traj.lateral)} m da lateral, ${km(padrao.vKmh)}, ${AMBIENTES.find((a) => a.id === padrao.ambiente)?.nome.toLowerCase()}, umidade ${AR_PADRAO.ur}%, ${AR_PADRAO.temperatura} °C${trem ? `, ${TREM_PAGINA_PADRAO.N} vagões de ${TREM_PAGINA_PADRAO.Lc} m` : ''}.`}</p>
+        <p className="note">{`Padrões do CENA para ${trem ? 'o trem' : PORTADORES.find((x) => x.id === c.portador)?.nome.toLowerCase()}: via ${padrao.traj.tipo} de ${fmt(padrao.traj.comprimento)} m, ${fmt(padrao.traj.lateral)} m da lateral, ${km(padrao.vKmh)}, ${AMBIENTES.find((a) => a.id === padrao.ambiente)?.nome.toLowerCase()}, umidade ${AR_PADRAO.ur}%, ${AR_PADRAO.temperatura} °C${trem ? `, ${TREM_PAGINA_PADRAO.N} vagões de ${TREM_PAGINA_PADRAO.Lc} m` : ''}.`}</p>
         <button type="button" className="key wide" id="padrao" onClick={() => c.voltarAoPadrao()}>Voltar ao padrão</button>
       </Section>
     </>
+  );
+}
+
+/** Motor: o preset da família (as listas das páginas Ronco, Diesel e Turbina) e o comando do portador. */
+function Motor({ c }: { c: ControlePassagem }) {
+  const opcoes = presetsDoMotor(c.portador, c.motor);
+  const atual = opcoes.find((o) => o.id === c.motorPreset);
+  const p = c.portador;
+  return (
+    <Section titulo="Motor">
+      <Field rotulo="Preset">
+        <select id="motorPreset" className="sel" value={c.motorPreset ?? ''} onChange={(e) => c.setMotorPreset(e.target.value)}>
+          {opcoes.map((o) => <option key={o.id} value={o.id}>{o.nome} · {o.tag}</option>)}
+        </select>
+      </Field>
+      <p className="note">{atual ? `${atual.nome}: ${atual.tag}. O som é o do DSP da família, sem os painéis de ajuste dela (escape, admissão, mixagem): esses ficam na página do motor.` : ''}</p>
+      {p === 'carro' && <>
+        <Slider id="pedal" rotulo="Acelerador na passagem" min={0} max={1} passo={0.01} valor={c.pedal} formatar={(v) => `${fmt(v * 100)}%`} aoSoltar={(v) => c.setPedal(v)} />
+        <Field rotulo="Marcha na passagem">
+          <ChipGroup id="marcha" atual={c.marcha} aoEscolher={(v) => c.setMarcha(v)} opcoes={[1, 2, 3, 4, 5, 6].map((n) => ({ valor: n, rotulo: `${n}ª` }))} />
+        </Field>
+        <p className="note">Na passagem a velocidade é imposta e o motor fica preso às rodas na marcha escolhida (como num dinamômetro de rolo); parado, ponto morto e lenta.</p>
+      </>}
+      {(p === 'helice' || p === 'aviao') && <Slider id="pedal" rotulo="Manete" min={0} max={p === 'aviao' ? 1.3 : 1} passo={0.01} valor={c.pedal} formatar={(v) => `${fmt(v * 100)}%${v > 1 ? ' (pós-combustão)' : ''}`} aoSoltar={(v) => c.setPedal(v)} />}
+      {p === 'locomotiva' && <Field rotulo="Notch">
+        <ChipGroup id="notch" atual={c.notch} aoEscolher={(v) => c.setNotch(v)} opcoes={[0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({ valor: n, rotulo: n === 0 ? 'Lenta' : `N${n}` }))} />
+      </Field>}
+      {p === 'gerador' && <Field rotulo="Carga elétrica">
+        <ChipGroup id="carga" atual={c.cargaFracao} aoEscolher={(v) => c.setCarga(v)} opcoes={[0, 0.25, 0.5, 0.75, 1].map((f) => ({ valor: f, rotulo: `${fmt(f * 100)}%` }))} />
+      </Field>}
+    </Section>
   );
 }
 
@@ -98,7 +135,7 @@ function Passagem({ c }: { c: ControlePassagem }) {
         <button type="button" className="key wide" id="disparar" onClick={() => (c.andando ? c.parar() : c.disparar())}>{c.andando ? 'Parar' : 'Disparar passagem'}</button>
         <button type="button" className="key wide" id="repetir" aria-pressed={c.repetir} onClick={() => c.setRepetir(!c.repetir)}>{c.repetir ? 'Repetindo em volta' : 'Uma vez'}</button>
       </div>
-      <Slider id="vKmh" rotulo="Velocidade" min={0} max={c.portador === 'rotor' ? 400 : 600} passo={5} valor={c.vKmh} formatar={(v) => `${km(v)} · Mach ${fmt(v / 3.6 / 343, 3)}`} aoMudar={(v) => c.setV(v)} />
+      <Slider id="vKmh" rotulo="Velocidade" min={0} max={c.portador === 'rotor' ? 400 : c.portador === 'aviao' ? 2500 : 600} passo={5} valor={c.vKmh} formatar={(v) => `${km(v)} · Mach ${fmt(v / 3.6 / 343, 3)}`} aoMudar={(v) => c.setV(v)} />
       <Slider id="x0" rotulo="O nariz parte a" min={50} max={2000} passo={10} valor={c.x0} formatar={(v) => `${fmt(v)} m do ouvinte`} aoMudar={(v) => { c.x0 = v; }} />
       <p className="note"><kbd>Espaço</kbd> dispara ou para · <kbd>R</kbd> repetir · <kbd>G</kbd> gimbal · <kbd>C</kbd> câmera (com a cena em foco)</p>
     </Section>

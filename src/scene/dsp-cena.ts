@@ -3,7 +3,10 @@
 // (0 dBFS ≙ 124 dB SPL); por cima vão o `master` do usuário e o `tanh` como limitador suave.
 //
 // Mensagens:
-//   { type: 'portador', tipo: 'trem' | 'rotor', config? }              monta o portador (aloca)
+//   { type: 'portador', tipo, config?, motor? }                       monta o portador (aloca): 'trem' e 'rotor' sem
+//        motor; 'carro' (CarroLegado + Ronco ou Diesel), 'helice' (turboélice), 'gerador' e 'locomotiva' (Diesel),
+//        'aviao' (jato). `motor` = { familia, cfg }: o cfg do preset já calibrado na thread principal
+//        (prepararMotorRonco / prepararMotorDiesel; o da Turbina é o preset cru)
 //   { type: 'cena', amb?, traj?, ouv? }                                configura/atualiza (rampas de 20 ms)
 //   { type: 'comando', ...ComandoPortador }                            velocidade fixa etc.
 //   { type: 'params', master?, posicao? }                              master e posição s do corpo
@@ -17,6 +20,38 @@ import type { Ambiente, Trajetoria, Ouvinte } from './tipos';
 import { CenaPassagem } from './cena';
 import { Trem } from '../carriers/trem';
 import { Rotor } from '../carriers/rotor';
+import { CarroLegado } from '../carriers/carro';
+import { Helice } from '../carriers/helice';
+import { Gerador } from '../carriers/gerador';
+import { Locomotiva } from '../carriers/locomotiva';
+import { Aviao } from '../carriers/aviao';
+import { MotorRonco } from '../engines/ronco/motor';
+import { MotorDiesel } from '../engines/diesel/motor';
+import { MotorTurbina } from '../engines/turbina/motor';
+import type { Motor } from '../carriers/tipos';
+
+/** monta o motor de uma mensagem `portador` (fora do laço: aloca) */
+export function montarMotor(m: { familia: string; cfg: Record<string, any> } | undefined, fs: number): Motor | null {
+  if (!m) return null;
+  if (m.familia === 'pistao') { const x = new MotorRonco(fs); x.configurar(m.cfg, fs); return x; }
+  if (m.familia === 'diesel') { const x = new MotorDiesel(fs); x.configurar(m.cfg, fs); return x; }
+  if (m.familia === 'turboelice' || m.familia === 'turbina') { const x = new MotorTurbina(fs); x.configurar(m.cfg, fs); return x; }
+  return null;
+}
+
+/** portador com motor de uma mensagem `portador` (a página monta o mesmo na thread principal, para a geometria) */
+export function montarPortadorComMotor(tipo: string, config: Record<string, any> | undefined, motor: Motor | null, fs: number): Portador | null {
+  const c = config || {};
+  let p: Portador | null = null;
+  if (tipo === 'carro') p = new CarroLegado();
+  else if (tipo === 'helice') p = new Helice(fs, c);
+  else if (tipo === 'gerador') p = new Gerador(fs, c);
+  else if (tipo === 'locomotiva') p = new Locomotiva(fs, c);
+  else if (tipo === 'aviao') p = new Aviao();
+  if (!p) return null;
+  p.acoplar(motor);
+  return p;
+}
 import { ambientePassagem } from './ambientes';
 
 export const OUVINTE_PADRAO: Ouvinte = { modo: 'fixo', pos: [0, 0, 1.6], gimbal: { az: 90, el: 0, r: 5, alvo: 'corpo' }, local: 'fora', binaural: true };
@@ -64,6 +99,13 @@ export class CenaDSP implements DSPDeAudio {
         const vf = this.portador ? this.portador.cinematica.v : null;
         this.montar(new Rotor(this.fs, m.config || {}));
         if (vf != null) this.portador!.comandar({ pedal: 0.75, velocidadeFixa: vf });
+      } else {
+        const p = montarPortadorComMotor(m.tipo, m.config, montarMotor(m.motor, this.fs), this.fs);
+        if (p) {
+          const vf = this.portador ? this.portador.cinematica.v : null;
+          this.montar(p);
+          p.comandar({ pedal: 0, ignicao: true, ...(m.comando || {}), ...(vf != null ? { velocidadeFixa: vf } : {}) });
+        }
       }
     } else if (m.type === 'cena') {
       if (m.amb) this.amb = m.amb; if (m.traj) this.traj = m.traj; if (m.ouv) this.ouv = m.ouv;

@@ -7,15 +7,18 @@
 // desabilitados com o motivo; quando o adaptador de um motor chegar, basta acrescentá-lo às listas.
 import type { FamiliaMotor, TipoPortador } from '../../carriers/tipos';
 import type { IdAmbiente, Solo } from '../../scene/tipos';
-import { COMPAT } from '../../carriers/compat';
+import { COMPAT, ADAPTADORES, USO_REAL } from '../../carriers/compat';
+import { PRESETS as PRESETS_RONCO } from '../../engines/ronco/presets';
+import { PRESETS as PRESETS_DIESEL } from '../../engines/diesel/presets';
+import { PRESETS_TURBINA } from '../../engines/turbina/presets';
 
 export type IdPortadorPagina = Exclude<TipoPortador, 'nenhum'>;
 export type IdAmbientePagina = Extract<IdAmbiente, 'ceu' | 'corte' | 'estacao' | 'ponte' | 'tunel'>;
 
-/** famílias de motor com adaptador pronto para a Cena ('nenhum' = o portador sozinho) */
-export const MOTORES_PRONTOS: readonly FamiliaMotor[] = ['nenhum'];
+/** famílias de motor com adaptador pronto para a Cena ('nenhum' = o portador sozinho; docs/TECNICO.md → Adaptadores de motor) */
+export const MOTORES_PRONTOS: readonly FamiliaMotor[] = ADAPTADORES;
 /** portadores que o DSP da Cena (src/scene/dsp-cena.ts) monta */
-export const PORTADORES_NO_DSP: readonly IdPortadorPagina[] = ['trem', 'rotor'];
+export const PORTADORES_NO_DSP: readonly IdPortadorPagina[] = ['trem', 'rotor', 'carro', 'helice', 'gerador', 'locomotiva', 'aviao'];
 
 export const NOME_MOTOR: Record<FamiliaMotor, string> = {
   nenhum: 'Sem motor', pistao: 'Pistão (Ronco)', turbina: 'Turbina', turboelice: 'Turboélice', turboeixo: 'Turboeixo',
@@ -35,12 +38,28 @@ export const PORTADORES: readonly InfoPortador[] = [
   { id: 'helice', nome: 'Avião de hélice', descricao: 'Hélice com redutor e governador' },
   { id: 'gerador', nome: 'Gerador', descricao: 'Rotação fixa, degraus de carga' },
   { id: 'locomotiva', nome: 'Locomotiva', descricao: 'Diesel-elétrica de 8 notches' },
+  { id: 'aviao', nome: 'Avião a jato', descricao: 'Fuselagem com os motores da Turbina; acima de Mach 0,9 o resolvedor fechado e o estrondo' },
 ];
 
-/** motores possíveis no portador que já têm adaptador */
+/** motores possíveis no portador que já têm adaptador e foram usados nele de verdade (regra do produto) */
 export function motoresProntos(p: IdPortadorPagina): FamiliaMotor[] {
-  return COMPAT[p].filter((f) => MOTORES_PRONTOS.includes(f));
+  return COMPAT[p].filter((f) => MOTORES_PRONTOS.includes(f) && USO_REAL[p].includes(f));
 }
+
+/** Presets de motor que a Passagem oferece em cada portador (os das páginas de cada família, filtrados pelo uso). */
+export interface OpcaoMotor { id: string; nome: string; tag: string }
+export function presetsDoMotor(p: IdPortadorPagina, f: FamiliaMotor): OpcaoMotor[] {
+  const op = (x: { id: string; name: string; tag: string }) => ({ id: x.id, nome: x.name, tag: x.tag });
+  if (f === 'pistao') return PRESETS_RONCO.map(op);
+  if (f === 'diesel') return PRESETS_DIESEL.filter((x) => (x.portadores as string[]).includes(p === 'carro' ? 'carro' : p)).map(op);
+  if (f === 'turboelice') return PRESETS_TURBINA.filter((x) => x.arch === 'turboprop').map(op);
+  if (f === 'turbina') return PRESETS_TURBINA.filter((x) => x.arch !== 'turboprop').map(op);
+  return [];
+}
+/** preset de motor padrão por portador e família */
+export const MOTOR_PADRAO: Partial<Record<FamiliaMotor, Partial<Record<IdPortadorPagina, string>>>> = {
+  pistao: { carro: 'muscle' }, diesel: { carro: 'hilux28', gerador: 'gen500', locomotiva: 'emd710' }, turboelice: { helice: 'regional' }, turbina: { aviao: 'narrow' },
+};
 
 /** habilitado e, se não, por quê */
 export function situacaoPortador(p: IdPortadorPagina): { ok: boolean; motivo: string } {
@@ -83,6 +102,10 @@ export interface PresetPassagem {
   ambiente: IdAmbientePagina; vKmh: number; lateral: number; altitude?: number;
   trem?: Partial<TremPagina>; solo?: Solo['tipo'];
   coletivo?: number;
+  /** motor: preset da família (src/engines/<família>/presets.ts) e comando */
+  motorPreset?: string; pedal?: number; marcha?: number; notch?: number; cargaFracao?: number;
+  /** ouvinte parado nesta posição ao longo da via (m) e altura do ouvido */
+  x0?: number;
 }
 
 export const PRESETS_PASSAGEM: readonly PresetPassagem[] = [
@@ -93,9 +116,14 @@ export const PRESETS_PASSAGEM: readonly PresetPassagem[] = [
     trem: { N: 8, Lc: 26.4, vao: 0.8, lNariz: 3, cpNariz: 0.3, largura: 2.9, altura: 3.9, zPiso: 0.5, pantografos: [4], carenagem: false } },
   { id: 'regional-corte', nome: 'Regional no corte', sub: '4 vagões · 160 km/h · 4 m', portador: 'trem', motor: 'nenhum', ambiente: 'corte', vKmh: 160, lateral: 4,
     trem: { N: 4, Lc: 26, vao: 0.7, lNariz: 6, cpNariz: 0.22, largura: 2.9, altura: 3.8, pantografos: [2], carenagem: false } },
-  { id: 'heli-rasante', nome: 'Helicóptero rasante', sub: 'R44 só o rotor · 150 km/h · 40 m', portador: 'rotor', motor: 'nenhum', ambiente: 'ceu', vKmh: 150, lateral: 0, altitude: 40, solo: 'grama', coletivo: 0.75 },
-  // à espera dos adaptadores de motor: aparecem desabilitados
-  { id: 'carro-rua', nome: 'Carro na rua', sub: 'a 6 m · 108 km/h', portador: 'carro', motor: 'pistao', ambiente: 'ceu', vKmh: 108, lateral: 6, solo: 'asfalto' },
-  { id: 'aviao-rasante', nome: 'Turboélice rasante', sub: '150 m · 300 km/h', portador: 'helice', motor: 'turboelice', ambiente: 'ceu', vKmh: 300, lateral: 0, altitude: 150, solo: 'grama' },
-  { id: 'locomotiva-patio', nome: 'Locomotiva em notch 8', sub: 'a 5 m · 60 km/h', portador: 'locomotiva', motor: 'diesel', ambiente: 'ceu', vKmh: 60, lateral: 5 },
+  // (o pistão de aviação do R44, Lycoming O-540, é da etapa 3: o rotor passa sem motor, com o Nr imposto)
+  { id: 'heli-rasante', nome: 'Helicóptero R44 sobrevoando', sub: 'só o rotor (sem motor) · 150 km/h · 40 m', portador: 'rotor', motor: 'nenhum', ambiente: 'ceu', vKmh: 150, lateral: 0, altitude: 40, solo: 'grama', coletivo: 0.75 },
+  // com motor (adaptadores de src/engines/*/motor.ts)
+  { id: 'carro-rua', nome: 'Carro na rua a 6 m', sub: 'Camaro SS · V8 · 3ª, pé no fundo · 108 km/h', portador: 'carro', motor: 'pistao', motorPreset: 'muscle', ambiente: 'ceu', vKmh: 108, lateral: 5.1, solo: 'asfalto', marcha: 3, pedal: 1, x0: 150 },
+  { id: 'picape-diesel', nome: 'Picape diesel passando', sub: 'Hilux 2.8 · 4ª · 80 km/h · 5 m', portador: 'carro', motor: 'diesel', motorPreset: 'hilux28', ambiente: 'ceu', vKmh: 80, lateral: 5, solo: 'asfalto', marcha: 4, pedal: 0.8, x0: 150 },
+  { id: 'aviao-rasante', nome: 'Turboélice rasante', sub: 'ATR 72 · decolagem · 100 m · 250 km/h', portador: 'helice', motor: 'turboelice', motorPreset: 'regional', ambiente: 'ceu', vKmh: 250, lateral: 0, altitude: 100, solo: 'grama', pedal: 1, x0: 900 },
+  { id: 'locomotiva-patio', nome: 'Locomotiva EMD em N8 passando', sub: 'SD70ACe · notch 8 · 40 km/h · 15 m', portador: 'locomotiva', motor: 'diesel', motorPreset: 'emd710', ambiente: 'ceu', vKmh: 40, lateral: 15, solo: 'brita', notch: 8, x0: 110 },
+  { id: 'gerador-bancada', nome: 'Gerador em bancada', sub: 'Cummins 500 kVA · 1800 rpm · 50% de carga · 7,5 m', portador: 'gerador', motor: 'diesel', motorPreset: 'gen500', ambiente: 'ceu', vKmh: 0, lateral: 7.5, solo: 'concreto', cargaFracao: 0.5, x0: 0 },
+  { id: 'jato-1500', nome: 'Jato a 1500 m', sub: '737-800 · 300 km/h · manete 0,85', portador: 'aviao', motor: 'turbina', motorPreset: 'narrow', ambiente: 'ceu', vKmh: 300, lateral: 0, altitude: 1500, solo: 'grama', pedal: 0.85, x0: 2500 },
+  { id: 'caca-supersonico', nome: 'Caça supersônico a 200 m', sub: 'F-16 · Mach 1,5 · estrondo', portador: 'aviao', motor: 'turbina', motorPreset: 'fighter', ambiente: 'ceu', vKmh: 1836, lateral: 0, altitude: 200, solo: 'grama', pedal: 1, x0: 1500 },
 ];

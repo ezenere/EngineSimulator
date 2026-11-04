@@ -11,7 +11,8 @@
 // trem-bala no túnel a 350 km/h e acompanha a passagem (nariz chegando, onda de compressão do túnel
 // ~2 kPa antes do trem, onda de nariz, nível em dB(A) no ouvido real), arrasta a cabeça na cena 3D,
 // usa os atalhos do gimbal e os sliders (mensagens 'cena' com o ouvinte novo), troca o ambiente (resposta
-// ao impulso nova, mensagem com o ambiente), modo de testes (voltar ao padrão), câmera, e console sem erros.
+// ao impulso nova, mensagem com o ambiente), modo de testes (voltar ao padrão), câmera, os portadores com motor
+// (carro na rua com o Camaro do Ronco, locomotiva EMD em N8 com o diesel) e console sem erros.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -145,8 +146,8 @@ const est = await ev(`({
   placa: document.getElementById('plate')?.textContent,
 })`);
 console.log('estrutura:', JSON.stringify(est));
-confere(est.presets.length === 9 && est.presets.filter((p) => p.endsWith('(d)')).length === 3, 'presets: 9, os 3 com motor desabilitados', est.presets);
-confere(est.portadores.join() === 'Trem,Helicóptero,Carro(d),Avião de hélice(d),Gerador(d),Locomotiva(d)', 'portadores pela tabela de compatibilidade', est.portadores);
+confere(est.presets.length === 13 && !est.presets.some((p) => p.endsWith('(d)')), 'presets: 13, todos habilitados (os com motor pelos adaptadores)', est.presets);
+confere(est.portadores.join() === 'Trem,Helicóptero,Carro,Avião de hélice,Gerador,Locomotiva,Avião a jato', 'portadores pela tabela de compatibilidade e os adaptadores', est.portadores);
 confere(JSON.stringify(est.secoes) === JSON.stringify(['Portador', 'Passagem', 'Ambiente', 'Trajetória', 'Ouvinte', 'Trem', 'Ar', 'Escuta', 'Modo de testes']), 'seções do painel', est.secoes);
 confere(['vKmh', 'x0', 'rtFator', 'tunelArea', 'tunelComp', 'tunelBoca', 'comprimento', 'lateral', 'altitude', 'ouvX', 'ouvZ', 'N', 'Lc', 'vao', 'truque', 'lNariz', 'ur', 'temperatura', 'master'].every((s) => est.sliders.includes(s)), 'parâmetros livres do modo de testes', est.sliders.length);
 confere(est.atalhos.join() === 'escape(d),ponteira(d),frente,lateral,atras,cabine,cofre(d),topo', 'atalhos do gimbal (sem motor: escape, ponteira e cofre desabilitados)', est.atalhos);
@@ -272,6 +273,44 @@ await espera(800);
 const port3 = (await ultimos('portador')).at(-1);
 confereMsg(port3?.tipo === 'rotor', 'helicóptero montado');
 confere((await ev(`${P}.traj.altitude`)) === 150, 'padrão do helicóptero: altitude 150 m');
+// ---- carro na rua a 6 m: Camaro SS (Ronco adaptado), 3ª, pé no fundo, 108 km/h
+await clicar('#ignicao');
+if (await ev(`${P}.andando`)) await clicar('#ignicao');
+await clicar('.preset[data-id="carro-rua"]');
+await espera(600);
+const portC = (await ultimos('portador')).at(-1);
+confereMsg(portC?.tipo === 'carro' && portC.motor?.familia === 'pistao' && portC.motor.cfg.id === 'muscle' && portC.motor.cfg.kAbs > 0, 'carro montado com o motor do Ronco calibrado na página (kAbs)', portC && { tipo: portC.tipo, motor: portC.motor?.familia, id: portC.motor?.cfg.id, kAbs: portC.motor?.cfg.kAbs });
+const secC = await ev(`[...document.querySelectorAll('#controls h2')].map((h) => h.textContent)`);
+confere(secC.includes('Motor') && (await ev(`document.getElementById('motorPreset')?.options.length`)) > 50, 'seção Motor com os presets do Ronco', secC);
+await clicar('#ignicao');
+let maxC = -1e9, rpmC = 0, vC = 0, marchaC = 0;
+const tc0 = Date.now();
+while (Date.now() - tc0 < 9000) {
+  const r = await ev(`(() => { const t = ${P}.tele; const m = window.__passagem.med; return t && { dBA: m.dBA, rpm: t.portador.rpm, v: t.portador.v, marcha: t.portador.marcha }; })()`);
+  if (r) { if (Number.isFinite(r.dBA)) maxC = Math.max(maxC, r.dBA); rpmC = Math.max(rpmC, r.rpm || 0); vC = Math.max(vC, r.v); marchaC = r.marcha; }
+  await espera(60);
+}
+confere(Math.abs(vC - 30) < 0.5 && marchaC === 3 && rpmC > 3500 && rpmC < 4500, 'carro a 108 km/h em 3ª com o motor preso às rodas', { v: vC, marcha: marchaC, rpm: Math.round(rpmC) });
+confere(maxC > 80 && maxC < 100, 'nível no ouvido na passagem do carro (direto + reverberação)', `${maxC.toFixed(1)} dB(A)`);
+await clicar('#ignicao');
+if (await ev(`${P}.andando`)) await clicar('#ignicao');
+// ---- locomotiva EMD em N8 (diesel adaptado, governador do motor, carga do portador)
+await clicar('.preset[data-id="locomotiva-patio"]');
+await espera(600);
+const portL = (await ultimos('portador')).at(-1);
+confereMsg(portL?.tipo === 'locomotiva' && portL.motor?.familia === 'diesel' && portL.motor.cfg.uso === 'locomotiva' && portL.comando?.notch === 8, 'locomotiva montada com o EMD 710 (uso locomotiva) e notch 8', portL && { tipo: portL.tipo, motor: portL.motor?.familia, uso: portL.motor?.cfg.uso, notch: portL.comando?.notch });
+await clicar('#ignicao');
+let rpmL = 0, maxL = -1e9;
+const tl0 = Date.now();
+while (Date.now() - tl0 < 16000) {
+  const r = await ev(`(() => { const t = ${P}.tele; const m = window.__passagem.med; return t && { dBA: m.dBA, rpm: t.portador.rpmEixo }; })()`);
+  if (r) { if (Number.isFinite(r.dBA)) maxL = Math.max(maxL, r.dBA); rpmL = Math.max(rpmL, r.rpm || 0); }
+  await espera(80);
+}
+confere(rpmL > 840 && rpmL < 920, 'locomotiva sobe ao notch 8 (EMD 710: 904 rpm)', Math.round(rpmL));
+confere(maxL > 75 && maxL < 110, 'nível no ouvido com a locomotiva', `${maxL.toFixed(1)} dB(A)`);
+await clicar('#ignicao');
+if (await ev(`${P}.andando`)) await clicar('#ignicao');
 // modo de testes: voltar ao padrão
 await chip('portador', 'Trem');
 await slider('ur', 30); await slider('temperatura', -5);
