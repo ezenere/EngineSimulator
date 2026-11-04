@@ -129,6 +129,14 @@ export class Rotor extends PortadorComMotor {
   tmp = new Float32Array(4096);
   downM: Modulada;
   carga() { return this.cargaR; }
+  /** (RADIAL.md 6) com um motor a pistão de verdade (pistão de aviação, radial) o governador é o do R22/R44: a borboleta
+   *  responde na hora e, com os ganhos do motor de bancada (0,8 por %), o Nr nem se mexia ao puxar o coletivo; com 1/10
+   *  deles o droop fica em 2–3% e volta em ~1 s, como no helicóptero real. Sem motor ou com outro motor, os de sempre */
+  acoplar(motor: import('./tipos').Motor | null) {
+    const k = motor && (motor.familia === 'pistao' || motor.familia === 'radial') && 'dsp' in (motor as object) ? 0.12 : 1; // (o MotorTeste de bancada, com o atraso de torque do correlacionador, fica com os de sempre)
+    this.gov.kp = 0.8 * k; this.gov.ki = 0.4 * Math.min(1, 6 * k);
+    super.acoplar(motor);
+  }
 
   protected fisica(n: number, dt: number) {
     const c = this.cfg, tb = n * dt, m = this.motor;

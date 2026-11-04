@@ -260,6 +260,21 @@ export class MotorRonco extends MotorPistaoBase {
     this.dsp.setConfig(cfg);
     this.dsp.message({ type: 'input', temp: { mode: 'fixed', value: 90 } });
     this.montarFontes(cfg.kAbs);
+    // aviação (RADIAL.md 6): o motor fica no nariz do avião ou atrás da cabine do helicóptero
+    if (this.dsp.av) this.montagem = { posMotor: cfg.rotor ? [-0.5, 0, 1.2] : [2.5, 0, 1.5], rotMotor: 'frente' };
+  }
+  /** aviação: a carga do portador (hélice ou rotor) vai ao eixo (gancho 11) e o motor já começa funcionando na rotação
+   *  dele (a Passagem mostra a passagem, não a partida); no carro a carga é a de dentro do DSP, como antes */
+  acoplar(carga: Carga | null) {
+    this.carga = carga;
+    const d: any = this.dsp;
+    if (!d.av) return;
+    d.cargaExterna = carga; d.carga = carga || d.cargaAv; if (carga) d.heliceSom = null;
+    const k: any = (carga as any)?.cfg;
+    if (!k) return;
+    const rpm = k.nHelice ? k.nHelice * k.i * 0.92 : k.Nr ? k.Nr * k.icx : d.idle;
+    d.state = 'run'; d.ignition = true; this.ign = true; d.runT = 120; d.coolant = 90; d.warm = 1; d.exhT = 450;
+    d.omega = (rpm * TAU) / 60; d.rpmAvg = rpm;
   }
 }
 
