@@ -15,6 +15,7 @@ qualquer veículo, antigo ou novo.
 - [Caso: o Mustang](#caso-o-mustang)
 - [Caso: a Fórmula 1](#caso-a-fórmula-1)
 - [Caso: o compressor do Hellcat](#caso-o-compressor-do-hellcat)
+- [Caso: os pipocos do radial](#caso-os-pipocos-do-radial)
 - [Ferramentas](#ferramentas)
 - [O que olhar em cada tipo de veículo](#o-que-olhar-em-cada-tipo-de-veículo)
 
@@ -399,6 +400,32 @@ de cada acelerada o real faz um "tó roouummm", um tom grave que varre até o ui
   demais e o uivo presente na hora errada. Pergunte cedo qual dos três, e descreva o que mudou em termos de ouvido.
 - **Uivo preso só ao giro.** O nível segue a pressão que os rotores fazem: forte com o pé embaixo, um fundo tirando o pé.
   Olhar só o espectro numa rotação não mostra isso; acompanhe o nível ao longo de uma acelerada.
+
+## Caso: os pipocos do radial
+
+**Queixa:** "tem muito pipoco nos motores radiais".
+
+**O que a medida mostrou** (`tools/radial-estouros.ts`: o detector do `pops.py` dos rotativos, picos da envoltória de 1–6 kHz
+mais de 10 dB sobre a mediana de 0,3 s, e a curtose de 2–6 kHz, na saída da página e nas gravações de DC-3, P-47, Corsair,
+T-28, R-2800 em banco, Rotec e Sh-14):
+
+- Na lenta quente e em carga os radiais grandes já batiam (0 picos por segundo no simulado, 0–2,5 nas gravações).
+- O excesso era da partida: 21 estouros de 28–34 dB nos 3 s depois de pegar e 32 nos 20 primeiros segundos (o próprio
+  projeto pedia 3–8 em 10 s, e a validação só conferia "≥ 3"), e quem acelerava no primeiro minuto ouvia 2–7 por segundo,
+  porque a chance extra caía com τ 20 s. As gravações têm 0–6 picos acima de 20 dB nos 20 s depois de pegar.
+- Atenuar: a chance (35% → 6%), a constante (20 s → 8 s, a do encharque) e o tamanho do estouro (−11 dB). O mecanismo é o
+  mesmo; o que saía da medida era o ganho.
+
+**Erros que quase custaram rodadas:**
+
+- **Uma medida de partida que só passava por causa do defeito.** O CVciclo de ≥ 0,8 nos 3 s depois de pegar vinha dos
+  estouros. A janela da gravação começa meio segundo antes da primeira explosão (pega a subida de 20 dB); com a mesma
+  janela e o alvo na faixa das partidas gravadas (0,6–1,1) ela mede o que deve.
+- **Uma lenta que só passava por causa do defeito.** O Verner 5S ficava a +2,6% do alvo aos 25–30 s porque os estouros
+  freavam o motor pela contrapressão; sem eles, +5,9% (o controle de lenta ainda descendo). Mudar o sorteio (o tamanho dos
+  estouros) mudava o resultado de +2,6 a +5,9%: era sorte, não margem.
+- **Duas gravações em sentidos opostos.** O M-14P tem 3× os picos do Yak-52 na lenta, mas o T-6G, também de carburador de
+  boia, tem 14× os do R-1340 simulado. Com as duas puxando para lados opostos, o galope de boia não mudou.
 
 ## Ferramentas
 

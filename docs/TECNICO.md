@@ -1091,7 +1091,7 @@ Itens da segunda passada (alvo do DIESEL.md × 1ª passada × agora):
 
 ## Radial e aviação a pistão
 
-O projeto está em [`RADIAL.md`](RADIAL.md); aqui fica o que foi feito, como e o que se mediu. Página `radial.html` (`src/pages/radial/`), DSP em `src/engines/radial/`, worklet `src/worklet/processador-radial.ts` (`radial-engine`); a família **Aviação** (motores planos de avião e de helicóptero leve) está na página do Ronco.
+O projeto está em [`RADIAL.md`](RADIAL.md); aqui fica o que foi feito, como e o que se mediu. Página `radial.html` (`src/pages/radial/`; nos aviões e no helicóptero o comando de potência é a manete da Turbina, `src/ui/Manete.tsx`, que fica onde foi deixada, com W/S, 1–4 e arrasto; no tanque, no carro e na moto, o pedal), DSP em `src/engines/radial/`, worklet `src/worklet/processador-radial.ts` (`radial-engine`); a família **Aviação** (motores planos de avião e de helicóptero leve) está na página do Ronco, também com a manete no lugar do pedal.
 
 ### Como estende o Ronco
 
@@ -1122,6 +1122,7 @@ As funções de aviação moram em `src/engines/ronco/aviacao.ts` (`instalarAvia
 - **Escape** (`buildExhaust` inteiro): anel coletor em laço com as saídas nas junções mais perto do ângulo de cada uma; estaques (um por cilindro, ou grupos de vizinhos de uma fileira); aranha; dois lados em cadeia (Sherman); um sistema por fileira; os dois anéis do P-47 num tubo longo até a turbina (`TwoPort 'turbo'`); as fileiras do R-4360 aos pares. O vazamento do anel de chapa e das juntas é o `breakout` do Ronco, com o acerto da instalação em dB (`vazamento` no preset), e vira a fonte `coletor` na Cena.
 - **Sondas** (`calibrate`/`measurePower`): um `RadialDSP` com o escape de referência (anel de uma saída), 55% da rotação máxima, lenta 21 dB abaixo; a potência medida perto da rotação máxima (0,8/0,9/1,0), que é a da ficha dos motores de avião.
 - **Partida**: inércia (energizar: o apito do volante sobe de 290 a 390 Hz em ~18 s; engatar: o estalo e o volante girando o motor a 80–95 rpm), elétrica direta e ar comprimido (M-14P: o distribuidor manda ar de 3° a 100° depois do PMS, um "tchuf" por cilindro). Os magnetos ficam desligados até a 9ª pá contada (no de inércia, até 4,5 s de giro). Encharque dos cilindros de baixo (`max(0, −cos φ)`, ×(1 + 0,3·primer)), falhas e estouros dos primeiros segundos, fumaça.
+- **Estouros da partida** (`ESTOURO_PARTIDA` em `aviacao.ts`): uma falha estoura no escape com 1,5% + 6%·e^(−t/8 s) de chance (a constante do encharque) e o "coletor quente" dispensado cai junto; o estouro tem `k` 0,25. Com os 35%, τ 20 s e `k` 0,9 do RADIAL.md o R-1830 dava 21 estouros de 28–34 dB nos 3 s depois de pegar, 32 nos primeiros 20 s, e acelerar no primeiro minuto dava 2–7 por segundo (o "muito pipoco" da revisão de novembro de 2026); as gravações (DC-3, P-47, Corsair, T-28, R-2800 em banco, Rotec, Sh-14) têm 0–6 picos acima de 20 dB nos 20 s depois de pegar e 0–0,7 por segundo acima de 16 dB. A medida é `tools/radial-estouros.ts` (o detector do `pops.py` dos rotativos e a curtose de 2–6 kHz na saída da página, com os estouros e as centelhas sem queima contados por dentro), e o grupo `estouros` do `teste:radial` a confere.
 - **Galope da lenta**: dispersão do Ronco ×1,8 (carburador de pressão) ou ×2,6 (boia), 2,5–4,5% de falhas de vela na lenta e um balanço lento da mistura (±20%, abaixo de ~0,4 Hz).
 
 ### Portadores e Cena
@@ -1133,9 +1134,9 @@ As funções de aviação moram em `src/engines/ronco/aviacao.ts` (`instalarAvia
 
 ### Ferramentas e portões
 
-`npm run teste:radial` (`tools/radial-valida.ts`, 11 grupos em paralelo, ~40 s), `npm run lenta:radial` (26 presets × 20 °C e −5 °C, partida de verdade, acelerada aos 12 s: 52/52), `npm run geometria:radial`, `npm run navegador:radial` (Chromium e Firefox, `dist/`). `tools/radial-bandas.ts` é a porta de `medir2.py` (conferida: Yak-52 e DC-3 dão os números do Apêndice A); `tools/radial-cena.ts` monta o preset no portador e ouve parado de lado pela Cena (propagação, solo, hélice). CPU: R-4360 subindo de giro, 28% do tempo real em Node (62 tubos, 32 nós), contra o portão de 60%.
+`npm run teste:radial` (`tools/radial-valida.ts`, 12 grupos em paralelo e o de CPU sozinho no fim, ~2–3 min), `npm run lenta:radial` (26 presets × 20 °C e −5 °C, partida de verdade, acelerada aos 12 s, rotação final aos 35–40 s: 52/52; a janela era 25–30 s e o Verner 5S, que pega aos 7 s, só passava porque os estouros exagerados freavam o motor pela contrapressão), `npx tsx tools/radial-estouros.ts [ids]` (estouros e falhas por regime), `npm run geometria:radial`, `npm run navegador:radial` (Chromium e Firefox, `dist/`). `tools/radial-bandas.ts` é a porta de `medir2.py` (conferida: Yak-52 e DC-3 dão os números do Apêndice A); `tools/radial-cena.ts` monta o preset no portador e ouve parado de lado pela Cena (propagação, solo, hélice). CPU: R-4360 subindo de giro, 26–28% do tempo real em Node (62 tubos, 32 nós), contra o portão de 60%.
 
-### Alvo × medido (`npm run teste:radial`: 124 medidas, 94 ok, 29 desvios documentados, 0 falhas)
+### Alvo × medido (`npm run teste:radial`: 141 medidas, 110 ok, 31 desvios documentados, 0 falhas)
 
 | Medida | Alvo | Medido |
 |---|---|---|
@@ -1158,7 +1159,11 @@ As funções de aviação moram em `src/engines/ronco/aviacao.ts` (`instalarAvia
 | vagar da lenta (Yak, Corsair, P-47) | 2–4% (P-47 ≤ 7) | 3,6 / 2,3 / 0,6% |
 | CVciclo da lenta (Yak, T-6G, DC-3) | 0,30–0,42 | 0,32 / 0,37 / 0,37 |
 | R-1830: apito do arranque de inércia | 290 → 390 Hz em 15–20 s | 299 → 375 Hz em 16,0 s |
-| R-1830: CVciclo nos 3 s depois de pegar · aos 20 s | ≥ 0,8 · ≤ 0,45 | 1,02 · 0,37 |
+| R-1830: CVciclo nos 3 s em que pega (de 0,5 s antes a 2,5 s depois, a janela da gravação) · aos 20 s | 0,6–1,1 (A.3: P-47 0,62, DC-3 0,80, R-2800 1,06, SBD 1,11) · ≤ 0,45 | 0,62 · 0,36 (o 1,02 de antes vinha dos estouros) |
+| R-1830 com primer 2: estouros nos 10 s depois de pegar | 3–8 | 4 |
+| estouros nos 20 s depois de pegar, picos > 20 dB (R-1820, R-1830, R-2800, P-47) | ≤ 6 (gravações 0–6) | 5 / 5 / 3 / 4 (antes 22 / 32 / 28 / 32) |
+| picos > 16 dB por segundo: 20 s depois de pegar · acelerando e desacelerando a frio | ≤ 0,75 · ≤ 0,5 | 0,20–0,30 · 0–0,18 (antes 1,2–2,1 · 0,2–3,8) |
+| lenta quente: picos por segundo (R-1820, R-1830, R-2800, P-47; M-14P) | ≤ 3, nenhum > 16 dB | 0 / 0 / 0,09 / 0; 7,3 (**desvio**) |
 | R-2800: uivo do superalimentador a 800 e 2 700 rpm | 1 621 e 5 472 Hz ± 2%; ≤ −25 dB do total | 1 620 e 5 476 Hz; −42,8 e −40,8 dB |
 | mag check a 1 700 rpm (R-1340): queda esq/dir, diferença | 60 ± 30; ≤ 30 rpm | 74 / 83; 8 rpm |
 | mistura 0,55: potência · escape | −3 a −7% · +40 a +80 °C | −5,0% · +60 °C |
@@ -1177,6 +1182,7 @@ As funções de aviação moram em `src/engines/ronco/aviacao.ts` (`instalarAvia
 - **Galope com o PI de lenta.** A decisão 10 manteve o controle de lenta do Ronco: ele corrige o balanço lento, e o vagar do DC-3 (J 19 kg·m²) fica em 0,3%; o CVciclo bate.
 - **Partida.** O EngineDSP só queima acima de 60 rpm no arranque: o volante de inércia gira o R-1830 a 80–95 rpm (9 pás em 3,2 s, contra 4–6) e o ar comprimido gira o M-14P a ~180 rpm (13,5 "tchufs"/s, contra 7–11).
 - **R44.** A borboleta do Ronco responde em 30 ms: o droop é 0,7% (contra 2–3%), com a volta em 1,1 s.
+- **M-14P na lenta.** 7,3 picos por segundo no agudo (0,64 acima de 16 dB, curtose 9) contra 2,5/s do Yak-52 (Commons, codec saturando), sem nenhum estouro injetado: são as explosões fortes do galope de boia (×2,6 sobre a dispersão do carburador do Ronco) saindo como estalos no chiado do jato das duas saídas curtas (∝ v²); sem o chiado, 2,3/s. A outra gravação de boia (T-6G a 4 m) tem 10/s e o R-1340 do modelo 0,7/s: com as duas em sentidos opostos, o galope não mudou (com menos dispersão o CVciclo do Yak e do T-6G cai abaixo de 0,30). Frio (CHT 15–35 °C, os primeiros minutos na página) ele chega a 16/s.
 - **Faixa dos 13 aviões a 12 m.** O alvo de 12 dB não cabe nos `nivelEscape` do próprio RADIAL.md (Verner 124 e R-1820 145 dB de L_W): a faixa medida é 38 dB.
 - **Desvios das fórmulas do RADIAL.md, anotados no código:** ordem do 3 cilindros `1-3-2` (a `1-2-3` da tabela 1.1 dispara a 120-120-480°); intervalos do 9 cilindros 80 ± 7,2° (os ΔPMS da própria tabela 1.2 somados; o texto diz ±5°); `qMix` com o fator pobre (a fórmula de 2.2 dava 1 com 0,55); um magneto ×1,6 na queima (com ×1,2 o mag check caía 18 rpm); ar de partida ×0,3 da vazão do texto e janela de 3–100° (com 5–60° o motor parado ficava num buraco sem cilindro recebendo ar); arranque direto 3,2× o atrito frio; passo mínimo absorvendo 90% da potência (com 25% o R-2800 subia em 1 s); `FAMILIES` do Ronco sem a Aviação (ela fica em `PRESETS_AVIACAO`/`FAMILIA_AVIACAO`, e a página usa `PRESETS_PAGINA`), porque a paridade confere os 68 e as 9 famílias contra o legado.
 - **Aproximações declaradas:** Monaco-Trossi em 4 tempos (o ciclo de 360° do `EngineDSP` só existe com `cc`); Megola (a panorâmica dos estaques gira com a roda; a "lenta" é a roda empurrada); Sherman sem o ruído da esteira.
@@ -1188,6 +1194,7 @@ As funções de aviação moram em `src/engines/ronco/aviacao.ts` (`instalarAvia
 - Ford Trimotor com 3 instâncias (opcional no RADIAL.md) e a passagem com altitude no ouvinte `road` da página.
 - Som do rotor na página do Ronco (na Passagem o rotor é o do portador).
 - Monaco-Trossi em 2 tempos a centelha, quando o ciclo de 360° existir sem `cc`.
+- Estaques curtos e estreitos (Rotec, Verner, M-14PF) na lenta: o chiado do jato e a turbulência da válvula saem crus pela boca e viram um estalo por explosão (Rotec: 19 picos por segundo no agudo, 16 acima de 16 dB, curtose 97, contra 5,9/s, 0,17/s e 6 da gravação, com o espectro médio certo na página). É a mesma falta da boca de estaque curto (acima); atenuar o jato só tira o agudo do espectro, que já bate. O M-14P frio (acima) idem.
 
 ## Rotativos
 
