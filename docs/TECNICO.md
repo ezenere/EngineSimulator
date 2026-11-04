@@ -10,6 +10,7 @@ Este documento explica a física e o processamento de áudio por trás dos dois 
 - [Cena e portadores](#cena-e-portadores)
 - [Página Passagem e modo de testes](#página-passagem-e-modo-de-testes)
 - [Diesel: ignição por compressão](#diesel-ignição-por-compressão)
+- [Radial e aviação a pistão](#radial-e-aviação-a-pistão)
 - [Validação](#validação)
 - [Limitações conhecidas](#limitações-conhecidas)
 - [Como adicionar um carro ou avião](#como-adicionar-um-carro-ou-avião)
@@ -39,6 +40,7 @@ O site é compilado com Vite (TypeScript + React) e publicado como páginas est�
 | `tools/render.ts`, `tools/compare-wav.ts`, `tools/acoustics-paridade.ts` | Renderização offline para WAV, comparação amostra a amostra e conferência bit a bit do `acoustics/` contra o legado |
 | `tools/analise-som/` | Banco de testes em Node e análise em Python para comparar o som com gravações reais (ver `docs/REVISAO-DE-SOM.md`) |
 | `src/scene/`, `src/carriers/`, `tools/cena/` | Camadas cena e portador (Passagem, trem e demais portadores) e a validação offline delas (ver [Cena e portadores](#cena-e-portadores)) |
+| `radial.html`, `src/pages/radial/`, `src/engines/radial/`, `src/engines/ronco/aviacao.ts`, `src/pages/comum/Aviacao.tsx` | Radial (`RadialDSP`, geometria da biela-mestra, escape radial, partida de aviação, `MotorRadial`) e a família Aviação do Ronco (ver [Radial e aviação a pistão](#radial-e-aviação-a-pistão)); testes em `tools/radial-*.ts` e `tools/radial-navegador.mjs` |
 | `passagem.html`, `src/pages/passagem/`, `public/3d/` | Página Passagem / modo de testes: ouvinte no gimbal, cena three.js, mostradores; texturas com `LICENSES.md` (ver [Página Passagem e modo de testes](#página-passagem-e-modo-de-testes)); teste em `tools/passagem-navegador.mjs` |
 | **Legado** (até a migração): | |
 | `src/geometry.js` | Geometria do motor: virabrequins, ordem de ignição, intervalos, balanceamento (migrado para `src/engines/ronco/geometria.ts`) |
@@ -55,7 +57,7 @@ Os arquivos `*-dsp.js` legados ficam dentro de uma função-fábrica (`EngineDSP
 ## Build: Vite, TypeScript e React
 
 - `npm run dev` serve o projeto com recarga automática; `npm run build` confere os tipos (`tsc` com `tsconfig.json`, código do navegador, e `tsconfig.node.json`, ferramentas e DSP, sem tipos do DOM) e gera `dist/`; `npm run preview` serve o `dist/`.
-- **Multi-página:** as entradas estão em `vite.config.mts` (`build.rolldownOptions.input`: `index.html`, `ronco.html`, `turbina.html`, `passagem.html`). Uma página nova (`radial.html`…) é um HTML na raiz com `<script type="module" src="./src/pages/<nome>/main.tsx">` e uma linha a mais nessa lista.
+- **Multi-página:** as entradas estão em `vite.config.mts` (`build.rolldownOptions.input`: `index.html`, `ronco.html`, `turbina.html`, `passagem.html`, `diesel.html`, `radial.html`). Uma página nova (`rotativo.html`…) é um HTML na raiz com `<script type="module" src="./src/pages/<nome>/main.tsx">` e uma linha a mais nessa lista.
 - **`base: './'`:** todos os caminhos do `dist/` são relativos, então o site funciona em `ezenere.com/data/engine/` (ou qualquer subpasta) sem reconfigurar. Foi testado servindo o `dist/` em `/data/engine/`. Abrir o HTML pelo `file://` não funciona (módulos ES exigem http).
 - **Por que não `"type": "module"` no `package.json`:** as ferramentas antigas em `tools/analise-som/` e os arquivos legados de `src/` são CommonJS (`require`, `module.exports`) e deixariam de carregar. A configuração do Vite é `.mts` para ser ESM mesmo assim. O `tsx` roda os `.ts` de `tools/` como CommonJS; eles usam `createRequire(import.meta.url)` e `import.meta.url`, que funcionam nos dois modos.
 - **TypeScript:** `strict: false`, e os campos das classes copiadas do legado são declarados com `declare` (não geram código; a classe compilada fica igual à original). TypeScript 7, React 19, Vite 8 (Rolldown).
@@ -890,7 +892,8 @@ Os motores existentes entram na camada cena/portador por adaptadores `Motor` (CE
 | gerador | Diesel (`gerador`) | degraus de carga | `rpmAlvo` da rede; carga `P/(η·ω)` do portador |
 | locomotiva | Diesel (`locomotiva`) | notch | `rpmAlvo` do notch; carga do gerador de tração do portador |
 | avião | Turbina | manete | `acelerador` |
-| rotor | — | coletivo | Nr imposto (não há pistão de aviação nem turboeixo) |
+| rotor | pistão de aviação (R22, R44, Bell 47, S300), radial (S-55) ou nenhum | coletivo | `combustivel` do governador do rotor vira o acelerador (Kp 0,12× o de bancada); sem motor, Nr imposto |
+| hélice | radial ou pistão de aviação | manete (e `rpmAlvo`, a manete de passo) | `acelerador`; a carga da hélice no eixo, com o governador de passo do portador |
 
 - **Velocidade imposta no carro:** com `velocidadeFixa` (a passagem disparada), o `CarroLegado` impõe a velocidade dentro do DSP a cada bloco. Com uma marcha engatada, o motor fica preso às rodas, como num dinamômetro de rolo: em 3ª e pé no fundo, o Camaro segura 3996 rpm a 108 km/h. Parado, a página manda ponto morto e lenta. A marcha escolhida trava o automático (`shiftCool`).
 - **Governador do motor** (`Motor.governadorProprio` e `ComandoMotor.rpmAlvo`, extensões): o diesel em gerador e locomotiva usa o isócrono dele, acertado por motor (Kp = ω_c/P), e o portador manda só o alvo. O DSP fica no modo do uso, e a carga externa substitui a interna em `cargas()`. O PI do portador (CENA 4.4/4.5) foi acertado com o `MotorTeste` e, num diesel de verdade, fazia um ciclo-limite:
@@ -907,7 +910,7 @@ Os motores existentes entram na camada cena/portador por adaptadores `Motor` (CE
 - **O alternador entra com o campo** (50–90% da rotação).
 - **Piso de −50 dB na ponderação A** em `calibrarSerieA`: com a rotação perto de zero, as séries pediam amplitudes enormes em poucos Hz (137 dB SPL de infrassom na partida do gerador).
 - **Fonte do motor substitui a própria de mesmo id:** a fonte `turbo` do EMD (o turbo do DieselDSP) tira a `turbo` da locomotiva, e a `helice.g` do turboélice tira a `helice` do portador.
-- **O Ronco não recebe carga no eixo:** o gancho 11 do RADIAL.md é da etapa 3. `acoplar` só guarda a carga, e no carro ela é o câmbio de dentro.
+- **Carga no eixo (gancho 11 do RADIAL.md, etapa 3):** os motores de aviação do Ronco (`aviation`) e o radial recebem a carga do portador no virabrequim (`T_carga`, `J + inércia`); no carro ela continua sendo o câmbio de dentro, e `acoplar` só guarda a carga.
 
 ### Hélice idêntica
 
@@ -983,7 +986,6 @@ A sonda roda na thread principal, junto com a calibração (página: `prepararMo
 ### Pendente (TODO)
 
 - Fontes da Turbina separadas por fonte, com a diretividade de cada uma (o gimbal de perto de um jato).
-- Gancho de carga no virabrequim do Ronco (gancho 11 do RADIAL.md, etapa 3) e o pistão de aviação no rotor e na hélice (R44, Cessna).
 - Turboeixo: não há preset com `arch: 'turboeixo'` na Turbina, e o rotor fica sem motor.
 - Escala absoluta da Turbina (o ATR sai ~10 dB alto).
 - Referência própria para o diesel leve no carro (Hilux 3 dB baixa com a referência do Ronco).
@@ -1024,6 +1026,106 @@ O projeto está em [`DIESEL.md`](DIESEL.md); aqui fica o que foi feito, como e o
 ### Desvios conhecidos
 
 Os números medidos estão no relatório da etapa e em `npm run teste:diesel`. Ficaram fora do alvo: a temperatura na abertura do escape em lenta (480–540 K contra 600–750: zona única com a lenta pobre), o ângulo do pico (2–7° adiantado) e o `dp/dθ` de plena carga (10 bar/° contra 5–8); a fumaça preta no transiente (aspirado com ar sobrando, regulador de carga da locomotiva subindo junto com o giro); o EMD 710 mais escuro que a gravação (faltam fontes do 2 tempos: engrenagens, ventiladores, sopradores) e o GE agudo demais em lenta; o Jake e o freio de descarga sem o agudo e a atenuação pedidos; o droop do OM617 (3,6% contra 7–9%, pelo atrito em vazio); a caça do mecânico em lenta maior que ±2%; potência na rotação de potência até 15% acima da ficha nos leves aspirados e no Ranger; Hilux a 100 km/h em 6ª a 1542 rpm com as relações da ficha. O MAN B&W marítimo (opcional) não entrou.
+
+## Radial e aviação a pistão
+
+O projeto está em [`RADIAL.md`](RADIAL.md); aqui fica o que foi feito, como e o que se mediu. Página `radial.html` (`src/pages/radial/`), DSP em `src/engines/radial/`, worklet `src/worklet/processador-radial.ts` (`radial-engine`); a família **Aviação** (motores planos de avião e de helicóptero leve) está na página do Ronco.
+
+### Como estende o Ronco
+
+`RadialDSP extends EngineDSP`, como o Diesel. O `EngineDSP` ganhou duas flags neutras (`av`, `radial`, falsas no Ronco), a carga do portador no eixo (`carga`, nula no Ronco) e ramos `if (this.av) …` / `if (this.radial) …` nos pontos da tabela 1.6 do RADIAL.md, com o lado gasolina textual:
+
+| Gancho | Onde | O que faz |
+|---|---|---|
+| 1 | construtor | `av = false; radial = false; carga = null` |
+| 2 | `setConfig` | curso das articuladas no ar e na energia de cada cilindro (`cylIn`, `cylQ` × `curso[c]`) |
+| — | `setConfig`, `message`, `control`, `telemetry` | `instalarAviacao` (com `aviation` no preset), mensagens `{ type: 'av' }`, `avControle`, `avTelemetria` |
+| 4–7, 15 | centelha, falhas, energia, estouros | um magneto (queima ×1,6), mistura, falhas da partida (encharque), estouros da partida sem coletor quente |
+| 8 | antes da 1ª lei | ar comprimido de partida (M-14P) |
+| 9 e 12 | `vib`, `mech` | vibração sem a 1ª ordem (o contrapeso a anula), 2ª ordem das articuladas, momento entre fileiras, oscilação do torque ×1,6; aletas expostas ×1,17 |
+| 10 e 11 | `Tst`, integração | arranque de aviação; `T_carga = carga.torque(ω)` e `J + carga.inercia` (com `carga` nula: `x − 0` e `J + 0`, os mesmos doubles) |
+| — | DFCO, lenta, arranque | o carburador não corta na desaceleração; a lenta de aviação sem a lenta acelerada da central (0,2 do `coldAdd`); arranque mais longo (`crankMax`) |
+| — | mistura do ouvinte | o som da hélice da página (`avSomExtra`) |
+
+`git diff --stat` do `dsp.ts` do Ronco contra a base da etapa: 35 linhas a mais, 8 trocadas. `npm run paridade:ronco` (200 cenários) e `--dist` idênticos; `v16 rev` e `muscle wot` com o mesmo tempo (1,9 s e 2,2 s, contra 2,0 s e 2,3 s antes). O único outro toque no Ronco é o `export` de `balance` com os eixos opcionais (`geometria.ts`).
+
+As funções de aviação moram em `src/engines/ronco/aviacao.ts` (`instalarAviacao`): magnetos, mistura (`qMix`, queima pobre, falhas abaixo de 0,45), arranque elétrico direto (torque de partida 3,2× o atrito frio parado: a fórmula de 8·L + 60 N·m do RADIAL.md não vence o atrito do modelo acima de ~30 L), a carga de bancada da página (`CargaBancadaAv`: a `CargaHelice` com o governador de passo do portador, ou a `CargaRotor` com a embreagem e o governador no acelerador) e o som da hélice na página (a `FonteHelice` do portador, em Pa a 5 m do cubo, na escala do escape pelo `nivelEscape`). O `RadialDSP` troca falhas, arranque, ar de partida e som de partida pelos dele.
+
+### Geometria (`src/engines/radial/geometria.ts`)
+
+`buildRadial` devolve o `MotorMontado` do Ronco mais os campos radiais. Fileira única 3/5/7/9 com biela-mestra: o PMS real de cada articulada sai da cinemática (máximo numérico, passo 0,05° e refino parabólico) e o `schedule()` do Ronco, sem alteração, usa esses PMS; dupla fileira 14/18 com as ordens da P&W (moentes a 180°, dianteira deslocada meio passo); R-4360 com a ordem decorrente (`ordemDecorrente`: das combinações de PMS de ignição por fileira, a que dá os 28 disparos a 25,714°); o Monaco-Trossi (2 × 8) com a ordem decorrente mais uniforme possível em 4 tempos (aproximação). `tools/radial-geometria.ts` reproduz o Apêndice B (34 medidas: ΔPMS a ±0,05°, intervalos exatos, `fire[]`, ordem do R-4360, balanço).
+
+### Escape, sondas e partida (`src/engines/radial/dsp.ts`)
+
+- **Escape** (`buildExhaust` inteiro): anel coletor em laço com as saídas nas junções mais perto do ângulo de cada uma; estaques (um por cilindro, ou grupos de vizinhos de uma fileira); aranha; dois lados em cadeia (Sherman); um sistema por fileira; os dois anéis do P-47 num tubo longo até a turbina (`TwoPort 'turbo'`); as fileiras do R-4360 aos pares. O vazamento do anel de chapa e das juntas é o `breakout` do Ronco, com o acerto da instalação em dB (`vazamento` no preset), e vira a fonte `coletor` na Cena.
+- **Sondas** (`calibrate`/`measurePower`): um `RadialDSP` com o escape de referência (anel de uma saída), 55% da rotação máxima, lenta 21 dB abaixo; a potência medida perto da rotação máxima (0,8/0,9/1,0), que é a da ficha dos motores de avião.
+- **Partida**: inércia (energizar: o apito do volante sobe de 290 a 390 Hz em ~18 s; engatar: o estalo e o volante girando o motor a 80–95 rpm), elétrica direta e ar comprimido (M-14P: o distribuidor manda ar de 3° a 100° depois do PMS, um "tchuf" por cilindro). Os magnetos ficam desligados até a 9ª pá contada (no de inércia, até 4,5 s de giro). Encharque dos cilindros de baixo (`max(0, −cos φ)`, ×(1 + 0,3·primer)), falhas e estouros dos primeiros segundos, fumaça.
+- **Galope da lenta**: dispersão do Ronco ×1,8 (carburador de pressão) ou ×2,6 (boia), 2,5–4,5% de falhas de vela na lenta e um balanço lento da mistura (±20%, abaixo de ~0,4 Hz).
+
+### Portadores e Cena
+
+- **Hélice** (`carriers/helice.ts`): campos novos, todos com o padrão de antes (os turboélices e `teste:cena` não mudam): `nMin` e a manete de passo (`ComandoPortador.rpmAlvo`), `beta0` do passo fixo, `onLenta` (piso da fonte na lenta), `kapK` e `largoK` (decaimento dos harmônicos e ruído largo das pás; nas hélices a pistão 0,5 e ×10 entre M 0,5 e 0,85) e a contagem de pás abaixo de 10% da rotação; a tabela `HELICES_PISTAO`. O c_Q sai da potência da ficha (passo fixo: absorve a potência a 92% da rotação máxima; passo variável: o mínimo absorve 90% na máxima).
+- **Rotor**: monta com motor; com um motor a pistão de verdade o Kp do governador é 0,12× o de bancada (com o original o Nr nem se mexia ao puxar o coletivo).
+- **Adaptadores**: `MotorRadial` (`src/engines/radial/motor.ts`: bocas do escape na carenagem com a diretividade de lado, `coletor`, `admissao`, `bloco` exposto, `vibracao`, `compressor`; nível absoluto pelo `nivelEscape`, sem o reforço de lenta da página) e o `MotorRonco` de aviação (acopla a carga no eixo). Com um portador em voo o motor já começa na rotação dele.
+- **Passagem**: `ADAPTADORES`, `COMPAT.carro` e `USO_REAL` com o radial e o pistão de aviação; o R44 da Passagem passa a ter o O-540; presets novos: Corsair rasante, Yak-52, P-47, Sherman, Cessna 172.
+
+### Ferramentas e portões
+
+`npm run teste:radial` (`tools/radial-valida.ts`, 11 grupos em paralelo, ~40 s), `npm run lenta:radial` (26 presets × 20 °C e −5 °C, partida de verdade, acelerada aos 12 s: 52/52), `npm run geometria:radial`, `npm run navegador:radial` (Chromium e Firefox, `dist/`). `tools/radial-bandas.ts` é a porta de `medir2.py` (conferida: Yak-52 e DC-3 dão os números do Apêndice A); `tools/radial-cena.ts` monta o preset no portador e ouve parado de lado pela Cena (propagação, solo, hélice). CPU: R-4360 subindo de giro, 28% do tempo real em Node (62 tubos, 32 nós), contra o portão de 60%.
+
+### Alvo × medido (`npm run teste:radial`: 124 medidas, 94 ok, 29 desvios documentados, 0 falhas)
+
+| Medida | Alvo | Medido |
+|---|---|---|
+| ΔPMS das articuladas (1.2, B.1), intervalos 80 / 51,43 / 40 / 25,714°, ordem do R-4360, balanço | Apêndice B | 34/34 (ΔPMS a ±0,023°) |
+| f_ign/BPF: Yak, T-6, DC-3, P-47, Corsair | 3,42 / 2,25 / 4,15 / 4,5 / 5,14 ± 1% | 3,419 / 2,250 / 4,148 / 4,500 / 5,143 |
+| bandas lenta 14 cil. a 10 m (DC-3), rel. 150–400 | +5 / −7,5 / −11 / −12,5 | +0,9 / −7,2 / −11,4 / −12,7 (**desvio** no grave) |
+| bandas lenta 18 cil. coletor único + turbina a 5 m (P-47) | +5 / −6,5 / −12 / −10 | +2,5 / −2,8 / −12,2 / −13,0 |
+| bandas lenta 9 cil. a 12 m (Yak-52) | +4 / −6 / −15 / −14 | +9,7 / −8,8 / −12,8 / −13,7 (**desvio** no grave) |
+| bandas lenta 9 cil. a 4 m (T-6G) | +12 / −1 / +2 / 0 | 0 / −0,7 / +2,9 / +2,5 (**desvio** no grave) |
+| bandas lenta 18 cil. estaques a 8 m (Corsair) | −4 / −5 / −9 / −14,5 | +1,1 / −10,6 / −12,6 / −12,6 (**desvio**) |
+| bandas lenta 7 cil. a 4 m (Rotec) | +3 / −8 / −4 / −6 | +10,2 / +0,7 / +3,1 / +1,7 (**desvio**) |
+| bandas decolagem Yak (75 m), T-6 (50 m), Corsair (150 m) | ver 4.1 | grave da BPF 3–11 dB acima, agudo 4–10 dB abaixo (**desvio**) |
+| centroides (lenta DC-3, Yak, P-47, Corsair; decolagem T-6) | ±30% | 360 / 351 / 365 / 375 / 794 Hz |
+| R-2800 estaques na lenta: 4,5ª contra a 9ª · P-47: 9ª contra a 4,5ª | ≥ −3 · ≥ 0 dB | +2,6 · +24,5 dB |
+| Corsair decolagem: 4,5ª contra a 9ª | ≥ +8 dB | +20,8 dB |
+| Yak decolagem: BPF contra a ignição · harmônicos 1–3 | ≥ +5 · dentro de 8 dB | +14,8 · 5,2 dB |
+| T-6 decolagem: harmônicos 5–9 contra a ignição · entre si | ≥ +10 · dentro de 6 dB | +16,6 · 6,6 dB (**desvio**, 0,6 dB) |
+| lenta a 12 m: harmônicos 2–5 da BPF contra a ignição (DC-3, Yak) | −10 ± 5 dB | −6,3 / −15,0 dB |
+| lenta → plena a 55% (bocas a 5 m): R-1830, M-14P, R-1340, R-2800 | +18 a +25 dB | +18,7 / +22,2 / +13,8 / +17,5 (**desvio** nos dois últimos) |
+| vagar da lenta (Yak, Corsair, P-47) | 2–4% (P-47 ≤ 7) | 3,6 / 2,3 / 0,6% |
+| CVciclo da lenta (Yak, T-6G, DC-3) | 0,30–0,42 | 0,32 / 0,37 / 0,37 |
+| R-1830: apito do arranque de inércia | 290 → 390 Hz em 15–20 s | 299 → 375 Hz em 16,0 s |
+| R-1830: CVciclo nos 3 s depois de pegar · aos 20 s | ≥ 0,8 · ≤ 0,45 | 1,02 · 0,37 |
+| R-2800: uivo do superalimentador a 800 e 2 700 rpm | 1 621 e 5 472 Hz ± 2%; ≤ −25 dB do total | 1 620 e 5 476 Hz; −42,8 e −40,8 dB |
+| mag check a 1 700 rpm (R-1340): queda esq/dir, diferença | 60 ± 30; ≤ 30 rpm | 74 / 83; 8 rpm |
+| mistura 0,55: potência · escape | −3 a −7% · +40 a +80 °C | −5,0% · +60 °C |
+| mecânica do radial contra o mesmo motor a água | 1,4× | 1,40× |
+| R-2800: governador da hélice na decolagem | 1 225 rpm ± 2% | 1 226 rpm |
+| potência (R-1820, R-1830, R-2800, R-4360, M-14P, R-1340) | ficha ± 5% | +0,8 / −1,3 / +0,4 / −0,1 / −1,5 / +3,4% |
+| Cessna 172: lenta quente a 20 e −5 °C · decolagem a 35 m/s | 650 ± 20 rpm · BPF ≈ 90 Hz, M 0,80, f_ign/BPF 1 | 646 / 646 · 88,5 Hz, 0,79, 1,001 |
+| R44 (O-540 + rotor): Nr · droop (0,5 → 0,75 em 1 s) · recuperação | 408 ± 2% · 2–3% · ≤ 1,5 s | 408,0 · 0,7% (**desvio**) · 1,1 s |
+| R-4360, 10 s subindo de giro em Node | ≤ 60% | 28% |
+| lenta de todos os radiais e dos 10 de aviação a 20 e −5 °C | zero apagamentos, ±3% | 52/52 |
+
+### Desvios conhecidos
+
+- **Grave da lenta perto e agudo dos estaques.** O T-6G a 4 m tem a 2·BPF da hélice direta (61 Hz) e a ignição fortes no grave; no modelo a hélice na lenta é ∝ M⁴ e o grave fica 12 dB abaixo. O Rotec (estaques de 38 mm sem nada depois) fica 7–9 dB mais brilhante: o `Radiator` do Ronco irradia a derivada da vazão e o chiado da boca estreita; falta um modelo de boca de estaque curto.
+- **Decolagem.** A hélice de ponta quase sônica do T-6 e o escape dos estaques do Corsair têm na gravação mais agudo (1–6 kHz) do que a `FonteHelice` (a do JetDSP, sem ruído de choque) e o escape do modelo dão; a BPF fundamental deixa o grave 3–11 dB acima.
+- **Galope com o PI de lenta.** A decisão 10 manteve o controle de lenta do Ronco: ele corrige o balanço lento, e o vagar do DC-3 (J 19 kg·m²) fica em 0,3%; o CVciclo bate.
+- **Partida.** O EngineDSP só queima acima de 60 rpm no arranque: o volante de inércia gira o R-1830 a 80–95 rpm (9 pás em 3,2 s, contra 4–6) e o ar comprimido gira o M-14P a ~180 rpm (13,5 "tchufs"/s, contra 7–11).
+- **R44.** A borboleta do Ronco responde em 30 ms: o droop é 0,7% (contra 2–3%), com a volta em 1,1 s.
+- **Faixa dos 13 aviões a 12 m.** O alvo de 12 dB não cabe nos `nivelEscape` do próprio RADIAL.md (Verner 124 e R-1820 145 dB de L_W): a faixa medida é 38 dB.
+- **Desvios das fórmulas do RADIAL.md, anotados no código:** ordem do 3 cilindros `1-3-2` (a `1-2-3` da tabela 1.1 dispara a 120-120-480°); intervalos do 9 cilindros 80 ± 7,2° (os ΔPMS da própria tabela 1.2 somados; o texto diz ±5°); `qMix` com o fator pobre (a fórmula de 2.2 dava 1 com 0,55); um magneto ×1,6 na queima (com ×1,2 o mag check caía 18 rpm); ar de partida ×0,3 da vazão do texto e janela de 3–100° (com 5–60° o motor parado ficava num buraco sem cilindro recebendo ar); arranque direto 3,2× o atrito frio; passo mínimo absorvendo 90% da potência (com 25% o R-2800 subia em 1 s); `FAMILIES` do Ronco sem a Aviação (ela fica em `PRESETS_AVIACAO`/`FAMILIA_AVIACAO`, e a página usa `PRESETS_PAGINA`), porque a paridade confere os 68 e as 9 famílias contra o legado.
+- **Aproximações declaradas:** Monaco-Trossi em 4 tempos (o ciclo de 360° do `EngineDSP` só existe com `cc`); Megola (a panorâmica dos estaques gira com a roda; a "lenta" é a roda empurrada); Sherman sem o ruído da esteira.
+
+### Pendente (TODO)
+
+- Boca de estaque curto (Rotec, M-14PF, Corsair) e ruído de choque da hélice de ponta sônica (T-6), para o agudo da lenta perto e da decolagem.
+- Hélice na lenta com um termo de carga (o "canto" do DC-3 a 3 m).
+- Ford Trimotor com 3 instâncias (opcional no RADIAL.md) e a passagem com altitude no ouvinte `road` da página.
+- Som do rotor na página do Ronco (na Passagem o rotor é o do portador).
+- Monaco-Trossi em 2 tempos a centelha, quando o ciclo de 360° existir sem `cc`.
 
 ## Validação
 

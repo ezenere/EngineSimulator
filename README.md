@@ -1,12 +1,13 @@
-# Ronco e Turbina
+# Ronco, Turbina, Diesel e Radial
 
 Simuladores de som de motor que rodam direto no navegador. O site começa num menu com os tipos de motor: https://ezenere.com/data/engine/
 
 - **Ronco**, motores de carro e moto: https://ezenere.com/data/engine/ronco.html
 - **Turbina**, motores de avião: https://ezenere.com/data/engine/turbina.html
 - **Diesel**, picapes, caminhões, geradores e locomotivas: https://ezenere.com/data/engine/diesel.html
-- **Passagem**, qualquer coisa passando por você (trem-bala, carro na rua, picape diesel, locomotiva, turboélice, jato, helicóptero) com o ouvinte livre em 3D: https://ezenere.com/data/engine/passagem.html
-- **Em construção:** radial, rotativos (Wankel), vapor e elétrico.
+- **Radial**, motores em estrela de avião (Corsair, P-47, DC-3, T-6, Yak-52, R-4360), helicóptero S-55, Sherman, Monaco-Trossi e Megola: https://ezenere.com/data/engine/radial.html
+- **Passagem**, qualquer coisa passando por você (trem-bala, carro na rua, picape diesel, locomotiva, turboélice, jato, helicóptero R44, Corsair, Yak-52, Sherman) com o ouvinte livre em 3D: https://ezenere.com/data/engine/passagem.html
+- **Em construção:** rotativos (Wankel), vapor e elétrico.
 
 ![Ronco com uma Ferrari 458 no corte de giro](docs/ronco.png)
 
@@ -53,6 +54,12 @@ Também dá para pôr pós-combustão em qualquer jato, usar reversor e trocar p
 
 **Teclas:** `I` partida · `W` e `S` mexem a manete · `1` a `4` posições da manete · `R` reversor · `C` muda a posição · `V` alterna entre a bordo e no solo.
 
+## Radial (aviões a pistão)
+
+Motores em estrela: o R-2800 do Corsair e do P-47, o R-1830 do DC-3, o R-1820 do T-28, o R-1340 do T-6, o M-14P do Yak-52, o R-4360 de 28 cilindros, Rotec e Verner de ultraleve, o R-975 do tanque Sherman, o Monaco-Trossi, a moto Megola e o helicóptero S-55. A partida é como num avião: no DC-3 você energiza o volante do arranque (o apito sobe) e engata; nos outros o motor gira, você conta as pás e os magnetos ligam. Depois mexe na manete, na mistura, nos magnetos e no passo da hélice. Os motores planos de avião e de helicóptero (Cessna, Piper, Cirrus, Rotax, Robinson R22 e R44, Bell 47, Schweizer) ficam na família Aviação do Ronco.
+
+**Teclas:** `I` partida (energizar, engatar, magnetos) · `W` manete · `M` magnetos · `[` e `]` mistura · `,` e `.` manete de passo · `C` muda o microfone.
+
 ## Dicas
 
 - Use fone de ouvido: o som tem esquerda e direita, e com a câmera atrás do carro ele soa fora da cabeça, como se o carro estivesse ali.
@@ -80,7 +87,7 @@ O projeto usa [Vite](https://vite.dev/), TypeScript e React. O React fica só na
 - `npm run preview`: serve o `dist/` gerado, para testar o build antes de publicar.
 - `npx tsx tools/render.ts ronco mustang rev saida/`: renderiza um cenário para WAV sem navegador; `npx tsx tools/compare-wav.ts a.wav b.wav` compara dois WAVs amostra a amostra. Detalhes no começo de cada arquivo em `tools/`.
 
-Páginas: `index.html` (menu), `ronco.html` e `turbina.html`, com o código em `src/pages/`. A estrutura das pastas está em [`docs/TECNICO.md`](docs/TECNICO.md).
+Páginas: `index.html` (menu), `ronco.html`, `turbina.html`, `diesel.html`, `radial.html` e `passagem.html`, com o código em `src/pages/`. A estrutura das pastas está em [`docs/TECNICO.md`](docs/TECNICO.md).
 
 ## Quer saber como funciona por dentro?
 
