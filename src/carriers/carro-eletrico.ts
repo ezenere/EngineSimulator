@@ -122,8 +122,10 @@ export class CarroEletrico implements Portador {
   /** carga do 1º motor: o carro inteiro, menos o torque do 2º (que anda preso a ele) */
   private torqueCarga(w: number) {
     const v = (w * this.cfg.rw) / this.i;
-    const T2 = this.motores[1] ? this.motores[1].eixo.torque : 0;
-    return (this.forcaResistente(v) * this.cfg.rw) / (this.i * this.eta) - T2;
+    const T1 = this.motores[0] ? this.motores[0].eixo.torque : 0, T2 = this.motores[1] ? this.motores[1].eixo.torque : 0;
+    // perda da engrenagem (1 − η)·|T| sempre contra o movimento: na regeneração ela também freia
+    const perda = w > 0 ? (1 - this.eta) * (Math.abs(T1) + Math.abs(T2)) : 0;
+    return (this.forcaResistente(v) * this.cfg.rw) / this.i + perda - T2;
   }
 
   acoplar(motor: Motor | null) {

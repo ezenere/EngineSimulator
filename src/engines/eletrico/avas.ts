@@ -27,6 +27,7 @@ export class Avas {
   /** Pa RMS do tom e do ruído no bloco (no eixo, a refDist) */
   aTom = 0; gRuido = 0; gRuido0 = 0;
   f1 = 250;
+  fBip = 0;
   fp: number;
   constructor(fs: number, modo: ModoAvas, semente = 0xa7a5) {
     this.fs = fs; this.modo = modo; this.rng = new RNG(semente);
@@ -44,7 +45,7 @@ export class Avas {
    */
   linhas(v: number, ignicao: boolean, dt: number, L: ListaLinhas) {
     const kmh = Math.abs(v) * 3.6, re = this.re || v < -0.05;
-    const on = this.modo !== null && ignicao && (re || kmh < this.limite());
+    const on = this.modo !== null && ignicao && (re || kmh <= this.limite() + 0.05);
     // liga em 0,2 s, desliga em 2 s
     this.env += on ? dt / 0.2 : -dt / 2;
     this.env = Math.max(0, Math.min(1, this.env));
@@ -53,16 +54,21 @@ export class Avas {
     const vib = 1 + 0.005 * Math.sin(TAU * this.fVib);
     const f1 = (re ? 200 : 250 * (1 + 0.012 * kmh)) * vib;
     this.f1 = f1;
-    // nível no eixo: L_W = 74 + 0,6·v dB(A), dividido entre tom (−1 dB) e ruído (−7 dB) (≈)
+    // nível no eixo: L_W = 74 + 0,6·v dB(A), dividido entre o tom e o ruído; o ruído sobe 3 dB por 10 km/h dentro desse
+    // total (parado: −7 dB, o tom −1 dB; a 20 km/h, −1 e −7) (≈)
     const paA = paDeLw(74 + 0.6 * kmh, REF_DIST_ELETRICO) * this.fp * this.env;
+    const fr = Math.min(0.85, 0.2 * Math.pow(10, (0.3 * kmh) / 10));
     let eA = 0;
-    for (const [r, d] of PARC) { const a = dB(d) * Math.max(0.00316, ganhoA(r * f1)); eA += a * a; }
-    const gTom = (paA * dB(-1)) / Math.sqrt(eA);
+    for (let i = 0; i < PARC.length; i++) { const a = dB(PARC[i][1]) * Math.max(0.00316, ganhoA(PARC[i][0] * f1)); eA += a * a; }
+    // em ré o tom vira um "bip" a 1,5 Hz (porta de meio período com bordas de 30 ms)
+    if (re) { this.fBip += 1.5 * dt; if (this.fBip >= 1) this.fBip -= 1; } else this.fBip = 0;
+    const porta = re ? Math.min(1, Math.max(0, Math.min(this.fBip, 0.5 - this.fBip) / 0.045)) : 1;
+    const gTom = ((paA * Math.sqrt(1 - fr)) / Math.sqrt(eA)) * porta * (re ? Math.SQRT2 : 1);
     this.aTom = gTom;
     for (let i = 0; i < PARC.length; i++) L.por(chave(MEC.avas, i + 1), PARC[i][0] * f1, gTom * dB(PARC[i][1]) * Math.SQRT2);
-    const mod = dB(2 * Math.sin(TAU * this.fMod)) * dB(3 * Math.min(2, kmh / 10));
+    const mod = dB(2 * Math.sin(TAU * this.fMod));
     this.gRuido0 = this.gRuido;
-    this.gRuido = ((paA * dB(-7)) / this.rmsRuidoA) * mod * this.norm;
+    this.gRuido = ((paA * Math.sqrt(fr)) / this.rmsRuidoA) * mod * this.norm;
     // ritmo: um pulso por 2 m percorridos (em ré, a 1,5 Hz)
     this.fRit = re ? 1.5 : Math.abs(v) / 2;
   }

@@ -13,7 +13,7 @@
 import type { FonteSonora, EixoSaida, Carga, ComandoMotor, Vec3, Diretividade } from '../../scene/tipos';
 import type { Motor, EstadoMotor, TelemetriaMotor, FamiliaMotor } from '../../carriers/tipos';
 import { BancoDeLinhas, ListaLinhas, JitterEixo } from './linhas';
-import { EstadoMaquina, estadoEletrico, linhasMotor, torqueDisponivel, naRede, escovado } from './maquina';
+import { EstadoMaquina, estadoEletrico, ForcasMotor, torqueDisponivel, naRede, escovado } from './maquina';
 import { Inversor, linhasAux, type ModoModulacao, type ModoEfetivo } from './inversor';
 import { Reducao, Ventilador, Escovas, Helice, RuidoBanda } from './mecanica';
 import { Avas, type ModoAvas } from './avas';
@@ -72,6 +72,8 @@ export interface PresetEletrico {
   ordensEletricas?: [number, number][];
   /** linhas fixas do conversor auxiliar e da ventilação do trem parado [Hz, dB] */
   auxLinhas?: [number, number][];
+  /** ruído largo dos ventiladores do auxiliar (ar-condicionado, ventilação), dB relativos à potência das linhas do aux */
+  auxRuido?: number;
   /** torque de regeneração (fração de T_n) e velocidade mínima da regeneração (m/s) */
   Tregen?: number; vRegenMin?: number;
   /** escovas: nível do faiscamento relativo aos tons (≈) */
@@ -119,8 +121,10 @@ class Unidade {
   corcova: RuidoBanda | null = null; bqCorc: Bq | null = null; normCorc = 1; fCorc0 = 300;
   cMotor = -1; cInv = -1; cRed = -1; cVen = -1; cEsc = -1; cHel = -1;
   faseSlip = 0;
+  forcas: ForcasMotor;
   constructor(p: PresetEletrico, fs: number, u: number, det: number, sem: number) {
     this.det = det;
+    this.forcas = new ForcasMotor(p);
     this.jit = new JitterEixo(fs, sem ^ 0x31, p.jitter ?? 5e-4, 0.5, p.jitter && p.jitter > 2e-3 ? 2 : 0.3);
     this.bMotor = new BancoDeLinhas(fs, LMAX.motor, sem + 1);
     this.inv = p.inversor ? new Inversor(p, fs, sem + 2) : null;
@@ -166,7 +170,7 @@ export class EletricoDSP implements Motor {
   modoAvas: ModoAvas = null;
   private regen = 0; private Tf = 0;
   // fontes compartilhadas
-  bAux: BancoDeLinhas | null = null; lAux = new ListaLinhas(32); cAux = -1;
+  bAux: BancoDeLinhas | null = null; lAux = new ListaLinhas(32); cAux = -1; ruidoAux: RuidoBanda | null = null; rmsAux = 0;
   avas: Avas | null = null; bAvas: BancoDeLinhas | null = null; lAvas = new ListaLinhas(8); cAvas = -1; cAvasRe = -1;
   private pos = 0;           // amostra dentro do bloco de controle
   private semente = 0x5e1e;
@@ -199,8 +203,16 @@ export class EletricoDSP implements Motor {
       if (U.bHel) U.cHel = add('helice');
     });
     const inv = p.inversor;
-    if ((inv && inv.fcAux) || p.auxLinhas?.length) { this.bAux = new BancoDeLinhas(fs, LMAX.aux, this.semente + 77); this.canais.push({ id: 'aux', base: 'aux', u: -1, out: this.canais.length }); this.cAux = this.canais.length - 1; }
-    else this.bAux = null;
+    if ((inv && inv.fcAux) || p.auxLinhas?.length) {
+      this.bAux = new BancoDeLinhas(fs, LMAX.aux, this.semente + 77); this.canais.push({ id: 'aux', base: 'aux', u: -1, out: this.canais.length }); this.cAux = this.canais.length - 1;
+      // ventiladores do auxiliar: largo de 60 Hz a 1 kHz (passa-baixa suave, Q 0,5), na potência relativa do preset
+      if (p.auxRuido !== undefined) {
+        this.lAux.limpar(); linhasAux(p, this.lAux);
+        let e = 0; for (let i = 0; i < this.lAux.n; i++) e += 0.5 * this.lAux.a[i] * this.lAux.a[i];
+        this.rmsAux = Math.sqrt(e) * Math.pow(10, p.auxRuido / 20);
+        this.ruidoAux = new RuidoBanda(fs, this.semente + 79, [new Bq().hp(fs, 60, 0.7071), new Bq().lp(fs, 1000, 0.5)]);
+      } else this.ruidoAux = null;
+    } else { this.bAux = null; this.ruidoAux = null; }
     if (p.avas !== undefined) {
       this.avas = new Avas(fs, p.avas ?? null, this.semente + 99);
       this.bAvas = new BancoDeLinhas(fs, LMAX.avas, this.semente + 98);
@@ -218,7 +230,7 @@ export class EletricoDSP implements Motor {
     const p = this.p;
     const chaves = [c.id, c.base, c.base === 'avas' && c.id === 'avas.re' ? 'avas.re' : c.base];
     let f = p.fontes[c.id] ?? p.fontes[c.base];
-    if (c.id === 'avas.re') f = p.fontes['avas.re'] ?? { pos: [-2.3, 0, 0.4], dentro: false };
+    if (c.id === 'avas.re') f = p.fontes['avas.re'] ?? { pos: [-2.31, 0, 0.4], dentro: false };
     void chaves;
     const pos: Vec3 = f ? f.pos : [0, 0, 0];
     const dentro = f ? f.dentro : false;
@@ -301,7 +313,8 @@ export class EletricoDSP implements Motor {
       U.lMotor.limpar();
       if (this.ign || e.frot > 0.3) {
         if (p.maquina === 'inducao') { U.faseSlip += TAU * 2 * Math.abs(e.fslip) * U.det * dt; if (U.faseSlip > TAU) U.faseSlip -= TAU; }
-        linhasMotor(p, e, U.lMotor, U.faseSlip, U.det);
+        U.forcas.fatores(p, e, U.faseSlip);
+        U.forcas.emitir(U.lMotor, e.frot * U.det, e.fe * U.det);
       }
       U.bMotor.atualizar(U.lMotor, jf, jg * this.kAbs.motor);
       if (U.corcova) {
@@ -330,7 +343,7 @@ export class EletricoDSP implements Motor {
       if (U.hel && U.bHel) { U.lHel.limpar(); U.hel.linhas(e, U.lHel, U.det, fBase); U.bHel.atualizar(U.lHel, jf, jg * this.kAbs.helice); }
     }
     // auxiliar (constante, com a ignição) e AVAS
-    if (this.bAux) { this.lAux.limpar(); if (this.ign) linhasAux(p, this.lAux); this.bAux.atualizar(this.lAux, 1, this.kAbs.aux); }
+    if (this.bAux) { this.lAux.limpar(); if (this.ign) linhasAux(p, this.lAux); this.bAux.atualizar(this.lAux, 1, this.kAbs.aux); this.ruidoAux?.alvo(this.ign ? this.rmsAux : 0); }
     if (this.avas && this.bAvas) {
       this.lAvas.limpar();
       const vS = this.re ? -vp : vp;
@@ -360,7 +373,7 @@ export class EletricoDSP implements Motor {
         if (U.bEsc) { const o = saidas[U.cEsc]; if (o) { U.bEsc.processar(o, k, m); U.esc!.ruido(o, k, m, pos, BLOCO, this.kAbs.escovas); } }
         if (U.bHel) { const o = saidas[U.cHel]; if (o) { U.bHel.processar(o, k, m); U.hel!.largo.processar(o, k, m, pos, BLOCO, this.kAbs.helice); } }
       }
-      if (this.bAux && saidas[this.cAux]) this.bAux.processar(saidas[this.cAux], k, m);
+      if (this.bAux && saidas[this.cAux]) { this.bAux.processar(saidas[this.cAux], k, m); this.ruidoAux?.processar(saidas[this.cAux], k, m, pos, BLOCO, this.kAbs.aux); }
       if (this.bAvas) {
         const o = saidas[this.re ? this.cAvasRe : this.cAvas];
         if (o) { this.bAvas.processar(o, k, m); this.avas!.processar(o, k, m, pos, BLOCO); }

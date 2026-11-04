@@ -6,7 +6,7 @@
 // vem da sonda (`kAbs`, motor.ts) na condição de referência.
 import type { PresetEletrico } from './dsp';
 import type { ListaLinhas } from './linhas';
-import { TAU, MEC, chave, hCarcaca, I_VAZIO, I_VAZIO_CC, F_CARC } from './constantes';
+import { TAU, MEC, chave, I_VAZIO, I_VAZIO_CC, F_CARC, F_CARC_LP } from './constantes';
 
 /** estado elétrico e mecânico da máquina, recalculado a cada bloco de controle */
 export class EstadoMaquina {
@@ -84,74 +84,112 @@ export function pesoLaterais(fe: number) { const x = (2 * Math.abs(fe) - 1.5) / 
 
 const W_M = [1, Math.pow(10, -10 / 20), Math.pow(10, -18 / 20)];        // m = 1, 2, 3
 const W_K = [1, 0.5, Math.pow(10, -14 / 20)];                            // k = 0, ±1, ±2
+const DOBRA = 2 * (W_K[1] * W_K[1] + W_K[2] * W_K[2]);
+
+/** categorias de amplitude (uma por mecanismo; o fator é calculado uma vez por bloco) */
+const C2E = 0, C6E = 1, CRAN = 2, CBAR = 3, CCC = 4, CMAG = 5, CBLDC = 6, CEXT = 7;
+const LAT = 1, CENTRO = 2, SEMH = 4;
 
 /**
- * Forças eletromagnéticas (tabela 1.1) na lista `L`. `fase` é a fase da modulação de escorregamento (2·s·f_e) da
- * indução, `det` o desvio de rotação da unidade (o mesmo motor numa roda de outro diâmetro).
+ * Forças eletromagnéticas (tabela 1.1) como um gabarito montado uma vez por preset: cada linha é f = a·f_rot + b·f_e + c,
+ * amplitude = fator da categoria × peso × curva da carcaça; as laterais ±2k·f_e levam o peso √w (f_e → 0: a potência
+ * delas volta para o centro, `CENTRO`). Um bloco de controle só percorre os Float64Array (sem alocação nem fecho).
  */
-export function linhasMotor(p: PresetEletrico, e: EstadoMaquina, L: ListaLinhas, fase: number, det = 1) {
-  const fc = F_CARC[p.carcaca];
-  const fr = e.frot * det, fe = e.fe * det, phi = e.fluxo;
-  const H = (f: number) => hCarcaca(Math.abs(f), fc);
-  const wl = pesoLaterais(fe), sl = Math.sqrt(wl), cl = 1 - wl;
-  const exc = Math.pow(10, (-20 + 12 * (p.excentricidade ?? 0.2)) / 20);
-  const add = (k: number, f: number, a: number, laterais: boolean) => {
-    L.por(k, f, a * H(f));
-    if (laterais && fr > 0) {
-      L.por(k + 0x1000, f + fr, a * exc * H(f + fr)); L.por(k + 0x2000, f - fr, a * exc * H(f - fr));
-      L.por(k + 0x3000, f + 2 * fr, 0.5 * a * exc * H(f + 2 * fr)); L.por(k + 0x4000, f - 2 * fr, 0.5 * a * exc * H(f - 2 * fr));
-    }
-  };
-  /** grupo de ranhuras/barras: m·Z·f_rot ± 2k·f_e, com a potência das laterais voltando ao centro quando f_e → 0 */
-  const grupo = (mec: number, Z: number, G: number) => {
-    for (let m = 1; m <= 3; m++) {
-      const f0 = m * Z * fr, am = G * W_M[m - 1];
-      let a0 = am;
-      if (cl > 0) a0 = Math.sqrt(am * am + cl * 2 * am * am * (W_K[1] * W_K[1] + W_K[2] * W_K[2]));
-      add(chave(mec, m * 16 + 8), f0, a0, m === 1);
-      if (sl > 0) for (let k = 1; k <= 2; k++) {
-        const ak = am * W_K[k] * sl;
-        add(chave(mec, m * 16 + 8 + k), f0 + 2 * k * fe, ak, false);
-        add(chave(mec, m * 16 + 8 - k), f0 - 2 * k * fe, ak, false);
+export class ForcasMotor {
+  n = 0;
+  chave: Int32Array; cr: Float64Array; ce: Float64Array; c0: Float64Array; cat: Uint8Array; w: Float64Array; fl: Uint8Array;
+  /** fatores por categoria do bloco */
+  amp = new Float64Array(8);
+  fc: number;
+  constructor(p: PresetEletrico) {
+    const L: [number, number, number, number, number, number, number][] = [];
+    const exc = Math.pow(10, (-20 + 12 * (p.excentricidade ?? 0.2)) / 20);
+    const add = (k: number, cr: number, ce: number, c0: number, cat: number, w: number, fl: number, laterais: boolean) => {
+      L.push([k, cr, ce, c0, cat, w, fl]);
+      if (laterais) {
+        L.push([k + 0x1000, cr + 1, ce, c0, cat, w * exc, fl]); L.push([k + 0x2000, cr - 1, ce, c0, cat, w * exc, fl]);
+        L.push([k + 0x3000, cr + 2, ce, c0, cat, 0.5 * w * exc, fl]); L.push([k + 0x4000, cr - 2, ce, c0, cat, 0.5 * w * exc, fl]);
       }
+    };
+    const grupo = (mec: number, Z: number, cat: number) => {
+      for (let m = 1; m <= 3; m++) {
+        add(chave(mec, m * 16 + 8), m * Z, 0, 0, cat, W_M[m - 1], CENTRO, m === 1);
+        for (let k = 1; k <= 2; k++) {
+          add(chave(mec, m * 16 + 8 + k), m * Z, 2 * k, 0, cat, W_M[m - 1] * W_K[k], LAT, false);
+          add(chave(mec, m * 16 + 8 - k), m * Z, -2 * k, 0, cat, W_M[m - 1] * W_K[k], LAT, false);
+        }
+      }
+    };
+    if (escovado(p)) {
+      // CC e universal: desbalanceamento e ranhuras da armadura em ordens de f_rot; o comutador vai nas escovas
+      if (p.Zs > 0) { add(chave(MEC.ranhura, 1), p.Zs, 0, 0, CCC, 1, 0, true); add(chave(MEC.ranhura, 2), 2 * p.Zs, 0, 0, CCC, W_M[1], 0, false); }
+      // o desbalanceamento sacode a ferramenta inteira (carcaça, mandril, a mão): não passa pela curva da carcaça
+      const ge = Math.max(exc * 5, 0.3);
+      add(chave(MEC.rot, 1), 1, 0, 0, CCC, 0.7 * ge, SEMH, false);
+      add(chave(MEC.rot, 2), 2, 0, 0, CCC, 0.5 * ge, SEMH, false);
+      (p.linhasExtras ?? []).forEach(([o, db], i) => add(chave(MEC.extra, i), o, 0, 0, CCC, Math.pow(10, db / 20), 0, false));
+    } else {
+      if (naRede(p)) {
+        // magnetostrição e forças de 2·f da rede: 2f, 4f, 6f, 8f a −6 dB por harmônico, +8 dB em plena carga (como o alternador)
+        const fR = p.fRede ?? 50;
+        for (let h = 1; h <= 4; h++) add(chave(MEC.magnetostr, h), 0, 0, 2 * h * fR, CMAG, Math.pow(10, (-6 * (h - 1)) / 20), 0, false);
+      } else if (p.maquina !== 'bldc') add(chave(MEC.f2e, 0), 0, 2, 0, C2E, 1, 0, true);
+      if (p.maquina === 'bldc') {
+        // BLDC com ESC de 6 passos: a comutação põe a força em ordens de f_e (padrão 6f_e 0 dB, 12f_e −8 dB; o preset mede)
+        (p.ordensEletricas ?? [[6, 0], [12, -8]]).forEach(([o, db], i) => add(chave(MEC.bldc, i), 0, o, 0, CBLDC, Math.pow(10, db / 20), 0, i === 0));
+      } else {
+        // ondulação de torque: 6f_e, 12f_e −8, 18f_e −16
+        add(chave(MEC.f6e, 6), 0, 6, 0, C6E, 1, 0, false);
+        add(chave(MEC.f6e, 12), 0, 12, 0, C6E, Math.pow(10, -8 / 20), 0, false);
+        add(chave(MEC.f6e, 18), 0, 18, 0, C6E, Math.pow(10, -16 / 20), 0, false);
+      }
+      if (p.Zs > 0) grupo(MEC.ranhura, p.Zs, CRAN);
+      if (p.maquina === 'inducao' && p.Zr) grupo(MEC.barra, p.Zr, CBAR);
+      // excentricidade: f_rot e 2f_rot
+      add(chave(MEC.excentr, 1), 1, 0, 0, C2E, exc, 0, false);
+      add(chave(MEC.excentr, 2), 2, 0, 0, C2E, 0.5 * exc, 0, false);
+      (p.linhasExtras ?? []).forEach(([o, db], i) => add(chave(MEC.extra, i), o, 0, 0, CEXT, Math.pow(10, db / 20), 0, false));
     }
-  };
-  if (escovado(p)) {
-    // CC e universal: desbalanceamento e ranhuras da armadura em ordens de f_rot; o comutador vai nas escovas
-    const Ie = Math.max(e.I, I_VAZIO_CC), g = Math.sqrt(Ie);
-    if (p.Zs > 0) { add(chave(MEC.ranhura, 1), p.Zs * fr, g, true); add(chave(MEC.ranhura, 2), 2 * p.Zs * fr, g * W_M[1], false); }
-    add(chave(MEC.rot, 1), fr, 0.7 * g * Math.max(exc * 5, 0.3), false);
-    add(chave(MEC.rot, 2), 2 * fr, 0.5 * g * Math.max(exc * 5, 0.3), false);
-    if (p.linhasExtras) for (let i = 0; i < p.linhasExtras.length; i++) { const [o, db] = p.linhasExtras[i]; add(chave(MEC.extra, i), o * fr, g * Math.pow(10, db / 20), false); }
-    return;
+    const n = (this.n = L.length);
+    this.chave = new Int32Array(n); this.cr = new Float64Array(n); this.ce = new Float64Array(n); this.c0 = new Float64Array(n);
+    this.cat = new Uint8Array(n); this.w = new Float64Array(n); this.fl = new Uint8Array(n);
+    L.forEach((x, i) => { this.chave[i] = x[0]; this.cr[i] = x[1]; this.ce[i] = x[2]; this.c0[i] = x[3]; this.cat[i] = x[4]; this.w[i] = x[5]; this.fl[i] = x[6]; });
+    this.fc = F_CARC[p.carcaca];
   }
-  const Ie = Math.max(e.I, I_VAZIO);
-  const gI = Math.sqrt(Ie);
-  // fundamental (onda de 2p polos): 2·f_e, ∝ Φ (6 dB/oitava acima da base), +6 dB sobre o grupo de ranhuras
-  const A2 = 2 * phi;
-  if (naRede(p)) {
-    // magnetostrição e forças de 2·f da rede: 2f, 4f, 6f, 8f a −6 dB por harmônico, +8 dB em plena carga (como o alternador)
-    const fRede = p.fRede ?? 50;
-    for (let h = 1; h <= 4; h++) add(chave(MEC.magnetostr, h), 2 * h * fRede, A2 * 0.4 * (1 + 1.51 * Math.max(e.I, 0)) * Math.pow(10, (-6 * (h - 1)) / 20), false);
-  } else if (p.maquina !== 'bldc') add(chave(MEC.f2e, 0), 2 * fe, A2, true);
-  if (p.maquina === 'bldc') {
-    // BLDC com ESC de 6 passos: a comutação põe a força em ordens de f_e (padrão 6f_e 0 dB, 12f_e −8 dB; o preset mede)
-    const ords = p.ordensEletricas ?? [[6, 0], [12, -8]];
-    for (let i = 0; i < ords.length; i++) add(chave(MEC.bldc, i), ords[i][0] * fe, 2 * gI * Math.pow(10, ords[i][1] / 20), i === 0);
-  } else {
-    // ondulação de torque: 6f_e −20 dB de 2f_e em vazio, +20·log(I/I_vazio) com a carga (até 0 dB), 12f_e −8, 18f_e −16
-    const A6 = Math.min(A2, A2 * 0.1 * (Ie / I_VAZIO));
-    add(chave(MEC.f6e, 6), 6 * fe, A6, false);
-    add(chave(MEC.f6e, 12), 12 * fe, A6 * Math.pow(10, -8 / 20), false);
-    add(chave(MEC.f6e, 18), 18 * fe, A6 * Math.pow(10, -16 / 20), false);
+
+  /**
+   * Fatores do bloco pelas leis de 1.1. `fase` = fase da modulação de escorregamento (2·s·f_e) da indução.
+   *   2f_e ∝ Φ (6 dB/oitava acima da base), +6 dB sobre o grupo de ranhuras, quase não depende do torque;
+   *   6f_e: −20 dB de 2f_e em vazio, +20·log(I/I_vazio) com a carga (até 0 dB);
+   *   ranhuras ∝ Φ·√I (20·log(I/I_n)·0,5), barras da indução +3,5 dB (o grupo mais forte), ±1,5 dB em 2·s·f_e.
+   */
+  fatores(p: PresetEletrico, e: EstadoMaquina, fase: number) {
+    const a = this.amp, phi = e.fluxo;
+    if (escovado(p)) { a[CCC] = Math.sqrt(Math.max(e.I, I_VAZIO_CC)); return; }
+    const Ie = Math.max(e.I, I_VAZIO), gI = Math.sqrt(Ie), A2 = 2 * phi;
+    const mod = p.maquina === 'inducao' ? 1 + 0.19 * Math.sin(fase) : 1;
+    a[C2E] = A2;
+    a[C6E] = Math.min(A2, A2 * 0.1 * (Ie / I_VAZIO));
+    a[CRAN] = (p.maquina === 'inducao' ? 0.6 : 1) * phi * gI * mod;
+    a[CBAR] = 1.5 * phi * gI * mod;
+    a[CMAG] = A2 * 0.4 * (1 + 1.51 * Math.max(e.I, 0));
+    a[CBLDC] = 2 * gI;
+    a[CEXT] = phi * gI;
   }
-  // escorregamento: o grupo de ranhuras/barras da indução oscila ±1,5 dB em 2·s·f_e
-  const mod = p.maquina === 'inducao' ? 1 + 0.19 * Math.sin(fase) : 1;
-  const ind = p.maquina === 'inducao';
-  if (p.Zs > 0) grupo(MEC.ranhura, p.Zs, (ind ? 0.6 : 1) * phi * gI * mod);
-  if (ind && p.Zr) grupo(MEC.barra, p.Zr, 1.5 * phi * gI * mod);
-  // excentricidade: f_rot e 2f_rot
-  add(chave(MEC.excentr, 1), fr, A2 * exc, false);
-  add(chave(MEC.excentr, 2), 2 * fr, 0.5 * A2 * exc, false);
-  if (p.linhasExtras) for (let i = 0; i < p.linhasExtras.length; i++) { const [o, db] = p.linhasExtras[i]; add(chave(MEC.extra, i), o * fr, phi * gI * Math.pow(10, db / 20), false); }
+
+  /** linhas do bloco na lista; `fr`, `fe` já com o desvio da unidade */
+  emitir(L: ListaLinhas, fr: number, fe: number) {
+    const wl = pesoLaterais(fe), sl = Math.sqrt(wl), F = Math.sqrt(1 + (1 - wl) * DOBRA), fc = this.fc;
+    const A = this.amp, K = this.chave, CR = this.cr, CE = this.ce, C0 = this.c0, CT = this.cat, W = this.w, FL = this.fl;
+    for (let i = 0; i < this.n; i++) {
+      const fl = FL[i];
+      if (fl === LAT && sl === 0) continue;
+      let f = CR[i] * fr + CE[i] * fe + C0[i];
+      if (f < 0) f = -f;
+      const r = f / fc, r4 = r * r * r * r, q = f * (1 / F_CARC_LP);
+      let a = A[CT[i]] * W[i] * (fl === SEMH ? 1 : Math.sqrt(r4 / (1 + r4)) / Math.sqrt(1 + q * q));
+      if (fl === LAT) a *= sl; else if (fl === CENTRO) a *= F;
+      L.por(K[i], f, a);
+    }
+  }
 }

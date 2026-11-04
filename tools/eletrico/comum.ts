@@ -10,6 +10,7 @@ import { CenaDSP } from '../../src/scene/dsp-cena';
 import type { Ambiente, Trajetoria, Ouvinte } from '../../src/scene/tipos';
 import { ambientePassagem } from '../../src/scene/ambientes';
 import { PonderacaoA } from '../../src/scene/filtros';
+import { PA_FS } from '../../src/scene/constantes';
 
 export const SR = 48000;
 const cache = new Map<string, CfgEletrico>();
@@ -91,7 +92,8 @@ export function renderCena(p: Portador, op: { amb?: Ambiente; traj?: Partial<Tra
     while (e < ev.length && ev[e][0] <= t) ev[e++][1](t);
     const b = Math.min(B, N - k);
     d.process(l, r, b, sl, sr);
-    L.set(l.subarray(0, b), k); R.set(r.subarray(0, b), k);
+    // a Cena escreve em unidades do alto-falante (0 dBFS ≙ 124 dB SPL): volta para Pa
+    for (let j = 0; j < b; j++) { L[k + j] = l[j] * PA_FS; R[k + j] = r[j] * PA_FS; }
     op.cada?.(t + b / SR, d);
   }
   return { L, R, d };

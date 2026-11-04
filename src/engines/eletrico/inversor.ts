@@ -46,7 +46,13 @@ export const J_REF = besselJ(0, 0.1 * Math.PI);
 export function dbTensao(m: number, n: number, M: number) { return 20 * Math.log10(Math.abs(jTab(n, (m * Math.PI * M) / 2)) / m / J_REF); }
 
 /** bandas laterais por grupo: m ímpar → n par; m par → n ímpar (|n| ≤ 4) */
-const LATERAIS: Record<number, number[]> = { 1: [2, 4], 2: [1, 3], 3: [2, 4] };
+const LAT_N = [[0, 0], [2, 4], [1, 3], [2, 4]];
+const dB20 = (x: number) => Math.pow(10, x / 20);
+const DB_CSI = [1, dB20(-8), dB20(-16)];
+const DB_HARM = [1, dB20(-4), dB20(-8), dB20(-12), dB20(-16)];
+const BLOCO_N = [6, 12, 5, 7], BLOCO_A = [1, dB20(-8), dB20(-14), dB20(-14)];
+/** curva da carcaça (fc = 0: sem curva, a tensão pura dos testes) */
+function hc(f: number, fc: number) { return fc === 0 ? 1 : hCarcaca(f < 0 ? -f : f, fc); }
 
 export class Inversor {
   p: PresetEletrico; fs: number;
@@ -65,8 +71,10 @@ export class Inversor {
   /** soma de a² dos grupos 1 e 2 (para o ruído do random PWM) */
   private eG = [0, 0];
 
+  private permitidosP: ModoModulacao[];
   constructor(p: PresetEletrico, fs: number, semente: number) {
     this.p = p; this.fs = fs; this.rng = new RNG(semente);
+    this.permitidosP = Inversor.permitidos(p);
     this.bqC.bp(fs, 800, 1);
   }
 
@@ -105,7 +113,7 @@ export class Inversor {
     if (!inv || !ligado) { this.modo = 'desligado'; this.fc = 0; this.N = 0; this.nota = -1; }
     else if (inv.tipo === 'csi') { this.modo = 'csi'; this.fc = 0; this.N = 6; this.nota = -1; }
     else {
-      const pedido = this.pedido && Inversor.permitidos(this.p).includes(this.pedido) ? this.pedido : inv.modo;
+      const pedido = this.pedido && this.permitidosP.includes(this.pedido) ? this.pedido : inv.modo;
       const fe = Math.abs(e.fe), lista = inv.sincrona ?? [];
       const Nmax = lista.length ? lista[0] : Infinity;
       this.nota = -1;
@@ -139,22 +147,19 @@ export class Inversor {
     }
   }
 
-  /** linhas do bloco (tensão → corrente → força × curva da carcaça), em unidades relativas */
+  /** linhas do bloco (tensão → corrente → força × curva da carcaça), em unidades relativas (sem alocação: sem fechos) */
   linhas(e: EstadoMaquina, L: ListaLinhas, det = 1, soTensao = false) {
     const inv = this.p.inversor;
     this.eG[0] = this.eG[1] = 0;
     if (!inv || this.modo === 'desligado') return;
-    const fcar = F_CARC[this.p.carcaca];
-    const H = (f: number) => (soTensao ? 1 : hCarcaca(Math.abs(f), fcar));
+    const fcar = soTensao ? 0 : F_CARC[this.p.carcaca];
     const gI = soTensao ? 1 : Math.max(e.I, I_VAZIO);
     const fe = e.fe * det, g = this.gen << 8;
-    const pp = (m: number, n: number, f: number, a: number) => L.por(chave(MEC.portadora, g | (m << 4) | (n + 8)), f, a);
     if (this.modo === 'csi') {
       // inversor de corrente (TGV): sem portadora; 6f_e dominante, 12f_e −8, 18f_e −16, e o chopper de entrada
-      const k = [0, -8, -16];
-      for (let h = 1; h <= 3; h++) { const f = 6 * h * fe; L.por(chave(MEC.csi, h), f, gI * Math.pow(10, k[h - 1] / 20) * H(f)); }
+      for (let h = 1; h <= 3; h++) { const f = 6 * h * fe; L.por(chave(MEC.csi, h), f, gI * DB_CSI[h - 1] * hc(f, fcar)); }
       const fch = inv.fcEntrada ?? 300;
-      for (let h = 1; h <= 3; h++) L.por(chave(MEC.chopper, h), h * fch, 0.3 * gI * Math.pow(10, (-4 * (h - 1)) / 20) * H(h * fch));
+      for (let h = 1; h <= 3; h++) L.por(chave(MEC.chopper, h), h * fch, 0.3 * gI * DB_HARM[h - 1] * hc(h * fch, fcar));
       return;
     }
     if (this.modo === 'chopper') {
@@ -162,14 +167,13 @@ export class Inversor {
       const D = e.D;
       const a = D >= 0.999 ? 0 : 4 * D * (1 - D) * gI;
       this.aChopAnt = a;
-      if (a > 0) for (let h = 1; h <= 5; h++) { const f = h * inv.fc; L.por(chave(MEC.chopper, (this.gen << 4) | h), f, a * Math.pow(10, (-4 * (h - 1)) / 20) * H(f)); }
+      if (a > 0) for (let h = 1; h <= 5; h++) { const f = h * inv.fc; L.por(chave(MEC.chopper, (this.gen << 4) | h), f, a * DB_HARM[h - 1] * hc(f, fcar)); }
       return;
     }
     if (this.modo === 'bloco') {
       // onda quadrada (N = 1): sem portadora; 6f_e da 5ª e 7ª da corrente, 12f_e −8, 5f_e e 7f_e −14 (≈ a f_c com M = 1)
       const a0 = (Math.abs(jTab(0, Math.PI / 2)) / J_REF) * gI;
-      const lin: [number, number][] = [[6, 0], [12, -8], [5, -14], [7, -14]];
-      for (const [o, db] of lin) { const f = o * fe; L.por(chave(MEC.bloco, (this.gen << 6) | o), f, a0 * Math.pow(10, db / 20) * H(f)); }
+      for (let i = 0; i < BLOCO_N.length; i++) { const o = BLOCO_N[i], f = o * fe; L.por(chave(MEC.bloco, (this.gen << 6) | o), f, a0 * BLOCO_A[i] * hc(f, fcar)); }
       return;
     }
     const M = e.M, fc = this.fc;
@@ -181,27 +185,31 @@ export class Inversor {
       // linha central (n = 0 só existe com m ímpar) e as laterais
       const centro = m % 2 === 1 && m <= 3 ? Math.abs(jTab(0, (m * Math.PI * M) / 2)) / m / J_REF : 0;
       let pot = centro * centro, potLat = 0;
-      const lat = m <= 3 ? LATERAIS[m] : [];
       const corr = soTensao ? 1 : 1 / m;          // corrente: mais 1/m
-      for (const n of lat) {
+      if (m <= 3) for (let q = 0; q < 2; q++) {
+        const n = LAT_N[m][q];
         const av = Math.abs(jTab(n, (m * Math.PI * M) / 2)) / m / J_REF;
         const w = pesoLaterais((n * fe) / 2);
         potLat += 2 * av * av;
         if (w > 0) {
           const a = av * Math.sqrt(w) * corr * gI;
-          pp(m, n, fm + n * fe, a * H(fm + n * fe)); pp(m, -n, fm - n * fe, a * H(fm - n * fe));
+          L.por(chave(MEC.portadora, g | (m << 4) | (n + 8)), fm + n * fe, a * hc(fm + n * fe, fcar));
+          L.por(chave(MEC.portadora, g | (m << 4) | (8 - n)), fm - n * fe, a * hc(fm - n * fe, fcar));
         }
         pot += 2 * av * av * (1 - w);
       }
       let ac = Math.sqrt(pot) * corr;
-      // perfil medido (GTO em escada, Taurus): os grupos 2f_c, 3f_c, 4f_c ficam no nível das gravações (a tabela de Bessel
-      // com M ≈ 0,1 dá 2f_c a −22 dB e nenhum 4f_c, contra −4..−9 e −3..−10 dB medidos: o padrão de pulsos do GTO com
-      // poucos pulsos por período não é o PWM senoidal)
-      // (o perfil é acústico, como foi medido: relativo à linha f_c já com a curva da carcaça)
-      const hm = perfil && m <= perfil.length && a10 * Math.pow(10, perfil[m - 1] / 20) * H(fc) > ac * H(fm) ? H(fc) : H(fm);
-      if (perfil && m <= perfil.length) ac = Math.max(ac, a10 * Math.pow(10, perfil[m - 1] / 20));
-      if (ac > 0) pp(m, 0, fm, ac * gI * hm);
-      if (m <= 2) this.eG[m - 1] = (ac * ac + potLat * corr * corr) * gI * gI * H(fm) * H(fm) * 0.5;
+      // perfil medido (GTO em escada, Taurus; bonde): os grupos m·f_c ficam no nível das gravações (a tabela de Bessel com
+      // M ≈ 0,1 dá 2f_c a −22 dB e nenhum 4f_c, contra −4..−9 e −3..−10 dB medidos: o padrão de pulsos do GTO com poucos
+      // pulsos por período não é o PWM senoidal). O perfil é acústico, como foi medido: relativo à linha f_c já com a carcaça.
+      let hm = hc(fm, fcar);
+      if (perfil && m <= perfil.length) {
+        const ap = a10 * Math.pow(10, perfil[m - 1] / 20);
+        if (ap * hc(fc, fcar) > ac * hm) hm = hc(fc, fcar);
+        if (ap > ac) ac = ap;
+      }
+      if (ac > 0) L.por(chave(MEC.portadora, g | (m << 4) | 8), fm, ac * gI * hm);
+      if (m <= 2) this.eG[m - 1] = (ac * ac + potLat * corr * corr) * gI * gI * hm * hm * 0.5;
     }
   }
 

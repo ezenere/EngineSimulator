@@ -125,6 +125,10 @@ export class BancoDeLinhas {
       if (a > aMax) aMax = a;
       if (ns < sel.length) sel[ns++] = i;
     }
+    // linhas na mesma frequência (|Δf| < 0,1 Hz: duas ordens de mecanismos diferentes que coincidem, como 12·f_e e as
+    // ranhuras de uma PMSM com Z_s/p inteiro) somam em potência numa só: com fases sorteadas, a soma de duas senoides de
+    // mesma frequência daria qualquer nível entre a diferença e a soma
+    this.fundir(sel, ns, lf, la);
     const piso = aMax * Math.pow(10, PISO_LINHA_DB / 20);
     let m = 0;
     for (let j = 0; j < ns; j++) { const i = sel[j]; if (la[i] >= piso && la[i] > 0) sel[m++] = i; }
@@ -167,6 +171,26 @@ export class BancoDeLinhas {
     }
     this.nAtivas = na;
     this.pos = 0;
+  }
+
+  private tq = new Int32Array(2048); private ti = new Int32Array(2048);
+  /** funde as candidatas de frequências iguais (±0,1 Hz) em potência, na primeira delas */
+  private fundir(sel: Int32Array, ns: number, lf: Float64Array, la: Float64Array) {
+    const TQ = this.tq, TI = this.ti, M = TQ.length - 1;
+    TI.fill(-1);
+    for (let j = 0; j < ns; j++) {
+      const i = sel[j], f = lf[i], q = Math.round(f * 10);
+      let achou = -1;
+      for (let d = -1; d <= 1 && achou < 0; d++) {
+        const qq = q + d;
+        let h = Math.imul(qq, 0x9e3779b1) >>> 0 & M;
+        while (TI[h] >= 0) { if (TQ[h] === qq && Math.abs(lf[TI[h]] - f) < 0.1) { achou = TI[h]; break; } h = (h + 1) & M; }
+      }
+      if (achou >= 0) { la[achou] = Math.sqrt(la[achou] * la[achou] + la[i] * la[i]); la[i] = 0; continue; }
+      let h = Math.imul(q, 0x9e3779b1) >>> 0 & M;
+      while (TI[h] >= 0) h = (h + 1) & M;
+      TQ[h] = q; TI[h] = i;
+    }
   }
 
   /** oscilador livre (inativo); se não houver, o que está saindo com menor amplitude */

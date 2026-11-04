@@ -28,6 +28,7 @@ export class Multirrotor implements Portador {
   carga: Carga;
   private lista: FonteSonora[] = [];
   private alvo = 0;
+  private integ = 0;
 
   constructor(cfg: { massa?: number; cQ?: number } = {}) {
     this.massa = cfg.massa ?? 0.734; this.cQ = cfg.cQ ?? 0.012;
@@ -60,7 +61,10 @@ export class Multirrotor implements Portador {
       this.alvo = Math.min(wM, wH * Math.sqrt(col / 0.5));
       const w = m.eixo.omega;
       const Tff = this.carga.torque(this.alvo), Td = Math.max(1e-6, torqueDisponivel(p, w, 1));
-      const ac = Math.max(0, Math.min(1, (Tff + 4 * p.Tn * (this.alvo - w) / wH) / Td));
+      // PI do ESC sobre a rotação (o integral tira o erro de regime do proporcional)
+      const err = (this.alvo - w) / wH;
+      this.integ = Math.max(-0.5, Math.min(0.5, this.integ + 20 * err * n * dt));
+      const ac = Math.max(0, Math.min(1, (Tff + p.Tn * (4 * err + this.integ)) / Td));
       m.comandar({ acelerador: ac, ignicao: c.ignicao !== false, partida: false, v: Math.abs(k.v) } as never);
       m.processar(saidas, n);
     }

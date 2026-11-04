@@ -348,9 +348,11 @@ export class TracaoTrem {
     const canaisDe = (u: number, bases: string[]) => motor.canais.filter((c) => c.u === u && bases.includes(c.base)).map((c) => c.out);
     const xT = trem.xTruques, L = trem.corpo.comprimento, lc = trem.cfg.Lc - trem.cfg.vao;
     const xCarro = (v: number) => L / 2 - (v - 1) * trem.cfg.Lc - lc / 2;
-    const fonte = (id: string, tipo: TipoFonte, x: number, z: number, omni = false): FonteSonora => ({
+    // sob o piso (a sombra do assoalho, CENA 2.5, como o rolamento): 10 cm abaixo dele, no máximo a 0,5 m do trilho
+    const zMax = Math.max(0.15, trem.cfg.zPiso - 0.1);
+    const fonte = (id: string, tipo: TipoFonte, x: number, z0: number, omni = false): FonteSonora => { const z = Math.min(z0, zMax); return {
       id, tipo, pos: [x, 0, z], hCorpo: z, dir: { tabela: omni ? OMNI_EL : DIR_MOTOR, eixo: [0, 1, 0], expConv: 2 }, refDist: REF_DIST_PORTADOR, dentro: false,
-    });
+    }; };
     /** fonte que soma as unidades dos truques `gs` nos canais de `bases` (cada unidade com o peso √(quantos truques a usam)) */
     const somar = (gs: number[], bases: string[]) => {
       const cont = new Map<number, number>();
@@ -383,7 +385,10 @@ export class TracaoTrem {
     }
     if (temAux) {
       const v = Math.min(N, Math.max(1, pt?.carroAux ?? carros[0] ?? 1));
-      this.fontes.push(fonte('aux', 'eletrica', xCarro(v), 0.6, true)); this.mapa.push({ ch: Int32Array.of(motor.cAux), g: Float64Array.of(1) });
+      // o conversor e a ventilação do carro: de dentro do carro se ouvem pela estrutura e pelos dutos (vias), não pelo piso
+      const fa = fonte('aux', 'eletrica', xCarro(v), 0.6, true);
+      fa.dentro = true; fa.vias = { cabine: { ganho: 0.5, fc: 2500 }, cofre: { ganho: 1, fc: 0 } };
+      this.fontes.push(fa); this.mapa.push({ ch: Int32Array.of(motor.cAux), g: Float64Array.of(1) });
     }
   }
   private atualizarInercia() {
@@ -400,7 +405,9 @@ export class TracaoTrem {
     const atrito = this.freio > 0 && va > 0.02 && va <= vR ? this.freio * 1.0 * m : 0;
     return rola + d.B * va + d.C * va * va + atrito + m * 9.81 * Math.sin(Math.atan(this.inclinacao));
   }
-  torqueEm(w: number) { const v = (w * this.rw) / this.i; return (this.forca(v) * this.rw) / (this.i * this.eta * this.nMot); }
+  /** carga por motor: a força refletida mais a perda da engrenagem, (1 − η)·|T|, sempre contra o movimento (na regeneração
+   * ela também freia: a roda vê |T|·i·(2 − η)/r_w ≈ |T|·i/(η·r_w)) */
+  torqueEm(w: number) { const v = (w * this.rw) / this.i; return (this.forca(v) * this.rw) / (this.i * this.nMot) + (w > 0 ? (1 - this.eta) * Math.abs(this.motor.eixo.torque) : 0); }
 
   processar(saidas: Float32Array[], off: number, n: number, dt: number, cmd: ComandoPortador) {
     const k = this.trem.cinematica, vf = cmd.velocidadeFixa, m = this.motor;
