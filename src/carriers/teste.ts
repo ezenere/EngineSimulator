@@ -66,3 +66,50 @@ export class PortadorTeste implements Portador {
   }
   telemetria(): TelemetriaPortador { return { v: this.cinematica.v, s: this.cinematica.s, rpmEixo: 0, torqueCarga: 0 }; }
 }
+
+// ---------------------------------------------------------------- motor de teste
+import type { EixoSaida, Carga, ComandoMotor } from '../scene/tipos';
+import type { EstadoMotor, TelemetriaMotor } from './tipos';
+
+export interface ConfigMotorTeste {
+  familia: FamiliaMotor;
+  Tmax: number;          // N·m com combustível 1
+  J: number;             // kg·m² do motor (sem a carga)
+  atrito: number;        // N·m por rad/s
+  tau: number;           // s, atraso do torque ao comando (bomba/injeção)
+  omega0: number;        // rad/s inicial
+}
+
+/**
+ * Motor de bancada para testar portadores (governadores, cargas, inércias) sem depender da migração
+ * dos motores de verdade: eixo rígido, torque = comando·Tmax com atraso de 1ª ordem, atrito viscoso.
+ * Não tem fontes sonoras. Integra o virabrequim (decisão 1.1.5: quem integra é o motor).
+ */
+export class MotorTeste implements Motor {
+  readonly familia: FamiliaMotor;
+  readonly fontes: readonly FonteSonora[] = [];
+  eixo: EixoSaida = { omega: 0, torque: 0, inercia: 0 };
+  estado: EstadoMotor = 'funcionando';
+  cfg: ConfigMotorTeste;
+  fs = 48000;
+  carga: Carga | null = null;
+  u = 0; uAlvo = 0; primeiro = true;
+  constructor(cfg: ConfigMotorTeste) { this.cfg = cfg; this.familia = cfg.familia; this.eixo.omega = cfg.omega0; this.eixo.inercia = cfg.J; }
+  configurar(_p: object, fs: number) { this.fs = fs; }
+  comandar(c: ComandoMotor) { this.uAlvo = Math.max(0, Math.min(1, c.combustivel ?? c.acelerador)); if (!c.ignicao) this.uAlvo = 0; if (this.primeiro) { this.u = this.uAlvo; this.primeiro = false; } }
+  acoplar(c: Carga | null) { this.carga = c; }
+  processar(_s: Float32Array[], n: number) {
+    // integra em passos de 32 amostras (a carga não muda mais depressa que isso)
+    const c = this.cfg, h = 32 / this.fs;
+    for (let k = 0; k < n; k += 32) {
+      this.u += (this.uAlvo - this.u) * (1 - Math.exp(-h / c.tau));
+      const w = this.eixo.omega;
+      const Tm = this.u * c.Tmax - c.atrito * w;
+      const Tc = this.carga ? this.carga.torque(w) : 0;
+      const J = c.J + (this.carga ? this.carga.inercia : 0);
+      this.eixo.omega = Math.max(0, w + ((Tm - Tc) / J) * h);
+      this.eixo.torque = Tm;
+    }
+  }
+  telemetria(): TelemetriaMotor { const w = this.eixo.omega; return { rpm: (w * 60) / (2 * Math.PI), torque: this.eixo.torque, potencia: this.eixo.torque * w, estado: this.estado }; }
+}
