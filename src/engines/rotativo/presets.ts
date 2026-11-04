@@ -53,6 +53,8 @@ export type PresetRotativo = Partial<PresetRonco> & {
   turbo?: { sequencial: boolean; boost: number; trocaRpm?: number };
   escape: EscapeRotativo;
   fHCextra?: number;
+  /** espalhamento da pós-queima até o ponto quente e a boca (ms; 9 se ausente): 0 = cada evento com o seu chiado */
+  hcEspalha?: number;
   vedacoes?: 'novas' | 'gastas';
   nivelEscape?: number;
   reducao?: number; helice?: HelicePreset; rotor?: Record<string, any>;

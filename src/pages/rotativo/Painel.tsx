@@ -329,7 +329,8 @@ function Estalos({ k, e }: P) {
         <ChipGroup id="cat" opcoes={[{ valor: true, rotulo: 'Com' }, { valor: false, rotulo: 'Sem' }]} atual={s.cat !== false} aoEscolher={(v) => k.setSpec({ cat: v }, { structural: false })} />
       </Field>
       <Slider id="fHCextra" rotulo="Pós-queima extra (HC no escape)" min={0} max={0.1} passo={0.005} valor={s.fHCextra || 0} formatar={pct} aoMudar={(v) => k.setSpec({ fHCextra: v }, { structural: false, render: false })} />
-      <p className="note">O Wankel manda 3–5× mais HC ao escape que um pistão (a chama apaga nas vedações e nos cantos da câmara): em lenta ~8% do calor queima no escape, o "chiado quente" de cada pulso; com a mistura crua de uma falha, estoura.</p>
+      <Slider id="hcEspalha" rotulo="Espalhamento da pós-queima" min={0} max={20} passo={1} valor={s.hcEspalha ?? 9} formatar={(v) => `${v} ms`} aoMudar={(v) => k.setSpec({ hcEspalha: v }, { structural: false, render: false })} />
+      <p className="note">O Wankel manda 3–5× mais HC ao escape que um pistão (a chama apaga nas vedações e nos cantos da câmara): em lenta ~8% do calor queima no escape, o "chiado quente" de cada pulso; com a mistura crua de uma falha, estoura. O espalhamento é quanto o gás de cada evento se mistura até queimar na boca: 0 ms deixa cada pulso com o seu chiado e o vão quieto; mais que ~12 ms emenda os pulsos num chiado contínuo.</p>
     </Section>
   );
 }
