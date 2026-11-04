@@ -134,7 +134,7 @@ function ComandoDaCarga({ k, e }: { k: ControleDiesel; e: EstadoDiesel }) {
     </div>
   );
   return (
-    <div className="gearbox" id="dinamometro">
+    <div className="gearbox" id="dinoRead">
       <div className="gear-read"><span className="k">Dinamômetro</span><span className="gear mono">{Math.round(c.dinamometro * 100)}%</span></div>
     </div>
   );

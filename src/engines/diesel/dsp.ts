@@ -142,7 +142,7 @@ export class DieselDSP extends EngineDSP {
   freshStart() {
     super.freshStart();
     this.fuelCmd = 0; this.gI = this.fuelLenta; this.gX = 0; this.gV = 0; this.sobre = false; this.tw = 0; this.boostR = 0; this.boostD = 0; this.pBack = 0;
-    this.Pcarga = 0; this.regCarga = 1; this.tEsc = this.ambientT;
+    this.Pcarga = 0; this.Tcarga = 0; this.regCarga = 1; this.tEsc = this.ambientT; this.rpmAlvo = 0; this.gX = this.gI; this.aquec = 0; this.velas = 0;
   }
 
   tune(cfg) {
