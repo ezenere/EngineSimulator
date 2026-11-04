@@ -23,6 +23,9 @@ export function usarTeclado(k: ControleRonco, setFreio: (on: boolean) => void) {
       else if (e.repeat) return;
       else if (e.code === 'KeyE' || e.code === 'PageUp') k.shift(1);
       else if (e.code === 'KeyQ' || e.code === 'PageDown') k.shift(-1);
+      else if (e.code === 'KeyM' && k.estado.spec.aviation) k.cycleMagnetos();
+      else if (e.code === 'BracketLeft') k.stepMistura(-0.05);
+      else if (e.code === 'BracketRight') k.stepMistura(0.05);
       else if (e.code === 'KeyM' && k.estado.spec.transmission === 'auto') k.cycleDriveMode();
       else if (e.code === 'KeyB') k.cycleValve();
       else if (e.code === 'KeyI') k.toggleIgnition().catch((err) => console.error('Ronco: áudio não iniciou', err));

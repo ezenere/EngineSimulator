@@ -106,7 +106,8 @@ try {
   await espera(2500);
   confere((await ev('document.title')) === 'Ronco', 'título');
   const ini = await ev(`({ familias: document.querySelectorAll('.fam').length, carros: document.querySelectorAll('.preset').length, marcado: document.querySelector('.preset[aria-pressed=true]')?.dataset.id, placa: document.querySelector('.plate')?.textContent, secoes: [...document.querySelectorAll('.controls h2')].map((h) => h.textContent), sliders: document.querySelectorAll('.controls input[type=range]').length, ordem: document.getElementById('roOrder').textContent, bal: document.querySelectorAll('.bal').length })`);
-  confere(ini.familias === 9 && ini.carros === 9 && ini.marcado === 'muscle', 'presets: 9 famílias, 9 muscle, Camaro marcado', JSON.stringify([ini.familias, ini.carros, ini.marcado]));
+  // (10 famílias: as 9 do legado e a Aviação da etapa 3, RADIAL.md 6)
+  confere(ini.familias === 10 && ini.carros === 9 && ini.marcado === 'muscle', 'presets: 10 famílias, 9 muscle, Camaro marcado', JSON.stringify([ini.familias, ini.carros, ini.marcado]));
   confere(ini.placa === 'V8 90° · Cross-plane · 6.2 L · aspirado · 1-8-4-3-6-5-7-2', 'placa', ini.placa);
   confere(ini.secoes.join(',') === 'Escuta e ambiente,Motor,Características,Corte de giro,Temperatura do motor,Transmissão,Escapamento,Acessórios,Estalos no escape,Admissão', 'seções do painel', ini.secoes.join(','));
   confere(ini.ordem === '1-8-4-3-6-5-7-2' && ini.bal === 4, 'leitura da ordem e balanceamento');
@@ -242,6 +243,24 @@ try {
   await espera(1500);
   t = await tele();
   confere(t.state === 'off' && (await texto('.bar .ignition')).includes('Ligar motor'), 'I desliga o motor', t.state);
+
+  const esperaAte = async (f, ms = 8000) => { const t0 = Date.now(); let v; while (Date.now() - t0 < ms) { v = await f(); if (v) return v; await espera(250); } return v; };
+  // família aviação (RADIAL.md 7.2): Cessna 172 com magnetos e mistura no lugar do corte de giro, sem transmissão, com
+  // partida e hélice; o botão vira "Magnetos + partida" e o motor pega e gira a hélice
+  await clicar('.fam:nth-child(10)');
+  await clicar('.preset[data-id=c172]');
+  await espera(1200);
+  const av = await ev(`({ secoes: [...document.querySelectorAll('.controls h2')].map((h) => h.textContent), botao: document.querySelector('.bar .ignition')?.textContent })`);
+  confere(av.secoes.includes('Magnetos e mistura') && av.secoes.includes('Hélice') && av.secoes.includes('Partida') && !av.secoes.includes('Transmissão') && !av.secoes.includes('Corte de giro'),
+    'aviação: Magnetos e mistura, Partida e Hélice; sem Transmissão e Corte de giro', av.secoes.join(','));
+  confere(av.botao.includes('Magnetos + partida'), 'botão "Magnetos + partida"', av.botao);
+  await clicar('.bar .ignition');
+  t = await esperaAte(async () => { const x = await ev(`(() => { const t = window.__ronco.tele; return { state: t.state, rpm: t.rpm, rpmHelice: t.rpmHelice }; })()`); return x.state === 'run' && x.rpm > 450 ? x : null; }, 12000);
+  confere(!!t && t.rpmHelice > 300, 'Cessna pegou e gira a hélice', t ? `${Math.round(t.rpm)} rpm · hélice ${Math.round(t.rpmHelice)} rpm` : 'não pegou');
+  await tecla('KeyM');
+  await espera(400);
+  confere((await ev(`window.__ronco.tele.magnetos`)) === 'desligado', 'M cicla os magnetos', await ev(`window.__ronco.tele.magnetos`));
+  await tecla('KeyI');
   if (process.env.SHOT) await b.foto(process.env.SHOT);
 } catch (e) {
   confere(false, `exceção no teste: ${e.message}`);

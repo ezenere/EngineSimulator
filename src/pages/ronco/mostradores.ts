@@ -4,6 +4,7 @@
 // Também atualiza direto no DOM o que muda a cada quadro (marcha, válvula, frequência de ignição,
 // nota da passagem, água e escape), para o React não re-renderizar com a telemetria.
 import type { ControleRonco } from './controle';
+import { escreverLeiturasAv } from '../comum/Aviacao';
 
 const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
 
@@ -23,7 +24,7 @@ export class Mostradores {
   C: Cores = {};
   private shownRpm = 0;
   private ringPhase = 0; private ringSweep = 0; private lastNow = 0;
-  private glow = new Float32Array(16);
+  private glow = new Float32Array(32);
   private tBuf: Float32Array<ArrayBuffer> | null = null;
   private fBuf: Float32Array<ArrayBuffer> | null = null;
   private raf = 0;
@@ -47,6 +48,7 @@ export class Mostradores {
 
   private frame(now: number) {
     const k = this.k, tele = k.tele;
+    if (tele.aviacao) escreverLeiturasAv(tele); // (família aviação: hélice, rotor, magnetos)
     const dt = this.lastNow ? Math.min(0.1, (now - this.lastNow) / 1000) : 0;
     // água do motor: o controle acompanha a telemetria (menos enquanto o usuário mexe nele)
     const cs = document.getElementById('coolant');

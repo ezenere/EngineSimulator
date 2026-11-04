@@ -146,7 +146,8 @@ const est = await ev(`({
   placa: document.getElementById('plate')?.textContent,
 })`);
 console.log('estrutura:', JSON.stringify(est));
-confere(est.presets.length === 13 && !est.presets.some((p) => p.endsWith('(d)')), 'presets: 13, todos habilitados (os com motor pelos adaptadores)', est.presets);
+// (18: os 13 da etapa 1 e 2 e os 5 da etapa 3, radiais e aviação a pistão)
+confere(est.presets.length === 18 && !est.presets.some((p) => p.endsWith('(d)')), 'presets: 18, todos habilitados (os com motor pelos adaptadores)', est.presets);
 confere(est.portadores.join() === 'Trem,Helicóptero,Carro,Avião de hélice,Gerador,Locomotiva,Avião a jato', 'portadores pela tabela de compatibilidade e os adaptadores', est.portadores);
 confere(JSON.stringify(est.secoes) === JSON.stringify(['Portador', 'Passagem', 'Ambiente', 'Trajetória', 'Ouvinte', 'Trem', 'Ar', 'Escuta', 'Modo de testes']), 'seções do painel', est.secoes);
 confere(['vKmh', 'x0', 'rtFator', 'tunelArea', 'tunelComp', 'tunelBoca', 'comprimento', 'lateral', 'altitude', 'ouvX', 'ouvZ', 'N', 'Lc', 'vao', 'truque', 'lNariz', 'ur', 'temperatura', 'master'].every((s) => est.sliders.includes(s)), 'parâmetros livres do modo de testes', est.sliders.length);
@@ -271,7 +272,7 @@ await clicar('.camera [data-cam="ouvinte"]');
 await chip('portador', 'Helicóptero');
 await espera(800);
 const port3 = (await ultimos('portador')).at(-1);
-confereMsg(port3?.tipo === 'rotor', 'helicóptero montado');
+confereMsg(port3?.tipo === 'rotor' && port3.motor?.familia === 'pistao' && port3.motor.cfg.id === 'r44', 'helicóptero montado com o O-540 do R44 (família aviação do Ronco)', port3 && { tipo: port3.tipo, motor: port3.motor?.familia, id: port3.motor?.cfg.id });
 confere((await ev(`${P}.traj.altitude`)) === 150, 'padrão do helicóptero: altitude 150 m');
 // ---- carro na rua a 6 m: Camaro SS (Ronco adaptado), 3ª, pé no fundo, 108 km/h
 await clicar('#ignicao');

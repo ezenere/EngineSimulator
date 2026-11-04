@@ -8,7 +8,8 @@
 import type { FamiliaMotor, TipoPortador } from '../../carriers/tipos';
 import type { IdAmbiente, Solo } from '../../scene/tipos';
 import { COMPAT, ADAPTADORES, USO_REAL } from '../../carriers/compat';
-import { PRESETS as PRESETS_RONCO } from '../../engines/ronco/presets';
+import { PRESETS as PRESETS_RONCO, PRESETS_AVIACAO } from '../../engines/ronco/presets';
+import { PRESETS_RADIAL } from '../../engines/radial/presets';
 import { PRESETS as PRESETS_DIESEL } from '../../engines/diesel/presets';
 import { PRESETS_TURBINA } from '../../engines/turbina/presets';
 
@@ -27,15 +28,15 @@ export const NOME_MOTOR: Record<FamiliaMotor, string> = {
 /** de onde vem o adaptador de cada família (para o motivo de um portador desabilitado) */
 export const ESPERA_MOTOR: Partial<Record<FamiliaMotor, string>> = {
   pistao: 'adaptador do Ronco', turbina: 'adaptador da Turbina', turboelice: 'adaptador da Turbina', turboeixo: 'adaptador da Turbina',
-  diesel: 'etapa 2 (diesel)', radial: 'etapa 3 (radial)', rotativo: 'etapa 4 (rotativos)', vapor: 'etapa 5 (vapor)', eletrico: 'etapa 6 (elétrico)',
+  diesel: 'etapa 2 (diesel)', radial: 'adaptador do radial', rotativo: 'etapa 4 (rotativos)', vapor: 'etapa 5 (vapor)', eletrico: 'etapa 6 (elétrico)',
 };
 
 export interface InfoPortador { id: IdPortadorPagina; nome: string; descricao: string }
 export const PORTADORES: readonly InfoPortador[] = [
   { id: 'trem', nome: 'Trem', descricao: 'N vagões: rolamento por truque, camada limite, vãos, pantógrafos, nariz e cauda' },
-  { id: 'rotor', nome: 'Helicóptero', descricao: 'Rotor principal e de cauda, caixa e downwash (R44); sem motor, o Nr é imposto' },
+  { id: 'rotor', nome: 'Helicóptero', descricao: 'Rotor principal e de cauda, caixa e downwash (R44); com o pistão de aviação ou o radial do S-55 o governador segura o Nr; sem motor, o Nr é imposto' },
   { id: 'carro', nome: 'Carro', descricao: 'Motor, câmbio e estrada' },
-  { id: 'helice', nome: 'Avião de hélice', descricao: 'Hélice com redutor e governador' },
+  { id: 'helice', nome: 'Avião de hélice', descricao: 'Hélice com redutor e governador (turboélice, radial ou motor plano)' },
   { id: 'gerador', nome: 'Gerador', descricao: 'Rotação fixa, degraus de carga' },
   { id: 'locomotiva', nome: 'Locomotiva', descricao: 'Diesel-elétrica de 8 notches' },
   { id: 'aviao', nome: 'Avião a jato', descricao: 'Fuselagem com os motores da Turbina; acima de Mach 0,9 o resolvedor fechado e o estrondo' },
@@ -50,7 +51,8 @@ export function motoresProntos(p: IdPortadorPagina): FamiliaMotor[] {
 export interface OpcaoMotor { id: string; nome: string; tag: string }
 export function presetsDoMotor(p: IdPortadorPagina, f: FamiliaMotor): OpcaoMotor[] {
   const op = (x: { id: string; name: string; tag: string }) => ({ id: x.id, nome: x.name, tag: x.tag });
-  if (f === 'pistao') return PRESETS_RONCO.map(op);
+  if (f === 'pistao') return p === 'carro' ? PRESETS_RONCO.map(op) : PRESETS_AVIACAO.filter((x) => (x.portadores || []).includes(p)).map(op);
+  if (f === 'radial') return PRESETS_RADIAL.filter((x) => (x.portadores as string[]).includes(p)).map(op);
   if (f === 'diesel') return PRESETS_DIESEL.filter((x) => (x.portadores as string[]).includes(p === 'carro' ? 'carro' : p)).map(op);
   if (f === 'turboelice') return PRESETS_TURBINA.filter((x) => x.arch === 'turboprop').map(op);
   if (f === 'turbina') return PRESETS_TURBINA.filter((x) => x.arch !== 'turboprop').map(op);
@@ -58,7 +60,7 @@ export function presetsDoMotor(p: IdPortadorPagina, f: FamiliaMotor): OpcaoMotor
 }
 /** preset de motor padrão por portador e família */
 export const MOTOR_PADRAO: Partial<Record<FamiliaMotor, Partial<Record<IdPortadorPagina, string>>>> = {
-  pistao: { carro: 'muscle' }, diesel: { carro: 'hilux28', gerador: 'gen500', locomotiva: 'emd710' }, turboelice: { helice: 'regional' }, turbina: { aviao: 'narrow' },
+  pistao: { carro: 'muscle', helice: 'c172', rotor: 'r44' }, radial: { helice: 'r2800', rotor: 's55', carro: 'r975' }, diesel: { carro: 'hilux28', gerador: 'gen500', locomotiva: 'emd710' }, turboelice: { helice: 'regional' }, turbina: { aviao: 'narrow' },
 };
 
 /** habilitado e, se não, por quê */
@@ -116,11 +118,17 @@ export const PRESETS_PASSAGEM: readonly PresetPassagem[] = [
     trem: { N: 8, Lc: 26.4, vao: 0.8, lNariz: 3, cpNariz: 0.3, largura: 2.9, altura: 3.9, zPiso: 0.5, pantografos: [4], carenagem: false } },
   { id: 'regional-corte', nome: 'Regional no corte', sub: '4 vagões · 160 km/h · 4 m', portador: 'trem', motor: 'nenhum', ambiente: 'corte', vKmh: 160, lateral: 4,
     trem: { N: 4, Lc: 26, vao: 0.7, lNariz: 6, cpNariz: 0.22, largura: 2.9, altura: 3.8, pantografos: [2], carenagem: false } },
-  // (o pistão de aviação do R44, Lycoming O-540, é da etapa 3: o rotor passa sem motor, com o Nr imposto)
-  { id: 'heli-rasante', nome: 'Helicóptero R44 sobrevoando', sub: 'só o rotor (sem motor) · 150 km/h · 40 m', portador: 'rotor', motor: 'nenhum', ambiente: 'ceu', vKmh: 150, lateral: 0, altitude: 40, solo: 'grama', coletivo: 0.75 },
+  // R44 com o Lycoming O-540 (família aviação do Ronco): o governador do rotor mexe na borboleta
+  { id: 'heli-rasante', nome: 'Helicóptero R44 sobrevoando', sub: 'Lycoming O-540 + rotor · 150 km/h · 40 m', portador: 'rotor', motor: 'pistao', motorPreset: 'r44', ambiente: 'ceu', vKmh: 150, lateral: 0, altitude: 40, solo: 'grama', coletivo: 0.75 },
   // com motor (adaptadores de src/engines/*/motor.ts)
   { id: 'carro-rua', nome: 'Carro na rua a 6 m', sub: 'Camaro SS · V8 · 3ª, pé no fundo · 108 km/h', portador: 'carro', motor: 'pistao', motorPreset: 'muscle', ambiente: 'ceu', vKmh: 108, lateral: 5.1, solo: 'asfalto', marcha: 3, pedal: 1, x0: 150 },
   { id: 'picape-diesel', nome: 'Picape diesel passando', sub: 'Hilux 2.8 · 4ª · 80 km/h · 5 m', portador: 'carro', motor: 'diesel', motorPreset: 'hilux28', ambiente: 'ceu', vKmh: 80, lateral: 5, solo: 'asfalto', marcha: 4, pedal: 0.8, x0: 150 },
+  // radiais (etapa 3) e aviação a pistão
+  { id: 'corsair-rasante', nome: 'Corsair rasante', sub: 'F4U-4 · R-2800 · 30 m · 500 km/h', portador: 'helice', motor: 'radial', motorPreset: 'r2800', ambiente: 'ceu', vKmh: 500, lateral: 0, altitude: 30, solo: 'grama', pedal: 1, x0: 900 },
+  { id: 'yak52-passagem', nome: 'Yak-52 passando', sub: 'M-14P · 9 cilindros · 120 m · 280 km/h', portador: 'helice', motor: 'radial', motorPreset: 'm14p', ambiente: 'ceu', vKmh: 280, lateral: 0, altitude: 120, solo: 'grama', pedal: 0.8, x0: 700 },
+  { id: 'p47-passagem', nome: 'P-47 Thunderbolt passando', sub: 'R-2800 com turbina · 80 m · 450 km/h', portador: 'helice', motor: 'radial', motorPreset: 'r2800turbo', ambiente: 'ceu', vKmh: 450, lateral: 0, altitude: 80, solo: 'grama', pedal: 0.9, x0: 900 },
+  { id: 'sherman', nome: 'Sherman passando', sub: 'M4A1 · Continental R-975 · 2ª · 15 km/h · 8 m', portador: 'carro', motor: 'radial', motorPreset: 'r975', ambiente: 'ceu', vKmh: 15, lateral: 8, solo: 'asfalto', marcha: 2, pedal: 0.7, x0: 60 },
+  { id: 'cessna-passagem', nome: 'Cessna 172 passando', sub: 'Lycoming O-320 · 100 m · 200 km/h', portador: 'helice', motor: 'pistao', motorPreset: 'c172', ambiente: 'ceu', vKmh: 200, lateral: 0, altitude: 100, solo: 'grama', pedal: 0.8, x0: 600 },
   { id: 'aviao-rasante', nome: 'Turboélice rasante', sub: 'ATR 72 · decolagem · 100 m · 250 km/h', portador: 'helice', motor: 'turboelice', motorPreset: 'regional', ambiente: 'ceu', vKmh: 250, lateral: 0, altitude: 100, solo: 'grama', pedal: 1, x0: 900 },
   { id: 'locomotiva-patio', nome: 'Locomotiva EMD em N8 passando', sub: 'SD70ACe · notch 8 · 40 km/h · 15 m', portador: 'locomotiva', motor: 'diesel', motorPreset: 'emd710', ambiente: 'ceu', vKmh: 40, lateral: 15, solo: 'brita', notch: 8, x0: 110 },
   { id: 'gerador-bancada', nome: 'Gerador em bancada', sub: 'Cummins 500 kVA · 1800 rpm · 50% de carga · 7,5 m', portador: 'gerador', motor: 'diesel', motorPreset: 'gen500', ambiente: 'ceu', vKmh: 0, lateral: 7.5, solo: 'concreto', cargaFracao: 0.5, x0: 0 },

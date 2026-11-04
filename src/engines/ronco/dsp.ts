@@ -25,6 +25,7 @@ import {
 } from '../../acoustics';
 import type { DSPDeAudio } from '../../worklet/tipos';
 import { T_MAN, T_BACK, T_WALL, T_EXREF, SCREW_H, ENV_LOOP } from './constantes';
+import { instalarAviacao } from './aviacao';
 
 // Diferencial padrão: motores de giro alto pedem redução maior para a mesma velocidade.
 export const defaultFinal = (redline) => 3.55 * clamp(redline / 7000, 0.6, 3);
@@ -73,6 +74,11 @@ export class EngineDSP implements DSPDeAudio {
   declare ccInjecao: any; declare ccValvulas: any; declare ccQueima: any; declare ccEscape: any; declare ccAdmissao: any; declare ccMecanica: any; declare ccTurbo: any; declare ccDens: any;
   // adaptador Motor da Cena (src/engines/ronco/motor.ts): só lê os canais antes da mistura; null no Ronco
   declare tap: any;
+  // aviação e radial (RADIAL.md 1.6; src/engines/ronco/aviacao.ts e src/engines/radial/dsp.ts): flags, carga no eixo e o que os
+  // ganchos `if (this.av)` / `if (this.radial)` leem (o EngineDSP só os declara; instalarAviacao os põe na instância)
+  declare av: any; declare radial: any; declare carga: any; declare cargaExterna: any; declare qMix: any; declare burnAv: any; declare avHot: any; declare prAv: any;
+  declare arPartida: any; declare crankMax: any; declare falhaAv: any; declare torquePartida: any; declare partidaAr: any; declare somPartidaAv: any;
+  declare avControle: any; declare avMensagem: any; declare avTelemetria: any; declare avSomExtra: any;
 
   constructor(fs) {
     this.fs = fs; this.dt = 1 / fs;
@@ -110,12 +116,14 @@ export class EngineDSP implements DSPDeAudio {
     this.arcE = 0; this.arcG = 1; this.arcP = 0; // nivelador do modo arcade
     this.cc = false; this.tempos = 4; // gasolina; o DieselDSP põe cc = true e o ciclo do preset
     this.tap = null;
+    this.av = false; this.radial = false; this.carga = null; // (RADIAL.md 1.6, gancho 1: gasolina sem aviação)
   }
 
   message(m) {
     if (m.type === 'config') this.setConfig(m.cfg);
     else if (m.type === 'tune') { if (this.cfg) this.tune(m.cfg); }
     else if (m.type === 'params') Object.assign(this.params, m.params);
+    else if (m.type === 'av') { if (this.av) this.avMensagem(m); } // (aviação: magnetos, mistura, passo, partida)
     else if (m.type === 'input') {
       if (m.throttle !== undefined) this.thrTarget = clamp(m.throttle, 0, 1);
       if (m.brake !== undefined) this.brake = clamp(m.brake, 0, 1);
@@ -166,6 +174,7 @@ export class EngineDSP implements DSPDeAudio {
   setConfig(cfg, calibrate = true) {
     const prevN = this.N;
     this.cfg = cfg;
+    if (cfg.aviation || this.av) instalarAviacao(this, cfg); // (aviação: RADIAL.md 6)
     const N = cfg.N;
     this.N = N;
     this.fire = Float64Array.from(cfg.fire);
@@ -213,6 +222,7 @@ export class EngineDSP implements DSPDeAudio {
       this.cylEx[c] = 1 + 0.1 * sp * sr.bi();
       this.cylQ[c] = 1 + 0.05 * sp * sr.bi();
     }
+    if (this.radial) for (let c = 0; c < N; c++) { this.cylIn[c] *= cfg.curso[c]; this.cylQ[c] *= cfg.curso[c]; } // (gancho 2: curso das articuladas)
     for (let c = 0; c < N; c++) {
       const a = ((this.theta - this.fire[c]) % 720 + 720) % 720;
       this.aPrev[c] = a;
@@ -627,6 +637,7 @@ export class EngineDSP implements DSPDeAudio {
       // de funcionamento mesmo antes de a água esquentar; limitada em rpm absolutos para motores de corrida
       const coldAdd = cold * Math.min(0.8 * this.idle, 650) * (0.55 + 0.45 * Math.exp(-(this.runT || 0) / 50));
       this.idleTarget = this.idle + coldAdd + flare;
+      if (this.av) this.idleTarget = this.idle + 0.2 * coldAdd + flare; // (aviação: manete na batente, sem a lenta acelerada da central)
       const e = (this.idleTarget - rpm) / this.idleTarget;
       const active = user < 0.05 && !(this.shifting && this.blip);
       const de = (e - this.ePrev) / dtc; this.ePrev = e;
@@ -752,7 +763,7 @@ export class EngineDSP implements DSPDeAudio {
     if (this.state === 'crank') {
       this.crankT += dtc;
       if (this.crankT > 0.45 && rpm > Math.min(this.idle * 0.7, 550)) this.state = 'run';
-      if (this.crankT > 5) this.state = 'off';
+      if (this.crankT > (this.av ? this.crankMax : 5)) this.state = 'off'; // (aviação: arranque mais longo)
     }
     if (this.state === 'run' && rpm < 150 && this.omega < 15) this.state = 'off';
 
@@ -790,6 +801,7 @@ export class EngineDSP implements DSPDeAudio {
         if (nextRpm < this.redline * 0.9 && (!FIXED || nextRpm < up * 0.92)) this.requestShift(-1);
       }
     }
+    if (this.av) this.avControle(dtc); // (aviação: mistura, magnetos, partida, governador da carga)
   }
 
   vehOmega() { return this.gear ? (this.v / this.rw) * this.ratios[this.gear] * this.final : 0; }
@@ -827,6 +839,7 @@ export class EngineDSP implements DSPDeAudio {
       const it = this.idleTarget || this.idle;
       if (dfcoWant && this.rpmAvg > Math.max(it + 900, it * 1.9)) this.dfcoOn = true;
       else if (!dfcoWant || this.rpmAvg < Math.max(it + 350, it * 1.4)) this.dfcoOn = false;
+      if (this.av) this.dfcoOn = false; // (aviação: o carburador não corta na desaceleração)
       const dfco = !!this.dfcoOn;
       this.fuelRamp = dfco ? 0 : Math.min(1, (this.fuelRamp ?? 1) + dt / 0.4);
       const cut = this.limiter || (this.shifting && this.shiftCut);
@@ -885,7 +898,8 @@ export class EngineDSP implements DSPDeAudio {
           const float = this.limType === 'none' ? clamp((this.rpmAvg - this.redline) / (0.12 * this.redline), 0, 1) : 0;
           // (carburador em lenta: de vez em quando uma mistura não acende, a "tossida" do motor velho, ~1% das explosões)
           // (e na desaceleração, com o vácuo alto, a mistura rala falha muito mais: até ~15% das explosões)
-          const misfire = rng.next() < this.cam * this.cam * 0.02 * idleness + 0.5 * float + (this.fuelVar > 1 ? (this.carbMis * idleness + 0.15 * clamp((0.3 - this.pMan / P0) / 0.15, 0, 1)) * this.varScale : 0);
+          let misfire = rng.next() < this.cam * this.cam * 0.02 * idleness + 0.5 * float + (this.fuelVar > 1 ? (this.carbMis * idleness + 0.15 * clamp((0.3 - this.pMan / P0) / 0.15, 0, 1)) * this.varScale : 0);
+          if (this.av) misfire = misfire || rng.next() < this.falhaAv(c); // (gancho 5: encharque, mistura, magnetos)
           if (combust && !misfire) {
             this.burnHeat += (1 - this.burnHeat) * 0.05;
             // carburador em carga leve: com a borboleta quase fechada a mistura chega mal vaporizada e mal dividida
@@ -895,9 +909,11 @@ export class EngineDSP implements DSPDeAudio {
             // sai da pressão no fim da queima, que já amplifica bastante uma variação pequena da mistura
             const light = this.fuelVar > 1 ? clamp((0.8 - this.pMan / P0) / 0.5, 0, 1) * this.varScale : 0;
             this.Q[c] = Math.max(0, this.air[c]) * 2.6e6 * this.cylQ[c] * (1 - 0.7 * float) * (0.45 + 0.55 * this.fuelRamp) * clamp(1 + (sigma * this.varScale * this.fuelVar + this.carbVar * light) * rng.gauss(), 0.25, 1.6);
+            if (this.av) this.Q[c] *= this.qMix; // (gancho 6: mistura)
             // (mistura pobre queima devagar e chega mais quente no escape; a variação é em graus, então não cresce
             // com a queima mais lenta do vácuo)
             this.burnK[c] = light ? 1 + 0.1 * light * clamp(rng.gauss(), -1.5, 2) / slowB : 1;
+            if (this.av) this.burnK[c] *= this.burnAv; // (gancho 4: um magneto só, mistura pobre)
             this.xb[c] = 0;
             this.knockEnv += 0.6 + 0.4 * rng.next();
           } else {
@@ -909,7 +925,7 @@ export class EngineDSP implements DSPDeAudio {
             let rate = 0, k = 0, pr = 0, wet = true, floor = 0.15, lit = false;
             if (running && this.rpmAvg > this.idle * 1.4) {
               const ov = this.overrun;
-              if (combust) { pr = 0.015; k = 0.7; } // falha de ignição (válvulas flutuando, comando bravo): mistura inteira, mas quase nunca acende
+              if (combust) { pr = 0.015; k = 0.7; if (this.av) { pr = this.prAv; k = 0.9; } } // falha de ignição (válvulas flutuando, comando bravo): mistura inteira, mas quase nunca acende
               else if (this.launching && this.limiter) { rate = 20; k = 0.8; } // 2-step com corte
               else if (this.limiter) [rate, k, wet] = { ign: [25, 0.7, true], partial: [8, 0.6, true] }[this.limType] || [0.5, 0.3, false]; // (corte de injeção: só o filme de combustível do coletor)
               else if (this.shifting && this.shiftCut) [rate, k] = this.ignCut ? [40, 0.8] : [5, 0.5];
@@ -925,7 +941,8 @@ export class EngineDSP implements DSPDeAudio {
             this.burnHeat += ((wet && (pr || rate) ? 0.5 : 0) - this.burnHeat) * 0.05;
             // (nos mapas de estouro a ignição atrasada manda a chama acesa para o escape: não precisa da parede em
             // brasa. A mistura crua do corte de ignição, do carburador ou de uma falha só acende no escape quente)
-            const hot = lit ? 0.7 + 0.3 * smooth(280, 520, this.exhT) : smooth(280, 520, this.exhT);
+            const hot0 = lit ? 0.7 + 0.3 * smooth(280, 520, this.exhT) : smooth(280, 520, this.exhT);
+            const hot = this.av ? Math.max(hot0, this.avHot) : hot0; // (gancho 7: estouros da partida sem coletor quente)
             if (pr && rng.next() < pr * hot * (this.hasCat ? 0.6 : 1) && this.pops.length < 10) {
               const size = Math.pow(clamp(this.air[c] / (this.Vd * 1.2), floor, 1.3), 0.7);
               const delay = ((evo + adv + 30) / Math.max(600, rpm * 6)) * fs + rng.next() * 0.006 * fs;
@@ -1026,6 +1043,7 @@ export class EngineDSP implements DSPDeAudio {
         m += (mIn - mEx - mLk) * dt;
         if (m < 1e-9) m = 1e-9;
         if (p < 3000) p = 3000;
+        if (this.av && this.arPartida) { const ma = this.partidaAr(c, a) * dt; p += (GAM * RGAS * T_MAN * ma) / V; m += ma; } // (gancho 8: partida a ar)
         pc_[c] = p; m_[c] = m;
 
         Tgas += (p - P0) * Ap * dxdth;
@@ -1033,7 +1051,8 @@ export class EngineDSP implements DSPDeAudio {
         // ---- forças de inércia (vibração)
         const ph = (this.theta - this.tdcRel[c]) * DEG;
         const acc = Math.cos(ph) + 0.3 * Math.cos(2 * ph);
-        vib += (0.6 * this.ux[c] + this.uy[c] + 0.35 * this.dz[c] * (this.ux[c] + this.uy[c])) * acc;
+        if (this.radial) vib += (0.6 * this.ux[c] + this.uy[c]) * 0.3 * Math.cos(2 * ph) + 0.35 * this.dz[c] * (this.ux[c] + this.uy[c]) * Math.cos(ph); // (gancho 9: sem a 1ª ordem)
+        else vib += (0.6 * this.ux[c] + this.uy[c] + 0.35 * this.dz[c] * (this.ux[c] + this.uy[c])) * acc;
       }
       this.pMan = clamp(pMan + ((mThr - mInSum) * dt * RGAS * T_MAN) / this.Vman, 3000, pUp * 1.05);
 
@@ -1045,6 +1064,7 @@ export class EngineDSP implements DSPDeAudio {
       const Tfr = (fmep * this.dispL * 1e-3) / (4 * Math.PI) * (omega > 0.5 ? 1 : 0.6);
       let Tst = 0;
       if (this.state === 'crank') Tst = (70 * this.dispL / Math.sqrt(this.N) * 2 + 40) * Math.max(0, 1 - rpm / (this.cc ? this.rpmPartida : 330));
+      if (this.av) Tst = this.torquePartida(rpm); // (gancho 10: arranque de aviação)
       let Tcl = 0;
       // segurando o 2-step a embreagem fica aberta (pedal pisado / dupla embreagem esperando)
       if (this.gear > 0 && this.clutch > 0 && !this.launching) {
@@ -1070,7 +1090,8 @@ export class EngineDSP implements DSPDeAudio {
             : Math.max(coast, this.clutch * this.Tmax * 1.15 * smooth(this.idle * 1.05, launch, rpm) * smooth(0.02, 0.12, this.thr));
         Tcl = clamp(220 * slip, -cap, cap);
       } else this.locked = false;
-      const w = Math.max(0, omega + ((Tgas * this.tqS + Tst - Tfr - Tcl) / this.J) * dt);
+      const Tld = this.carga ? this.carga.torque(omega) : 0, Jt = this.J + (this.carga ? this.carga.inercia : 0); // (gancho 11: carga do portador)
+      const w = Math.max(0, omega + ((Tgas * this.tqS + Tst - Tfr - Tcl - Tld) / Jt) * dt);
       if (!this.lockOmega) this.omega = w;
       this.theta += deg; if (this.theta >= 720) this.theta -= 720;
       this.tqGas += (Tgas - this.tqGas) * 0.002;
@@ -1153,8 +1174,10 @@ export class EngineDSP implements DSPDeAudio {
           this.phS += (omega * 11 * dt) / TAU; this.phS -= Math.floor(this.phS);
           mech += this.starterLP.run((this.phS * 2 - 1) * 0.05 + rng.bi() * 0.02) * (0.6 + 0.4 * Math.sin(this.phW * 2));
         }
+        if (this.av) mech += this.somPartidaAv(rng); // (arranque de aviação: apito do volante, zumbido, ar)
         mech = this.mechHP.run(mech);
         if (this.airCool) mech *= 1.2; // (sem a camisa d'água em volta, tucho, válvula e pistão irradiam mais)
+        if (this.radial) mech *= 1.17; // (gancho 12: cilindros e aletas expostos)
         // bomba de ar secundário (zumbido elétrico) e ventoinha do radiador
         if (this.secAir > 0.01 && P.saSound !== false) {
           this.phSA += 760 * dt; if (this.phSA > 1) this.phSA -= 1;
@@ -1165,7 +1188,8 @@ export class EngineDSP implements DSPDeAudio {
           mech += this.fanSpin * (0.006 * Math.sin(TAU * this.phFan) + 0.03 * this.fanF.run(rng.bi())) * this.fanSpin;
         }
         const ripple = (Tgas - this.tqGas) / (this.Tmax + 1);
-        vib = this.vibLP.run(vib * 0.04 * rf * rf + ripple * 0.05);
+        if (this.radial) vib = this.vibLP.run(vib * 0.04 * rf * rf + ripple * 0.08); // (radial: a oscilação do torque pesa 1,6×)
+        else vib = this.vibLP.run(vib * 0.04 * rf * rf + ripple * 0.05);
       }
 
       // ---- irradiação do coletor perto do motor: a rajada de cada abertura de válvula vaza pelas paredes finas e
@@ -1267,6 +1291,7 @@ export class EngineDSP implements DSPDeAudio {
         const b = 0.55 * ex + 1.0 * inS + 0.7 * mech + 0.8 * (tur + sc) + brk + 0.8 * vib;
         L += this.wB * b; R += this.wB * b;
       }
+      if (this.av) { const h = this.avSomExtra(); L += h; R += h; } // (aviação: a hélice da página, ouvinte a 5 m do cubo)
       // carro andando pela via (posição sempre atualizada; volta de "loop" metros)
       this.carX += this.v * dt;
       if (this.carX > loop / 2) this.carX -= loop;
@@ -1388,7 +1413,7 @@ export class EngineDSP implements DSPDeAudio {
   }
 
   telemetry() {
-    return {
+    const t = {
       type: 'telemetry', rpm: this.rpmAvg, theta: this.theta, kmh: this.v * 3.6, gear: this.gear,
       gears: this.ratios.length - 1, auto: this.auto,
       boost: this.boost, thr: this.thr, map: this.pMan / P0, limiter: this.limiter, state: this.state,
@@ -1397,5 +1422,7 @@ export class EngineDSP implements DSPDeAudio {
       coolant: this.coolant, fan: this.fanOn, secAir: this.secAir > 0.5, idleTarget: this.idleTarget, exhT: this.exhT, als: this.als,
       carX: this.carX, dist: this.rDist, vRad: this.vRad, loop: ENV_LOOP[this.params.env] || 800,
     };
+    if (this.av) this.avTelemetria(t); // (gancho 14)
+    return t;
   }
 }

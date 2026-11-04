@@ -5,8 +5,9 @@
 // Mensagens:
 //   { type: 'portador', tipo, config?, motor? }                       monta o portador (aloca): 'trem' e 'rotor' sem
 //        motor; 'carro' (CarroLegado + Ronco ou Diesel), 'helice' (turboélice), 'gerador' e 'locomotiva' (Diesel),
-//        'aviao' (jato). `motor` = { familia, cfg }: o cfg do preset já calibrado na thread principal
-//        (prepararMotorRonco / prepararMotorDiesel; o da Turbina é o preset cru)
+//        'aviao' (jato), 'rotor' com motor (pistão de aviação do Ronco, radial do S-55), 'helice' com radial ou pistão de
+//        aviação. `motor` = { familia, cfg }: o cfg do preset já calibrado na thread principal
+//        (prepararMotorRonco / prepararMotorDiesel / prepararMotorRadial; o da Turbina é o preset cru)
 //   { type: 'cena', amb?, traj?, ouv? }                                configura/atualiza (rampas de 20 ms)
 //   { type: 'comando', ...ComandoPortador }                            velocidade fixa etc.
 //   { type: 'params', master?, posicao? }                              master e posição s do corpo
@@ -28,6 +29,7 @@ import { Aviao } from '../carriers/aviao';
 import { MotorRonco } from '../engines/ronco/motor';
 import { MotorDiesel } from '../engines/diesel/motor';
 import { MotorTurbina } from '../engines/turbina/motor';
+import { MotorRadial } from '../engines/radial/motor';
 import type { Motor } from '../carriers/tipos';
 
 /** monta o motor de uma mensagem `portador` (fora do laço: aloca) */
@@ -36,6 +38,7 @@ export function montarMotor(m: { familia: string; cfg: Record<string, any> } | u
   if (m.familia === 'pistao') { const x = new MotorRonco(fs); x.configurar(m.cfg, fs); return x; }
   if (m.familia === 'diesel') { const x = new MotorDiesel(fs); x.configurar(m.cfg, fs); return x; }
   if (m.familia === 'turboelice' || m.familia === 'turbina') { const x = new MotorTurbina(fs); x.configurar(m.cfg, fs); return x; }
+  if (m.familia === 'radial') { const x = new MotorRadial(fs); x.configurar(m.cfg, fs); return x; }
   return null;
 }
 
@@ -48,6 +51,7 @@ export function montarPortadorComMotor(tipo: string, config: Record<string, any>
   else if (tipo === 'gerador') p = new Gerador(fs, c);
   else if (tipo === 'locomotiva') p = new Locomotiva(fs, c);
   else if (tipo === 'aviao') p = new Aviao();
+  else if (tipo === 'rotor') p = new Rotor(fs, c);
   if (!p) return null;
   p.acoplar(motor);
   return p;
@@ -94,7 +98,7 @@ export class CenaDSP implements DSPDeAudio {
         const vf = this.portador ? this.portador.cinematica.v : null;
         this.montar(new Trem(this.fs, { ladoOuvinte, ...(m.config || {}) }));
         if (vf != null) this.portador!.comandar({ pedal: 0, velocidadeFixa: vf });
-      } else if (m.tipo === 'rotor') {
+      } else if (m.tipo === 'rotor' && !m.motor) {
         // helicóptero sem motor (compatibilidade "nenhum × rotor"): Nr imposto, coletivo pelo pedal
         const vf = this.portador ? this.portador.cinematica.v : null;
         this.montar(new Rotor(this.fs, m.config || {}));

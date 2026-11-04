@@ -22,6 +22,10 @@ import { Rotor } from '../../carriers/rotor';
 import { montarMotor, montarPortadorComMotor } from '../../scene/dsp-cena';
 import { prepararMotorRonco } from '../../engines/ronco/motor';
 import { prepararMotorDiesel, type UsoDiesel } from '../../engines/diesel/motor';
+import { prepararMotorRadial } from '../../engines/radial/motor';
+import { PRESETS_RADIAL, PADRAO_RADIAL } from '../../engines/radial/presets';
+import { PRESETS_AVIACAO } from '../../engines/ronco/presets';
+import { configHelice, configRotor } from '../../engines/ronco/aviacao';
 import { PRESETS as PRESETS_RONCO, ACESSORIOS_PADRAO } from '../../engines/ronco/presets';
 import { PRESETS as PRESETS_DIESEL, PADRAO_DIESEL } from '../../engines/diesel/presets';
 import { PRESETS_TURBINA } from '../../engines/turbina/presets';
@@ -136,13 +140,14 @@ export class ControlePassagem {
     let p: Portador;
     this.rotorCfg = null;
     this.motorMsg = null;
-    if (this.portador === 'rotor') { const r = new Rotor(fs); p = r; this.rotorCfg = { R: r.cfg.R, Rc: r.cfg.Rc, B: r.cfg.B, posRotor: r.cfg.posRotor, posCauda: r.cfg.posCauda }; }
+    if (this.portador === 'rotor' && this.motor === 'nenhum') { const r = new Rotor(fs); p = r; this.rotorCfg = { R: r.cfg.R, Rc: r.cfg.Rc, B: r.cfg.B, posRotor: r.cfg.posRotor, posCauda: r.cfg.posCauda }; }
     else if (this.portador !== 'trem') {
       // portador com motor: o mesmo que o worklet monta (geometria e fontes), com o motor calibrado aqui
       const fam = this.motor, id = this.motorPreset ?? MOTOR_PADRAO[fam]?.[this.portador] ?? presetsDoMotor(this.portador, fam)[0]?.id;
       this.motorPreset = id ?? null;
       this.motorMsg = id ? { familia: fam, cfg: this.cfgMotor(fam, id, fs) } : null;
       p = montarPortadorComMotor(this.portador, this.configPortador(), montarMotor(this.motorMsg ?? undefined, fs), fs)!;
+      if (p instanceof Rotor) this.rotorCfg = { R: p.cfg.R, Rc: p.cfg.Rc, B: p.cfg.B, posRotor: p.cfg.posRotor, posCauda: p.cfg.posCauda };
     } else {
       this.trem.N = Math.min(this.trem.N, this.maxVagoes());
       const t = new Trem(fs, this.configTrem());
@@ -159,7 +164,7 @@ export class ControlePassagem {
   private mandarPortador() {
     const a = this.audio; if (!a) return;
     if (this.fsSonda !== a.ctx.sampleRate) this.sondar(a.ctx.sampleRate);
-    if (this.portador === 'rotor') a.send({ type: 'portador', tipo: 'rotor' });
+    if (this.portador === 'rotor' && this.motor === 'nenhum') a.send({ type: 'portador', tipo: 'rotor' });
     else if (this.portador === 'trem') a.send({ type: 'portador', tipo: 'trem', config: { ...this.configTrem(), calibracao: this.calibracao } });
     else a.send({ type: 'portador', tipo: this.portador, config: this.configPortador(), motor: this.motorMsg, comando: this.comandoMotor() });
   }
@@ -169,7 +174,8 @@ export class ControlePassagem {
     const chave = `${fam}|${id}|${this.portador}|${fs}`;
     let cfg = this.cacheMotor.get(chave);
     if (!cfg) {
-      if (fam === 'pistao') cfg = prepararMotorRonco({ ...ACESSORIOS_PADRAO, ...PRESETS_RONCO.find((x) => x.id === id)! }, fs);
+      if (fam === 'pistao') cfg = prepararMotorRonco({ ...ACESSORIOS_PADRAO, ...[...PRESETS_RONCO, ...PRESETS_AVIACAO].find((x) => x.id === id)! }, fs);
+      else if (fam === 'radial') cfg = prepararMotorRadial({ ...PADRAO_RADIAL, ...PRESETS_RADIAL.find((x) => x.id === id)! }, fs);
       else if (fam === 'diesel') cfg = prepararMotorDiesel({ ...PADRAO_DIESEL, ...PRESETS_DIESEL.find((x) => x.id === id)! }, fs, this.portador as UsoDiesel);
       else cfg = { ...PRESETS_TURBINA.find((x) => x.id === id)! };
       this.cacheMotor.set(chave, cfg);
@@ -179,6 +185,10 @@ export class ControlePassagem {
   /** configuração do portador que vem do preset do motor (hélice do turboélice, alternador, tabela de notches) */
   configPortador(): Record<string, any> {
     const id = this.motorPreset;
+    // hélice e rotor dos motores a pistão (radial, aviação do Ronco): a do preset (RADIAL.md 3.3 e 5.2), no nariz do avião
+    const pist: any = this.motor === 'radial' ? PRESETS_RADIAL.find((x) => x.id === id) : this.motor === 'pistao' ? PRESETS_AVIACAO.find((x) => x.id === id) : null;
+    if (pist && this.portador === 'helice' && pist.helice) return { ...configHelice(pist), posMotor: [2.5, 0, 1.5], posCubo: [3.3, 0, 1.5] };
+    if (pist && this.portador === 'rotor' && pist.rotor) return configRotor(pist);
     if (this.portador === 'helice') { const t = PRESETS_TURBINA.find((x) => x.id === id); return t ? { B: t.propB, D: t.propD, nHelice: t.propRpm } : {}; }
     if (this.portador === 'gerador') { const g = (PRESETS_DIESEL.find((x) => x.id === id) as any)?.gerador; return g ? { polos: g.polos, fRede: g.fRede, potenciaNominal: g.kWe, eta: g.eta } : {}; }
     if (this.portador === 'locomotiva') { const l = (PRESETS_DIESEL.find((x) => x.id === id) as any)?.locomotiva; return { motor: id === 'ge7fdl' ? 'ge7fdl' : 'emd710', ...(l ? { potenciaNominal: l.kW, etaGer: l.eta } : {}) }; }

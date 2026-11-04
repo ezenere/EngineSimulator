@@ -26,6 +26,11 @@ export type PresetRonco = {
   // transmissão e carro (não mudam o som, só como o carro anda)
   gears: number; transmission: 'manual' | 'auto' | string; shiftTime?: number; driveMode?: string;
   power?: number; mass?: number; ratios?: number[]; finalDrive?: number; wheelR?: number; drag?: number;
+  // aviação (RADIAL.md 6; só os presets de PRESETS_AVIACAO têm: os 68 carros não mudam): magnetos, mistura, partida e a
+  // carga do portador no eixo (a hélice com o governador de passo, ou o rotor com a embreagem e o governador)
+  aviation?: boolean; partida?: 'direta' | 'inercia' | 'ar' | 'manivela' | string; J?: number; reducao?: number; rpmMax?: number;
+  helice?: { B: number; D: number; J: number; passoFixo?: boolean; beta0?: number; nMin?: number; nMax?: number };
+  rotor?: Record<string, any>; portadores?: string[]; nivelEscape?: number; magnetosPadrao?: string; misturaPadrao?: number;
 };
 
 export type FamiliaRonco = { id: string; name: string };
@@ -384,5 +389,56 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     header: 'equal', routing: 'single', muffler: 'straight', pipeLen: 1.0, ...NA, intake: 'sport', overrun: 'lean', cat: false, ...CUT('ign', 120, 0.05), gears: 5, transmission: 'manual', shiftTime: 0.15,
     ...moto(46, 178, [2.00, 1.62, 1.33, 1.10, 0.92], 12.0, 0.35, 0.45) }),
 ], { families: FAMILIES });
+
+// ---- Aviação (RADIAL.md 6): motores planos refrigerados a ar e os helicópteros leves que os usam, no EngineDSP sem subclasse
+// (`aviation: true`). Lista à parte: PRESETS e FAMILIES seguem idênticos aos do legado (tools/ronco-paridade.ts confere);
+// a página do Ronco mostra PRESETS_PAGINA (os 68 e estes, com a família depois de Motos).
+export const FAMILIA_AVIACAO: FamiliaRonco = { id: 'aviacao', name: 'Aviação' };
+// `inertia` sai do J do motor sozinho (kg·m²): J = (0,05 + 0,045·L)·inertia (a hélice ou o rotor entram pela carga)
+const avi = (L: number, J: number) => ({ displacement: L, inertia: J / (0.05 + 0.045 * L) });
+const AV = { aviation: true, partida: 'direta', cooling: 'air', ...NA, intake: 'airbox', overrun: 'lean', cat: false, ...NONE, gears: 0, transmission: 'manual', cam: 0.15, engine: 'front' };
+const hel = (B: number, D: number, J: number, passoFixo: boolean, extra = {}) => ({ helice: { B, D, J, passoFixo, ...extra }, portadores: ['helice', 'nenhum'] });
+const rot = (rotor: Record<string, any>) => ({ rotor, portadores: ['rotor', 'nenhum'] });
+export const PRESETS_AVIACAO: PresetRonco[] = [
+  car('c172', 'aviacao', 'Cessna 172 (Lycoming O-320)', 'boxer 4 · 5,2 L · 160 hp · passo fixo', B4, {
+    ...AV, ...avi(5.24, 0.3), compression: 7.0, redline: 2700, rpmMax: 2700, idle: 650, power: 112, fuel: 'carb',
+    header: 'short', routing: 'single', muffler: 'classic', pipeLen: 0.8, pipeD: 1.75, breakout: 'old', ...hel(2, 1.93, 5, true), nivelEscape: 135 }),
+  car('o360', 'aviacao', 'Piper Archer / RV-7 (Lycoming O-360)', 'boxer 4 · 5,9 L · 180 hp · passo fixo', B4, {
+    ...AV, ...avi(5.92, 0.35), compression: 8.5, redline: 2700, rpmMax: 2700, idle: 650, power: 134, fuel: 'carb',
+    header: 'short', routing: 'single', muffler: 'classic', pipeLen: 0.7, pipeD: 1.75, breakout: 'old', ...hel(2, 1.88, 5, true), nivelEscape: 136 }),
+  car('io540', 'aviacao', 'Piper Saratoga (Lycoming IO-540)', 'boxer 6 · 8,9 L · 300 hp · passo variável', B6, {
+    ...AV, ...avi(8.87, 0.5), compression: 8.5, redline: 2700, rpmMax: 2700, idle: 650, power: 224, fuel: 'efi',
+    header: 'short', routing: 'single', muffler: 'classic', pipeLen: 0.9, pipeD: 2.0, breakout: 'old', ...hel(3, 2.03, 9, false, { nMin: 2000 }), nivelEscape: 139 }),
+  car('o200', 'aviacao', 'Cessna 150 (Continental O-200)', 'boxer 4 · 3,3 L · 100 hp · passo fixo', B4, {
+    ...AV, ...avi(3.29, 0.2), compression: 7.0, redline: 2750, rpmMax: 2750, idle: 650, power: 75, fuel: 'carb',
+    header: 'short', routing: 'single', muffler: 'classic', pipeLen: 0.7, pipeD: 1.75, breakout: 'old', ...hel(2, 1.75, 3, true), nivelEscape: 132 }),
+  car('io550', 'aviacao', 'Cirrus SR22 (Continental IO-550)', 'boxer 6 · 9,1 L · 310 hp · passo variável', B6, {
+    ...AV, ...avi(9.05, 0.5), compression: 8.5, redline: 2700, rpmMax: 2700, idle: 700, power: 231, fuel: 'efi',
+    header: 'short', routing: 'single', muffler: 'classic', pipeLen: 0.9, pipeD: 2.0, breakout: 'old', ...hel(3, 1.98, 9, false, { nMin: 2000 }), nivelEscape: 139 }),
+  car('rotax912', 'aviacao', 'Rotax 912 ULS', 'boxer 4 · 1,35 L · 100 hp · redutor 2,43:1', B4, {
+    ...AV, ...avi(1.35, 0.08), compression: 10.8, redline: 5800, rpmMax: 5800, idle: 1400, power: 73, fuel: 'carb', cooling: 'water', reducao: 1 / 2.43,
+    header: 'short', routing: 'single', muffler: 'sport', pipeLen: 0.6, pipeD: 1.5, breakout: 'old', ...hel(3, 1.7, 1.2, true), nivelEscape: 128 }),
+  car('bell47', 'aviacao', 'Bell 47G (Franklin 6V4)', 'boxer 6 · 5,7 L · 200 hp · rotor de 2 pás', B6, {
+    ...AV, ...avi(5.73, 0.4), compression: 7.0, redline: 3100, rpmMax: 3100, idle: 1500, power: 149, fuel: 'carb',
+    header: 'short', routing: 'dual', muffler: 'straight', pipeLen: 0.6, pipeD: 1.75, breakout: 'old', nivelEscape: 136,
+    ...rot({ B: 2, R: 5.66, Nr: 370, sigma: 0.03, J_rot: 1100, Bc: 2, Rc: 0.89, ic: 1650 / 370, icx: 8.4, massa: 1340, engrenagens: [{ z: 43, rpm: 3100 }, { z: 9, rpm: 370 * 8 }],
+      posRotor: [0, 0, 2.8], posCauda: [-6.5, 0, 1.4], posCaixa: [0, 0, 2.0], posMotor: [-0.6, 0, 1.0], corpo: { comprimento: 13, largura: 2.3, altura: 2.8 } }) }),
+  car('r22', 'aviacao', 'Robinson R22 (Lycoming O-360)', 'boxer 4 · 5,9 L · 124 hp · rotor de 2 pás', B4, {
+    ...AV, ...avi(5.92, 0.35), compression: 8.5, redline: 2652, rpmMax: 2652, idle: 1500, power: 92, fuel: 'carb',
+    header: 'short', routing: 'single', muffler: 'stock', pipeLen: 0.8, pipeD: 1.75, breakout: 'old', nivelEscape: 134,
+    ...rot({ B: 2, R: 3.835, Nr: 530, sigma: 0.034, J_rot: 250, Bc: 2, Rc: 0.535, ic: 3330 / 530, icx: 5.0, massa: 620, engrenagens: [{ z: 57, rpm: 2652 }, { z: 9, rpm: 530 * 9.6 }],
+      posRotor: [0.1, 0, 2.7], posCauda: [-5.3, 0, 1.6], posCaixa: [0, 0, 2.0], posMotor: [-0.5, 0, 1.0], corpo: { comprimento: 8.8, largura: 1.1, altura: 2.7 } }) }),
+  car('r44', 'aviacao', 'Robinson R44 (Lycoming O-540)', 'boxer 6 · 8,9 L · 245 hp · rotor de 2 pás', B6, {
+    ...AV, ...avi(8.87, 0.5), compression: 8.5, redline: 2718, rpmMax: 2718, idle: 1500, power: 183, fuel: 'carb',
+    header: 'short', routing: 'single', muffler: 'stock', pipeLen: 0.9, pipeD: 2.0, breakout: 'old', nivelEscape: 137, ...rot({}) }),
+  car('s300', 'aviacao', 'Schweizer 300C (Lycoming HIO-360)', 'boxer 4 · 5,9 L · 190 hp · rotor de 3 pás', B4, {
+    ...AV, ...avi(5.92, 0.35), compression: 8.5, redline: 3200, rpmMax: 3200, idle: 1500, power: 142, fuel: 'efi',
+    header: 'short', routing: 'single', muffler: 'straight', pipeLen: 0.6, pipeD: 1.75, breakout: 'old', nivelEscape: 136,
+    ...rot({ B: 3, R: 4.09, Nr: 471, sigma: 0.045, J_rot: 450, Bc: 2, Rc: 0.65, ic: 3000 / 471, icx: 6.8, massa: 930, engrenagens: [{ z: 51, rpm: 3200 }, { z: 11, rpm: 471 * 6.8 }],
+      posRotor: [0, 0, 2.7], posCauda: [-5.8, 0, 1.4], posCaixa: [0, 0, 2.0], posMotor: [-0.4, 0, 0.9], corpo: { comprimento: 9.4, largura: 2.0, altura: 2.7 } }) }),
+];
+
+/** o que a página do Ronco lista: os 68 do legado e a família aviação, depois de Motos */
+export const PRESETS_PAGINA: PresetRonco[] & { families: FamiliaRonco[] } = Object.assign([...PRESETS, ...PRESETS_AVIACAO], { families: [...FAMILIES, FAMILIA_AVIACAO] });
 
 export default PRESETS;

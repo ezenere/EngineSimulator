@@ -154,8 +154,9 @@ export function randomValidOrder(layout, pins, bankAngle, tries = 4000) {
   return null;
 }
 
-// Forças de inércia alternativas (1ª e 2ª ordem) e momentos de balanço.
-function balance(layout, tdc, bankAngle, z) {
+// Forças de inércia alternativas (1ª e 2ª ordem) e momentos de balanço. (`eixos`: ângulos dos eixos dos cilindros, para
+// arranjos que não saem do layout, como o radial de src/engines/radial/geometria.ts; sem ele, os do layout)
+export function balance(layout, tdc, bankAngle, z, eixos?: number[]) {
   const N = tdc.length;
   const lam = 0.3;
   let f1 = 0, f2 = 0, m1 = 0, m2 = 0;
@@ -163,7 +164,7 @@ function balance(layout, tdc, bankAngle, z) {
   for (let s = 0; s < 360; s += 2) {
     let x1 = 0, y1 = 0, x2 = 0, y2 = 0, mx1 = 0, my1 = 0, mx2 = 0, my2 = 0;
     for (let c = 0; c < N; c++) {
-      const ax = axisAngle(layout, c + 1, bankAngle) * Math.PI / 180;
+      const ax = (eixos ? eixos[c] : axisAngle(layout, c + 1, bankAngle)) * Math.PI / 180;
       const ph = (s - tdc[c]) * Math.PI / 180;
       const a1 = Math.cos(ph), a2 = lam * Math.cos(2 * ph);
       const ux = Math.sin(ax), uy = Math.cos(ax), dz = z[c] - zc;

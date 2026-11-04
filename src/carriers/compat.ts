@@ -5,7 +5,7 @@ import type { FamiliaMotor, TipoPortador, Motor, MontagemMotor } from './tipos';
 import type { FonteSonora, Vec3 } from '../scene/tipos';
 
 export const COMPAT: Record<TipoPortador, readonly FamiliaMotor[]> = {
-  carro: ['pistao', 'diesel', 'rotativo', 'vapor', 'eletrico'],
+  carro: ['pistao', 'diesel', 'radial', 'rotativo', 'vapor', 'eletrico'],
   // (o jato puro não tem hélice: a linha "turbina / turboélice × hélice" de 1.6 é a do turboélice)
   helice: ['pistao', 'turboelice', 'radial', 'rotativo'],
   rotor: ['pistao', 'turboeixo', 'radial', 'nenhum'],
@@ -18,14 +18,14 @@ export const COMPAT: Record<TipoPortador, readonly FamiliaMotor[]> = {
 
 /**
  * O que existe hoje (adaptadores de motor, docs/TECNICO.md): famílias com adaptador `Motor` e, por portador, os
- * motores de verdade que a Passagem monta. O Ronco não tem pistão de aviação (etapa 3) e a Turbina não tem turboeixo
- * (nenhum preset com `arch: 'turboeixo'`): o rotor fica sem motor (`nenhum`), com Nr imposto.
+ * motores de verdade que a Passagem monta. A Turbina não tem turboeixo (nenhum preset com `arch: 'turboeixo'`); o rotor
+ * leva o pistão de aviação do Ronco (R22, R44, Bell 47, S300) ou o radial do S-55 (etapa 3), ou fica sem motor (`nenhum`).
  */
-export const ADAPTADORES: readonly FamiliaMotor[] = ['nenhum', 'pistao', 'diesel', 'turboelice', 'turbina'];
+export const ADAPTADORES: readonly FamiliaMotor[] = ['nenhum', 'pistao', 'diesel', 'turboelice', 'turbina', 'radial'];
 export const USO_REAL: Record<TipoPortador, readonly FamiliaMotor[]> = {
-  carro: ['pistao', 'diesel'],          // carros e motos; picape, caminhão e ônibus
-  helice: ['turboelice'],
-  rotor: ['nenhum'],
+  carro: ['pistao', 'diesel', 'radial'], // carros e motos; picape, caminhão e ônibus; Sherman, Monaco-Trossi e Megola
+  helice: ['turboelice', 'radial', 'pistao'], // turboélices; radiais e motores planos de avião (RADIAL.md 5.3 e 6)
+  rotor: ['pistao', 'radial', 'nenhum'],      // R22, R44, Bell 47, S300 (pistão de aviação), S-55 (radial); ou o rotor sozinho
   gerador: ['diesel'],
   locomotiva: ['diesel'],
   trem: ['nenhum'],
