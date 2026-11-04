@@ -11,6 +11,7 @@ Este documento explica a física e o processamento de áudio por trás dos dois 
 - [Página Passagem e modo de testes](#página-passagem-e-modo-de-testes)
 - [Diesel: ignição por compressão](#diesel-ignição-por-compressão)
 - [Radial e aviação a pistão](#radial-e-aviação-a-pistão)
+- [Elétrico: síntese espectral](#elétrico-síntese-espectral)
 - [Validação](#validação)
 - [Limitações conhecidas](#limitações-conhecidas)
 - [Como adicionar um carro ou avião](#como-adicionar-um-carro-ou-avião)
@@ -41,6 +42,7 @@ O site é compilado com Vite (TypeScript + React) e publicado como páginas est�
 | `tools/analise-som/` | Banco de testes em Node e análise em Python para comparar o som com gravações reais (ver `docs/REVISAO-DE-SOM.md`) |
 | `src/scene/`, `src/carriers/`, `tools/cena/` | Camadas cena e portador (Passagem, trem e demais portadores) e a validação offline delas (ver [Cena e portadores](#cena-e-portadores)) |
 | `radial.html`, `src/pages/radial/`, `src/engines/radial/`, `src/engines/ronco/aviacao.ts`, `src/pages/comum/Aviacao.tsx` | Radial (`RadialDSP`, geometria da biela-mestra, escape radial, partida de aviação, `MotorRadial`) e a família Aviação do Ronco (ver [Radial e aviação a pistão](#radial-e-aviação-a-pistão)); testes em `tools/radial-*.ts` e `tools/radial-navegador.mjs` |
+| `eletrico.html`, `src/pages/eletrico/`, `src/engines/eletrico/`, `src/carriers/carro-eletrico.ts`, `multirrotor.ts` | Elétrico (`EletricoDSP`: banco de linhas, máquina, inversor, mecânica, AVAS, `MotorEletrico`), o carro elétrico, o trem com motor, a bancada e o drone (ver [Elétrico](#elétrico-síntese-espectral)); testes em `tools/eletrico/` e `tools/eletrico-navegador.mjs` |
 | `passagem.html`, `src/pages/passagem/`, `public/3d/` | Página Passagem / modo de testes: ouvinte no gimbal, cena three.js, mostradores; texturas com `LICENSES.md` (ver [Página Passagem e modo de testes](#página-passagem-e-modo-de-testes)); teste em `tools/passagem-navegador.mjs` |
 | **Legado** (até a migração): | |
 | `src/geometry.js` | Geometria do motor: virabrequins, ordem de ignição, intervalos, balanceamento (migrado para `src/engines/ronco/geometria.ts`) |
@@ -57,7 +59,7 @@ Os arquivos `*-dsp.js` legados ficam dentro de uma função-fábrica (`EngineDSP
 ## Build: Vite, TypeScript e React
 
 - `npm run dev` serve o projeto com recarga automática; `npm run build` confere os tipos (`tsc` com `tsconfig.json`, código do navegador, e `tsconfig.node.json`, ferramentas e DSP, sem tipos do DOM) e gera `dist/`; `npm run preview` serve o `dist/`.
-- **Multi-página:** as entradas estão em `vite.config.mts` (`build.rolldownOptions.input`: `index.html`, `ronco.html`, `turbina.html`, `passagem.html`, `diesel.html`, `radial.html`). Uma página nova (`rotativo.html`…) é um HTML na raiz com `<script type="module" src="./src/pages/<nome>/main.tsx">` e uma linha a mais nessa lista.
+- **Multi-página:** as entradas estão em `vite.config.mts` (`build.rolldownOptions.input`: `index.html`, `ronco.html`, `turbina.html`, `passagem.html`, `diesel.html`, `radial.html`, `eletrico.html`). Uma página nova (`rotativo.html`…) é um HTML na raiz com `<script type="module" src="./src/pages/<nome>/main.tsx">` e uma linha a mais nessa lista.
 - **`base: './'`:** todos os caminhos do `dist/` são relativos, então o site funciona em `ezenere.com/data/engine/` (ou qualquer subpasta) sem reconfigurar. Foi testado servindo o `dist/` em `/data/engine/`. Abrir o HTML pelo `file://` não funciona (módulos ES exigem http).
 - **Por que não `"type": "module"` no `package.json`:** as ferramentas antigas em `tools/analise-som/` e os arquivos legados de `src/` são CommonJS (`require`, `module.exports`) e deixariam de carregar. A configuração do Vite é `.mts` para ser ESM mesmo assim. O `tsx` roda os `.ts` de `tools/` como CommonJS; eles usam `createRequire(import.meta.url)` e `import.meta.url`, que funcionam nos dois modos.
 - **TypeScript:** `strict: false`, e os campos das classes copiadas do legado são declarados com `declare` (não geram código; a classe compilada fica igual à original). TypeScript 7, React 19, Vite 8 (Rolldown).
@@ -1186,6 +1188,120 @@ As funções de aviação moram em `src/engines/ronco/aviacao.ts` (`instalarAvia
 - Ford Trimotor com 3 instâncias (opcional no RADIAL.md) e a passagem com altitude no ouvinte `road` da página.
 - Som do rotor na página do Ronco (na Passagem o rotor é o do portador).
 - Monaco-Trossi em 2 tempos a centelha, quando o ciclo de 360° existir sem `cc`.
+
+## Elétrico: síntese espectral
+
+O projeto está em [`ELETRICO.md`](ELETRICO.md); aqui fica o que foi feito, como e o que se mediu. Página `eletrico.html` (`src/pages/eletrico/`), DSP em `src/engines/eletrico/`, worklet `src/worklet/processador-eletrico.ts` (`eletrico-engine`). Ao contrário do Diesel e do Radial, não estende o Ronco: uma máquina elétrica não tem combustão nem pulso, o espectro é de linhas em múltiplos exatos de `f_rot`, `f_e` e `f_c`, e o `EletricoDSP` é um banco de senóides com ruídos com semente, que implementa o `Motor` do CENA direto (escreve os canais das fontes; sem `tap`).
+
+| Arquivo | O que faz |
+|---|---|
+| `linhas.ts` | `BancoDeLinhas` (osciladores recursivos), `ListaLinhas`, `JitterEixo` |
+| `maquina.ts` | Mapa de torque, corrente, M, Φ, escorregamento (`estadoEletrico`) e as forças magnéticas como gabarito (`ForcasMotor`) |
+| `inversor.ts` | `Inversor` (Bessel, seis modos, perfil medido), `linhasAux` (conversor auxiliar) |
+| `mecanica.ts` | `Reducao` (engrenamento, chocalho, clique de flanco, rolamentos), `Ventilador`, `Escovas`, `Helice`, `RuidoBanda` |
+| `avas.ts` | `Avas`: tom composto, ruído, ritmo, ré |
+| `dsp.ts` | `PresetEletrico`, `ComandoEletrico` (extensões), `EletricoDSP` (até 4 unidades) |
+| `motor.ts`, `portador.ts`, `pagina.ts` | `MotorEletrico` e a sonda de nível (`sondarNivelEletrico`, `prepararMotorEletrico`); montagem do portador do preset; DSP da página (`CenaDSP` + portador) |
+| `presets.ts`, `constantes.ts` | As 18 fichas (com `aprox` nos valores ≈) e as constantes (curva da carcaça, notas do Taurus, diretividades) |
+| `src/carriers/carro-eletrico.ts`, `multirrotor.ts` | `CarroEletrico` (e o trólebus), `FontePneu`, `FonteTrole`; `Multirrotor` (tipo `drone`) |
+| `src/carriers/trem.ts`, `teste.ts` | `TracaoTrem` (o motor por truque); `CargaBancada` e `PortadorBancada` |
+| `tools/eletrico/` | `valida.ts`, `lenta.ts`, `comum.ts` (render e análise), `linhas.ts` (porte de `doremi.py`/`ridges.py`/`ordens.py`), `gc.ts`, `analise/*.py` (os scripts do projetista, `python3 -I` sobre as gravações) |
+
+### Banco de linhas (decisão 1)
+
+- **Oscilador:** rotação complexa `[c, s] ← [c·cos δ − s·sen δ, s·cos δ + c·sen δ]`. A frequência vai em rampa linear dentro do bloco de 64 amostras: o incremento δ varia `dδ` por amostra, e a rotação do incremento também é uma rotação (`w ← w·dw`, 2 multiplicações complexas por amostra; sem variação, uma). Fase e incremento renormalizados no fim do bloco. Amplitude em rampa linear.
+- **Lista a cada bloco:** a fonte entrega `(chave, f, a)`. O banco tira o que fica acima de 0,45·fs (e põe a rampa de −12 dB entre 18 kHz e 0,45·fs), abaixo de 10 Hz (infrassom de `f_e` ≈ 0, com rampa até 20 Hz) e abaixo de −60 dB da maior; fica com as `L_max` mais fortes (seleção parcial); casa as chaves com os osciladores por uma tabela de espalhamento em `Int32Array`. A mesma chave segue no mesmo oscilador; chave nova entra e chave que some sai com envelope de 20 ms em seno/cosseno (potência constante: a troca de modo do inversor muda a "geração" das chaves e vira um crossfade de 20 ms).
+- **Linhas de mesma frequência** (|Δf| < 0,1 Hz) somam em potência numa só. Com fases sorteadas, duas senoides de mesma frequência dariam qualquer nível entre a diferença e a soma; acontece numa PMSM com `Z_s/p` inteiro (Leaf: ranhuras `48·f_rot` = `12·f_e`, a ondulação de torque).
+- **Jitter por eixo:** passeio de ±0,05% a 0,3 Hz em todas as linhas da unidade e tremor de amplitude de ±0,5 dB; no Mavic, ±0,4% a 2 Hz (o ESC segurando a rotação).
+- **Sem alocação:** estado em `Float64Array`; as forças magnéticas são um gabarito montado uma vez por preset (`f = a·f_rot + b·f_e + c`, categoria de amplitude, peso, laterais) que o bloco só percorre. 200 linhas: 10 s sem nenhuma coleta e 1,8% do tempo real; o motor do N700 (4 unidades, 800 osciladores no máximo): 5 coletas jovens em 10 s e 2,9% do tempo real.
+
+### Máquina, inversor e mecânica
+
+- **Torque (1.4):** `T_max = min(T_n, P_max/ω)` até `ω_max` (rampa de 3%); acelerador → `a·T_max`, freio → `−b·T_regen` acima de `v_regen,min` com rampa de 0,3 s; creep de 3% abaixo de 5 km/h. O controle de torque tem 10 ms de atraso (sem degrau). Ferramentas: `T = T_st·(a − ω/ω₀)` com `T_st = T_n/(1 − ω_base/ω₀)` (o gatilho é tensão; furar a 60% de `T_n` derruba 30% da rotação); indução na rede: a reta do escorregamento, até 2,5·`T_n`. Atrito do eixo: 1% de `T_n` na base mais 0,2%.
+- **Corrente:** `|T|/T_n` até a quina de potência `P_max/T_n`, `|P|/P_max` acima (contínua na quina). `M = min(1, ω/ω_base)`, `Φ = min(1, ω_base/ω)`. Indução: `f_e = p·f_rot + s_n·f_e,n·T/T_n`.
+- **Forças (1.1):** `2f_e ∝ Φ` (+6 dB sobre as ranhuras); `6f_e` −20 dB de `2f_e` em vazio e +20·log(I/I_vazio) com a carga (até 0 dB), `12f_e` −8, `18f_e` −16; ranhuras `m·Z_s·f_rot ± 2k·f_e` com os pesos da tabela (`k` ±1 −6, ±2 −14, `m` 2 −10, `m` 3 −18) ∝ Φ·√I; barras da indução +3,5 dB, com a modulação de ±1,5 dB em `2·s·f_e`; excentricidade (±f_rot, ±2f_rot e as linhas em f_rot, 2f_rot); magnetostrição na rede; BLDC nas ordens de `f_e` do preset; curva da carcaça por família. Quando `f_e` → 0 as laterais `±2k·f_e` devolvem a potência ao centro (sem salto). `I_vazio` = 0,1 (ímã, magnetização) e 0,3 nas escovadas (atrito e ventilação).
+- **Inversor (1.2):** `|J_n(mπM/2)|/m` da tabela de Bessel (tabelada em M, 6 ordens), mais `1/m` da corrente, × `I/I_n` × curva da carcaça; grupos `m` 1–3, laterais até `|n|` = 4. Modos: assíncrona; escada por limiares de `f_e` (`f₀` 0,25, Δ 0,40 Hz, histerese de 0,02 Hz), patamar até `f_c/f_e < N_max`; síncrona pelo maior `N` com `N·f_e ≤ f_c,max` (histerese de 1%; `N` = 1 vira onda quadrada: `6f_e`, `12f_e`, `5f_e`, `7f_e`); auto; aleatória (passa-banda Q = 1/(2δ) em `f_c` e `2f_c` com a energia das linhas); chopper `∝ D(1 − D)·I`, com o clique de 20 ms em D = 1; CSI (TGV): `6f_e`, `12f_e`, `18f_e` e o chopper de entrada. Desligado com torque e rotação ≈ 0.
+- **Conversor auxiliar:** canal `aux` do motor, constante com a ignição, que o trem põe no carro do conversor: `f_c,aux` com ±`f_rede`, ±2`f_rede`, `2f_c,aux`, as linhas fixas medidas do preset e (`auxRuido`) o largo dos ventiladores.
+- **Mecânica (1.3):** engrenamento `Z_p·f_j` com harmônicos 2–4 e laterais ±`f_j`, ±`f_{j+1}` a −10 dB, ∝ T·n; abaixo de 3% de `T_n` some (rampa até 6%) e entra o chocalho (impactos no bp de 2 kHz a cada volta do pinhão, curtose 12); clique de flanco de 45 ms no bp de 800 Hz quando T troca de sinal; perda da engrenagem (1 − η)·|T| contra o movimento (na regeneração ela também freia); rolamentos de 2–10 kHz; ventilação BPF + 3 harmônicos (κ 0,6) + bp 1 kHz, ∝ n^5,5, o forçado sobe em 1,5 s; escovas `Z_c·f_rot`, `2Z_c·f_rot` ∝ I e o faiscamento (2–10 kHz modulado em `Z_c·f_rot`, ∝ I^1,5); hélice com os harmônicos do Mavic normalizados em A por `calibrarSerieA` (carriers/base.ts) e o ruído largo de pá.
+- **AVAS (2):** genérico, tom de 250 Hz com 1,62× e 2,41×, vibrato, ruído bp 1 kHz modulado, ritmo de um pulso por 2 m; o ruído sobe 3 dB por 10 km/h dentro do total `L_W = 74 + 0,6·v`; desliga em 2 s acima de 20 km/h (30 no `eua`); em ré, 200 Hz em "bip" de 1,5 Hz. Calibração analítica (ponderação A das parciais e do ruído, fator de potência da diretividade).
+- **Nível absoluto (4.2):** `sondarNivelEletrico` renderiza 0,5 s na condição de referência (`T_n` na rotação de base; o ventilador forçado já na rotação; o chopper em D = 0,5) com `kAbs` = 1 e leva o RMS ponderado A de cada canal (unidade de detune mais perto de zero) ao `L_W` do preset a 7,5 m. Pior erro na re-sonda: 0,15 dB.
+
+### Portadores e Cena
+
+- **`CarroEletrico`:** `CORPO_CARRO` (ou o ônibus de 12 × 2,5 × 3,3 m com 6 pneus e o trole); pneus `pneu.k` (bp 1 kHz Q 0,8: −10 dB em 250 Hz e 4 kHz, 95 dB(A) por roda a 80 km/h, n 3,5; ônibus +3 dB) e `aero` (80 dB(A) a 80 km/h, n 6) ligados. O 1º motor integra o carro inteiro (resistência refletida menos o torque do 2º, inércia 1,06·m·r_w²/i²); o 2º anda preso a ele (ω imposta). Controle de tração a 0,75 g. Atrito (mudo) abaixo de `v_regen,min`. `marcha` −1 = ré (AVAS de ré).
+- **Trem com motor (`TracaoTrem`):** `Carga` Davis + rampa por motor; até 4 unidades do motor replicadas ciclicamente nos truques motores, pelo orçamento de fontes que sobra (o trem sem motor não muda): por truque `motor.g` (motor + redução + escovas) e `inversor.g` (inversor + soprador); por carro `tracao.c`; ou carros agrupados. Sob o piso (10 cm abaixo dele). O `aux` vai no carro do conversor, `dentro` com vias (estrutura e dutos, lp 2,5 kHz) para a cabine. Pedal com rampa de 0,5/s (limitador de solavanco). `ConfigTrem` ganhou `truques` (bonde: um truque nos módulos 1, 3, 5) e `reservaFontes`; sem eles, o trem é o mesmo. O N700 na Passagem: trem-bala de 10 vagões, 8 carros motores, 63 fontes (por carro).
+- **Bancada:** `PortadorBancada` (portador `nenhum`) com `CargaBancada` constante, quadrática ou degrau. **Drone:** `Multirrotor` (tipo `drone`, `COMPAT.drone = ['eletrico']`), carga `c_Q·ρ·n²·D⁵`, PI do ESC sobre a rotação (coletivo 0,5 = pairado), `motor.k`/`helice.k` nos rotores.
+- **Passagem:** `ADAPTADORES`, `USO_REAL` (carro, trem, `nenhum`, drone) e `PORTADORES_NO_DSP` com o elétrico; o "Trem-bala no túnel" passa a ter o N700; presets novos: Tesla na rua, Taurus partindo do-re-mi (a velocidade vem do motor: `partida`), Metrô chegando na estação (freio elétrico), Trem-bala N700 no túnel, Drone pairando; seção Motor do trem com tração e freio elétrico. `src/scene/dsp-cena.ts` ganhou só o motor elétrico em `montarMotor`/`montarPortadorComMotor` e o trem com motor na mensagem `portador` (mudança mínima, relatada).
+- **Página:** Cena nova (`DSPEletricoPagina` = `CenaDSP` + portador do preset), ouvinte sempre no gimbal preso ao corpo (fora a 7,5 m, cabine, cofre/sob o assoalho, livre), ambientes céu, rua e galpão (próprios da página), túnel e estação; mostradores de rpm, v, `f_e`, `f_c`/N ou o teclado do do-re-mi, corrente com sinal, potência, M e Φ, dB(A) no ouvido, espectro anotado pelas linhas da telemetria e espectrograma de 10 s.
+
+### Ferramentas e portões
+
+`npm run teste:eletrico` (`tools/eletrico/valida.ts`, 13 grupos, ~2 min), `npm run lenta:eletrico` (os 18 presets em quatro estados: 18/18), `npm run navegador:eletrico` (Chromium, Firefox e a reserva). Portões da etapa: `paridade:ronco`, `paridade:turbina` e `paridade:acoustics` idênticos; `teste:cena` com as mesmas 105 medidas e os mesmos estados de antes (93 ok, 12 desvios: só o CPU e as coletas do laço variam de rodada para rodada); `teste:diesel`, `teste:radial`, `lenta:diesel`, `lenta:radial`, `typecheck`, `build` e os `navegador:*` de todas as páginas no `dist/`.
+
+### Alvo × medido (`npm run teste:eletrico`: 94 medidas, 92 ok, 2 desvios documentados, 0 falhas)
+
+| Medida | Alvo | Medido |
+|---|---|---|
+| 200 linhas: frequência, nível, nada acima de 21,6 kHz, CPU | ±0,01%, ±0,1 dB, < −100 dB, < 3% | 0,0002%, 0,006 dB, −154 dB, 1,8% |
+| troca de 100 linhas de uma vez (acima de 16 kHz); coletas em 10 s | < 0,05 FS; zero | 0,004 FS; zero (motor do N700: 5) |
+| 0–100 km/h Model 3 · Leaf; 0–80 do metrô de 6 carros; regeneração 100 → 20 | 4,7 ± 0,5 · 8,0 ± 0,8; 36 ± 4; 9 ± 1 s | 4,59 · 8,19; 38,0; 9,76 s |
+| Leaf a 5000 rpm: 666,7 / 2000 / 4000 / 4000 ± 666,7 Hz | ±0,5% | 0,000% |
+| ranhuras k ±1 / ±2 / m 2 (Z_s 46); 6f_e contra 2f_e; barras com s; Φ entre 1× e 2× a base | −6 / −14 / −10 ± 1; −0,8 ± 1; ±0,5%; −6 ± 0,5 dB | −6,0 / −14,0 / −10,0; −0,8; 0,0%; −6,0 dB |
+| Bessel `f_c ± 2f_e` e `2f_c ± f_e`, M 0,2 / 0,6 / 1,0 | −38 / −19,4 / −11,8; −16,3 / −10,5 / −16,7 ± 1 | −38,0 / −19,5 / −11,8; −16,3 / −10,5 / −16,7 |
+| f_e → 0 sem salto | ≤ 0,5 dB | 0,000 dB |
+| do-re-mi a 0,35 m/s²: 12 notas, durações, escala, patamar | 12 ±1%; 0,3–1,2 s; 6,2 ± 1 s; 598 ± 12 Hz | 12; 0,45–0,90 s; 6,45 s; 598,0 Hz |
+| do-re-mi a 0,6 m/s² | 12; escala 3,6 ± 0,7 s | 12; 4,30 s (o esforço de partida de 300 kN não dá 0,6 m/s² com 486 t) |
+| Taurus no patamar: 2f_c / 3f_c / 4f_c | −4..−9 / −5..−15 / −3..−10 dB | −6 / −9 / −9 |
+| síncrona `f_c = N·f_e`; estalo nas trocas | ±0,1%; < 0,1 FS | 0,0000%; 0,0001 FS |
+| aleatória δ 0,15: energia; pico em f_c | ±1 dB; ≥ 12 dB abaixo | −0,6; 21,8 dB |
+| chopper: D 0,25 = 0,75; máximo em 0,5; D = 1 | ±0,5 dB; sim; < −60 dB | 0,00; +2,5 dB; mudo |
+| Tesla a 7700 rpm: 3465 e 1062 Hz; laterais; ao dobrar T | ±0,5%; −10 ± 2; +6 ± 0,5 dB | 3465,0 e 1062,6; −10,0; +6,02 |
+| \|T\| < 3%: engrenamento; chocalho (curtose) | < −40 dB; > 4 | −40,6; 11,8 |
+| furadeira: 12× e 24× f_rot; envoltória do faiscamento | 2970 e 5940 ± 1%; Z_c·f_rot ±1% | 2967 e 5935; 2967 Hz |
+| AVAS a 2 m, 0 / 10 / 20 km/h; deslocamento; 25 km/h; ré | 55 / 61 / 67 ± 1,5; 1,2 ± 0,1 %/km/h; < −40 dB; 1,5 Hz | 55,0 / 61,8 / 68,3; 1,200; mudo; 1,51 Hz |
+| sonda (todos os presets); 4 estados × 2 s | ±1 dB; sem NaN, < −1 dBFS | −0,15 dB; nenhum |
+| fontes: metrô de 8 carros; N700 de 10; drone: 4 BPF | ≤ 64; ≤ 64; ±0,5% | 62; 63; 0,19% |
+| pneus a 80 km/h, 7,5 m, campo livre | 73 ± 2 dB(A) | 70,7 (**desvio**) |
+| Taurus parado: 176, 527, 688 Hz contra o tom | −8..−12 dB | −9,5 / −9,5 / −10,3 |
+| CPTM 9500: razão das famílias; SIV | 2,24 ± 0,05; 1333, 2666, ±60 Hz | 2,248; 1333,0, 2665,3, 60,0 |
+| CPTM 9000: razões | 1 : 1,44 : 2,45 ± 0,05 | 1 : 1,440 : 2,434 |
+| Leaf a 85 km/h: 96·f_rot; razão das famílias agudas | 9,5 kHz ±1%; 1,46 ± 0,05 | 9422 Hz; 1,500 |
+| Tesla: portadora na cabine | ≈ 10 kHz, ≥ 40 dB abaixo do grave | 9785 Hz, −41,4 dB |
+| bonde IGBT (Flexity) | f_c 2,0–2,5 kHz, 2f_c ≥ f_c | 2200 Hz, +2,0 dB |
+| furadeira sem fio: f_rot; ×8, ×12, ×24; bandas 400–1k / 1–2,5k / 2,5–6k | 247,5 ± 1%; ≥ −3, ≥ −3, −10 ± 4; +4,9 / +17,0 / +16,7 ± 4 | 247,3; 0 / −2,4 / −10,9; +4,6 / +17,3 / +13,2 |
+| furadeira de rede (variante): ×10, ×20; banda 2,5–6k | 3870, 7740 ± 1%; +22,7 ± 4 | 3874, 7747; +20,6 |
+| Mavic: BPF; harmônicos 1–7; 63·f_rot; bandas | 209 ± 1%; tabela ±3; −13 ± 4; +0,8 / +0,7 / −2,3 ± 4 | 211,0 (os 4: 188, 205, 209, 211); 0 −6 −7 −6 −9 −8 −12; −11,8; −1,2 / −2,3 / −3,2 |
+| drone 2 (variante): BPF; 6f_e | 382 Hz; 8,0–8,3 kHz | 381,8; 8034 Hz |
+| MP 73 (Frota A sem chopper): corcova | ≈ 300 → 700 Hz | 270 → 896 Hz |
+| Taurus no patamar (estação, 4 m): bandas; centroide | −11,5 / +3,2 / −2,0 / −12,4 ± 4; 622 ± 25% | −8,7 / −0,4 / −5,8 / −13,0; 588 Hz |
+| CPTM 9500 parado, de dentro: bandas | +0,9 / −4,3 / −18,7 ± 4 | +1,8 / −0,3 / −17,2 |
+| Taurus a 7,5 m arrancando: tom sobre o fundo da estação | 10 ± 3 dB | +12,4 dB |
+| Tesla a 6 m e 30 km/h: L_AFmax; a 100 km/h, trem de força | 62 ± 3 dB(A); ≤ −8 dB do total | 61,9; −29,3 dB |
+| os 5 presets elétricos da Passagem pela mensagem `portador` | montam e soam | todos |
+| CPU: motor do N700 (4 unidades); N700 no túnel pela Cena (63 fontes) | ≈ 3%; < 40% do quantum | 2,9%; 17,2% (p99 21,6%) |
+| N700 de 16 carros | ≤ 64 fontes | não cabe nem sem motor (**desvio**) |
+
+### Desvios conhecidos e escolhas (com o motivo)
+
+- **N700 de 16 carros:** o trem de 16 vagões passa das 64 fontes da Cena já sem motor (67 com uma face; `maxVagoes` 15). O orçamento é da Cena e do trem sem motor, fora desta etapa; o N700 entra no trem-bala de 10 vagões da Passagem.
+- **Pneus a 7,5 m (70,7 contra 73 dB(A)):** com os 95 dB(A) por roda do CENA 4.1 à letra, os 73 contam as 4 rodas a 7,5 m; no corpo real o par do lado de lá fica 1,55 m mais longe e os eixos a ±1,4 m. No asfalto a imagem da fonte no chão soma +5 dB (75,7).
+- **Níveis de 4.2 mudados (≈, contra as gravações):** inversor dos carros 62 dB(A) (72 no texto: o Leaf e o Plaid têm a portadora 45–51 dB abaixo do grave da cabine, e com 72 as laterais `f_c ± 2f_e` passavam a ordem de ranhura 96·f_rot); furadeira escovas 101 e ventilador 86 (94 e 90: ×12 a 0 dB e ×8 a −1 da gravação); Taurus inversor 96 e auxiliar 77 (98 e 85: o tom 10 dB acima do fundo da estação e as linhas fixas a −10 dB dele); Metropolis `P_max` 150 kW (os 190 da ficha dão 0–80 em 30 s contra 36 ± 4).
+- **Perfil medido do GTO (Taurus) e do bonde:** a tabela de Bessel com M ≈ 0,1 dá 2f_c a −22 dB e nenhum 4f_c; as gravações têm −4..−9 e −3..−10. O preset leva `perfilGrupos` (acústico, relativo à linha f_c já com a carcaça; no Taurus até 8·f_c, a gravação D tem 2996 Hz a −22) e o bonde 2f_c a +2 dB (Citadis: 2f_c mais forte).
+- **Leis das ranhuras medidas com Z_s 46:** com `Z_s/p` inteiro (o Leaf de 48) a linha m = 1, k = 0 cai em 12·f_e e soma em potência com a ondulação de torque; a frequência é conferida no Leaf de 48, as leis num Leaf de 46.
+- **AVAS a 2 m:** medido em campo livre, 125 ms com o alto-falante no través (o mesmo ponto parado e andando). No asfalto a reflexão a 2 m cancela parte do tom de 250 Hz (Δ ≈ 0,56 m) e não o ruído de 1 kHz, e o nível passa a depender da mistura tom/ruído. O alto-falante foi 1 cm para fora da face do para-choque ([2,31; 0; 0,4]): em [2,2; 0; 0,4] ele fica dentro da caixa do corpo de 4,6 m e a Cena o sombreava.
+- **Desbalanceamento das escovadas sem a curva da carcaça:** a 1ª e a 2ª ordem sacodem a ferramenta inteira; com o passa-alta de 1 kHz da carcaça "pequena" o ×1 da furadeira ficava 24 dB abaixo da gravação.
+- **Fontes do trem agrupadas:** `motor.g` junta motor + redução + escovas e `inversor.g` junta inversor + soprador do truque (4.3 pede `motor.u`, `inversor.u`, `reducao.u`, `ventilador.u` separados); com eles separados o metrô de 8 carros não cabe nas 64 fontes. O `aux` é um canal do motor (4.1 o põe no inversor "quando parado", 4.3 numa fonte própria do portador): o trem o põe no carro do conversor.
+- **Interior do trem:** o largo dos ventiladores do auxiliar (`auxRuido`, ar-condicionado) entra no canal `aux`, que chega à cabine pelas vias (estrutura e dutos, lp 2,5 kHz); sem ele a CPTM parada de dentro não tinha nada abaixo de 400 Hz.
+- **ESC do Mavic:** passeio de ±0,4% (a gravação mostra a linha do motor oscilando ±1,5%, mas com o passeio desse tamanho as quatro BPF se misturam em 6 s); o PI do ESC tira o erro de regime.
+- **Variantes só da validação:** MP 73 (a Frota A sem o chopper), a furadeira de rede e o drone 2 não são presets (as 18 fichas da seção 5 ficam como estão).
+- **Página:** o espectro é o da saída (depois do ouvinte), não "antes do ouvinte" (6).
+
+### Pendente (TODO)
+
+- Trem de 16 vagões (N700 inteiro): orçamento da Cena ou fontes do trem agrupadas.
+- Grave da cabine do carro elétrico (rumor de estrada e "boom" abaixo de 200 Hz), que faz a portadora do Plaid ficar 51 dB abaixo do grave na gravação.
+- Chave 50/60 Hz do motor industrial na página; presets próprios para o MP 73, a furadeira de rede e drones menores.
+- Revisão de ouvido (`REVISAO-DE-SOM.md`) de todos os presets.
 
 ## Validação
 

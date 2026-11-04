@@ -37,7 +37,7 @@ Regra do produto: por enquanto só se ouve cada motor nos portadores onde ele fo
 3. **Radial** — geometria de fileiras ímpares, hélice; aviões, M4 Sherman, Monaco-Trossi, Megola, helicópteros antigos. *Feita: `radial.html` e a família Aviação no Ronco; ver `TECNICO.md` → Radial e aviação a pistão.*
 4. **Rotativos** — Wankel (13B, Renesis, 20B, 787B, Ro80, Norton, Mistral), X-Engine e palhetas marcados como aproximação.
 5. **Vapor** — DSP novo: sopro do escape por volta de roda, regulador e corte, vazamentos, bomba de ar, bielas, apito; locomotivas, estacionários, Stanley, barco.
-6. **Elétrico** — DSP novo: ordens de ranhura e torque, PWM com bandas laterais, redução; carros, metrô, Taurus, trem-bala (ganha o motor), bonde, ferramentas, drones.
+6. **Elétrico** — DSP novo: ordens de ranhura e torque, PWM com bandas laterais, redução; carros, metrô, Taurus, trem-bala (ganha o motor), bonde, ferramentas, drones. *Feita: `eletrico.html`, `src/engines/eletrico/` (síntese espectral), `CarroEletrico`, trem com motor por truque, bancada e `Multirrotor`; ver `TECNICO.md` → Elétrico.*
 
 Cada etapa termina com: código, presets, tabela de compatibilidade, testes passando, `docs/TECNICO.md` atualizado (seção por camada e por família) e um relatório curto do que foi medido. Commits na branch `reestruturacao` com mensagens em pt-BR; o usuário decide quando mesclar em `master`.
 
