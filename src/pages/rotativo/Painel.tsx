@@ -281,8 +281,10 @@ function Escapamento({ k, e }: P) {
             atual={s.muffler} aoEscolher={(v) => k.setSpec({ muffler: v })} />
         </Field>
       )}
-      <Slider id="Dsaida" rotulo="Ø da saída" min={25} max={130} passo={1} valor={esc.saidas[0]?.D ?? 63.5} formatar={(v) => `${v} mm`}
+      <Slider id="Dsaida" rotulo="Ø da saída" min={20} max={130} passo={1} valor={esc.saidas[0]?.D ?? 63.5} formatar={(v) => `${v} mm`}
         aoSoltar={(v) => k.setEscape({ saidas: esc.saidas.map((x) => ({ ...x, D: v })) })} />
+      <Slider id="Dtip" rotulo="Ponteira (jato)" min={20} max={130} passo={1} valor={esc.ponteira ?? esc.saidas[0]?.D ?? 63.5} formatar={(v) => `${v} mm`}
+        aoSoltar={(v) => k.setEscape({ ponteira: v })} />
       {esc.tipo !== 'megafone' && (
         <Field rotulo="Saídas">
           <ChipGroup id="saidas" classe="num" opcoes={[1, 2].map((n) => ({ valor: n, rotulo: String(n) }))} atual={saidas}
@@ -327,7 +329,8 @@ function Estalos({ k, e }: P) {
         <ChipGroup id="cat" opcoes={[{ valor: true, rotulo: 'Com' }, { valor: false, rotulo: 'Sem' }]} atual={s.cat !== false} aoEscolher={(v) => k.setSpec({ cat: v }, { structural: false })} />
       </Field>
       <Slider id="fHCextra" rotulo="Pós-queima extra (HC no escape)" min={0} max={0.1} passo={0.005} valor={s.fHCextra || 0} formatar={pct} aoMudar={(v) => k.setSpec({ fHCextra: v }, { structural: false, render: false })} />
-      <p className="note">O Wankel manda 3–5× mais HC ao escape que um pistão (a chama apaga nas vedações e nos cantos da câmara): em lenta ~8% do calor queima no escape, o "chiado quente" de cada pulso; com a mistura crua de uma falha, estoura.</p>
+      <Slider id="hcEspalha" rotulo="Espalhamento da pós-queima" min={0} max={20} passo={1} valor={s.hcEspalha ?? 9} formatar={(v) => `${v} ms`} aoMudar={(v) => k.setSpec({ hcEspalha: v }, { structural: false, render: false })} />
+      <p className="note">O Wankel manda 3–5× mais HC ao escape que um pistão (a chama apaga nas vedações e nos cantos da câmara): em lenta ~8% do calor queima no escape, o "chiado quente" de cada pulso; com a mistura crua de uma falha, estoura. O espalhamento é quanto o gás de cada evento se mistura até queimar na boca: 0 ms deixa cada pulso com o seu chiado e o vão quieto; mais que ~12 ms emenda os pulsos num chiado contínuo.</p>
     </Section>
   );
 }

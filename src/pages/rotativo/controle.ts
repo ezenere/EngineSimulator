@@ -24,7 +24,9 @@ export type Lento = { agua: number; escape: string };
 export type Telemetria = Record<string, any> & { rpm: number; theta: number; state: string };
 
 /** especificação completa de um preset: padrões do rotativo e o `redline` que os mostradores do Ronco leem */
-export const specDe = (p: PresetRotativo): Spec => ({ ...PADRAO_ROTATIVO, ...p, redline: p.rpmMax } as Spec);
+/** ponteira de fábrica: a boca do preset (o megafone irradia pela boca larga) */
+const ponteiraDe = (e: PresetRotativo['escape']) => e.ponteira ?? (e.tipo === 'megafone' ? e.megafone?.Dboca : e.saidas[0]?.D) ?? 63.5;
+export const specDe = (p: PresetRotativo): Spec => ({ ...PADRAO_ROTATIVO, ...p, escape: { ...p.escape, ponteira: ponteiraDe(p.escape) }, redline: p.rpmMax } as Spec);
 const geometria = (s: Spec) => (s.tipo === 'palhetas' ? null : montarRotativo(s));
 const VALVE_MODES = ['closed', 'auto', 'sport', 'open'];
 
