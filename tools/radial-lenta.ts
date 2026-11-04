@@ -1,7 +1,11 @@
 // Teste de lenta do radial e da família aviação (RADIAL.md 8, passos 7 e 8): todos os presets radiais (menos a Megola,
 // que não tem lenta) e os 10 de aviação do Ronco, a 20 °C e a −5 °C, com a partida de verdade (arranque, contagem de pás,
-// magnetos no automático; o de inércia é engatado aos 0,5 s), acelerada aos 12 s (60% por 1,5 s) e 30 s no total.
-// Passa com zero apagamentos depois de pegar, rotação final (25–30 s) a ±3% do alvo do controle de lenta e sem NaN.
+// magnetos no automático; o de inércia é engatado aos 0,5 s), acelerada aos 12 s (60% por 1,5 s) e 40 s no total.
+// Passa com zero apagamentos depois de pegar, rotação final (35–40 s) a ±3% do alvo do controle de lenta e sem NaN.
+// (A janela era 25–30 s: nos pequenos que pegam tarde, como o Verner 5S aos 7 s, as falhas da partida, 0,12·e^(−t/15),
+// ainda são 3% aos 20 s de funcionamento, e o controle de lenta, que abriu ar para segurá-las, desce devagar de propósito:
+// a lenta fica 3–6% acima do alvo até uns 30 s. Ela passava porque os estouros da partida, 20 dB acima do que as
+// gravações têm, freavam o motor pela contrapressão no escape.)
 //
 //   npx tsx tools/radial-lenta.ts [ids...] [--j 8]
 import os from 'node:os';
@@ -33,11 +37,11 @@ async function umCaso(id: string, temp: number): Promise<Resultado> {
     [12, (x) => x.message({ type: 'input', throttle: 0.6 })],
     [13.5, (x) => x.message({ type: 'input', throttle: 0 })],
   ];
-  const r = renderizar(d, 30, ev as any);
+  const r = renderizar(d, 40, ev as any);
   let nan = false; for (let i = 0; i < r.L.length; i += 97) if (!Number.isFinite(r.L[i])) { nan = true; break; }
   const pegou = r.tele.findIndex((q) => q.state === 'run');
   const apagou = pegou >= 0 && r.tele.slice(pegou).some((q) => q.state === 'off');
-  const fim = trecho(r.tele, 25, 30);
+  const fim = trecho(r.tele, 35, 40);
   const rpm = media(fim.map((q) => q.rpm)), alvo = media(fim.map((q) => q.idleTarget));
   const erro = alvo ? (100 * (rpm - alvo)) / alvo : 100;
   const tPega = pegou >= 0 ? r.tele[pegou].t : NaN;
