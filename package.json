@@ -20,6 +20,7 @@
     "teste:diesel": "tsx tools/diesel-valida.ts",
     "lenta:diesel": "tsx tools/diesel-lenta.ts",
     "governador:diesel": "tsx tools/diesel-governador.ts",
+    "troca:diesel": "tsx tools/diesel-troca.ts",
     "navegador:diesel": "node tools/diesel-navegador.mjs"
   },
   "dependencies": {

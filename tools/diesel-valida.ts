@@ -4,7 +4,7 @@
 // docs/TECNICO.md → Diesel) e aparecem como "desvio", sem reprovar.
 //
 //   npx tsx tools/diesel-valida.ts [--j 12] [--so grupo1,grupo2]
-//   grupos: pressoes, bandas, fumaca, jake, potencia, veiculo, nan, lenta, governador
+//   grupos: pressoes, bandas, fumaca, jake, potencia, veiculo, cambio, nan, lenta, governador, troca
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -217,8 +217,9 @@ const GRUPOS: Record<string, () => Linha[]> = {
 
   // potência medida depois da escala = ficha ±5% (rotação travada na rotação de potência, combustível 1)
   potencia: () => PRESETS.map((p) => {
-    const sp = preset(p.id), r = renderizar(sp, plena(sp.rpmPotencia, sp.boost, 2.5));
-    const d = r.d, kw = ((d.tqMean) * d.omega) / 1000;
+    const sp = preset(p.id), r = renderizar(sp, plena(sp.rpmPotencia, sp.boost, 3), { tele: 256 });
+    // (média do último 1,5 s: o tqMean de um instante carrega a dispersão de ciclo a ciclo)
+    const d = r.d, kw = (med(trecho(r.tele, 1.5, 3), 'torque') * d.omega) / 1000;
     return { grupo: 'potencia', nome: `${p.id}: potência a ${sp.rpmPotencia} rpm`, alvo: `${sp.power} kW ± 5%`, medido: `${kw.toFixed(0)} kW (${((kw / sp.power - 1) * 100).toFixed(1)}%)`, ok: Math.abs(kw / sp.power - 1) <= 0.05 };
   }),
 
@@ -234,6 +235,30 @@ const GRUPOS: Record<string, () => Linha[]> = {
     const chega = r.tele.find((e) => e.kmh >= 85);
     const t85 = chega ? chega.t - 3 : Infinity;
     L.push({ grupo: 'veiculo', nome: 'volvod13 carregado 0–85 km/h', alvo: '60–90 s', medido: Number.isFinite(t85) ? `${t85.toFixed(0)} s` : `não chegou (${Math.round(r.tele[r.tele.length - 1].kmh)} km/h em 120 s)`, ok: faixa(t85, 60, 90) });
+    return L;
+  },
+
+  // câmbio automático (troca pela rotação de potência do diesel): arrancada com pé no fundo e com meio pé, depois solta
+  // o pedal. A sequência de marchas tem de subir sem voltar, nos pontos de troca do diesel, e sem acelerar não sobe
+  cambio: () => {
+    const L: Linha[] = [];
+    const caso = (id: string, ped: number, T: number, faixa0: [number, number]) => {
+      const r = renderizar(preset(id), { eventos: [[0, (d) => { quente(d); liga(d); }], [3, (d) => { d.message({ type: 'input', shift: 1 }); d.message({ type: 'input', throttle: ped }); }], [3 + T, (d) => d.message({ type: 'input', throttle: 0 })], [13 + T, null]], portador: 'carro' }, { tele: 512 });
+      const acel = r.tele.filter((e) => e.t >= 3 && e.t < 3 + T), solto = r.tele.filter((e) => e.t >= 3.5 + T);
+      let volta = 0; const trocas: number[] = [];
+      for (let i = 1; i < acel.length; i++) { if (acel[i].gear < acel[i - 1].gear && acel[i].gear > 0) volta++; if (acel[i].gear > acel[i - 1].gear && acel[i - 1].gear > 1) trocas.push(acel[i - 1].rpm); } // (a saída da 1ª, com a embreagem patinando, não conta)
+      let sobeSolto = 0; for (let i = 1; i < solto.length; i++) if (solto[i].gear > solto[i - 1].gear) sobeSolto++;
+      const g = acel.map((e) => e.gear), fim = g[g.length - 1];
+      const rm = trocas.length ? media(trocas) : NaN, mn = trocas.length ? Math.min(...trocas) : NaN, mx = trocas.length ? Math.max(...trocas) : NaN;
+      L.push({ grupo: 'cambio', nome: `${id} pedal ${ped}: marchas sobem sem voltar`, alvo: 'monotônica', medido: `1ª → ${fim}ª, ${volta} reduções`, ok: volta === 0 && fim > 2 });
+      L.push({ grupo: 'cambio', nome: `${id} pedal ${ped}: rotação nas subidas`, alvo: `${faixa0[0]}–${faixa0[1]} rpm`, medido: `${mn.toFixed(0)}–${mx.toFixed(0)} rpm (média ${rm.toFixed(0)})`, ok: mn >= faixa0[0] && mx <= faixa0[1] });
+      L.push({ grupo: 'cambio', nome: `${id} pedal ${ped} → solto: não sobe sem acelerar`, alvo: '0 subidas', medido: `${sobeSolto}`, ok: sobeSolto === 0 });
+    };
+    caso('hilux28', 1, 30, [2700, 3300]);
+    caso('hilux28', 0.5, 40, [2200, 2700]);
+    caso('scaniav8', 1, 80, [1350, 1700]);
+    caso('scaniav8', 0.5, 80, [1250, 1500]);
+    caso('volvod13', 1, 80, [1300, 1600]);
     return L;
   },
 
@@ -256,7 +281,7 @@ if (args[0] === '--grupo') {
   console.log(JSON.stringify(GRUPOS[args[1]]()));
 } else if (process.argv[1] && process.argv[1].endsWith('diesel-valida.ts')) {
   const si = args.indexOf('--so');
-  const so = si >= 0 ? args[si + 1].split(',') : [...Object.keys(GRUPOS), 'lenta', 'governador'];
+  const so = si >= 0 ? args[si + 1].split(',') : [...Object.keys(GRUPOS), 'lenta', 'governador', 'troca'];
   const tsx = path.join(RAIZ, 'node_modules', '.bin', 'tsx');
   const rodar = (argv: string[]) => new Promise<string>((ok) => {
     const p = spawn(tsx, argv, { cwd: RAIZ });
@@ -268,6 +293,7 @@ if (args[0] === '--grupo') {
     const tarefas = so.map(async (g) => {
       if (g === 'lenta') { const s = await rodar(['tools/diesel-lenta.ts']); return { g, texto: s }; }
       if (g === 'governador') { const s = await rodar(['tools/diesel-governador.ts']); return { g, texto: s }; }
+      if (g === 'troca') { const s = await rodar(['tools/diesel-troca.ts']); return { g, texto: s }; }
       const s = await rodar(['tools/diesel-valida.ts', '--grupo', g]);
       try { return { g, linhas: JSON.parse(s.trim().split('\n').pop()!) as Linha[] }; } catch { return { g, erro: s.slice(-800) }; }
     });

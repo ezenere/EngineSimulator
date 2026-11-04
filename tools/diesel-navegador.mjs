@@ -1,6 +1,7 @@
 // Teste da página do Diesel num navegador headless de verdade (o padrão de tools/ronco-navegador.mjs: CDP no
 // Chromium, WebDriver BiDi no Firefox). Liga o motor (velas, partida), acelera, troca marcha, preset, ambiente e
-// ouvinte, passa pelos portadores (bancada, gerador com degraus, locomotiva com notches), aciona o freio-motor (J),
+// ouvinte, passa pelos portadores (bancada, gerador com degraus, locomotiva com notches, e de volta a um caminhão, que
+// tem de voltar à lenta), aciona o freio-motor (J),
 // mexe no painel e confere telemetria, som na saída, worklet (não a reserva) e console.
 //
 //   node tools/diesel-navegador.mjs [url da diesel.html] [chromium|firefox] [porta]
@@ -211,6 +212,37 @@ try {
   await espera(300);
   confere((await texto('#notchRead')) === '3', '− desce o notch', await texto('#notchRead'));
   await tecla('Digit0');
+
+  // troca de portador de volta para um caminhão (defeito: depois do gerador o caminhão ficava "acelerado constante")
+  // gerador com carga → EMD em notch 8 → Scania: o Scania tem de nascer no portador veículo e voltar à lenta de 500
+  await clicar('.fam:nth-child(3)');
+  await clicar('.preset[data-id=gen500]');
+  await espera(800);
+  await esperaAte(async () => { const x = await tele(); return x.state === 'run' && x.rpm > 1750; }, 9000);
+  await tecla('Digit2');
+  await espera(2000);
+  await clicar('.fam:nth-child(2)');
+  await clicar('.preset[data-id=scaniav8]');
+  await espera(800);
+  await esperaAte(async () => { const x = await tele(); return x.state === 'run' && Math.abs(x.rpm - 500) < 40; }, 10000);
+  t = await tele();
+  confere(t.portador === 'carro' && Math.abs(t.rpm - 500) < 40, 'gerador → Scania: veículo em lenta (não fica isócrono a 1800)', `${t.portador} ${Math.round(t.rpm)} rpm`);
+  await clicar('.fam:nth-child(4)');
+  await clicar('.preset[data-id=emd710]');
+  await espera(800);
+  await esperaAte(async () => { const x = await tele(); return x.state === 'run' && x.rpm > 200 && x.rpm < 400; }, 12000);
+  await tecla('Digit8');
+  await espera(3000);
+  await clicar('.fam:nth-child(2)');
+  await clicar('.preset[data-id=scaniav8]');
+  await espera(800);
+  await esperaAte(async () => { const x = await tele(); return x.state === 'run' && Math.abs(x.rpm - 500) < 40; }, 10000);
+  t = await tele();
+  confere(t.portador === 'carro' && Math.abs(t.rpm - 500) < 40 && t.notch === 0, 'EMD em notch 8 → Scania: lenta, sem notch', `${t.portador} ${Math.round(t.rpm)} rpm notch ${t.notch}`);
+  await clicar('.fam:nth-child(4)');
+  await clicar('.preset[data-id=emd710]');
+  await espera(800);
+  await esperaAte(async () => { const x = await tele(); return x.state === 'run' && x.rpm > 200 && x.rpm < 400; }, 12000);
 
   // bancada: dinamômetro e rotação-alvo
   await chip('#portador', 'Bancada');

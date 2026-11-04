@@ -4,7 +4,7 @@
 // `{ type: 'diesel', … }` para portador, notch, degrau, dinamômetro, freio-motor, acelerador manual e governador.
 import { buildDiesel, familiaDiesel } from '../../engines/diesel/geometria';
 import { LAYOUTS, type MotorMontado } from '../../engines/ronco/geometria';
-import { PRESETS, PADRAO_DIESEL, type PresetDiesel, type Portador } from '../../engines/diesel/presets';
+import { PRESETS, PADRAO_DIESEL, portadorAoTrocar, type PresetDiesel, type Portador } from '../../engines/diesel/presets';
 import { gearRatios } from '../../engines/ronco/dsp';
 import { configCalibrada, montarConfig } from '../../engines/diesel/config';
 import type { CadeiaDeAudio, Equalizacao } from '../../ui';
@@ -150,7 +150,7 @@ export class ControleDiesel {
 
   loadPreset(p: PresetDiesel) {
     const spec = { ...PADRAO_DIESEL, ...p } as Spec;
-    const portador = p.portadores.includes(this.estado.portador) ? this.estado.portador : p.portadores[0];
+    const portador = portadorAoTrocar(p, this.estado.portador);
     const carga = { ...this.estado.carga, notch: 0, degrau: 0, dinamometro: 0, rpmAlvo: 0, jake: p.jakeCilindros?.[p.jakeCilindros.length - 1] ?? 6, fRede: p.gerador?.fRede ?? 60, freio: false };
     this.mudar({ spec, motor: buildDiesel(spec), presetId: p.id, portador, carga }, true);
     this.pushConfig(true, true);
