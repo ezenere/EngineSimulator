@@ -27,6 +27,7 @@ export default defineConfig({
         radial: resolve(raiz, 'radial.html'),
         rotativo: resolve(raiz, 'rotativo.html'),
         eletrico: resolve(raiz, 'eletrico.html'),
+        vapor: resolve(raiz, 'vapor.html'),
       },
     },
   },

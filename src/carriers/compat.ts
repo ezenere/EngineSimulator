@@ -13,6 +13,9 @@ export const COMPAT: Record<TipoPortador, readonly FamiliaMotor[]> = {
   locomotiva: ['diesel', 'vapor'],
   trem: ['eletrico', 'nenhum'],
   aviao: ['turbina'],
+  // (vapor, VAPOR.md 4.4: trator a vapor e barco; o diesel marítimo fica para depois, sem preset)
+  trator: ['vapor'],
+  barco: ['vapor', 'diesel'],
   nenhum: ['pistao', 'turbina', 'turboelice', 'turboeixo', 'diesel', 'radial', 'rotativo', 'vapor', 'eletrico'],
   // Elétrico (ELETRICO.md 4.3): o multirrotor
   drone: ['eletrico'],
@@ -25,17 +28,22 @@ export const COMPAT: Record<TipoPortador, readonly FamiliaMotor[]> = {
  */
 export const ADAPTADORES: readonly FamiliaMotor[] = ['nenhum', 'pistao', 'diesel', 'turboelice', 'turbina', 'radial', 'rotativo',
   'eletrico', // Elétrico (etapa 6): MotorEletrico, src/engines/eletrico/motor.ts
+  'vapor', // Vapor (etapa 5): MotorVapor, src/engines/vapor/motor.ts
 ];
 export const USO_REAL: Record<TipoPortador, readonly FamiliaMotor[]> = {
   carro: ['pistao', 'diesel', 'radial', 'rotativo', // carros e motos; picape, caminhão e ônibus; Sherman, Monaco-Trossi e Megola; Mazda, Ro80, Norton
-    'eletrico'], // Elétrico: Tesla, Leaf, BYD, Fórmula E, trólebus (CarroEletrico)
+    'eletrico', // Elétrico: Tesla, Leaf, BYD, Fórmula E, trólebus (CarroEletrico)
+    'vapor'], // Vapor: Stanley
   helice: ['turboelice', 'radial', 'pistao', 'rotativo'], // turboélices; radiais e motores planos de avião (RADIAL.md 5.3 e 6); Wankel de aviação e UAV (ROTATIVO.md 6.3)
   rotor: ['pistao', 'radial', 'rotativo', 'nenhum'], // R22, R44, Bell 47, S300 (pistão de aviação), S-55 (radial), Camcopter S-100 (AE50R); ou o rotor sozinho
-  gerador: ['diesel', 'rotativo'],                 // grupos diesel; X-Engine (LiquidPiston, aproximação)
-  locomotiva: ['diesel'],
+  gerador: ['diesel', 'rotativo', // grupos diesel; X-Engine (LiquidPiston, aproximação)
+    'vapor'], // (vapor: Corliss de moinho e o trator na polia)
+  locomotiva: ['diesel', 'vapor'], // (vapor: as 10 locomotivas do VAPOR.md 5)
   trem: ['nenhum',
     'eletrico'], // Elétrico: Taurus, Vectron, CPTM, Metrô SP, N700, TGV, bonde
   aviao: ['turbina'],
+  trator: ['vapor'],
+  barco: ['vapor'],
   nenhum: [
     'eletrico'], // Elétrico: bancada (furadeira, liquidificador, motor industrial)
   drone: ['eletrico'], // Elétrico: Mavic

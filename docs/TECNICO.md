@@ -13,6 +13,7 @@ Este documento explica a física e o processamento de áudio por trás dos dois 
 - [Radial e aviação a pistão](#radial-e-aviação-a-pistão)
 - [Rotativos](#rotativos)
 - [Elétrico: síntese espectral](#elétrico-síntese-espectral)
+- [Vapor](#vapor)
 - [Validação](#validação)
 - [Limitações conhecidas](#limitações-conhecidas)
 - [Como adicionar um carro ou avião](#como-adicionar-um-carro-ou-avião)
@@ -45,6 +46,7 @@ O site é compilado com Vite (TypeScript + React) e publicado como páginas est�
 | `radial.html`, `src/pages/radial/`, `src/engines/radial/`, `src/engines/ronco/aviacao.ts`, `src/pages/comum/Aviacao.tsx` | Radial (`RadialDSP`, geometria da biela-mestra, escape radial, partida de aviação, `MotorRadial`) e a família Aviação do Ronco (ver [Radial e aviação a pistão](#radial-e-aviação-a-pistão)); testes em `tools/radial-*.ts` e `tools/radial-navegador.mjs` |
 | `rotativo.html`, `src/pages/rotativo/`, `src/engines/rotativo/` | Rotativos (`RotativoDSP` do Wankel e do X-Engine, `PalhetasDSP`, `RotativosDSP` da página, geometria trocoidal, janelas, pré-silencioso em `escape.ts`, `MotorRotativo`; ver [Rotativos](#rotativos)); worklet `src/worklet/processador-rotativo.ts`; testes em `tools/rotativo-*.ts` e `tools/rotativo-navegador.mjs` |
 | `eletrico.html`, `src/pages/eletrico/`, `src/engines/eletrico/`, `src/carriers/carro-eletrico.ts`, `multirrotor.ts` | Elétrico (`EletricoDSP`: banco de linhas, máquina, inversor, mecânica, AVAS, `MotorEletrico`), o carro elétrico, o trem com motor, a bancada e o drone (ver [Elétrico](#elétrico-síntese-espectral)); testes em `tools/eletrico/` e `tools/eletrico-navegador.mjs` |
+| `vapor.html`, `src/pages/vapor/`, `src/engines/vapor/`, `src/carriers/{locomotiva-vapor,trator,barco,carro-direto,portadores-vapor}.ts` | Vapor (`VaporDSP`, um DSP novo que implementa `Motor` direto: cilindros de dupla ação, rede bico → caixa de fumaça → chaminé, apito de guia de onda, sino, auxiliares, caldeira) e os portadores dele: a composição locomotiva + tênder + vagões, trator, barco de rodas de pás, `CarroDireto` do Stanley e o Corliss no `Gerador` (ver [Vapor](#vapor)); testes em `tools/vapor-*.ts` e `tools/vapor-navegador.mjs` |
 | `passagem.html`, `src/pages/passagem/`, `public/3d/` | Página Passagem / modo de testes: ouvinte no gimbal, cena three.js, mostradores; texturas com `LICENSES.md` (ver [Página Passagem e modo de testes](#página-passagem-e-modo-de-testes)); teste em `tools/passagem-navegador.mjs` |
 | **Legado** (até a migração): | |
 | `src/geometry.js` | Geometria do motor: virabrequins, ordem de ignição, intervalos, balanceamento (migrado para `src/engines/ronco/geometria.ts`) |
@@ -61,7 +63,7 @@ Os arquivos `*-dsp.js` legados ficam dentro de uma função-fábrica (`EngineDSP
 ## Build: Vite, TypeScript e React
 
 - `npm run dev` serve o projeto com recarga automática; `npm run build` confere os tipos (`tsc` com `tsconfig.json`, código do navegador, e `tsconfig.node.json`, ferramentas e DSP, sem tipos do DOM) e gera `dist/`; `npm run preview` serve o `dist/`.
-- **Multi-página:** as entradas estão em `vite.config.mts` (`build.rolldownOptions.input`: `index.html`, `ronco.html`, `turbina.html`, `passagem.html`, `diesel.html`, `radial.html`, `rotativo.html`, `eletrico.html`). Uma página nova (`vapor.html`…) é um HTML na raiz com `<script type="module" src="./src/pages/<nome>/main.tsx">` e uma linha a mais nessa lista.
+- **Multi-página:** as entradas estão em `vite.config.mts` (`build.rolldownOptions.input`: `index.html`, `ronco.html`, `turbina.html`, `passagem.html`, `diesel.html`, `radial.html`, `rotativo.html`, `eletrico.html`, `vapor.html`). Uma página nova é um HTML na raiz com `<script type="module" src="./src/pages/<nome>/main.tsx">` e uma linha a mais nessa lista.
 - **`base: './'`:** todos os caminhos do `dist/` são relativos, então o site funciona em `ezenere.com/data/engine/` (ou qualquer subpasta) sem reconfigurar. Foi testado servindo o `dist/` em `/data/engine/`. Abrir o HTML pelo `file://` não funciona (módulos ES exigem http).
 - **Por que não `"type": "module"` no `package.json`:** as ferramentas antigas em `tools/analise-som/` e os arquivos legados de `src/` são CommonJS (`require`, `module.exports`) e deixariam de carregar. A configuração do Vite é `.mts` para ser ESM mesmo assim. O `tsx` roda os `.ts` de `tools/` como CommonJS; eles usam `createRequire(import.meta.url)` e `import.meta.url`, que funcionam nos dois modos.
 - **TypeScript:** `strict: false`, e os campos das classes copiadas do legado são declarados com `declare` (não geram código; a classe compilada fica igual à original). TypeScript 7, React 19, Vite 8 (Rolldown).
@@ -1528,6 +1530,165 @@ O projeto está em [`ELETRICO.md`](ELETRICO.md); aqui fica o que foi feito, como
 - Grave da cabine do carro elétrico (rumor de estrada e "boom" abaixo de 200 Hz), que faz a portadora do Plaid ficar 51 dB abaixo do grave na gravação.
 - Chave 50/60 Hz do motor industrial na página; presets próprios para o MP 73, a furadeira de rede e drones menores.
 - Revisão de ouvido (`REVISAO-DE-SOM.md`) de todos os presets.
+
+## Vapor
+
+O projeto está em [`VAPOR.md`](VAPOR.md); aqui fica o que foi feito, como e o que se mediu. Página `vapor.html` (`src/pages/vapor/`), DSP em `src/engines/vapor/`, worklet `src/worklet/processador-vapor.ts` (`vapor`, o `CenaDSP` com o portador do preset), portadores em `src/carriers/`.
+
+### Um DSP novo
+
+`VaporDSP` (`src/engines/vapor/dsp.ts`) implementa `Motor` direto, sem herdar do `EngineDSP` (decisão 1). Nada no Ronco, no Diesel, no Radial, na Turbina, em `acoustics/`, `scene/` ou `ui/` mudou; a exceção são os ganchos de montagem em `scene/dsp-cena.ts`, cinco linhas. Por amostra:
+
+- **Cilindros de dupla ação.** Cada extremidade tem pressão, volume pela manivela (com a angularidade da biela, r/l = 1/8,5, e a haste do lado de trás) e os eventos da tabela 1.2 interpolados no corte:
+  - admissão com 1ª ordem de 3 ms até a caixa de válvulas, e a perda das passagens só no sentido de entrada;
+  - expansão e compressão politrópicas incrementais;
+  - escape pelo pórtico abrindo em 20° de manivela, com `Ψ` e engasgo, resolvido de forma implícita contra a onda da passagem.
+
+  O torque é `Σ (p − p₀)·dV/dθ`. A distribuição dos dois lados não é igual: ±2,5% de corte entre os lados, ±1% entre as pontas, ±1,3/0,4 dB de escape. É isso que põe a linha de 2/volta 6–11 dB abaixo da de 4/volta. Cada admissão varia ±5% (água arrastada), e o CV entre os picos sai em 2,3 dB.
+- **O chuff é a rede** (`rede.ts`). O caminho:
+  - uma `Line` por extremidade → `Junction` → tubo de descarga (`kNL` 0,3) → bico (orifício implícito) → caixa de fumaça (volume integrado de forma implícita) → chaminé → boca;
+  - a boca é um `Radiator` com reflexão 0,97 no grave e corte em 0,9·f_ch: fecha o Helmholtz de 9–14 Hz e deixa a meia onda com Q 2,5–3;
+  - o jato entra na base da chaminé como fonte de pressão `0,5·ṁ·U/A_ch` (passa-baixa de 2 polos no comprimento de mistura), com a turbulência de Lighthill por cima: é o "hoot" largo de cada chuff;
+  - por cima ainda: ruído de mistura por Strouhal (`0,2·U/D`, Q 0,5, ∝ ṁ·M³, envoltória de 2 kHz), choque acima de `p_bp/p_cx` = 1,9 e sopro da tiragem ∝ (ṁ·M)² médio;
+  - o canal tem passa-alta de 4 polos em 20 Hz; o Helmholtz fica só na `pCaixa` da telemetria.
+
+  As linhas usam a `SOUND_SPEED` 520 do pacote. Os comprimentos entram escalados por 520/c (c_v 480, c_q 450) e encurtados pelo atraso de fase dos filtros da boca, para a meia onda cair em `c_q/(2L)`.
+- **Caldeira com estado:** `dp/dt = (E − ṁ)·k_cal`, evaporação com 60 s de inércia térmica, foguista automático, segurança com histerese, injetor pelo nível de água. O regulador (1ª ordem de 0,4 s, lei de área de 1.1) alimenta o volume da caixa de válvulas; o reverser responde em 1,5 s. O compound (Y6b, barco) tem o receptor e a válvula de simplificação.
+- **Patinagem pela troca de J** (1.7). Aderido, `J = J_motor + carga.inercia`. Com o esforço acima de `μ·W_ad` a roda desacopla e fica só com `J_motor`, e o atrito de escorregamento empurra o trem; readere quando volta à velocidade dele. Nos dois motores (Big Boy, Y6b), ω e patinagem são próprios de cada um, com deriva de fase ε sorteada (1%).
+- **Apito como guia de onda realimentada** (`apito.ts`). Cada tubo é uma malha fechado-aberto: ida e volta 2L/c com inversão na boca, por isso só os harmônicos ímpares. O jato do anel entra como `g(p_s)·tanh`, com passa-baixa em 4·f. O limiar fica em p_s 0,1–0,15 (abaixo dele, o quilling). O aquecimento leva c_v de 0,90 a 1,0 (τ 13 s soprado), e o sopro fraco afina −60 cents.
+  - A malha saturada não oscila na ressonância linear. Por isso cada tubo é afinado uma vez na construção: 0,3 s soprado, D corrigido pela nota medida.
+  - Acordes reais: D51, C57, Big Boy com 6 tubos, 844 com o par de 407/420 Hz batendo a 13 Hz.
+  - O sino é modal, com os parciais do Big Boy.
+- **Auxiliares** (`auxiliares.ts`):
+  - bomba Westinghouse (thump, psh, clique, ritmo ±5%);
+  - injetor (afina ao pegar, gorgolejo);
+  - segurança;
+  - torneiras (sopros em fase com as admissões, água nas primeiras voltas);
+  - vazamentos e pinga-pinga;
+  - bielas (impacto de folga nas inversões de força, rolar 1/volta, dashpots do Corliss);
+  - soprador, queimador do Stanley, engrenagens (Shay, trator) e correias.
+- **Governador de esferas** (estacionária, trator parado): PI sobre o corte (5–60%), com integração condicional. Abaixo do corte mínimo ele fecha o regulador, como a borboleta de Watt.
+- **Determinismo e CPU:** `RNG` com a semente do preset, render offline idêntico a cada execução. Por amostra, K4s e 844 custam 0,25 do Ronco; o Big Boy, 0,34 (desvio, ver abaixo).
+
+**Fontes** (4.3), em Pa a 7,5 m: `chamine`, `cilindro.e/d`, `bielas.e/d`, `apito`, `seguranca`, `bomba.ar[.k]`, `injetor`, `sino`, `queimador`, `engrenagens`, `correias`.
+
+**Nível absoluto** (`motor.ts` → `prepararMotorVapor`, ~2 s na thread principal, guardado por preset): cada componente é renderizado sozinho na condição de referência de 4.6 e levado ao `L_W` dB(A), corrigido pelo índice de diretividade. Fora da referência, tudo é física.
+
+### Portadores e Passagem
+
+| Portador | Classe | O que faz |
+|---|---|---|
+| locomotiva | `LocomotivaVapor` (`locomotiva-vapor.ts`) | Composição locomotiva + tênder + N vagões, por composição (sem herdar do `Trem`). Carga de Davis + rampa + freio; `velocidadeFixa` impõe ω |
+| gerador | `Gerador` (extensões `rpmNominal`, `semFontes`, `corpo`) | Corliss a 75 rpm com o governador do próprio motor, numa casa de máquinas de 12 × 6 × 6 m |
+| trator | `Trator` (`trator.ts`, `TipoPortador` novo) | Rodas de ferro, marchas 0/1/2 pela redução do motor, `c_rr` 0,05 |
+| barco | `Barco` (`barco.ts`, `TipoPortador` novo) | Rodas de pás (tapas `N_pás × f_rev`, respingo e "tum"), água arrastada, casco com atrito e onda acima de Fr 0,3 |
+| carro | `CarroDireto` (`carro-direto.ts`) | Stanley sem câmbio, relação fixa, pneus ligados |
+
+Detalhes da composição:
+- Truques e vãos saem de `xTruquesVagoes`/`xVaosVagoes`, extraídos de `trem.ts` com a mesma aritmética: o `Trem` continua idêntico e o `teste:cena` não muda.
+- Rolamento: `FonteRolamento` por grupo de eixos, n 3, em dB(A) por eixo a 80 km/h: motrizes 103; guias, tênder e vagões 100.
+- Os vãos só entram se couberem nas 64 fontes.
+
+Tabela de compatibilidade: `COMPAT` ganhou `trator: ['vapor']` e `barco: ['vapor', 'diesel']`. `ADAPTADORES` e `USO_REAL` ganharam o vapor (locomotiva, gerador, carro, trator, barco).
+
+Na Passagem:
+- `PORTADORES_NO_DSP` inclui trator e barco, e `PADROES` tem os dois;
+- presets novos: "Pacific passando a 100 km/h", "Big Boy arrancando" e "Maria Fumaça na estação";
+- `configPortadorVapor` (`portadores-vapor.ts`) monta a configuração do portador pelo preset, a mesma para a página e para o worklet.
+
+### Presets
+
+As 14 fichas da seção 5: K4s, A4, D51, 844, Big Boy, Y6b, Shay, Maria Fumaça, pannier, King, Corliss, Aveling, Stanley e o vapor de rodas de pás.
+- A **Maria Fumaça** é uma ficha por classe: Consolidation métrica Baldwin, 17" × 22", roda de 44", 180 psi (estimados). O campo `nota` do preset avisa que as dimensões têm de ser conferidas no acervo da ABPF antes de nomear uma máquina específica.
+- A **pannier** ficou com `lwChuff` 118. A 4.6 a lista entre as médias (124), mas ela é a 0-6-0T pequena de 118.
+- O **Corliss** escapa para o condensador (`lwChuff` 80, o chiado do condensador), com `potenciaGerador` de 550 kW.
+
+### Ferramentas e portões
+
+- `npm run gravacoes:vapor` (`tools/vapor-gravacoes.ts`, passo 1): a porta em TypeScript dos scripts do projetista (`tools/vapor-analise.ts`) contra o Apêndice A. O Butterworth/filtfilt bate com o scipy em 12 algarismos. Resultado: 135 ok e 6 desvios, que são notas do Apêndice que o próprio `apito.py` não acha com os parâmetros do texto.
+- `npm run teste:vapor` (`tools/vapor-valida.ts`): 14 grupos em paralelo, ~25 s.
+- `npm run lenta:vapor` (`tools/vapor-lenta.ts`): os 14 presets no portador de uso real. Confere parado sem escape, arrancada no molhado com patinação, chuffs/s exatos em cruzeiro, drifting e ausência de NaN: 14/14.
+- `npm run navegador:vapor`: Chromium e Firefox, servindo o `dist/`.
+
+### Alvo × medido (`npm run teste:vapor`: 125 medidas, 97 ok, 28 desvios documentados, 0 falhas)
+
+Os desvios estão em negrito.
+
+| Medida | Alvo | Medido |
+|---|---|---|
+| K4s a 1 volta/s, corte 50%: p_rel · massa por chuff · τ_bd | 6,8 ± 0,3 bar abs · 0,65 ± 0,05 kg · 30 ± 5 ms | 6,60 · 0,623 · 29,8 ms |
+| torque × ω = ∮p·dV · TE a corte 80%, ω → 0 | ±5% · 198 ± 10 kN | 0,00% · 194,0 kN |
+| taxa de chuffs (linha da envoltória) a 3/5/7/10 por s | ±2%, ≥ 15 dB | 3,003/5,005/7,007/9,985, 28–35 dB |
+| linha de 2/volta contra a de 4/volta, 3/5/7/10 por s | −5 … −15 dB | −10,2/−9,7/−5,6/**−3,9** |
+| chaminé do 844: meia onda · decaimento · Helmholtz · no canal | 132 Hz ± 5% · 15–25 ms · 9,7 ± 1 Hz · < −40 dB | 131,8 · 16,6 ms · 9,34 · −41,3 dB |
+| forma a 4/s, corte 70% (ataque/largura/decaimento ms; p/v dB) | 47/70/68 ± 30%; 16,5 ± 3 | 34/68/69; 16,7 |
+| forma a 9/s, corte 40% | 37/55/52; 12 ± 3 | 26/58/**70**; 10,2 |
+| forma a 21,3/s (Big Boy a 52 km/h) | 15/16/17; 9 ± 3 | 17/18/22; **13,2** |
+| p/v(150–400) − p/v(1,5–6k) · CV entre picos, 4/s | 3–7 (±2) · 1–3 dB | 2,8 · 2,3 dB |
+| bandas no pico, de perto (60–150 / 400–1k / 1–2,5k / 2,5–6k / 6–12k) | −9,5±4,5 / +1±3 / −2±3 / −3±4 / −8±6 | −5,3 / +2,7 / **+1,7** / +0,1 / −10,2 |
+| centroide no pico · vale/pico, de perto | 1 100–1 600 Hz · 1,05–1,35 | 1 446 · **0,77** |
+| escurecimento do corte curto, Δ(2,5–6k) | −10 ± 4 dB | −9,4 dB |
+| 844 a 25 m pela Cena (400–1k / 1–2,5k / 2,5–6k / 6–12k; centroide; p/v) | −1±4 / −3±4 / −6±5 / −15±6; 750–1 500; 7–8 ± 3 | **+6,2 / +3,3** / −1,7 / −14,3; 1 032; **13,3** |
+| pico a 7,5 m (referência · arrancada) · acima de 16 kHz a 21/s · linha em fs/16 · salto a 45/s | < 25 Pa · < 60 Pa · < −60 dB · < 6 dB · < 0,1 FS | 13,1 · 15,0 Pa · −61,8 · 1,3 dB · 1,21 Pa |
+| segurança abre / fecha / ciclo (K4s parada, fogo 1) | 14,43 / 13,73 bar / 1–3 min | 14,43 / 13,73 / 1,02 min |
+| queda da caldeira: apito 20 s · arrancada com 300 t em 30 s | 0,6 ± 0,2 · 1–2 bar | **0,11 · 0,83** |
+| bomba de ar · torneiras (sopros/volta, em fase) | 70 ± 4/min, ≥ 15 dB · 4, ≥ 90% | 70,3, 25 dB · 4,00, 100% |
+| apito D51 (360/465/548 Hz) · 3º e 2º harmônicos · ataque | ±1,5% · −6 ± 4, < −15 · 100–300 ms | 360,4/464,4/547,9 · −5,3, −83 · 105 ms |
+| apito frio (início / 30 s) · batimento do 844 · quilling · varredura | −10 ± 2% / −1% · 13 ± 2 Hz, ≥ 6 dB · sem linha · nota certa e nível monotônico | −8,6 / −0,93% · 13,0 Hz, 20 dB · nenhuma · ok |
+| sino: parciais · batidas/s · T60 | ±3% · 2,0–2,3 · 3–5 s | 1 : 2,159 : 3,529 : 5,199 : 7,051 · 2,25 · 4,00 s |
+| A4 · Y6b (composição, p_rel da BP, simplificação) · King | 6/volta · 4/volta, 2–4 bar, 8/volta · 4 batidas duplas | 5,98 · 4,00, 3,57 bar, 8,00 · 4,00 |
+| Shay a 20 km/h · linha de 8/volta da King · linha de 8/volta do Big Boy em 60 s | 30 ± 0,6 · < −20 dB · varia ≥ 10 dB | **31,1 · −5,2 · 7,6 dB** (a de 4/volta de cada motor, 10,65 Hz, ok) |
+| patinagem (molhado, 500 t): surto · ω roda/trem · chuffs/s · readere · com areia | ≥ 1 · 3–5× · 15–20 · ≤ 1,5 s · nenhum | aos 1,09 s · 3,3× · **13,8** · 0,44 s · nenhum |
+| drifting a 60 km/h: chaminé · rolamento | −25 ± 3 · ≥ +10 dB | −25,7 · +16,2 dB |
+| composição a 40 km/h, 15 m: vagões × locomotiva · centroide do rolamento | −13 ± 3 dB · 550–1 000 Hz | −15,2 · 846 Hz |
+| a 100 km/h · L_Aeq da K4s a 15 m · Doppler do apito do 844 | 0 ± 4 · 90–100 dB(A) · 290,3/272,2 ± 1 Hz | **−9,7 · 85,8** · 290,2/272,2 |
+| orçamento: Big Boy + 20 vagões · 30 vagões | ≤ 64 fontes · erro claro | 60 fontes · "até 23 vagões" |
+| Corliss: 2/volta a 75 rpm · degrau de 50% · volta | 2,5 ± 0,05 · −3 ± 1% · 5–10 s | 2,515 · **−5,3% · 4,8 s** |
+| Aveling em lenta (escapes/s, 400–1k) · Stanley a 40 km/h (pants/s, p/v, queimador) · barco a 40 rpm | 2,5 ± 0,3, +8 dB · 23 ± 0,5, ≤ 4 dB, ≥ +10 · 6,7 ± 0,2 | **3,38, −1,3** · 23,34, **6,7**, ok · 6,67 |
+| L_W na referência (chuff, apito, segurança, torneiras, sino, bomba, injetor) | tabela 4.6 ± 1 dB | 124,3 / 145,0 / 140,0 / 123,2 / 113,1 / 104,2 / 94,0 |
+| apito a 30 m · segurança a 10 m · 844 a 15 m · por chuff na arrancada / em cruzeiro | 105 ± 3 · 110 ± 3 · 95 ± 5 · +6 ± 3 / −4 ± 3 | **100,5 · 104,4 · 89,1** · +3,6 / **−7,8** |
+| CPU por amostra / Ronco (K4s, 844, Big Boy) | < 1/3 | 0,25 / 0,25 / **0,34** |
+
+### Desvios conhecidos
+
+O motivo de cada um está no `DESVIOS` de `tools/vapor-valida.ts`. Por grupo:
+
+- **Contas do VAPOR.md que não fecham:**
+  - Apito por 20 s: 0,3–0,6 kg/s com o `k_cal` de 1.1 derruba 0,16 bar, não 0,6.
+  - Níveis a distância: 124 dB(A) de L_W dão 89,5 dB(A) a 15 m em campo livre. A Cena ainda mede a média dos dois ouvidos (−3 dB para um ouvinte de lado), e o apito aponta para a frente.
+  - Composição a 100 km/h: a conta de 3.5 esquece o rolamento da própria locomotiva e do tênder.
+- **Caldeira:** na arrancada a pressão cai 0,8 bar em 30 s. Com o regulador em 0,6 a área é 25% da máxima, e o consumo fica em ~1·E_max.
+- **Forma e bandas:**
+  - De perto, o vale é a tiragem, mais escura que o pico (vale/pico 0,77). Uma tiragem mais larga dava o vale mais claro das gravações, mas estragava o decaimento e o escurecimento do corte curto.
+  - A 25 m o nulo do solo cai na banda de referência. A gravação do próprio 844 dá +4/+5 dB nessas bandas, como o modelo.
+  - A 1,4 chuff/s o decaimento segue o M³ do jato, não o esvaziamento.
+  - A 10 chuffs/s a linha de 2/volta fica a −3,9 dB da de 4/volta.
+- **Geometrias:**
+  - Shay: a 30 chuffs/s os escapes se fundem e a linha da envoltória sai em 31,1; a taxa na telemetria é exata.
+  - King: a angularidade da biela separa as duas batidas de cada par. A própria 6024 tem a linha de 8/volta a −14 dB.
+  - Big Boy: o bico comum alisa os pares, e a linha de 8/volta varia só 7,6 dB.
+- **Patinagem:** o surto chega a 13,8 chuffs/s e a energia por chuff sobe em vez de cair. A caixa de válvulas não cai os 30–50% que 1.7 supõe.
+- **Estacionárias:**
+  - Corliss: queda de −5,3% no degrau, limitada pelo reabastecimento da caixa de válvulas.
+  - Aveling em lenta: o governador desce devagar, e falta o ruído de mecanismo da gravação.
+  - Stanley: p/v de 6,7 dB; falta o volume do abafador.
+- **CPU do Big Boy:** 0,34 do Ronco, pelas 16 extremidades.
+
+### Relatado, sem mudar (fora da etapa)
+
+- **`acoustics/`:** o que faltava ficou em `src/engines/vapor/rede.ts`:
+  - uma `Line` com velocidade do som por instância;
+  - um volume acústico (a caixa de fumaça, dentro de `RedeEscape`);
+  - o orifício implícito genérico (`orificioDeLinha`/`orificioParaLinha`, o `exhaustFlow` do Ronco sem o estado da classe);
+  - a `vazaoV`, que é o `flow` com o √(R·T) do vapor.
+- **`trem.ts`:** só a extração de `xTruquesVagoes`/`xVaosVagoes`, com a mesma aritmética (`teste:cena` igual).
+
+### Pendente (TODO)
+
+- Cena 3D da composição na página `vapor.html`. A Passagem já tem a cena 3D; a página do vapor não importa three.js.
+- Ruído de mecanismo das máquinas paradas (Aveling), volume do abafador do Stanley, e uma tiragem com o espectro do vale das gravações sem alongar a cauda do chuff.
+- Hélice no barco (`FonteHelice`, 2.4) e o diesel marítimo (o portador `barco` aceita o diesel, mas não há preset).
+- Conferir a ficha da Maria Fumaça no acervo da ABPF.
 
 ## Validação
 

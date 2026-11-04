@@ -2,7 +2,7 @@
   "name": "engine",
   "private": true,
   "version": "0.0.0",
-  "description": "Ronco, Turbina, Diesel, Radial, Rotativos e Elétrico: síntese física de som de motores no navegador",
+  "description": "Ronco, Turbina, Diesel, Radial, Rotativos, Elétrico e Vapor: síntese física de som de motores no navegador",
   "scripts": {
     "dev": "vite",
     "build": "npm run typecheck && vite build",
@@ -22,7 +22,6 @@
     "governador:diesel": "tsx tools/diesel-governador.ts",
     "troca:diesel": "tsx tools/diesel-troca.ts",
     "navegador:diesel": "node tools/diesel-navegador.mjs",
-    "navegador:diesel": "node tools/diesel-navegador.mjs",
     "teste:radial": "tsx tools/radial-valida.ts",
     "lenta:radial": "tsx tools/radial-lenta.ts",
     "geometria:radial": "tsx tools/radial-geometria.ts",
@@ -32,7 +31,11 @@
     "navegador:rotativo": "node tools/rotativo-navegador.mjs",
     "teste:eletrico": "tsx tools/eletrico/valida.ts",
     "lenta:eletrico": "tsx tools/eletrico/lenta.ts",
-    "navegador:eletrico": "node tools/eletrico-navegador.mjs"
+    "navegador:eletrico": "node tools/eletrico-navegador.mjs",
+    "teste:vapor": "tsx tools/vapor-valida.ts",
+    "lenta:vapor": "tsx tools/vapor-lenta.ts",
+    "gravacoes:vapor": "tsx tools/vapor-gravacoes.ts",
+    "navegador:vapor": "node tools/vapor-navegador.mjs"
   },
   "dependencies": {
     "react": "^19.3.1",

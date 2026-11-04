@@ -35,6 +35,9 @@ import type { Motor } from '../carriers/tipos';
 // Elétrico (etapa 6): motor, carro elétrico, trem com motor, bancada e drone
 import { MotorEletrico } from '../engines/eletrico/motor';
 import { montarMotorEletrico, montarPortadorEletrico } from '../engines/eletrico/portador';
+// (vapor, etapa 5)
+import { MotorVapor } from '../engines/vapor/motor';
+import { montarPortadorVapor } from '../carriers/portadores-vapor';
 
 /** monta o motor de uma mensagem `portador` (fora do laço: aloca) */
 export function montarMotor(m: { familia: string; cfg: Record<string, any> } | undefined, fs: number): Motor | null {
@@ -45,6 +48,7 @@ export function montarMotor(m: { familia: string; cfg: Record<string, any> } | u
   if (m.familia === 'radial') { const x = new MotorRadial(fs); x.configurar(m.cfg, fs); return x; }
   if (m.familia === 'rotativo') { const x = new MotorRotativo(fs); x.configurar(m.cfg, fs); return x; }
   if (m.familia === 'eletrico') return montarMotorEletrico(m.cfg as never, fs);
+  if (m.familia === 'vapor') { const x = new MotorVapor(fs); x.configurar(m.cfg, fs); return x; }
   return null;
 }
 
@@ -53,6 +57,7 @@ export function montarPortadorComMotor(tipo: string, config: Record<string, any>
   const c = config || {};
   // elétrico: o portador vem do preset (carro elétrico, trólebus, trem, bancada, drone)
   if (motor instanceof MotorEletrico) return montarPortadorEletrico(motor.cfg, fs, c, motor);
+  if (motor?.familia === 'vapor') return montarPortadorVapor(tipo, c, motor, fs);
   let p: Portador | null = null;
   if (tipo === 'carro') p = new CarroLegado();
   else if (tipo === 'helice') p = new Helice(fs, c);
