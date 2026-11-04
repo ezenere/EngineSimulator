@@ -1,0 +1,28 @@
+/* Menu de tipos de motor, sobre os mesmos tokens de src/ui/estilo.css. */
+.menu {
+  min-height: 100%;
+  max-width: 1200px; margin: 0 auto;
+  padding-block: 12px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.menu .plate { white-space: normal; }
+.menu .intro { margin: 18px 0; color: var(--muted); max-width: 70ch; }
+.tipos { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.tipos li { display: grid; }
+.tipo {
+  display: grid; align-content: start; gap: 8px; padding: 16px;
+  border: 1px solid var(--line); border-radius: var(--r); background: var(--panel);
+  color: inherit; text-decoration: none; position: relative;
+}
+a.tipo:hover { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 6%, var(--panel)); }
+a.tipo:hover .nome { color: var(--gold); }
+.tipo .nome { font: 800 26px/1 var(--f-display); letter-spacing: 0.06em; text-transform: uppercase; transition: color .15s; }
+.tipo .desc { font-size: 14px; }
+.tipo .ex { font: 12px/1.4 var(--f-mono); color: var(--muted); }
+.tipo .ex .k { font: 500 10.5px var(--f-body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); margin-right: 4px; }
+.tipo[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; border-style: dashed; }
+.tipo .obra {
+  justify-self: start; margin-top: 2px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line);
+  font: 500 10.5px var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}

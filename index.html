@@ -3,70 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Ronco</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<title>Motores</title>
+<link rel="icon" href="data:,">
+<meta name="description" content="Simuladores de som de motor: Ronco, Turbina e os próximos.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=Archivo:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="app">
-  <header class="bar">
-    <div class="brand">
-      <span class="logo">Ronco</span>
-      <span class="plate" id="plate">V8 · 90° · cross-plane</span>
-    </div>
-    <button id="ignition" class="ignition" type="button" aria-pressed="false">
-      <span class="dot"></span><span id="ignLabel">Ligar motor</span>
-    </button>
-  </header>
-
-  <nav class="presets" id="presets" aria-label="Motores prontos"></nav>
-
-  <main class="cluster">
-    <section class="tach-wrap" aria-label="Conta-giros">
-      <canvas id="tach"></canvas>
-      <div class="pedal" id="pedal" role="slider" tabindex="0" aria-label="Acelerador" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-        <div class="pedal-fill" id="pedalFill"></div>
-        <span class="pedal-label">Acelerador</span>
-      </div>
-    </section>
-
-    <section class="firing" aria-label="Ciclo de ignição">
-      <canvas id="ring"></canvas>
-      <div class="readout">
-        <div class="ro-row"><span class="k">Ordem</span><span class="v mono" id="roOrder"></span></div>
-        <div class="ro-row"><span class="k">Intervalos</span><span class="v mono" id="roIntervals"></span></div>
-        <div class="ro-row bankA"><span class="k">Bancada A</span><span class="v mono" id="roBankA"></span></div>
-        <div class="ro-row bankB"><span class="k">Bancada B</span><span class="v mono" id="roBankB"></span></div>
-        <div class="ro-row"><span class="k">Ignição</span><span class="v mono" id="roFreq">—</span></div>
-        <div class="balance" id="balance"></div>
-      </div>
-    </section>
-
-    <section class="scope-wrap" aria-label="Forma de onda e espectro">
-      <canvas id="scope"></canvas>
-    </section>
-
-    <section class="drive">
-      <div class="gearbox">
-        <button type="button" class="key" id="gDown" aria-label="Reduzir marcha">Q</button>
-        <div class="gear-read"><span class="k">Marcha</span><span class="gear mono" id="gearRead">N</span></div>
-        <button type="button" class="key" id="gUp" aria-label="Subir marcha">E</button>
-        <button type="button" class="key wide" id="brakeBtn">S · freio</button>
-        <button type="button" class="valve-tag" id="valveTag" title="Troca o modo do escape ativo (B)" hidden>válvula fechada</button>
-      </div>
-      <p class="hints"><kbd>W</kbd>/<kbd>↑</kbd>/<kbd>Espaço</kbd> acelera · <kbd>Shift</kbd> meio pé · <kbd>S</kbd> freia · <kbd>Q</kbd>/<kbd>E</kbd> câmbio · <kbd>I</kbd> ignição · <kbd>C</kbd> microfone · <kbd>V</kbd> observador · <kbd>B</kbd> escape ativo · <kbd>M</kbd> modo do câmbio</p>
-    </section>
-  </main>
-
-  <aside class="controls" id="controls" aria-label="Parâmetros do motor"></aside>
-</div>
-
-<script src="src/geometry.js"></script>
-<script src="src/presets.js"></script>
-<script src="src/dsp.js"></script>
-<script src="src/app.js"></script>
+<div id="raiz"></div>
+<script type="module" src="./src/pages/menu/main.tsx"></script>
 </body>
 </html>

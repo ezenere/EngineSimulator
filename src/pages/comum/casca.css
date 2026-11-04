@@ -1,0 +1,8 @@
+/* Casca das páginas durante a migração: o painel central mostra só um aviso. */
+.casca { grid-area: cluster; min-height: 0; display: grid; align-content: start; gap: 14px; padding-block: 12px; }
+.casca .aviso { padding: 18px; border: 1px dashed var(--line); border-radius: var(--r); background: var(--panel); display: grid; gap: 8px; max-width: 70ch; }
+.casca .aviso h1 { margin: 0; font: 600 20px/1.1 var(--f-display); letter-spacing: 0.08em; text-transform: uppercase; }
+.casca .aviso p { margin: 0; color: var(--muted); }
+.casca .aviso a { color: var(--gold); }
+.status { display: grid; gap: 4px; font-size: 12px; }
+.status .ro-row .v { color: var(--ink); }
