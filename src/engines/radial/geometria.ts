@@ -18,14 +18,14 @@ const mod = (a: number, m: number) => ((a % m) + m) % m;
 const RAD = Math.PI / 180;
 
 export const LAYOUTS_RADIAL: Record<string, { name: string; counts: number[] }> = {
-  radial: { name: 'Radial', counts: [3, 5, 7, 9, 14, 18, 28] },
+  radial: { name: 'Radial', counts: [3, 5, 7, 9, 14, 16, 18, 28] },
 };
 
 export type VirabrequimRadial = { id: string; name: string; rows: number; pins: number[]; orders: [string, string][] };
 
 /** ordens por fileira única (1.1): ímpares no sentido de rotação, depois os pares (no 3 isso dá 1-3-2: a tabela 1.1 diz
  * 1-2-3, que com os PMS em 0/120/240° dispara a 120-120-480°) */
-const ORDEM_FILEIRA: Record<number, string> = { 3: '1-3-2', 5: '1-3-5-2-4', 7: '1-3-5-7-2-4-6', 9: '1-3-5-7-9-2-4-6-8' };
+const ORDEM_FILEIRA: Record<number, string> = { 3: '1-3-2', 5: '1-3-5-2-4', 7: '1-3-5-7-2-4-6', 8: '1-3-5-7-2-4-6-8', 9: '1-3-5-7-9-2-4-6-8' };
 
 export const CRANKS_RADIAL: Record<string, VirabrequimRadial[]> = {
   'radial-3': [{ id: 'mestra', name: 'Biela-mestra (1 moente)', rows: 1, pins: [0], orders: [[ORDEM_FILEIRA[3], 'Uniforme 240°']] }],
@@ -33,6 +33,8 @@ export const CRANKS_RADIAL: Record<string, VirabrequimRadial[]> = {
   'radial-7': [{ id: 'mestra', name: 'Biela-mestra (1 moente)', rows: 1, pins: [0], orders: [[ORDEM_FILEIRA[7], 'Uniforme 102,9°']] }],
   'radial-9': [{ id: 'mestra', name: 'Biela-mestra (1 moente)', rows: 1, pins: [0], orders: [[ORDEM_FILEIRA[9], 'Uniforme 80°']] }],
   'radial-14': [{ id: 'mestra', name: 'Dupla fileira (moentes a 180°)', rows: 2, pins: [0, 180], orders: [['1-10-5-14-9-4-13-8-3-12-7-2-11-6', 'P&W R-1830 (51,43°)']] }],
+  // Monaco-Trossi: 2 anéis de 8 (2 tempos no motor real; aqui 4 tempos, aproximação): ordem decorrente, a mais uniforme
+  'radial-16': [{ id: 'mestra', name: 'Dupla fileira de 8 (aproximação 4T)', rows: 2, pins: [0, 180], orders: [['decorrente', 'Decorrente dos PMS']] }],
   'radial-18': [{ id: 'mestra', name: 'Dupla fileira (moentes a 180°)', rows: 2, pins: [0, 180], orders: [['1-12-5-16-9-2-13-6-17-10-3-14-7-18-11-4-15-8', 'P&W R-2800 (40°)']] }],
   'radial-28': [{ id: 'mestra4', name: 'Quatro fileiras helicoidais (0/90/180/270°)', rows: 4, pins: [0, 90, 180, 270], orders: [['decorrente', 'Decorrente dos PMS (25,714°)']] }],
 };
@@ -132,12 +134,18 @@ function eixosEFileiras(N: number, rows: number) {
  * dois PMS do seu cilindro 1 é o de ignição. Das 16 combinações (8 com a fileira 0 fixa), a que dá os 28 disparos a
  * 25,714° define a ordem (os disparos ordenados).
  */
-export function ordemDecorrente(tdc: number[], fileira: number[], rows: number): number[] | null {
+export function ordemDecorrente(tdc: number[], fileira: number[], rows: number, exata = true): number[] | null {
   const N = tdc.length, per = N / rows, alvo = 720 / N;
   const padrao = ORDEM_FILEIRA[per].split('-').map(Number);
   const base: number[][] = [];
+  // cilindros de cada fileira pela posição angular a partir do mestre da fileira (1.4: 7r+1..7r+7; na dupla, alternados)
+  const daFileira = Array.from({ length: rows }, (_, r) => {
+    const cs = tdc.map((_, c) => c).filter((c) => fileira[c] === r);
+    const t0 = tdc[cs[0]];
+    return cs.sort((a, b) => mod(tdc[a] - t0, 360) - mod(tdc[b] - t0, 360)).map((c) => c + 1);
+  });
   for (let r = 0; r < rows; r++) {
-    const cyls = padrao.map((l) => r * per + l);
+    const cyls = padrao.map((l) => daFileira[r][l - 1]);
     const sch = schedule(cyls.map((_, i) => i + 1), cyls.map((c) => tdc[c - 1]));
     if (!sch.valid) return null;
     base.push(cyls.map((c, i) => mod(tdc[cyls[0] - 1] + sch.fire[i], 720)));
@@ -148,14 +156,14 @@ export function ordemDecorrente(tdc: number[], fileira: number[], rows: number):
     const fire = new Array(N).fill(0);
     for (let r = 0; r < rows; r++) {
       const k = (comb >> r) & 1;
-      padrao.forEach((l, i) => { fire[r * per + l - 1] = mod(base[r][i] + 360 * k, 720); });
+      padrao.forEach((l, i) => { fire[daFileira[r][l - 1] - 1] = mod(base[r][i] + 360 * k, 720); });
     }
     const f0 = fire[0];
     const rel = fire.map((x) => mod(x - f0, 720));
     const erro = Math.max(...intervals(rel).map((x) => Math.abs(x - alvo)));
     if (erro < erroMin) { erroMin = erro; melhor = rel; }
   }
-  if (!melhor || erroMin > 1e-6) return null;
+  if (!melhor || (exata && erroMin > 1e-6)) return null;
   void fileira;
   return Array.from({ length: N }, (_, c) => c).sort((a, b) => melhor![a] - melhor![b]).map((c) => c + 1);
 }
@@ -216,8 +224,8 @@ export function buildRadial(spec: SpecRadial): MotorRadial {
   const tdcNom = phi.map((p, c) => mod(p - crank.pins[fileira[c]], 360));
   const tdc = tdcNom.map((t, c) => mod(t + dPMS[c], 360));
   // ordem: texto do preset; no R-4360, decorrente dos PMS nominais
-  const decorrente = rows === 4;
-  let order: number[] | null = decorrente ? ordemDecorrente(tdcNom, fileira, rows) : parseOrder(spec.order, N);
+  const decorrente = rows === 4 || N === 16;
+  let order: number[] | null = decorrente ? ordemDecorrente(tdcNom, fileira, rows, N !== 16) : parseOrder(spec.order, N);
   if (!order) order = decorrente ? null : parseOrder(crank.orders[0][0], N);
   if (!order) throw new Error('ordem de ignição do radial não encontrada');
   const sch = schedule(order, tdc);

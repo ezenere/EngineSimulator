@@ -68,7 +68,7 @@ export class CargaBancadaAv {
   /** rpm-alvo da hélice (manete de passo, 0..1) e coletivo do rotor */
   rpmAlvo = 1; coletivo = 0;
   /** embreagem do rotor (0 solto, 1 engatado) e o pedido */
-  engate = 0; engatar = true;
+  engate = 0; engatar = false;
   inercia = 0;
   constructor(spec: any) {
     if (spec.rotor) {
@@ -140,7 +140,7 @@ export function instalarAviacao(d: any, cfg: any) {
     d.prime = 0;
   }
   d.qMix = 1; d.burnAv = 1; d.avHot = 0; d.prAv = 0.015; d.arPartida = false; d.falhaMix = 0;
-  d.crankMax = cfg.crankMax || 8;
+  d.crankMax = cfg.crankMax || (d.radial ? 25 : 8);
   d.partidaTipo = cfg.partida || 'direta';
   d.nivelEscape = cfg.nivelEscape || 135;
   d.avRng = d.avRng || new RNG(0xa71a);
@@ -164,15 +164,15 @@ function falhaPlano(this: any, _c: number) {
 }
 
 /** arranque elétrico direto (RADIAL.md 3.4): torque que cai a zero em 220 rpm. O torque de partida segue o atrito de
- *  arranque do próprio motor (2,2× o atrito frio parado): a fórmula do RADIAL.md, (8·L + 60) N·m, não vence o atrito do
+ *  arranque do próprio motor (3,2× o atrito frio parado: gira a 70–110 rpm, acima dos 60 rpm em que o EngineDSP já queima): a fórmula do RADIAL.md, (8·L + 60) N·m, não vence o atrito do
  *  modelo acima de ~30 L (o R-2800 não saía do lugar) */
 function torqueDireta(this: any, rpm: number) {
   if (this.state !== 'crank') return 0;
-  return arranqueBase(this) * Math.max(0, 1 - rpm / 220);
+  return arranqueBase(this) * Math.max(0, 1 - rpm / (this.radial ? 220 : 330));
 }
 export function arranqueBase(d: any) {
   const atrito = (0.95e5 * 1.5 * d.dispL * 1e-3) / (4 * Math.PI);
-  return Math.max(8 * d.dispL + 60, 2.2 * atrito);
+  return Math.max(8 * d.dispL + 60, 3.2 * atrito, d.radial ? 0 : 0.8 * ((140 * d.dispL) / Math.sqrt(d.N) + 40));
 }
 
 /** zumbido do redutor do arranque (rpm·11, como o do Ronco) ×2 e o ruído das escovas em 1,2 kHz */
@@ -194,7 +194,7 @@ function controleAv(this: any, dtc: number) {
   if (this.radial) { this.avHot = 0.8 * Math.exp(-rt / 20); this.prAv = 0.015 + 0.35 * Math.exp(-rt / 20); }
   // carga de bancada
   const ca = this.cargaAv;
-  if (ca && this.carga === ca) {
+  if (ca && this.carga === ca && !this.lockOmega) { // (nas sondas de calibração o acelerador é o da sonda)
     const thr = ca.passo(dtc, this.omega, this.state === 'run', this.idle);
     if (thr !== null && this.state === 'run') this.thrTarget = thr;
   }
@@ -244,3 +244,6 @@ function somExtraAv(this: any) {
   const x = this.helBuf[this.helK++] * this.kHel;
   return x * (this.wE + 0.3 * this.wI + 0.15 * this.wB + 0.1 * this.wP);
 }
+
+/** as funções de aviação, para o radial reaproveitar (src/engines/radial/dsp.ts) */
+export const AV = { falhaPlano, torqueDireta, somDireta, controleAv, mensagemAv, telemetriaAv, somExtraAv };

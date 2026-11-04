@@ -637,6 +637,7 @@ export class EngineDSP implements DSPDeAudio {
       // de funcionamento mesmo antes de a água esquentar; limitada em rpm absolutos para motores de corrida
       const coldAdd = cold * Math.min(0.8 * this.idle, 650) * (0.55 + 0.45 * Math.exp(-(this.runT || 0) / 50));
       this.idleTarget = this.idle + coldAdd + flare;
+      if (this.av) this.idleTarget = this.idle + 0.2 * coldAdd + flare; // (aviação: manete na batente, sem a lenta acelerada da central)
       const e = (this.idleTarget - rpm) / this.idleTarget;
       const active = user < 0.05 && !(this.shifting && this.blip);
       const de = (e - this.ePrev) / dtc; this.ePrev = e;
