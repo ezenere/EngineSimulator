@@ -4,7 +4,9 @@ Simuladores de som de motor que rodam direto no navegador. O site começa num me
 
 - **Ronco**, motores de carro e moto: https://ezenere.com/data/engine/ronco.html
 - **Turbina**, motores de avião: https://ezenere.com/data/engine/turbina.html
-- **Em construção:** radial, rotativos (Wankel), diesel, vapor, elétrico e um modo de passagem e testes, com o ouvinte livre em 3D.
+- **Diesel**, picapes, caminhões, geradores e locomotivas: https://ezenere.com/data/engine/diesel.html
+- **Passagem**, qualquer coisa passando por você (trem-bala, carro na rua, picape diesel, locomotiva, turboélice, jato, helicóptero) com o ouvinte livre em 3D: https://ezenere.com/data/engine/passagem.html
+- **Em construção:** radial, rotativos (Wankel), vapor e elétrico.
 
 ![Ronco com uma Ferrari 458 no corte de giro](docs/ronco.png)
 

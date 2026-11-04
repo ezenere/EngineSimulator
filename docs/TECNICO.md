@@ -462,8 +462,9 @@ Camadas novas da etapa 1 (projeto em `docs/CENA.md`): o **portador** carrega o m
 | `src/scene/pressao.ts`, `fundo.ts`, `ambientes.ts` | Onda de nariz/cauda, onda de compressão e pistão no túnel, vento; som de fundo; ambientes da Passagem e resposta ao impulso com RT60 por banda |
 | `src/scene/cena.ts`, `dsp-cena.ts`, `supersonico.ts` | `CenaPassagem` (implementa `Cena`); DSP do worklet; resolvedor fechado para M ≥ 0,9 e estrondo (cópias do jet-dsp) |
 | `src/carriers/trem.ts`, `ruido.ts` | Trem de N vagões e os geradores de ruído calibrados em L_W dB(A) |
-| `src/carriers/helice.ts`, `rotor.ts`, `gerador.ts`, `locomotiva.ts`, `base.ts`, `compat.ts`, `teste.ts` | Demais portadores (tabelas, cargas, governadores, fontes), tabela motor × portador, portador e motor de bancada para os testes |
-| `tools/cena/` | `render-passagem.ts` (WAV + telemetria), `analise.ts`, `medidas.ts`, `portadores.ts`, `legado.ts` (referências de `master`), `cpu.ts`, `valida.ts` |
+| `src/carriers/helice.ts`, `rotor.ts`, `gerador.ts`, `locomotiva.ts`, `carro.ts`, `aviao.ts`, `base.ts`, `compat.ts`, `teste.ts` | Demais portadores (tabelas, cargas, governadores, fontes), o carro e o avião dos motores adaptados, tabela motor × portador, portador e motor de bancada para os testes |
+| `src/engines/ronco/motor.ts`, `diesel/motor.ts`, `turbina/motor.ts`, `src/scene/estrondo.ts` | Adaptadores `Motor` dos DSPs existentes e o estrondo da Cena (ver [Adaptadores de motor](#adaptadores-de-motor)) |
+| `tools/cena/` | `render-passagem.ts` (WAV + telemetria), `analise.ts`, `medidas.ts`, `portadores.ts`, `motores.ts` (motores adaptados), `legado.ts` (referências de `master`), `cpu.ts`, `valida.ts` |
 
 ### Propagação
 
@@ -471,7 +472,8 @@ Camadas novas da etapa 1 (projeto em `docs/CENA.md`): o **portador** carrega o m
 - **Atraso dentro do bloco de 64 amostras:** parábola com o atraso nos dois extremos e a derivada **analítica** no início, `dτ/dt = û·(v_s − v_O)/(c + û·v_s)` (carregar a derivada do fim da parábola anterior é marginalmente estável e oscila). Leitura Hermite de 4 pontos, a do `readProp`.
 - **Anel:** `min(dist. máx., 400 m)/c + 0,1 s` por fonte (64k amostras, 256 kB). O excedente vira um deslocamento inteiro fixo; quando o trecho variável sai da janela (25–90% do anel) o deslocamento é reancorado com crossfade de potência constante de 50 ms. Um salto do atraso maior que o bloco (a fonte reapareceu do outro lado da reta) zera o ganho e sobe em 50 ms.
 - **Ganho por caminho:** `conv·D(θ)·refDist/r`, conv = `|1 − M·cosθ_e|^−expConv` limitado a 4. Solo: segunda leitura com o ouvinte espelhado, ganho e passa-baixa da tabela 2.4; na ponte só onde o ponto de reflexão cai a menos de 3,7 m do eixo (tabuleiro).
-- **Ar:** dois polos de 1 polo, cada um em `1,554·f_c(r)` para a cascata ter −3 dB em `f_c(r)` (dois polos em `f_c` dariam −6 dB).
+- **Ar:** dois polos de 1ª ordem bilineares (polo e zero em Nyquist, com pré-distorção), cada um em `1,554·f_c(r)` para a cascata ter −3 dB em `f_c(r)` (dois polos em `f_c` dariam −6 dB); acima de 0,49·fs viram um fio. (Antes eram `y += k·(x − y)` com o corte limitado a 0,45·fs: a 3–7,5 m, com `f_c` no teto de 20 kHz, os polos ficavam em 21,6 kHz e tiravam ~1 dB em 10 kHz e ~2 dB em 16 kHz, mais que a ISO.)
+- **Diretividade que depende da frequência** (`FonteSonora.agudo`, extensão dos adaptadores): um corte por ângulo, que entra como teto do corte do ar (o `shade` do escape do Ronco). **Resolvedor fechado** acima de Mach 0,9 numa reta e o estrondo: ver [Adaptadores de motor](#supersônico-e-estrondo).
 - **Sombra:** fecho convexo da seção do segmento com a fonte e o ouvinte; as duas correntes (por cima e por baixo) desdobradas em 3D (`√(Δx² + P²) − √(Δx² + D²)`), vale a menor. Na zona iluminada perto da borda, Kurze–Anderson com o δ da seção 2D (o 3D encolhe com Δx e criaria uma sombra falsa de fontes na face vistas de longe). Corpo menor que 10 cm não faz sombra. Shelf de 1 polo em 400 Hz com `a` e `b` resolvidos para a **resposta** dar A(100) e A(1k) (com `a = A(100)`, `b = A(1k)` literais o shelf erra até 2,5 dB em 1 kHz).
 - **Ouvinte fora:** panorâmica `−3 dB` com largura 0,5 (pan inteiro zera o ouvido oposto a 90°, e aí não existe ILD para medir), ITD `0,65 ms·(seno lateral)` num anel curto por fonte, ILD por shelf em 1,5 kHz com ganho resolvido para −6·|sin az| dB em 4 kHz, sombra da cabeça −3 dB acima de 3 kHz para |az| > 120° (rampa 110–130°).
 - **Cabine:** lei da massa `TL = 20·log₁₀(f·m_s) − 47`, [5, 45] dB, como `0,562·(LP₁(398/m_s) + 0,01)` mais a ressonância em `fCabine`; os dois polos em `891/m_s` e `2,6×` de 3.3 caem 12 dB/oitava e erram 7 dB em 125 Hz e 17 dB em 2 kHz. Cofre e ponteira com as regras de 3.3 (as vias estruturais das fontes `dentro` esperam os motores).
@@ -490,15 +492,16 @@ Camadas novas da etapa 1 (projeto em `docs/CENA.md`): o **portador** carrega o m
 ### Portadores
 
 - **Trem (4.6):** geometria por vagão (`L = N·L_c − vão` = 249,5 m), truques a 3,75 m das pontas, vãos na junção, pantógrafos nos vagões 3 e 8, nariz e cauda. Fontes calibradas em **potência** `L_W` dB(A): `L_p(refDist) = L_W − 20·log₁₀ refDist − 11` pela integral de |H(f)·A(f)|² da cadeia, e uma fonte com diretividade sobe no eixo pelo índice de diretividade (sem isso um dipolo irradiava 3–5 dB a menos que o L_W). Diretividades (o CENA não dá): rolamento dipolo lateral `[0, −1,2, −6, −20, −6, −1,2, 0]`, fontes aerodinâmicas dipolo de face `[0, −1, −4, −10, −4, −1, 0]`, ambos no eixo y. Espectro aerodinâmico: HP₁(f_p/5)·LP₁(f_p)·LP₁(2,5 kHz), o espectro em 1/3 de oitava descrito em 2.7 (o passa-banda Q 0,5 sugerido lá põe o pico de 1/3 de oitava em ~600 Hz). Rolamento: passa-banda Q 0,5 em 1,5 kHz·√(v/v_ref) + 1 polo em 2,5 kHz·√(v/v_ref) com ganho 1/√k (1/3 de oitava −16/−8/−2/0/−4/−11 dB de 250 Hz a 8 kHz; ver [Trem contra gravações reais](#trem-contra-gravações-reais)), dormentes a v/0,6 m com ±1 dB, achatamento opcional. Níveis `L_W` ajustados contra as gravações: rolamento 130, aero do truque 105, corpo 119, vãos 119, pantógrafo 115 carenado, nariz/cauda 116 dB(A). Vão: corcova de 50–400 Hz + Rossiter (Q 5, −6 dB por ordem). Pantógrafo: tons eólios 0,2·v/d da cabeça e dos braços + ruído largo. `ladoOuvinte` põe as fontes de face no lado certo; com `faces: 'duas'` (a página) há `corpo.k.d` e `corpo.k.e` no mesmo gerador e `definirLado()` passa de uma face à outra com crossfade de potência constante de 50 ms (a Cena dá o lado em `ladoDoOuvinte()`, com histerese de 0,2 m). `orcamentoTrem`/`maxVagoes`: o aero dos truques sai quando o trem não cabe nas 64 fontes.
-- **Hélice (4.2):** carga `c_Q(β, J)·ρ·n²·D⁵/i`, governador PI de passo (0,02 rad/%, 0,01/s, 5°/s), fonte de passagem de pá pela tabela do `buildPropTab` e ruído largo de pá. **Não** é ainda a migração idêntica amostra a amostra da Turbina (depende do adaptador do JetDSP).
+- **Hélice (4.2):** carga `c_Q(β, J)·ρ·n²·D⁵/i`, governador PI de passo (0,02 rad/%, 0,01/s, 5°/s), fonte de passagem de pá e ruído largo de pá. Com um turboélice acoplado a hélice é a do JetDSP; sem ele, a `FonteHelice`, idêntica amostra a amostra ao tom da Turbina ([Hélice idêntica](#hélice-idêntica)).
 - **Rotor (4.3):** potência induzida + perfil + cauda + acessórios (R44: 171 kW no pairado), Nr pelo governador PI (0,8/%, 0,4/s); fontes rotor principal (carga, espessura e tapa até o 40º harmônico, peso do tapa 2,5), cauda modulada pela BPF principal, caixa e downwash.
 - **Gerador (4.4):** `Q = fração·P/(η·ω)` com rampa de 0,1 s, atraso de 0,3 s da bomba. Os ganhos do CENA (0,5 por % e 0,5/s, com o combustível em fração) fazem um ciclo-limite de ±10% com esse atraso; com 0,07 por % e 0,05/(%·s) o degrau de 50% num grupo de 500 kW com 80 kg·m² cai 5,9% e volta a ±2% em 1,6 s, como o parágrafo descreve. Fontes: alternador (2·f_rede e ímpares, ranhuras), ventilador.
 - **Locomotiva (4.5):** tabelas de rpm por notch (EMD 710, GE 7FDL) e de potência, rampa de 100 rpm/s, atraso de 1,5 s na carga, governador PI; regulador de carga que corta a excitação se a rotação cai mais de 10% (uma carga de potência constante apagaria o motor). Fontes: turbo, ventiladores, sopradores, compressor de ar, grades do freio dinâmico, rodas, buzina (só os parciais).
-- **Motor de bancada (`MotorTeste`):** eixo rígido com atraso de 1ª ordem, para testar cargas e governadores enquanto diesel, turboeixo e turboélice não estão migrados. As constantes dele (Tmax, J, atraso) são da bancada.
+- **Motor de bancada (`MotorTeste`):** eixo rígido com atraso de 1ª ordem, para testar cargas e governadores sem um motor de verdade (o turboeixo ainda não existe). As constantes dele (Tmax, J, atraso) são da bancada.
+- **Carro (`CarroLegado`) e avião a jato (`Aviao`):** os portadores dos motores adaptados ([abaixo](#adaptadores-de-motor)). Com o diesel, gerador e locomotiva usam o governador do próprio motor (`rpmAlvo`).
 
 ### Validação (`npx tsx tools/cena/valida.ts`)
 
-`npm run teste:cena` (= `npx tsx tools/cena/valida.ts`) roda 92 medidas, compara com os alvos do CENA.md (dois deles atualizados pelas gravações, com a justificativa em `medidas.ts`) e sai com código ≠ 0 se algum falhar sem desvio documentado. Resultado atual: **83 ok, 9 desvios documentados, 0 falhas** (antes do ajuste contra as gravações: 73 ok, 16 desvios). Medidas por ouvido (a soma mono de um sinal binaural cancela onde o ITD dá meia volta de fase: 770 Hz).
+`npm run teste:cena` (= `npx tsx tools/cena/valida.ts`) roda 105 medidas, compara com os alvos do CENA.md (dois deles atualizados pelas gravações, com a justificativa em `medidas.ts`) e sai com código ≠ 0 se algum falhar sem desvio documentado. Resultado atual: **92 ok, 13 desvios documentados, 0 falhas**: as 92 da Cena e do trem (83 ok, 9 desvios, como antes, mais os dois do agudo) e os grupos `motores` e `niveis-motores` (os motores adaptados: 2 desvios do avião a 1500 m e 3 de nível absoluto, ver [Adaptadores de motor](#adaptadores-de-motor)). Antes do ajuste contra as gravações: 73 ok, 16 desvios. Medidas por ouvido (a soma mono de um sinal binaural cancela onde o ITD dá meia volta de fase: 770 Hz).
 
 | Grandeza (trem 10×25 m, 350 km/h, 3 m) | Alvo | Medido |
 |---|---|---|
@@ -527,12 +530,13 @@ Camadas novas da etapa 1 (projeto em `docs/CENA.md`): o **portador** carrega o m
 | crossfade das faces do trem | potência ±0,1 dB; 50 ms | 0,01 dB; 48 ms |
 | CPU por bloco (trem no túnel, 63 fontes) | < 50% do quantum | 334 µs (12,5%), p99 436 µs |
 | CPU 48 fontes, 10 s | < 25% do tempo real | 7,8% |
+| agudo no pico, 300 km/h (6–12 kHz / 12–24 kHz rel. 150–400): 3 m; 7,5 m | ≈ −10 / ≈ −20 ± 4 dB | −12,2 / −20,3; −8,2 / −16,9 |
 
-**Desvios e por quê.** (1) *Ar a 1500 m:* com dois polos a diferença entre 500 Hz e 4 kHz não passa de 36 dB em nenhum corte; a ISO pede 46,7. O critério "não pode piorar" do avião (≤ −20 dB) é atendido (−21,7). (2) *σ do nariz:* 51 ms sai de L_nariz = 15 m; o padrão de 4.6 é 12 m (41 ms). (3) *Modulação no túnel, pulsos de vão e crista:* com o orçamento ajustado contra as gravações ([abaixo](#trem-contra-gravações-reais)) o balanço e a modulação a céu aberto batem; no túnel o campo reverberante enche os vales (2,0 dB); os pulsos de vão em 50–200 Hz e a crista de 5 dB (L_AFmax − L_Aeq,tp) também não aparecem nas gravações (0,7–1,8 dB). (4) *Leis de velocidade:* a potência segue 30/60·log v à letra e a Cena soma a convecção de 2.1, +1 dB entre 160 e 300 km/h; as leis de 4.6 são de níveis medidos, que já incluem esse efeito. (5) *Alocação:* ver acima. (6) *Bandas do carro e do avião pela Cena:* esperam os adaptadores do Ronco e da Turbina.
+**Desvios e por quê.** (1) *Ar a 1500 m:* com dois polos a diferença entre 500 Hz e 4 kHz não passa de 36 dB em nenhum corte; a ISO pede 46,7. O critério "não pode piorar" do avião (≤ −20 dB) é atendido (−21,7). (2) *σ do nariz:* 51 ms sai de L_nariz = 15 m; o padrão de 4.6 é 12 m (41 ms). (3) *Modulação no túnel, pulsos de vão e crista:* com o orçamento ajustado contra as gravações ([abaixo](#trem-contra-gravações-reais)) o balanço e a modulação a céu aberto batem; no túnel o campo reverberante enche os vales (2,0 dB); os pulsos de vão em 50–200 Hz e a crista de 5 dB (L_AFmax − L_Aeq,tp) também não aparecem nas gravações (0,7–1,8 dB). (4) *Leis de velocidade:* a potência segue 30/60·log v à letra e a Cena soma a convecção de 2.1, +1 dB entre 160 e 300 km/h; as leis de 4.6 são de níveis medidos, que já incluem esse efeito. (5) *Alocação:* ver acima. (6) *Bandas do carro e do avião pela Cena:* medidas com os motores adaptados ([Adaptadores de motor](#não-pode-piorar-cena-211-pela-cena-com-o-motor-adaptado)).
 
 **Referências do legado** (`tools/cena/referencias/legado.json`, de `master` por `git show`; `npx tsx tools/cena/legado.ts gravar` regrava, `valida.ts legado` confere): carro a 6 m (Camaro SS, 3000 rpm travado, 30 m/s): Doppler 217,7/182,6 Hz (teoria 219,2/183,9), bandas abeam, curva nível × x a cada 0,25 s, 1/3 de oitava de 400 Hz a 2,5 kHz; 737 a 1500 m e 300 km/h: bandas no ponto mais próximo e 10 s antes, 4 kHz a −21,6 dB de 500 Hz; F-16 a Mach 1,5 e 200 m: cone em 3,373 s (teoria 3,373), Δp 2270 Pa, T 79 ms. O `supersonico.ts` reproduz o instante do cone (3,3733 s) e Δp/T.
 
-**Pendente (TODO):** integrar o resolvedor supersônico no propagador (duas leituras por caminho, depende das fontes da Turbina); hélice idêntica ao legado (migração da Turbina); vias estruturais das fontes `dentro` na cabine e no cofre (motores). Feitos depois: ponte calibrada, crossfade do lado do ouvinte (duas faces), reverberação na página e cena 3D.
+**Pendente (TODO):** os da lista em [Adaptadores de motor](#pendente-todo). Feitos depois: ponte calibrada, crossfade do lado do ouvinte (duas faces), reverberação na página e cena 3D; resolvedor supersônico no propagador, hélice idêntica e vias estruturais das fontes `dentro` (com os adaptadores de motor); o agudo da passagem.
 
 ### Trem contra gravações reais
 
@@ -624,9 +628,33 @@ Esses dois desvios continuam documentados.
 
 **Efeito colateral:** a forma nova vale também para o rolamento da locomotiva (mesma classe `FonteRolamento`). O grupo `portadores` continua todo ok.
 
+**Agudo da passagem (depois de ouvir).** O trem soava "sem qualidade, como gravado por celular antigo": faltava agudo. Medido no pico (2 s em torno do máximo, direto + reverberação, céu aberto, 300 km/h), as bandas 6–12 kHz e 12–24 kHz rel. 150–400 davam −14,1 / −24,2 dB a 3 m e −9,7 / −20,9 a 7,5 m. Os culpados:
+- **O rolamento e o aero cortavam em 12 dB/oitava (PSD) acima de 3 kHz:** passa-banda com polo em 2,5 kHz, e polo do aero em 2,5 kHz.
+- **O ar em `y += k·(x − y)` com o corte limitado a 0,45·fs:** ~2 dB em 16 kHz a 3 m, mais que a ISO.
+
+Regra nova: as gravações (áudio comprimido; o YouTube corta em ~16 kHz e atenua antes) só são alvo até 6 kHz; acima vale a física. Até 6 kHz nada mudou na forma ajustada. As mudanças:
+
+| Fonte | Antes | Agora (`src/carriers/ruido.ts`, `src/scene/propagador.ts`) |
+|---|---|---|
+| Rolamento | passa-banda 1,5 kHz·√k + polo 2,5 kHz·√k (1/3 de oitava 8 kHz −11, 16 kHz −22 dB do pico) | o mesmo + 2º ramo, o chiado do contato roda-trilho: passa-alta de 1 polo em 6 kHz·√k e polo em 10 kHz·√k, `G_CHIADO` 0,05 (8 kHz −11, 16 kHz −17: ~−6 dB/oitava, a queda de −3 a −6 dB/oitava acima de 2–3 kHz do rolamento na literatura, Thompson, *Railway Noise and Vibration*) |
+| Aero (corpo, truques, nariz, cauda) | polo em 2,5 kHz (4/8/16 kHz a −13/−21/−32 dB do pico) | polo em 5 kHz (`F_AERO_POLO`: −10/−16/−26; o CENA 2.7 pede −3 dB/oitava até 2 kHz e −6 acima) |
+| Pantógrafo (ruído largo) | 200 Hz–3 kHz (2ª ordem) | 200 Hz–6 kHz |
+| Ar | 2 polos `y += k(x − y)`, corte ≤ 0,45·fs | 2 polos bilineares, transparentes perto (acima de 0,49·fs) |
+
+**Resultado** (6–12 kHz / 12–24 kHz):
+- 3 m: −12,2 / −20,3 dB;
+- 7,5 m: −8,2 / −16,9 dB;
+- túnel a 3 m e 350 km/h: −13,3 / −21,6 dB.
+
+O grupo `niveis` guarda os dois primeiros (alvo ≈ −10 / ≈ −20 ± 4). Os outros alvos do trem continuam passando:
+- balanço 2,5–6k −4,7, 6–12k −11,8;
+- L_Aeq,tp a 7,5 m de 100,7 dB(A).
+
+As respostas ao impulso não eram o problema: `gerarRespostaPorBanda` usa a banda inteira (a de cima é um passa-alta de 4 kHz até Nyquist) e o convolver não filtra (o corte do molhado na Passagem é 20 kHz).
+
 ## Página Passagem e modo de testes
 
-`passagem.html` e `src/pages/passagem/` formam a interface da Cena nova (CENA.md 3). Um portador passa pelo ouvinte: o trem de N vagões ou o helicóptero, os dois sem motor por enquanto. O ouvinte fica parado junto à via ou num gimbal 3D em torno do corpo, e há uma cena three.js. O padrão é o das outras páginas: estado e mensagens fora do React, painel com os componentes de `src/ui/`, mostradores em canvas e um único `requestAnimationFrame`.
+`passagem.html` e `src/pages/passagem/` formam a interface da Cena nova (CENA.md 3). Um portador passa pelo ouvinte: o trem de N vagões, o helicóptero (sem motor), o carro (Ronco ou Diesel), o avião de hélice (turboélice), o gerador e a locomotiva (Diesel) e o avião a jato (Turbina), com os motores pelos [adaptadores](#adaptadores-de-motor). O ouvinte fica parado junto à via ou num gimbal 3D em torno do corpo, e há uma cena three.js. O padrão é o das outras páginas: estado e mensagens fora do React, painel com os componentes de `src/ui/`, mostradores em canvas e um único `requestAnimationFrame`.
 
 | Arquivo | O que faz |
 |---|---|
@@ -651,9 +679,9 @@ Esses dois desvios continuam documentados.
 
 | Mensagem | Conteúdo | Quando |
 |---|---|---|
-| `portador` | `trem` ou `rotor`, com a configuração | Mudança estrutural: N, passo, vão, nariz… |
+| `portador` | `trem`, `rotor`, `carro`, `helice`, `gerador`, `locomotiva` ou `aviao`, com a configuração; com motor, `motor: { familia, cfg }` (calibrado na página) e o `comando` inicial | Mudança estrutural: N, passo, vão, nariz…, troca de motor ou de preset |
 | `cena` | Ambiente, trajetória e ouvinte | A cada mudança; o worklet faz rampas de 20 ms |
-| `comando` | Velocidade fixa e coletivo | Ao disparar, parar e mudar a velocidade |
+| `comando` | Velocidade fixa, coletivo, pedal, marcha, notch, degrau de carga | Ao disparar, parar e mudar a velocidade ou o comando do motor |
 | `params` | `master` e `posicao` | `posicao` chama `CenaPassagem.reposicionar` |
 | `ar` | Umidade e temperatura | Ao mudar o ar |
 
@@ -666,14 +694,29 @@ Arrasto e sliders contínuos marcam a cena como pendente. `enviarPendentes()` ma
 - **Teclas:** <kbd>Espaço</kbd> dispara ou para, <kbd>R</kbd> alterna repetir, <kbd>G</kbd> alterna o gimbal e <kbd>C</kbd> troca a câmera, com a cena em foco.
 
 **Portadores e compatibilidade.**
-- Os portadores aparecem pela tabela `COMPAT` (CENA 1.6).
-- Um portador fica habilitado quando alguma família de motor dele tem adaptador (`MOTORES_PRONTOS`, hoje só `'nenhum'`) e o `CenaDSP` sabe montá-lo (`PORTADORES_NO_DSP`, hoje `trem` e `rotor`).
-- Carro, avião de hélice, gerador e locomotiva aparecem desabilitados, com o motor que esperam.
-- Os presets com motor ("Carro na rua a 6 m", "Turboélice rasante", "Locomotiva em notch 8") também ficam desabilitados.
-- Quando um adaptador chegar:
-  1. acrescente a família em `MOTORES_PRONTOS`;
-  2. ensine o `CenaDSP` a montar o portador com o motor;
-  3. dê ao portador uma entrada em `PADROES`.
+- Os portadores aparecem pela tabela `COMPAT` (CENA 1.6, mais o `aviao`).
+- Um portador fica habilitado quando alguma família de motor dele tem adaptador (`MOTORES_PRONTOS` = `ADAPTADORES` de `compat.ts`: nenhum, pistão, diesel, turboélice, turbina) e foi usada nele de verdade (`USO_REAL`), e o `CenaDSP` sabe montá-lo (`PORTADORES_NO_DSP`: trem, rotor, carro, hélice, gerador, locomotiva, avião).
+- O rotor continua sem motor: o pistão de aviação (Lycoming do R44) é da etapa 3, e a Turbina não tem turboeixo.
+- **Motor:** a seção "Motor" do painel escolhe o preset da família, sem duplicar os painéis completos (escape, admissão, mixagem ficam na página do motor):
+  - os 68 do Ronco;
+  - os diesel do uso (carro, gerador, locomotiva);
+  - os turboélices;
+  - os jatos.
+
+  Ela também dá o comando do portador: acelerador e marcha da passagem no carro, manete, notch, degrau de carga. No carro, a família (pistão ou diesel) se troca nos chips "Motor".
+- **Calibração na thread principal:** `prepararMotorRonco` / `prepararMotorDiesel` (calibração do Ronco e sonda do nível absoluto, ~1 s), guardada por preset. A página monta o mesmo portador que o worklet para ter a geometria e as fontes.
+- **Mensagem:** `{ type: 'portador', tipo, config, motor: { familia, cfg }, comando }`.
+- **Presets com motor:**
+  - "Carro na rua a 6 m" (Camaro SS, 3ª, pé no fundo, 108 km/h);
+  - "Picape diesel passando" (Hilux, 4ª, 80 km/h);
+  - "Turboélice rasante" (ATR 72 em decolagem a 100 m);
+  - "Locomotiva EMD em N8 passando" (40 km/h a 15 m);
+  - "Gerador em bancada" (500 kVA, 50% de carga, 7,5 m);
+  - "Jato a 1500 m" (737);
+  - "Caça supersônico a 200 m" (F-16 a Mach 1,5, com o estrondo).
+
+  E, sem motor, "Helicóptero R44 sobrevoando".
+- **Padrões por portador** (`PADROES`, CENA 3.1): carro em volta de 800 m com curvas de 60 m; locomotiva em volta de 2000 m e raio de 400 m; hélice e avião em reta de 6000 m a 150 m. Os presets de passagem andam numa reta.
 
 **Ouvinte.**
 - **Parado junto à via:** posição ao longo da via, altura do ouvido e distância à lateral.
@@ -781,10 +824,173 @@ Um clique numa esfera faz da fonte o alvo do gimbal e mostra a ficha dela: tipo,
 5. **Parâmetros do modo de testes:** lateral e número de vagões (o trem é montado de novo).
 6. **Céu aberto:** passagem repetindo.
 7. **Câmeras e helicóptero.**
-8. **"Voltar ao padrão".**
-9. **Console sem erros.**
+8. **Carro na rua:** o preset monta o carro com o Ronco calibrado na página (`kAbs`), a seção Motor lista os presets do Ronco, a passagem anda a 108 km/h em 3ª com o motor preso às rodas (3997 rpm) e o ouvido chega a 88,8 dB(A).
+9. **Locomotiva:** o EMD 710 (uso locomotiva) sobe ao notch 8 (881 rpm) e o ouvido chega a 88,4 dB(A).
+10. **"Voltar ao padrão".**
+11. **Console sem erros.**
 
 **Resultado:** passa em Chromium (worklet e reserva) e em Firefox.
+## Adaptadores de motor
+
+Os motores existentes entram na camada cena/portador por adaptadores `Motor` (CENA.md 1.3), sem mudar o som das páginas Ronco, Turbina e Diesel: os DSPs ganharam só um gancho de leitura, `this.tap` (null nas páginas), e os adaptadores leem os sinais que já existem antes da mistura do ouvinte. Portões: `npm run paridade:ronco` (200 cenários), `paridade:turbina` (34 aviões e os extras) e `paridade:acoustics` idênticos; `teste:diesel` sem falha nova.
+
+| Arquivo | O que faz |
+|---|---|
+| `src/engines/ronco/dsp.ts` | Gancho `tap`: `ponteira(i, e, x)` e `jato(i, x)` no laço dos radiadores, `gravar(s, kEx, inP, inH, mech, vib, tur, sc, brk)` depois das escalas do ouvinte. Seis linhas, só leituras |
+| `src/engines/turbina/dsp.ts` | Gancho `tap`: `helice(e, x)` (o tom da hélice de cada motor) e `gravar(i, bi)` (os barramentos antes da propagação). Cinco linhas |
+| `src/engines/ronco/motor.ts` | `TapPistao`, `MotorPistaoBase`, `MotorRonco`, `fontesPistaoCarro`, `prepararMotorRonco`, `sondarNivelRonco` |
+| `src/engines/diesel/motor.ts` | `MotorDiesel` (herda a base), `prepararMotorDiesel`, `sondarNivelDiesel`, fontes do gerador e da locomotiva |
+| `src/engines/turbina/motor.ts` | `MotorTurbina`: os barramentos do `flyby` como fontes, a velocidade do portador como `vFly` |
+| `src/carriers/carro.ts` | `CarroLegado`: o câmbio e o carro de dentro do DSP (decisão 1.1.5) |
+| `src/carriers/aviao.ts` | `Aviao`: a fuselagem do jato em passagem |
+| `src/scene/estrondo.ts` | O estrondo do JetDSP (`triggerBoom`/`boomSample`), copiado com a mesma aritmética |
+| `tools/cena/motores.ts` | Grupos `motores` e `niveis-motores` do `teste:cena` |
+
+### Canais e posições
+
+**Ronco e Diesel no carro** (Pa a 5 m; posições no referencial do motor, que fica em `[1,6; 0; 0,7]` dianteiro, `[−0,5; 0; 0,6]` central e `[−1,8; 0; 0,6]` traseiro):
+
+| Fonte | Sinal | Peso de fora | Diretividade | Vias (cabine; cofre) |
+|---|---|---|---|---|
+| `escape.k` (uma por radiador, inclusive o da válvula) | `x` do radiador sem o `radSh` | `exScale·P.exhaust` | `[0, −0,4, −1,7, −3,9, −6,9, −9,9, −11,3]` atrás → frente e passa-baixa por ângulo `900 + 15000·traseira²` | — (cabine pela casca do carro) |
+| `admissao` (dentro) | `inP + inH` | 0,12·c | frente (dianteiro) ou trás | 0,35·lp 900; 1,0 |
+| `bloco` (dentro) | `mech` | 0,1·c | idem | 0,2·lp 1200; 0,7 |
+| `vibracao` (dentro) | `vib` | 0,1·c | idem | 1,2; 0,8 |
+| `compressor` (dentro, só com compressor mecânico) | `sc` | 0,8·c | idem | 0,25; 0,8 |
+| `turbo` (dentro, com turbo ou diesel) | `tur` | 0,2·0,73 | frente | 0,25; 0,8 |
+| `coletor` (dentro, só com coletor que vaza) | `brk` | 0,7 | a do escape | 0,2·lp 900; 1,0 |
+
+- **Pesos de fora:** os do `road()` legado, a passagem que a Cena substitui. O que sai do cofre de um motor dianteiro irradia para a frente com (0,5 + 0,3·cosθ), e o escape (com o cofre de um motor central ou traseiro) para trás com (0,3 + 0,8·traseira). Isso vira diretividade e o canal fica no nível do eixo, relativo ao escape: c = 0,8/1,1 na frente, 1 atrás.
+- **Escape sem o `radSh`:** o reforço de +3 dB em 110 Hz dos microfones junto ao carro é a imagem no asfalto, e a Cena calcula a imagem (2.4). O `x` antes do `radSh` sai de uma cópia do passa-alta de 45 Hz do radiador; o chiado de jato é somado de volta pela diferença.
+- **Tabela do escape:** a do CENA 1.3 está na convenção do `DIR` (0° = frente). Lida com o eixo para trás, o escape soprava para a frente, então ela vai invertida. A usada é a do `road()` (até 2,7 dB acima da do CENA na frente), para a curva nível × x ficar a ±1 dB do legado.
+- **Passa-baixa por ângulo** (`FonteSonora.agudo`, extensão): o `shade` do `road()`, que nenhuma tabela de ganho reproduz. No propagador entra como um teto no corte do ar.
+- **Ponteiras no eixo** (y = 0), como no `road()`, que soma as bancadas em mono. Com cada ponteira no seu lado (±0,55 m), a diferença de caminho de lado (~1,1 m) tira o cancelamento da 2ª ordem entre as bancadas de um V8 cruzado, e 60–150 Hz sobe 5,7 dB a 6 m. É mais físico, mas fica fora da tabela "não pode piorar": fica para quando houver gravação de passagem lateral para decidir.
+- **Vias estruturais** (`FonteSonora.vias`, extensão; CENA 3.3): na cabine e no cofre, as fontes com vias não chegam pelo ar, só pela via, mono nos dois ouvidos e sem propagação, com os pesos do `int` e do `bay` divididos pelo peso de fora. A cabine do carro usa o filtro do Ronco (`Corpo.cabine`, extensão: lp 420 + lp 1100 + pico de 70 Hz +7 dB), com o ganho 0,6·2,2/5: o `int` leva 0,6 do escape a 5 m e a Cena propaga ~2,2 m da ponteira ao ponto da cabine.
+- **Fora, a diretividade vale também para as fontes `dentro`** (3.3: "fora, aplicam-se sempre"). As dos portadores são omni, então nada mudou neles.
+
+**Diesel fora do carro** (gerador, locomotiva): os mesmos canais, mas a ponteira vira a chaminé no teto, omni (a boca de 0,45 m do EMD é pequena perto dos 1,4 m de onda da ignição em 240 Hz). Ela fica a +1,4 m do motor no gerador e a +3,0 m na locomotiva, 0,5 m acima do teto da caixa: rente a ele, a borda fazia ~8 dB de sombra a 15 m. As fontes do cofre também são omni.
+
+**Turbina** (Pa a 30 m, como o JetDSP calcula): no `flyby` legado cada fonte tem diretividade 1 e a do barramento inteiro é aplicada na propagação. O adaptador põe o JetDSP nesse modo, com altitude de 10 km para os atrasos dele não custarem, e lê os barramentos. Cada grupo de motores (lado esquerdo e direito) vira duas fontes:
+
+| Fonte | Posição | Diretividade (0° = nariz) |
+|---|---|---|
+| `admissao.g`, ou `helice.g` no turboélice | `x + 1,5` | `DIR.inlet` (ou `DIR.prop`) |
+| `jato.g` | `x − (3 + 4·Dj)` | `max(DIR.jetL, 0,55·DIR.jetF, 0,5·DIR.shock)` |
+
+- **Convecção:** |1 − M·cosθ|^−1,4 nos dois, como no legado.
+- **Por fonte:** a separação do CENA 1.3 (bypass, núcleo, crepitar, reversor, cada um com a sua diretividade) pede um gancho por fonte. Fica para quando o gimbal de perto de um jato precisar.
+- **Velocidade:** a do portador vira o `vFly`, como no flyby: Mach na ponta do fan, jato relativo ao ar, hélice com o avanço.
+
+### Carga e comando (CENA 1.6)
+
+| Portador | Motor | Pedal | O que o motor recebe |
+|---|---|---|---|
+| carro (`CarroLegado`) | Ronco, Diesel | acelerador | `acelerador`; câmbio, embreagem, massa e arrasto de dentro do DSP |
+| hélice | turboélice (JetDSP) | manete | `acelerador`; a hélice e o governador de `np` são os do JetDSP |
+| gerador | Diesel (`gerador`) | degraus de carga | `rpmAlvo` da rede; carga `P/(η·ω)` do portador |
+| locomotiva | Diesel (`locomotiva`) | notch | `rpmAlvo` do notch; carga do gerador de tração do portador |
+| avião | Turbina | manete | `acelerador` |
+| rotor | — | coletivo | Nr imposto (não há pistão de aviação nem turboeixo) |
+
+- **Velocidade imposta no carro:** com `velocidadeFixa` (a passagem disparada), o `CarroLegado` impõe a velocidade dentro do DSP a cada bloco. Com uma marcha engatada, o motor fica preso às rodas, como num dinamômetro de rolo: em 3ª e pé no fundo, o Camaro segura 3996 rpm a 108 km/h. Parado, a página manda ponto morto e lenta. A marcha escolhida trava o automático (`shiftCool`).
+- **Governador do motor** (`Motor.governadorProprio` e `ComandoMotor.rpmAlvo`, extensões): o diesel em gerador e locomotiva usa o isócrono dele, acertado por motor (Kp = ω_c/P), e o portador manda só o alvo. O DSP fica no modo do uso, e a carga externa substitui a interna em `cargas()`. O PI do portador (CENA 4.4/4.5) foi acertado com o `MotorTeste` e, num diesel de verdade, fazia um ciclo-limite:
+  - grupo de 500 kVA: ±2–3% em vazio;
+  - EMD em N4: combustível entre 0,1 e 0,9 a 1 Hz.
+
+  Com o isócrono do diesel:
+  - degrau de 50% no QSX15: queda de 3% e volta em ~3 s;
+  - EMD: sobe a N8 em ~7 s, 100 rpm/s;
+  - em N8 o EMD fica em 883 rpm (−2,3%) com o combustível saturado: o regulador de carga do portador só corta abaixo de 90%.
+
+  Para motores sem governador próprio, `ganhoRelativo` (carriers/base.ts) escala Kp e Ki pela planta, (T/J) da bancada sobre (T/J) do motor, e pela metade (atraso de combustão e turbo).
+- **O disjuntor do gerador** só fecha com o grupo funcionando acima de 90% da rotação. Dar a partida com a carga ligada pede P/ω com ω ≈ 0: o motor de partida não saía do lugar.
+- **O alternador entra com o campo** (50–90% da rotação).
+- **Piso de −50 dB na ponderação A** em `calibrarSerieA`: com a rotação perto de zero, as séries pediam amplitudes enormes em poucos Hz (137 dB SPL de infrassom na partida do gerador).
+- **Fonte do motor substitui a própria de mesmo id:** a fonte `turbo` do EMD (o turbo do DieselDSP) tira a `turbo` da locomotiva, e a `helice.g` do turboélice tira a `helice` do portador.
+- **O Ronco não recebe carga no eixo:** o gancho 11 do RADIAL.md é da etapa 3. `acoplar` só guarda a carga, e no carro ela é o câmbio de dentro.
+
+### Hélice idêntica
+
+Com um turboélice acoplado, a hélice é a do próprio JetDSP (`helice.g`). Sem ele (ou com outro motor, na etapa 3), o portador usa a `FonteHelice`, com a mesma aritmética:
+- `tabelaPassagemPa` é o `buildPropTab` com a mesma tabela de seno;
+- o tique de controle a cada 64 amostras com as amplitudes de `sources()`;
+- a tabela é refeita a cada 8 tiques;
+- desbalanceamento de 1ª e 2ª ordem;
+- ruído largo de pá normalizado pela banda.
+
+**Prova** (`motores`): o tom da hélice do Caravan (1 motor, decolagem a 300 km/h, 6 s) tirado do JetDSP pelo gancho e a `FonteHelice` alimentada tique a tique com as mesmas entradas (np, potência, reverso, velocidade, diretividade) e a mesma fase inicial saem **idênticos nas 288 000 amostras**. O ruído largo tem o mesmo filtro e o mesmo nível, com outra semente.
+
+### Supersônico e estrondo
+
+Com M ≥ 0,9 numa reta, a Cena liga no propagador o resolvedor fechado (`trechoSuper`, com `raizesEmissao` de `supersonico.ts`). Ele trabalha por fonte e por caminho (direto e imagem):
+- até duas raízes por caminho, com o slot de cada uma como no legado (a de maior atraso toca de trás para frente);
+- atraso e ganho em rampa linear no trecho;
+- convecção limitada a 4;
+- diretividade pelo ângulo de emissão;
+- ar pelo caminho mais curto;
+- sem ITD/ILD (o flyby não tem).
+
+O avião guarda o anel inteiro (`anelCompleto`): atrasos de vários segundos. Quando o cone de Mach da primeira fonte alcança o ouvinte (o critério do `geom()` legado), a Cena dispara o `Estrondo`, com o comprimento e o fator de forma do avião, e soma a onda em N na saída em unidades do alto-falante, como o legado.
+
+### Nível absoluto
+
+A sonda roda na thread principal, junto com a calibração (página: `prepararMotorRonco` / `prepararMotorDiesel`, guardados por preset):
+- **Ronco:** a condição de referência do `calibrate()`: escape de referência, 55% da faixa vermelha, borboleta aberta, turbo a 40%, motor quente. `kAbs` leva a soma das ponteiras a **95 dB SPL a 5 m** em campo livre. O CENA fixou 100; com 100, o Camaro em carga a 6 m dava 94 dB(A). A lenta mantém o reforço da calibração (`mk`, 21 dB abaixo da carga).
+- **Diesel no carro:** a mesma convenção, com a sonda `sonda0` do próprio DieselDSP (DIESEL.md 6.3).
+- **Diesel em gerador e locomotiva:** `L_W` dB(A) do escape + bloco em plena carga na rotação de potência. Os valores são 118 no gerador e 128 na locomotiva, do limite de 87 dB(A) a 30 m da 40 CFR 201.
+- **Turbina:** sem retoque. O JetDSP já é "Pa a 30 m", mas a página dele normaliza a saída e o absoluto nunca foi conferido (ver a tabela).
+
+### Não pode piorar (CENA 2.11), pela Cena com o motor adaptado
+
+| Caso | Alvo | Medido |
+|---|---|---|
+| carro a 6 m (Camaro SS, 3000 rpm travado, 30 m/s): Doppler da ignição | 219 ± 1 / 184 ± 1 Hz | 219,1 / 184,0 Hz |
+| idem: bandas abeam (dB rel. 150–400) contra o legado | ±1,5 dB | Δ −1,3 / 0 / +1,2 / +0,6 / +0,1 / +0,1 |
+| idem: curva nível × x (relativa ao pico) contra o legado sem o som de fundo | ±1 dB (rms) | 0,96 dB rms; chegando +1,4, indo −0,1 (a convecção de 2.1 a 30 m/s dá 1,5 dB entre os dois) |
+| avião a 1500 m (737, 300 km/h): bandas 10 s antes | ±2 dB | Δ +2,1 / 0 / +0,3 / +1,1 / +0,6 / +1,4 (**desvio**) |
+| idem, no ponto mais próximo | ±2 dB | Δ −0,9 / 0 / +1,5 / +1,9 / **+2,6 / +3,8** (**desvio**) |
+| idem: 4 kHz rel. 500 Hz no ponto mais próximo | ≤ −20 dB | −20,5 dB (legado −21,6) |
+| estrondo (F-16, M 1,5, 200 m): instante do cone, Δp e T | 3,373 s ± 1 ms; 2269,7 Pa; 0,079 s | 3,3733 s; 2269,708 Pa; 0,079 s |
+| hélice idêntica (Caravan, 6 s) | amostra a amostra | idêntica (288 000 amostras) |
+
+**Desvios do avião e por quê:**
+- **Acima de 2,5 kHz a Cena fica mais clara no ponto mais próximo.** É o ar: dois polos no `f_c(r)` da ISO (2.3: 680 Hz a 1500 m) contra os dois polos em 900 Hz do flyby. Os 900 Hz são o piso da fórmula dele, e ele usa o mesmo corte a 1500 e a 1750 m.
+- **Teste trocando só o corte pelo do legado** (sem solo): a diferença cai para ≤ 1,2 dB de 60 Hz a 2,5 kHz e 0,9 dB em 2,5–6 kHz.
+- **Os 2,1 dB em 60–150 Hz 10 s antes** são o pente denso do solo (Δr ≈ 3 m) numa janela de 2 s.
+- **2.3 manda registrar:** na etapa 1 o legado vale por definição. Os dois absorvem bem menos que a ISO, que pede −50 dB em 4 kHz a 1500 m.
+
+**Escolhas do teste do avião:**
+- ouvinte sem binaural (o flyby não tem ITD/ILD) a 1,7 m;
+- solo de grama;
+- c = 340 m/s (ar a 14,9 °C), a velocidade do som da Turbina.
+
+**O estrondo:** com o mesmo c, a fonte na altura do flyby (z = 0 é a linha dos motores) e o tique de 128 amostras do legado, o instante, o Δp e o T saem iguais.
+
+### Níveis absolutos (grupo `niveis-motores`; céu aberto, sem reverberação nem fundo)
+
+| Caso | Alvo e fonte | Medido |
+|---|---|---|
+| carro a 6 m em carga: Camaro SS, 3ª, pé no fundo, 108 km/h (3996 rpm), L_AFmax | 85–90 dB(A) (alvo da validação) | 89,1 dB(A) |
+| Hilux 2.8 em lenta (782 rpm), parada, a 1 m atrás da ponteira, L_Aeq | ~70 dB(A) (alvo da validação) | 66,7 dB(A) (**desvio**; a 7,5 m da lateral: 45,0) |
+| EMD SD70ACe em N8 (883 rpm), parada, a 15 m, L_Aeq | ~95 dB(A): 40 CFR 201.12 (locomotivas paradas fabricadas depois de 1979, plena potência: 87 dB(A) a 30 m) mais 6 dB | 88,8 dB(A) (**desvio**) |
+| ATR 72 em decolagem (manete 1, 60 m/s) a 100 m de altura, L_AFmax | ~85 dB(A): certificação de ruído do ATR 72 (ICAO Anexo 16, ~84 EPNdB no ponto lateral a 450 m) | 95,0 dB(A) (**desvio**) |
+
+**Desvios dos níveis:**
+- **Hilux:** a picape segue a convenção do carro. A referência de 95 dB, que acerta o Camaro, põe a lenta dela 3 dB abaixo; com os 100 do CENA ficaria em 71,7, e o carro em 94. Os dois alvos pedem referências diferentes para gasolina e diesel leve, e isso espera gravações calibradas.
+- **EMD:** o escape está no `L_W` de 128 dB(A), 103 dB(A) a 5 m (conferido canal a canal). A 15 m, a chaminé 0,5 m acima do teto fica rasante à borda da caixa, e a sombra (Maekawa) tira ~4 dB: sem ela, 92,6. O resto é a distância real da chaminé (17 m) e a brita, que reflete pouco acima de 800 Hz. A 40 CFR mede a 30 m, onde o ângulo sobre a borda é mais aberto.
+- **ATR:** o nível é o do JetDSP. A hélice é 9·(M/0,75)⁴ Pa a 30 m, 113 dB por motor na decolagem, ~10 dB acima do que a certificação sugere. O 737 do mesmo modelo dá 112,5 dB a 30 m por barramento, também alto. Corrigir a escala da Turbina muda o mostrador de dB da página Turbina: fica para a revisão de níveis dela.
+
+### Pendente (TODO)
+
+- Fontes da Turbina separadas por fonte, com a diretividade de cada uma (o gimbal de perto de um jato).
+- Gancho de carga no virabrequim do Ronco (gancho 11 do RADIAL.md, etapa 3) e o pistão de aviação no rotor e na hélice (R44, Cessna).
+- Turboeixo: não há preset com `arch: 'turboeixo'` na Turbina, e o rotor fica sem motor.
+- Escala absoluta da Turbina (o ATR sai ~10 dB alto).
+- Referência própria para o diesel leve no carro (Hilux 3 dB baixa com a referência do Ronco).
+- Ponteiras nos lados reais, se gravações laterais confirmarem a 2ª ordem do V8.
+- Pneus e aero do carro (4.1, desligados por padrão).
+- Casca do gerador com carenagem: a lei da massa sobre as fontes `dentro` em `fora`, que a Cena ainda não aplica.
+
 ## Diesel: ignição por compressão
 
 O projeto está em [`DIESEL.md`](DIESEL.md); aqui fica o que foi feito, como e o que se mediu. Página `diesel.html` (`src/pages/diesel/`), DSP em `src/engines/diesel/`, worklet `src/worklet/processador-diesel.ts` (`diesel-engine`).
