@@ -14,7 +14,7 @@ import {
 } from '../../acoustics';
 import { EngineDSP } from '../ronco/dsp';
 import { T_MAN, T_EXREF } from '../ronco/constantes';
-import { LHV, ESTEQ, CETANO_PADRAO, K_ATRASO, R_UNIV, BSFC, INJECAO, NOTCH_POT, K_MEC, K_VALV, K_FUNDO, K_VIB, K_CALOR, K_MISTURA, K_TURBINA, K_SOPRO } from './constantes';
+import { LHV, ESTEQ, CETANO_PADRAO, K_ATRASO, R_UNIV, BSFC, INJECAO, NOTCH_POT, K_MEC, K_VALV, K_FUNDO, K_VIB, K_CALOR, K_MISTURA, K_TURBINA, K_SOPRO, K_CHOQUE } from './constantes';
 import { DoisPortasDiesel } from './escape';
 
 // Carga e comando vindos de um portador externo (CENA.md 1.2). TODO(integração carriers/): trocar por
@@ -43,7 +43,7 @@ export class DieselDSP extends EngineDSP {
   declare Pcarga: any; declare Tcarga: any; declare Jcarga: any; declare regCarga: any; declare fRede: any; declare gerCfg: any; declare locCfg: any;
   declare dinamico: any; declare ptBuf: any; declare ptUlt: any; declare ptI: any; declare telN: any; declare classe: any; declare boostAlvo: any; declare partida: any;
   declare gChiado: any; declare lamInst: any; declare subidaTq: any; declare gMec: any; declare g0Rad: any; declare govBancada: any; declare boostD: any; declare aquec: any; declare estadoAnt: any; declare lentaFixa: any; declare vF: any; declare vAmp: any; declare vDec: any; declare vEnv: any; declare fundoF: any; declare fundoAmp: any; declare fundoM: any; declare pumpAmp: any; declare oilAmp: any;
-  declare wBuf: any; declare gwI: any; declare wSoma: any; declare wK: any; declare wSomaK: any; declare boostFixo: any; declare queimasBoas: any; declare cicloEv: any; declare lentaBaixa: any; declare kIdi: any; declare kPre: any; declare egtN: any; declare egtD: any; declare egtNs: any; declare egtDs: any; declare soiM: any; declare thInjM: any; declare thMix: any; declare eD: any; declare pInjMax: any; declare injK: any; declare tauK: any; declare injA: any; declare jTurb: any; declare turbNzF: any; declare zTurb: any; declare uPonta: any; declare whooshF: any; declare mecLP: any; declare trocaT: any; declare trocaDir: any;
+  declare wBuf: any; declare gwI: any; declare wSoma: any; declare wK: any; declare wSomaK: any; declare boostFixo: any; declare queimasBoas: any; declare cicloEv: any; declare lentaBaixa: any; declare kIdi: any; declare kPre: any; declare egtN: any; declare egtD: any; declare egtNs: any; declare egtDs: any; declare soiM: any; declare thInjM: any; declare thMix: any; declare eD: any; declare pInjMax: any; declare injK: any; declare tauK: any; declare injA: any; declare jTurb: any; declare turbNzF: any; declare zTurb: any; declare uPonta: any; declare whooshF: any; declare turboLenta: any; declare mecLP: any; declare trocaT: any; declare trocaDir: any;
 
   constructor(fs: number) {
     super(fs);
@@ -199,7 +199,8 @@ export class DieselDSP extends EngineDSP {
     const injPorS = (this.N * this.rpmNom) / (60 * (this.tempos / 2));
     this.mfMax = ((cfg.power || 100) * bsfc / 3600) / injPorS;
     this.mPilMin = 1.5e-6 * this.mfMax / 81e-6;
-    this.subidaTq = 1; // (a subida de torque da ficha deixava os mecânicos instáveis na lenta; fica desligada, ver TECNICO.md)
+    this.subidaTq = 1; // (a subida de torque da ficha nas bombas mecânicas, mesmo só no batente de plena carga, tirava a lenta
+    // do F-1000 da janela de ±8% depois das aceleradas e ainda não levava o aspirado a λ < 1,3: fica desligada, ver TECNICO.md)
     this.gMec = Math.pow(10, (cfg.mecanica || 0) / 20);
     this.piloto = !!cfg.piloto; this.idi = !!cfg.idi; this.eletronico = !!cfg.eletronico;
     this.cetano = cfg.cetano || CETANO_PADRAO;
@@ -219,7 +220,7 @@ export class DieselDSP extends EngineDSP {
     this.fuelPartida = this.eletronico ? 0.45 : 0.45;
     // turbo
     this.turboTipo = cfg.turboTipo || (this.turbo ? 'wastegate' : 'nenhum');
-    this.turboRpmMax = cfg.turboRpmMax || 0; this.turboPas = cfg.turboPas || 0; this.uPonta = cfg.turboPonta || 480;
+    this.turboRpmMax = cfg.turboRpmMax || 0; this.turboPas = cfg.turboPas || 0; this.uPonta = cfg.turboPonta || 480; this.turboLenta = cfg.turboLenta || 0.15;
     this.turboTau = cfg.turboTau || [1, 2]; this.gApito = Math.pow(10, (cfg.turboApito || 0) / 20);
     this.iEng = cfg.turboEngrenagem || 0;
     this.gChiado = Math.pow(10, (cfg.turboChiado || 0) / 20);
@@ -383,7 +384,8 @@ export class DieselDSP extends EngineDSP {
   // temperatura na câmara: ~16% quente, ~28% frio). É o que faz cada batida sair diferente da anterior: a fração
   // pré-misturada, e com ela o dp/dθ, segue o atraso
   atrasoEvento(c, p, T, rpm, k = 1) {
-    const s = (0.16 + 0.12 * (1 - this.warm));
+    // (os pesados, de câmara grande e injeção mais longa, variam menos: CV do knock das gravações 0,15–0,22 contra 0,17–0,29)
+    const s = (this.classe === 'leve' ? 0.16 : 0.11) + 0.12 * (1 - this.warm);
     return this.atraso(p, T, rpm, k) * (this.tauK ? this.tauK[c] : 1) * Math.exp(clamp(s * this.rng.gauss(), -2.5 * s, 2.5 * s));
   }
 
@@ -454,7 +456,7 @@ export class DieselDSP extends EngineDSP {
       // que escala com o diâmetro (o caminho até a parede) e cai com a velocidade do jato, √(pressão de injeção)
       this.soiM[c] = soi; this.thInjM[c] = thInj; this.eD[c] = 0;
       // (a turbulência da câmara varia de ciclo a ciclo: a mistura, e com ela a subida de pressão, também)
-      this.thMix[c] = this.tMistura(fuel, rpm) * 0.006 * Math.max(rpm, 30) * lento * Math.exp(clamp((0.18 + 0.22 * clamp(fuel, 0, 1)) * this.rng.gauss(), -0.8, 0.8));
+      this.thMix[c] = this.tMistura(fuel, rpm) * 0.006 * Math.max(rpm, 30) * lento * Math.exp(clamp((0.18 + 0.35 * clamp(fuel, 0, 1)) * this.rng.gauss(), -0.9, 0.9));
       this.queima[c] = 1;
       this.fechaRel[c] = soi + thInj;
       this.queimasBoas = kQ > 0.6 ? this.queimasBoas + 1 : 0;
@@ -534,7 +536,8 @@ export class DieselDSP extends EngineDSP {
     if (this.tempos === 4) {
       if (cruza(evo) || cruza(evc) || cruza(ivo) || cruza(ivc)) { const k = 0.5 + 0.5 * rng.next(); this.clickEnv += 1.5 * k; this.vEnv += k; }
       if (cruza(ivo)) this.air[c] = 0;
-      if (this.jakeOn && this.jakeCil[c] && cruza(712)) { this.vEnv += 4; this.clickEnv += 3; }
+      // (o pistão escravo do Jake abre a válvula contra 30–50 bar: a pancada no balancim é a metralhadora que se ouve do motor)
+      if (this.jakeOn && this.jakeCil[c] && cruza(712)) { this.vEnv += 16; this.clickEnv += 6; }
     } else {
       if (cruza(evo) || cruza(evc)) { const k = 0.5 + 0.5 * rng.next(); this.clickEnv += 1.5 * k; this.vEnv += k; }
       if (cruza(ivo)) this.air[c] = 0;
@@ -596,7 +599,9 @@ export class DieselDSP extends EngineDSP {
     if (a > evo && a < evc) {
       const sv = Math.sin(Math.PI * (a - evo) / (evc - evo));
       const A = this.AexMax * this.cylEx[c] * Math.min(1, 2.5 * sv * sv);
-      const mx = this.exhaustFlow(A, p, T, pb, Zr);
+      // (limite numérico de 10% da massa do cilindro por amostra nos dois sentidos: nunca atua no escape normal, mas segura
+      // o refluxo quando a onda do Jake de outro cilindro chega pelo coletor)
+      const ml = (0.1 * this.m[c]) / this.dt, mx = clamp(this.exhaustFlow(A, p, T, pb, Zr), -ml, ml);
       if (mx > 0) { this.egtN += mx * T; this.egtD += mx; }
       return mx;
     }
@@ -606,7 +611,17 @@ export class DieselDSP extends EngineDSP {
       if (aj > -8 && aj < 40) {
         const sv = Math.sin(Math.PI * (aj + 8) / 48);
         const A = this.kJake * this.AexMax * this.cylEx[c] * Math.min(1, 2.5 * sv * sv);
-        return this.exhaustFlow(A, p, T, pb, Zr);
+        // (Euler explícito: com a válvula grande perto do PMS o volume é pequeno; no máximo 10% da massa por amostra, nos dois sentidos)
+        const mlim = (0.1 * this.m[c]) / this.dt, mx = clamp(this.exhaustFlow(A, p, T, pb, Zr), -mlim, mlim);
+        // o ar a 30–50 bar sai como jato subexpandido (razão de pressão 20–40, Mach de expansão completa 2–2,6): além do
+        // chiado do jato engasgado que o laço já põe (Mach limitado a 1), o ruído de choque cresce com (M² − 1); é o
+        // estalo rasgado do Jake. Entra na junção do coletor, como os estouros do Ronco
+        const pr = clamp(p / Math.max(pb, 0.5 * P0), 1, 60);
+        if (mx > 0 && pr > 1.9) {
+          const M2 = (2 / (GAM - 1)) * (Math.pow(pr, (GAM - 1) / GAM) - 1);
+          this.bankJ[Math.min(this.cfg.bank[c], this.bankJ.length - 1)].inj += Zr * mx * K_CHOQUE * Math.min(M2 - 1, 6) * this.rng.bi();
+        }
+        return mx;
       }
     }
     return 0;
@@ -1007,7 +1022,7 @@ export class DieselDSP extends EngineDSP {
     if (this.sonda) { this.nTurbo = this.tw * this.turboRpmMax; this.turboW = this.tw; this.boost = this.boostFixo; return; }
     const fl = this.state === 'run' ? clamp(this.fuelM, 0, 1.2) : 0.02;
     let alvo = clamp(1.05 * Math.sqrt(rf * (0.08 + 0.92 * fl)), 0, 1);
-    if (this.turboTipo === 'vgt') alvo = Math.max(alvo, this.state === 'run' ? 0.15 : 0);
+    if (this.turboTipo === 'vgt') alvo = Math.max(alvo, this.state === 'run' ? this.turboLenta : 0);
     if (this.freioAtivo && this.freioTipo === 'descarga') alvo *= 0.3;
     if (this.freioAtivo && this.freioTipo === 'vgt') alvo = 0.8;
     // (o ar que o Jake solta a 35–50 bar gira a turbina como uma carga média: sem isso o coletor ficava em ~1,3 bar e a

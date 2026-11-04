@@ -799,7 +799,7 @@ O projeto está em [`DIESEL.md`](DIESEL.md); aqui fica o que foi feito, como e o
 
 - **Injeção** armada no curso de compressão; piloto 12° antes do principal (8% do combustível, mínimo 1,5 mg escalado), início pelo mapa do DIESEL.md 2.2 (common-rail, mecânica, IDI) ou fixo (EMD 10°, GE 14°). Combustível `fuelCmd·mfMax·mapa(rpm)`, limitado por `λ_min` quando a bomba tem limitador.
 - **Atraso** de Hardenberg–Hase com `p` e `T` do cilindro na injeção, `kAtraso` 1,6, cetano do preset; o principal com piloto usa 0,6×.
-- **Wiebe dupla** (pré-misturada `φ_p = clamp(τ/θ_inj)·k_pre`, 6–10°; difusão 40–90°) com `dQ` limitado a 6 bar por amostra. `θ_inj` vem da vazão do injetor, escalada para a plena carga durar ~32° na rotação de potência (com a vazão fixa por mg do DIESEL.md o EMD injetava em 11° e queimava quase tudo pré-misturado).
+- **Wiebe na pré-misturada + queima por mistura na difusão** (2ª passada, ver abaixo; pré-misturada `φ_p = clamp(τ/θ_inj)·k_pre`, 6–10°) com `dQ` limitado a 6 bar por amostra. `θ_inj` vem da vazão do injetor, escalada para a plena carga durar ~32° na rotação de potência (com a vazão fixa por mg do DIESEL.md o EMD injetava em 11° e queimava quase tudo pré-misturado).
 - **Frio**: parede `430 + 0,9·(água − 90)` K; queima parcial quando `τ > 4 ms` ou a temperatura alcançada no atraso (a maior entre a da injeção e a estimada no PMS, mais o ponto quente da vela) passa abaixo de 620 K; queimas parciais `0,3·frio·e^(−t/40 s)`; σ de 2,5% a 8%.
 - **Knock**: `dp/dθ` medido no cilindro em cada amostra de queima (±5% fixo por cilindro) → 2 passa-altas de 2ª ordem em `700·√(0,1/B)` Hz → banco de 5 ressonadores (bloco ×3 pelo diâmetro, tampa, câmara) → passa-baixa de 6 kHz → 70% determinístico + 30% ruído pela envoltória. Toda a mecânica (knock, tiques de injeção por tipo da tabela 2.7, trem de válvulas, bombas e um fundo mecânico contínuo) é referida ao pico do knock de lenta quente do próprio motor, medido na sonda de calibração (`refKnock`), e escalada por `K_MEC` e pelo `mecanica` do preset (dB).
 
@@ -813,11 +813,71 @@ O projeto está em [`DIESEL.md`](DIESEL.md); aqui fica o que foi feito, como e o
 
 ### Ferramentas e portões
 
-- `npm run teste:diesel` (`tools/diesel-valida.ts`): lenta, governadores, pressões (tabela 2.5), bandas por família (Apêndice A, tabela 4.4), fumaça, freio-motor, potência, veículo e NaN, em paralelo; sai ≠ 0 em falha nova; os desvios conhecidos (abaixo) aparecem como "desvio". `npm run lenta:diesel`: 16 presets × 20 °C e −5 °C, partida de verdade, aceleradas aos 8 s e 13 s (notch 4 na locomotiva, degrau de 50% no gerador), zero apagamentos, rotação final ±3% do alvo do governador (±8% nos mecânicos com a água fria). `npm run governador:diesel`. `tools/diesel-bandas.ts` é a porta de `analyze2.py` (conferida nas gravações: Hilux 1GD, Cat C15 e EMD 710 dão os números do Apêndice A). `tools/diesel-render.ts <preset> <cenário> <pasta> [ouvinte] [--resumo]`, `tools/diesel-medir.ts`. `npm run navegador:diesel` serve o `dist/` em `/data/engine/` e testa a página no Chromium e no Firefox (`… dist firefox`).
+- `npm run teste:diesel` (`tools/diesel-valida.ts`): lenta, governadores, pressões (tabela 2.5), bandas por família (Apêndice A, tabela 4.4), fumaça, freio-motor, potência, veículo e NaN, em paralelo; sai ≠ 0 em falha nova; os desvios conhecidos (abaixo) aparecem como "desvio". `npm run troca:diesel` (`tools/diesel-troca.ts`): troca de preset com o motor ligado na ordem de mensagens da página, volta à lenta. `npm run lenta:diesel`: 16 presets × 20 °C e −5 °C, partida de verdade, aceleradas aos 8 s e 13 s (notch 4 na locomotiva, degrau de 50% no gerador), zero apagamentos, rotação final ±3% do alvo do governador (±8% nos mecânicos com a água fria). `npm run governador:diesel`. `tools/diesel-bandas.ts` é a porta de `analyze2.py` (conferida nas gravações: Hilux 1GD, Cat C15 e EMD 710 dão os números do Apêndice A). `tools/diesel-render.ts <preset> <cenário> <pasta> [ouvinte] [--resumo]`, `tools/diesel-medir.ts`. `npm run navegador:diesel` serve o `dist/` em `/data/engine/` e testa a página no Chromium e no Firefox (`… dist firefox`).
+
+### Segunda passada (som, combustão e câmbio)
+
+Alvo principal: o conjunto **real3** (`scratchpad/real3/diesel/`, 25 gravações com banda ≥ 15 kHz, grave presente e rotação conferida; tabela por classe em `RESUMO.md`). Só razões entre bandas (vários vídeos têm controle automático de ganho). As tabelas do DIESEL.md (Apêndice A, vídeos do YouTube, vários lo-fi) ficam como referência interna. `tools/diesel-bandas.ts` ganhou a banda 30–60 Hz e o **CV do knock** da mesma definição do RESUMO (altura da envoltória 1–4 kHz por intervalo de ignição, `std(Δa)/(√2·média)`, mediana de janelas de 3 s; conferido: Cat C15 lenta 0,15, Amarok 0,22, iguais ao RESUMO); `diesel-valida.ts` ganhou o grupo `real3` (9 classes × 6 bandas, centroide e CV, mais os tons de turbo), `cambio` e `troca`.
+
+O que mudou, pela física:
+
+- **Pulso do escape** `p' = c·ṁ/A ∝ √T` (gancho `ccDens` no `dsp.ts` do Ronco, paridade idêntica). O fator linear `T/1650 K` do gasolina punha o pulso do diesel (500–750 K em lenta) 6–10 dB abaixo de um pulso gasolina da mesma massa; a calibração subia o ganho geral e com ele o chiado, o turbo e a mecânica: o "peidinho com aspirador atrás".
+- **Fontes contínuas que não existem no diesel**: sem borboleta não há o chiado do ar na fresta (`hiss` da admissão ×0,1); o chiado do turbo de 4,8 kHz virou o *whoosh* do compressor (0,25–1,5 kHz) ∝ vazão·U⁵, que some em lenta e aparece sob carga; o chiado do jato na válvula de escape (0,05 → 0,02: a pressão de abertura em lenta é maior que no gasolina e o Mach satura). Em compensação, o fundo mecânico subiu (0,02 → 0,1) e a parede do bloco corta o agudo da mecânica pelo diâmetro (7,5 kHz na picape, 5,4 no caminhão, 3,6 na locomotiva).
+- **Apito do turbo**: pás com os *splitters* (12 nas picapes pequenas, 14 nos maiores), nível 20–36 dB abaixo nos pequenos (a passagem de pás em carga passa de 20 kHz); VGT com rotação mínima por preset (`turboLenta`: Cummins 6.7 a 0,24 → 7,3 kHz, Duramax 0,30 → 9,8 kHz, os tons fortes das gravações); EMD com 27 pás (8,1 kHz em N8, 2,2 em lenta). Turbina com ruído de banda larga ∝ Zr·ṁ·M³ de ponta injetado depois dela: nos caminhões o abafador o come, nas locomotivas sai pela chaminé (é o agudo do EMD em N8).
+- **Irregularidade física**: atraso de ignição por evento (σ 16% nos leves, 11% nos pesados, +12% no frio), vazão de cada injetor (fixa ±2% no common-rail, ±3,5% injetor-bomba, ±6,5% bomba mecânica, mais um erro absoluto em mg, que pesa em lenta; a central equaliza 2/3 dele), tiro a tiro (1–2% × 2,5 em lenta), mistura por ciclo (σ 18% + 35%·carga). A fração pré-misturada e o dp/dθ seguem o atraso: cada batida sai diferente.
+- **Queima difusiva por mistura**: o combustível já injetado e ainda não queimado queima com o tempo de mistura do jato, `τ = 0,5 ms·(B/0,1)·√(200 MPa/p_inj)` (pressão do trilho no common-rail; ∝ rpm² nas bombas acionadas pelo came, com o piso de 20 MPa da abertura do bico), com a chama crescendo durante a pré-misturada. Piloto de massa fixa (1,5 mg, metade em plena carga), início de injeção da central `2 + 2·combustível + 0,15 ms·0,006·rpm` graus (compensa um atraso em ms), EMD 8°, GE 19°, EVC do EMD 227°.
+- **Câmbio automático do diesel** (`cambio()` na subclasse; o do Ronco fica desligado no diesel): pontos pela rotação de potência, caminhão sobe a 1400–1600 rpm com o pé no fundo e volta a ~1050, sai em 3ª e pula marchas; picape sobe de 2000 a 3000 conforme o pedal; sem acelerar segura a marcha; a central corta o torque durante a troca.
+- **Outros**: temperatura do coletor pela média, ponderada pela massa, do gás que sai pela válvula; potência medida pela média do torque (a leitura de um instante errava até 15%); droop do mecânico sobre o curso acima do atrito; Duramax na ordem real (1-2-7-8-4-5-6-3 = 1-8-7-3-6-5-4-2 na numeração do Ronco, virabrequim do Ronco; Scania e Power Stroke reais já eram a ordem clássica); Hilux com o raio dinâmico do 265/65 R17 (0,375 m); troca de preset volta à lenta (`portadorAoTrocar`: o caminhão depois do gerador nascia isócrono a 1800 rpm).
+
+Antes (`92de172`) × depois, simulado contra o real3 (ouvinte `ext`; caminhão em carga na cabine):
+
+| Classe (presets) | Medida | real3 | antes | depois |
+|---|---|---|---|---|
+| picape lenta (hilux, ranger, ram67) | 1–2,5k / 2,5–6k / 6–12k | −5,0 / −9,4 / −15,8 | −9,3 / −9,7 / −19,3 | −3,1 / −12,5 / −22,7 |
+| | centroide · CV | 630 Hz · 0,22 | 240 · 0,09 | 300 · 0,14 |
+| | apito > 2 kHz (hilux, ranger) | < +8 dB (Ranger, Power Stroke) | +32 a +34 dB em 3,3 kHz | +3 a +5 dB |
+| | apito do VGT do Cummins 6.7 | +17 a +24 dB em 7,2 kHz | +33 dB em 3,1 kHz | +20 dB em 7,3 kHz |
+| caminhão lenta (C15, Volvo) | 60–150 / 400–1k / 2,5–6k | +5,0 / +2,4 / −8,5 | +11,1 / +2,9 / −6,4 | +11,1 / +4,4 / −4,9 |
+| | centroide · CV | 761 · 0,19 | 677 · 0,28 | 949 · 0,28 |
+| | harmônicos 0,3–2 kHz sobre a mediana | +4 a +15 dB | +22 a +25 dB | +12 a +15 dB |
+| caminhão carga (Scania, cabine) | 60–150 / 1–2,5k / 6–12k | +5,5 / −10 / −27,8 | +11,5 / −18,5 / −19,9 | +7,2 / −4,8 / −24,7 |
+| | centroide · CV | 426 · 0,26 | 212 · 0,08 | 600 · 0,16 |
+| | apito | ≤ +11 dB | +9 | +2 |
+| ônibus carga | 1–2,5k / 6–12k · centroide | −5,6 / −21,9 · 692 | −13,3 / −20,0 · 281 | −10,3 / −30,8 · 381 |
+| EMD 710 notch 8 | 400–1k / 2,5–6k · centroide | −5,5…−0,4 / −5,8…+1,1 · 340–3547 | −4,2 / −16,7 · 499 | +0,4 / +0,2 · 1517 |
+| | apito | +19,5 dB (3,6–17 kHz) | +43 dB | +25 dB em 8,1 kHz |
+| GE 7FDL notch 8 | 60–150 / 1–2,5k / 6–12k | +5,4 / −4,5 / −21,2 | +8,6 / −6,2 / −31,2 | +9,2 / −3,1 / −22,2 |
+| gerador com carga | 60–150 / 1–2,5k · centroide | +5,8 / −11,8 · 233 | +8,1 / −29,7 · 207 | +7,2 / −11,7 · 356 |
+
+O grave: o real3 mostra que o simulado em lenta já tinha **mais** 30–150 Hz em relação a 150–400 do que as gravações (caminhão +11 contra +5); a falta de peso era a do pulso fraco contra o fundo largo (o fator de densidade) e do comb harmônico perfeito; em carga o caminhão agora tem 60–150 acima de 150–400 e o agudo 25 dB abaixo, como nas gravações.
+
+Itens da segunda passada (alvo do DIESEL.md × 1ª passada × agora):
+
+| Item | Alvo | antes | depois |
+|---|---|---|---|
+| hilux plena 3000 rpm: ângulo do pico / dp/dθ / gás no coletor | 10–14° / 5–8 bar/° / 550–700 °C | 9,3° / 10,0 / 539 | 14,0° / 6,6 / 699 |
+| hilux lenta: dp/dθ / ângulo | 3–6 / 3–8° | 2,8 / 3,1 | 3,0 / 5,1 |
+| catc15 plena 1900: ângulo / dp/dθ | 10–14° / 6–9 | 5,3° / 10,5 | 9,7° / 5,8 |
+| EMD N8: dp/dθ / p_max · GE N8 p_max / gás | 4–7 / 115–135 · 125–145 / 480–560 | 7,1 / 119 · 123 / 585 | 5,9 / 118 · 126 / 516 |
+| T na abertura do escape em lenta | 600–750 K | 478–525 | 478–521 (desvio: ver abaixo) |
+| Jake 6: frenagem / nível vs plena | 70–90% / +2 ± 2 dB | 65% / −1,2 | 69% / +3,2 |
+| freio de descarga: pulsos | −15 a −20 dB | −7,9 | −7,7 |
+| OM617 droop / caça | 7–9% / ±1–2% | 3,7% / dentro | 8,6% / ±1,9% |
+| Hilux a 100 km/h em 6ª · Volvo 0–85 km/h carregado | 1700 ± 100 rpm · 60–90 s | 1542 · 104 s | 1604 · 84 s |
+| potência na rotação de potência (16 presets) | ficha ± 5% | até +15,6% | −0,4 a +2,2% |
+| câmbio: subidas (Scania pé no fundo / meio pé; Hilux) | 1400–1600 / ~1300 / 2000–3000 | modo eco: 945 rpm | 1522–1595 / 1422–1460 / 2490–3092 |
+| troca gerador → Scania | volta à lenta | 1800 rpm isócrono | 500 rpm |
 
 ### Desvios conhecidos
 
-Os números medidos estão no relatório da etapa e em `npm run teste:diesel`. Ficaram fora do alvo: a temperatura na abertura do escape em lenta (480–540 K contra 600–750: zona única com a lenta pobre), o ângulo do pico (2–7° adiantado) e o `dp/dθ` de plena carga (10 bar/° contra 5–8); a fumaça preta no transiente (aspirado com ar sobrando, regulador de carga da locomotiva subindo junto com o giro); o EMD 710 mais escuro que a gravação (faltam fontes do 2 tempos: engrenagens, ventiladores, sopradores) e o GE agudo demais em lenta; o Jake e o freio de descarga sem o agudo e a atenuação pedidos; o droop do OM617 (3,6% contra 7–9%, pelo atrito em vazio); a caça do mecânico em lenta maior que ±2%; potência na rotação de potência até 15% acima da ficha nos leves aspirados e no Ranger; Hilux a 100 km/h em 6ª a 1542 rpm com as relações da ficha. O MAN B&W marítimo (opcional) não entrou.
+`npm run teste:diesel` lista cada um com o motivo (`DESVIOS` em `tools/diesel-valida.ts`). Da lista original da 1ª passada (54), 16 passaram (dp/dθ da lenta e ângulo, dp/dθ e gás de plena carga da picape, dp/dθ do EMD em N8, p_max e gás da GE, p90/p10 do cofre, potência dos 4 leves, Hilux a 100 km/h, Volvo 0–85, droop do OM617, nível do Jake) e as 11 bandas do EMD e da GE da tabela 4.4 foram trocadas pelas classes do real3; 7 saíram da janela com a queima por mistura e a mecânica mais alta (p_max da picape fria e do C15, gás do C15, agudo e curtose do cofre, 1–2,5 kHz do Cummins frio). São 34 linhas nos testes antigos e 31 nas classes novas do real3. Os grupos, com a física que falta:
+
+- **Temperaturas de lenta e do frio** (T na abertura 480–520 K): zona única com o combustível de lenta realista; a parede fria tira só 40 K da temperatura na injeção (o DIESEL.md supõe 180 K), o atraso quase não sobe e a queima fria sai cedo (ângulo 5,6°, alvo 8–15°).
+- **C15 a 1900 rpm com 2,7 bar**: λ 2,5 (real ≈ 1,8), porque o ar do coletor fica a 310 K fixos; pico de 140 bar, gás frio.
+- **EMD**: lavagem de zona única (o ar que atravessa esfria o coletor: 136/361 °C) e, no som, faltam os ventiladores, sopradores e motores de tração que dão o 60–150 Hz (+16 dB) de N8 e o agudo de lenta das gravações.
+- **Gerador**: ouvido pela câmera de veículo, sem a carenagem e o ventilador do grupo; precisa do portador gerador da Cena com o ouvinte ao lado.
+- **Grave de lenta 6–8 dB acima do real3** em picapes e caminhões (o 1º harmônico da ignição de 30 Hz).
+- **Fumaça preta** (aspirado com ar sobrando, locomotiva com a carga seguindo o giro), **Jake** sem o agudo e a 69% da frenagem, **freio de descarga** −7,7 dB, **Hilux** com a lenta carregada a ±2% por 5 s.
 
 ## Validação
 

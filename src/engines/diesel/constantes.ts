@@ -59,3 +59,6 @@ export const K_TURBINA = 0.0045;
 // banda larga do compressor sob carga (DieselDSP.turboSom), na escala do canal do turbo; acertada nas bandas de 1–12 kHz
 // dos caminhões, ônibus e gerador em carga do real3 (RESUMO.md)
 export const K_SOPRO = 4.5;
+
+// ruído de choque do jato subexpandido do Jake (fração de Zr·ṁ por (M² − 1)); acertado no agudo do Jake (DIESEL.md 3.4)
+export const K_CHOQUE = 0.025;
