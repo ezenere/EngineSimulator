@@ -1,6 +1,9 @@
 // Teste da página da Turbina num navegador headless de verdade (com áudio rodando).
 //
-//   node tools/turbina-testa-navegador.mjs <url de turbina.html> [--firefox] [--porta 9333] [--foto arquivo.png]
+//   node tools/turbina-testa-navegador.mjs <url de turbina.html> [--firefox] [--reserva] [--porta 9333] [--foto arquivo.png]
+//
+// --reserva bloqueia o AudioWorklet: a página tem de cair no ScriptProcessorNode (DSP na thread
+// principal). Nesse modo as mensagens não passam pela porta e as verificações delas são puladas.
 //
 // Chromium por CDP puro (/usr/bin/chromium) ou Firefox por WebDriver BiDi (/usr/bin/firefox), sem
 // dependências. Antes da página carregar, um script grava toda mensagem mandada pela porta do
@@ -17,9 +20,10 @@ const args = process.argv.slice(2);
 const opc = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };
 const url = args.find((a) => !a.startsWith('--') && a !== opc('--porta') && a !== opc('--foto'));
 const firefox = args.includes('--firefox');
+const reserva = args.includes('--reserva');
 const porta = +opc('--porta', firefox ? 9450 : 9333);
 const foto = opc('--foto');
-if (!url) { console.error('uso: node tools/turbina-testa-navegador.mjs <url> [--firefox] [--porta N] [--foto arq.png]'); process.exit(2); }
+if (!url) { console.error('uso: node tools/turbina-testa-navegador.mjs <url> [--firefox] [--reserva] [--porta N] [--foto arq.png]'); process.exit(2); }
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 const perfil = fs.mkdtempSync(path.join(os.tmpdir(), firefox ? 'turbina-ff-' : 'turbina-cr-'));
 
@@ -28,10 +32,11 @@ const GANCHO = `(() => {
   window.__msgs = [];
   const orig = MessagePort.prototype.postMessage;
   MessagePort.prototype.postMessage = function (m, ...r) { try { if (m && typeof m === "object" && typeof m.type === "string") window.__msgs.push(JSON.parse(JSON.stringify(m))); } catch {} return orig.call(this, m, ...r); };
-})();`;
+})();${reserva ? "\nAudioWorklet.prototype.addModule = () => Promise.reject(new Error('bloqueado no teste'));" : ''}`;
 
 const logs = [];
-let ev, tecla, fechar, fotografar;
+// clicarEm: clique de verdade do mouse (ponteiro ativo, então setPointerCapture funciona)
+let ev, tecla, fechar, fotografar, clicarEm;
 
 if (!firefox) {
   const chrome = spawn('/usr/bin/chromium', ['--headless=new', `--remote-debugging-port=${porta}`, '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check', '--window-size=1400,900', `--user-data-dir=${perfil}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -57,6 +62,7 @@ if (!firefox) {
     if (tipo !== 'down') await cmd('Input.dispatchKeyEvent', { type: 'keyUp', code, key: teclas[code] });
   };
   fotografar = async (arq) => { const r = await cmd('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(arq, Buffer.from(r.result.data, 'base64')); };
+  clicarEm = async (x, y) => { for (const type of ['mouseMoved', 'mousePressed', 'mouseReleased']) await cmd('Input.dispatchMouseEvent', { type, x, y, button: type === 'mouseMoved' ? 'none' : 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: 1 }); };
   fechar = () => { ws.close(); chrome.kill(); };
   await cmd('Runtime.enable'); await cmd('Log.enable'); await cmd('Network.enable'); await cmd('Page.enable');
   await cmd('Emulation.setDeviceMetricsOverride', { width: 1400, height: 900, deviceScaleFactor: 1, mobile: false });
@@ -74,7 +80,7 @@ if (!firefox) {
   await cmd('session.subscribe', { events: ['log.entryAdded'] });
   const tree = await cmd('browsingContext.getTree', {}); const ctx = tree.result.contexts[0].context;
   await cmd('browsingContext.setViewport', { context: ctx, viewport: { width: 1400, height: 900 } });
-  await cmd('script.addPreloadScript', { functionDeclaration: `() => ${GANCHO}` });
+  await cmd('script.addPreloadScript', { functionDeclaration: `() => { ${GANCHO} }` });
   ev = async (e) => { const r = await cmd('script.evaluate', { expression: e, target: { context: ctx }, awaitPromise: true, userActivation: true, resultOwnership: 'none' }); if (r.result?.type === 'exception') throw new Error(`${e.slice(0, 80)}: ${r.result.exceptionDetails?.text}`); return desserializar(r.result?.result); };
   const desserializar = (v) => (!v ? undefined : v.type === 'string' || v.type === 'number' || v.type === 'boolean' ? v.value : v.type === 'null' || v.type === 'undefined' ? null : JSON.stringify(v));
   const teclas = { Digit1: '1', Digit2: '2', Digit3: '3', Digit4: '4', KeyR: 'r', KeyI: 'i', KeyC: 'c', KeyV: 'v', KeyW: 'w', KeyS: 's' };
@@ -85,6 +91,7 @@ if (!firefox) {
     await cmd('input.performActions', { context: ctx, actions: [{ type: 'key', id: 'teclado', actions: acoes }] });
   };
   fotografar = async (arq) => { const r = await cmd('browsingContext.captureScreenshot', { context: ctx }); fs.writeFileSync(arq, Buffer.from(r.result.data, 'base64')); };
+  clicarEm = async (x, y) => { await cmd('input.performActions', { context: ctx, actions: [{ type: 'pointer', id: 'mouse', parameters: { pointerType: 'mouse' }, actions: [{ type: 'pointerMove', x: Math.round(x), y: Math.round(y) }, { type: 'pointerDown', button: 0 }, { type: 'pointerUp', button: 0 }] }] }); };
   fechar = () => { ws.close(); ff.kill(); };
   await cmd('browsingContext.navigate', { context: ctx, url, wait: 'complete' });
 }
@@ -92,6 +99,8 @@ if (!firefox) {
 // ------------------------------------------------------------------ roteiro
 let falhas = 0;
 const confere = (ok, rotulo, valor) => { console.log(`${ok ? 'ok  ' : 'FALHA'} ${rotulo}${valor !== undefined ? ` → ${typeof valor === 'string' ? valor : JSON.stringify(valor)}` : ''}`); if (!ok) falhas++; };
+// verificação que depende das mensagens gravadas na porta do worklet (pulada no modo reserva)
+const confereMsg = (ok, rotulo, valor) => (reserva ? console.log(`--    ${rotulo} (pulado: reserva)`) : confere(ok, rotulo, valor));
 const J = async (expr) => JSON.parse(await ev(`JSON.stringify(${expr})`));
 const ate = async (expr, ms, passo = 250) => { const t0 = Date.now(); let v; while (Date.now() - t0 < ms) { v = await J(expr); if (v) return v; await espera(passo); } return v; };
 const clicar = (sel) => ev(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) throw new Error('não achei ${sel.replace(/'/g, '')}'); e.click(); return true; })()`);
@@ -128,9 +137,9 @@ await clicar('.bar .ignition');
 const r1 = await ate(`document.querySelector('.bar .ignition').textContent === 'Partida em curso…' && document.querySelector('.bar .ignition').textContent`, 3000);
 confere(r1 === 'Partida em curso…', 'botão durante a partida', await rotulo());
 const msgs0 = await J(`window.__msgs.map((m) => m.type + (m.type === 'input' ? ':' + Object.keys(m).filter((k) => k !== 'type').join('+') : ''))`);
-confere(msgs0.slice(0, 5).join() === 'params,config,params,input:tla+reverser,input:start+tla', 'sequência de mensagens do legado (worklet)', msgs0.slice(0, 5));
+confereMsg(msgs0.slice(0, 5).join() === 'params,config,params,input:tla+reverser,input:start+tla', 'sequência de mensagens do legado (worklet)', msgs0.slice(0, 5));
 const cfg0 = (await ultimos('config'))[0];
-confere(cfg0 && cfg0.cfg.id === 'narrow' && cfg0.cfg.gain > 0, 'config com o ganho calibrado na página', cfg0 && cfg0.cfg.gain);
+confereMsg(cfg0 && cfg0.cfg.id === 'narrow' && cfg0.cfg.gain > 0, 'config com o ganho calibrado na página', cfg0 && cfg0.cfg.gain);
 const avisoPartida = await ate(`document.getElementById('eicas').dataset.avisos`, 3000);
 confere(/MOTOR DE PARTIDA|GIRANDO A SECO/.test(avisoPartida || ''), 'aviso de partida no EICAS', avisoPartida);
 const acesa = await ate(`/CHAMA ACESA/.test(document.getElementById('eicas').dataset.avisos) && document.getElementById('eicas').dataset.avisos`, 15000);
@@ -138,6 +147,7 @@ confere(!!acesa, 'chama acesa', acesa);
 const emRegime = await ate(`document.querySelector('.bar .ignition').textContent === 'Cortar motor'`, 25000, 500);
 const e1 = await eicas();
 confere(emRegime && +e1.n2 > 55, 'motor em marcha lenta (N2)', e1);
+if (reserva) confere(msgs0.length === 0, 'modo reserva: nada passou pela porta do worklet', msgs0.length);
 const rms1 = await ev(`document.getElementById('scope').dataset.rms`);
 confere(+rms1 > -60, 'som saindo (RMS no analisador)', `${rms1} dBFS`);
 confere(/rpm · BPF/.test(await ev(`document.getElementById('roFan').textContent`)), 'leitura do fan', await ev(`document.getElementById('roFan').textContent`));
@@ -162,7 +172,7 @@ await espera(400);
 const p2 = await J(`({ placa: document.querySelector('.plate').textContent, marcado: document.querySelector('.preset[aria-pressed=true]')?.dataset.id, ab: document.getElementById('abKey').disabled, marcas: [...document.querySelectorAll('#leverMarks span')].map((s) => s.textContent) })`);
 confere(p2.placa.includes('pós-combustão') && p2.marcado === 'fighter' && !p2.ab && p2.marcas.includes('pós'), 'F-16 carregado com pós-combustão', p2);
 const cfgF = (await ultimos('config')).at(-1);
-confere(cfgF?.cfg.id === 'fighter', 'config do F-16 mandada ao DSP');
+confereMsg(cfgF?.cfg.id === 'fighter', 'config do F-16 mandada ao DSP');
 await tecla('Digit4');
 confere((await ev(`document.getElementById('lever').getAttribute('aria-valuenow')`)) === '130', 'tecla 4 → manete 130%');
 const pc = await ate(`/PÓS-COMBUSTÃO/.test(document.getElementById('eicas').dataset.avisos) && document.getElementById('eicas').dataset.avisos`, 10000);
@@ -181,19 +191,21 @@ confere((await ev(`document.getElementById('revKey').getAttribute('aria-pressed'
 const antes = (await ultimos('params')).length;
 await chip('env', 'Hangar');
 const pEnv = (await ultimos('params')).slice(antes);
-confere(pEnv.length >= 1 && pEnv.at(-1).params.env === 'hangar', 'trocar ambiente manda params ao DSP', pEnv.map((m) => m.params.env));
+confereMsg(pEnv.length >= 1 && pEnv.at(-1).params.env === 'hangar', 'trocar ambiente manda params ao DSP', pEnv.map((m) => m.params.env));
 confere((await ev(`document.querySelector('#env [aria-pressed=true]').textContent`)) === 'Hangar', 'chip do ambiente marcado');
 
 // ---- arrastar no mapa muda ângulo e distância
-const mapa = await J(`(() => { const c = document.getElementById('obsMap'); const r = c.getBoundingClientRect(); return { x: r.left + r.width * 0.5 + 40, y: r.top + r.height * 0.5 + 5 }; })()`);
-await ev(`(() => { const c = document.getElementById('obsMap'); const o = { bubbles: true, clientX: ${mapa.x}, clientY: ${mapa.y}, pointerId: 1, isPrimary: true }; c.dispatchEvent(new PointerEvent('pointerdown', o)); })()`);
+await ev(`document.getElementById('obsMap').scrollIntoView({ block: 'center' })`);
 await espera(200);
-const solo = await J(`({ ang: document.getElementById('angle').value, dist: document.getElementById('dist').value, nota: document.getElementById('obsNote').textContent, ultimo: window.__msgs.filter((m) => m.type === 'params').at(-1).params })`);
-confere(+solo.ang > 150 && solo.ultimo.angle === +solo.ang && solo.ultimo.dist === +solo.dist, 'clique no mapa (atrás do motor)', solo);
+const mapa = await J(`(() => { const c = document.getElementById('obsMap'); const r = c.getBoundingClientRect(); return { x: r.left + r.width * 0.5 + 40, y: r.top + r.height * 0.5 + 5 }; })()`);
+await clicarEm(mapa.x, mapa.y);
+await espera(200);
+const solo = await J(`({ ang: document.getElementById('angle').value, dist: document.getElementById('dist').value, nota: document.getElementById('obsNote').textContent, ultimo: window.__msgs.filter((m) => m.type === 'params').at(-1)?.params })`);
+confere(+solo.ang > 150 && (reserva || (solo.ultimo.angle === +solo.ang && solo.ultimo.dist === +solo.dist)), 'clique no mapa (atrás do motor)', solo);
 
 // ---- passagem supersônica: silêncio, estrondo
 await chip('groundMode', 'Passagem');
-confere((await ultimos('params')).at(-1).params.listener === 'flyby', 'ouvinte em passagem');
+confereMsg((await ultimos('params')).at(-1)?.params.listener === 'flyby', 'ouvinte em passagem');
 confere(await slider('speed', 2000) === '2.000 km/h · Mach 1,63', 'velocidade 2000 km/h');
 await slider('alt', 300);
 const cone = await ate(`/cone de Mach está/.test(document.getElementById('obsNote').textContent) && document.getElementById('obsNote').textContent`, 3000);
@@ -206,10 +218,10 @@ if (foto) await fotografar(foto.replace(/\.png$/, '-passagem.png'));
 
 // ---- a bordo (V) e posição (C)
 await tecla('KeyV');
-const bordo = await J(`({ l: window.__msgs.filter((m) => m.type === 'params').at(-1).params.listener, chips: [...document.querySelectorAll('#board .chip')].map((b) => b.textContent + (b.disabled ? '(d)' : '')) })`);
-confere(bordo.l === 'cockpit', 'V: a bordo (F-16 não tem cabine de passageiros: cockpit)', bordo);
+const bordo = await J(`({ l: window.__msgs.filter((m) => m.type === 'params').at(-1)?.params.listener, chips: [...document.querySelectorAll('#board .chip')].map((b) => b.textContent + (b.disabled ? '(d)' : '')) })`);
+confereMsg(bordo.l === 'cockpit', 'V: a bordo (F-16 não tem cabine de passageiros: cockpit)', bordo);
 await tecla('KeyC');
-confere((await ultimos('params')).at(-1).params.listener === 'wingcam', 'C: câmera externa');
+confereMsg((await ultimos('params')).at(-1)?.params.listener === 'wingcam', 'C: câmera externa');
 
 // ---- turboélice: hélice, manete volta a 100%
 await familia('Turboélices');
@@ -225,7 +237,7 @@ const nCfg = (await ultimos('config')).length, nTune = (await ultimos('tune')).l
 await slider('jetV', 200, false);
 await chip('engines', '4');
 await espera(300);
-confere((await ultimos('tune')).length > nTune && (await ultimos('config')).length > nCfg, 'slider manda tune, nº de motores manda config', { tune: (await ultimos('tune')).length - nTune, config: (await ultimos('config')).length - nCfg });
+confereMsg((await ultimos('tune')).length > nTune && (await ultimos('config')).length > nCfg, 'slider manda tune, nº de motores manda config', { tune: (await ultimos('tune')).length - nTune, config: (await ultimos('config')).length - nCfg });
 confere((await ev(`document.querySelector('.preset[aria-pressed=true]')`)) == null, 'preset desmarcado depois de mexer');
 
 // ---- corte
@@ -237,9 +249,13 @@ if (foto) await fotografar(foto);
 // ---- telemetria e console
 const tel = await J(`window.__msgs.length`);
 console.log(`mensagens para o worklet: ${tel}`);
+// no modo reserva o aviso de ScriptProcessorNode obsoleto é esperado
+if (reserva) logs.splice(0, logs.length, ...logs.filter((l) => !/ScriptProcessorNode is deprecated/.test(l)));
 console.log(logs.length ? logs.join('\n') : '(sem erros no console)');
 confere(!logs.length, 'console sem erros');
 fechar();
-fs.rmSync(perfil, { recursive: true, force: true });
+// o navegador ainda escreve no perfil logo depois de morto
+await espera(500);
+try { fs.rmSync(perfil, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch {}
 console.log(falhas ? `${falhas} FALHA(S)` : 'TUDO OK');
 process.exit(falhas ? 1 : 0);
