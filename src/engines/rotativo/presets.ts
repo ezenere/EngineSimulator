@@ -181,7 +181,7 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     escape: { tipo: '2em1', Lp: 0.4, Dp: 38, presilencioso: false, cat: false, saidas: [{ L: 0.5, D: 40, phi: 90 }] },
     muffler: 'stock', pipeD: pol(40), gears: 0, overrun: 'cut', cat: false, limiter: 'fuel', limiterBand: 100,
     aviation: true, nivelEscape: 128, portadores: ['rotor', 'nenhum'],
-    rotor: { B: 3, R: 1.7, Nr: 1070, sigma: 0.06, cd0: 0.0105, J_rot: 15, Bc: 2, Rc: 0.3, ic: 4.6, icx: 6.66, massa: 200,
+    rotor: { B: 2, R: 1.7, Nr: 1070, sigma: 0.06, cd0: 0.0105, J_rot: 15, Bc: 2, Rc: 0.3, ic: 4.6, icx: 6.66, massa: 200,
       engrenagens: [{ z: 23, rpm: 7130 / 2.95 }, { z: 11, rpm: 1070 * 4 }], posRotor: [0, 0, 1.1], posCauda: [-1.9, 0, 0.9], posCaixa: [0, 0, 0.8], posMotor: [-0.3, 0, 0.6],
       corpo: { comprimento: 3.11, largura: 0.62, altura: 1.12 } } },
   { id: 'ar741', family: 'aviacao', name: 'UEL AR741', tag: 'AAI RQ-7 Shadow 200 · monorrotor · hélice impulsora direta · 38 hp',
