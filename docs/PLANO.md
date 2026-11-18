@@ -51,3 +51,20 @@ Cada etapa termina com: código, presets, tabela de compatibilidade, testes pass
 ## Recursos 3D
 
 Para a cena 3D (modo de testes e Passagem) podem ser usados modelos, malhas e texturas abertos, com licença CC0 ou equivalente (Poly Haven para texturas e HDRIs; Sketchfab/Blend Swap/Kenney só com CC0 ou CC-BY, com atribuição em `docs/CREDITOS.md`). Regras: guardar em `public/3d/` com um `LICENSES.md` ao lado (fonte, autor, licença, URL); orçamento de ~10 MB por página carregado sob demanda (glTF binário comprimido com Draco/meshopt, texturas de 1k em KTX2 ou JPEG); o que não existir em aberto (um vagão de trem-bala, um helicóptero específico) é feito em geometria simples parametrizada no three.js, com a mesma silhueta e dimensões reais. A cena nunca bloqueia o áudio: se o modelo não carregar, fica a caixa segmentada.
+
+## Rodada de auditoria e som (a partir de 18/11/2026)
+
+Todas as famílias estão na branch. O dono ouviu e o veredito é: **os sons novos estão ruins** (ar, mar, aspirador, pipoco, falta de peso; ver `docs/REVISAO-DE-SOM.md`, casos dos Rotativos, do Radial e as três passadas do Diesel no TECNICO). Esta rodada corrige o som, audita o projeto e arruma o que está incorreto, incompleto ou feio. Só agentes Fable.
+
+**Por que as passadas anteriores falharam.** Cada uma acertou números (bandas médias, taxas) e errou o ouvido. O padrão que se repetiu: fontes de **ruído largo contínuo** (chiado de admissão, sopro de turbo, pós-queima, jato da ponteira, fundo mecânico) acabam dominando, e o que é **tonal e impulsivo** (as ordens do motor, o pulso de cada explosão) fica fraco embaixo delas. A calibração de volume esconde isso: sobe tudo junto. Bandas médias não distinguem um chiado liso de um chiado colado ao pulso, nem um espectro de linhas de um espectro de ruído com a mesma energia.
+
+**Regras desta rodada (valem para todo agente de som):**
+
+1. **Referências persistentes.** As gravações ficam em `referencias/` na raiz do repositório (fora do git: está no `.gitignore`), com `referencias/INDEX.md`. Nada em `/tmp` (o sistema apaga). São uso privado como alvo de análise; nunca entram no site nem no git.
+2. **Kit "ouvido"** em `tools/ouvido/` (Python: numpy, scipy, matplotlib). Compara dois WAVs em condição casada (mesma rotação/carga/posição) e entrega: painel PNG lado a lado (espectrograma log-mel, zoom de 0,5 s, espectro fino com as ordens marcadas), razão harmônico/ruído (HNR) por banda, espectro de modulação, envoltória (p90/p10, crista, vão), planura espectral entre as linhas, e uma distância por componente. **Todo agente de som olha os painéis** (lê o PNG) antes e depois de mexer; o painel entra no relatório.
+3. **O alvo é a gravação casada, não a tabela.** Para cada preset revisado: pelo menos duas condições (lenta e carga, ou duas rotações), cada uma contra um trecho de gravação com a rotação confirmada. Acima de 6 kHz vale a física, não a gravação comprimida.
+4. **Orçamento de ruído.** Em cada condição, medir a fração da energia (ponderada A e por banda) que vem de fontes estocásticas contra a determinística, isolando fonte por fonte com a mesma semente. Se o HNR do simulado fica abaixo do da gravação numa banda, existe uma fonte de ruído sobrando ou uma fonte tonal faltando: achar qual. Ruído só entra modulado pelo evento físico que o gera.
+5. **Régua do que é "bom".** Os carros do Ronco que o dono revisou de ouvido (Fusca, Mustang, F1, Hellcat) definem a distância aceitável: o kit mede a distância deles às suas gravações e as famílias novas têm de chegar à mesma faixa.
+6. **Mecanismo físico, não ganho** (princípios do `REVISAO-DE-SOM.md`): cada correção nomeia a peça ou o fenômeno. Atenuar é atenuar. Todo campo de preset tem controle no painel.
+7. **Portões intactos:** `paridade:ronco`, `paridade:turbina`, `paridade:acoustics` idênticos; `teste:*` e `lenta:*` da família sem falhas (alvos e desvios atualizados com justificativa); `typecheck`, `build`, `navegador:*`.
+8. **Quem decide é o ouvido do dono.** O relatório de cada agente termina com "o que ouvir": preset, condição, o que deve ter mudado.
