@@ -9,7 +9,7 @@ Simuladores de som de motor que rodam direto no navegador. O site começa num me
 - **Rotativos**, Wankel (RX-7, RX-8, Cosmo 20B, 787B de Le Mans, NSU Ro80, Norton, motores de avião e de drone), o X-Engine e o motor de palhetas: https://ezenere.com/data/engine/rotativo.html
 - **Vapor**, locomotivas (K4s, A4 Mallard, D51, UP 844, Big Boy, Y6b, Shay, Maria Fumaça, pannier, King), máquina de moinho Corliss, trator Aveling, Stanley Steamer e vapor de rodas de pás: https://ezenere.com/data/engine/vapor.html
 - **Elétrico**, carros elétricos, metrôs e trens (o do-re-mi do Taurus), trem-bala, bonde, trólebus, ferramentas e drone: https://ezenere.com/data/engine/eletrico.html
-- **Passagem**, qualquer coisa passando por você (trem-bala, carro na rua, picape diesel, locomotiva, turboélice, jato, helicóptero R44, Corsair, Yak-52, Sherman) com o ouvinte livre em 3D: https://ezenere.com/data/engine/passagem.html
+- **Passagem**, qualquer coisa passando por você (trem-bala, metrô, carro na rua, picape diesel, locomotiva diesel e a vapor, turboélice, jato, caça supersônico, helicóptero R44, Corsair, Yak-52, Sherman, RX-7, 787B, Tesla, drone) com o ouvinte livre em 3D: https://ezenere.com/data/engine/passagem.html
 
 ![Ronco com uma Ferrari 458 no corte de giro](docs/ronco.png)
 
@@ -36,7 +36,7 @@ Você também escolhe de onde ouve: ao lado do escape, atrás do carro, dentro d
 
 ![Mustang passando pela rua, com o mapa mostrando onde ele está](docs/ronco-rua.png)
 
-**Teclas:** `I` liga · `W` acelera · `S` freia · `E` e `Q` trocam marcha · `C` muda o microfone · `V` alterna entre dentro do carro e na rua · `B` troca o modo do escape ativo (silencioso, normal, esportivo, pista) · `M` muda o modo do câmbio automático (pista, esportivo, normal, econômico, automático).
+**Teclas:** `I` liga · `W` acelera · `S` freia · `E` e `Q` trocam marcha · `C` muda o microfone · `V` alterna entre ouvir junto ao carro e parado na rua · `B` troca o modo do escape ativo (silencioso, normal, esportivo, pista) · `M` muda o modo do câmbio automático (pista, esportivo, normal, econômico, automático).
 
 ## Turbina (aviões)
 
@@ -55,6 +55,12 @@ Você dá a partida, que leva uns 15 segundos como num avião de verdade. Depois
 Também dá para pôr pós-combustão em qualquer jato, usar reversor e trocar peças do motor.
 
 **Teclas:** `I` partida · `W` e `S` mexem a manete · `1` a `4` posições da manete · `R` reversor · `C` muda a posição · `V` alterna entre a bordo e no solo.
+
+## Diesel (picapes, caminhões, geradores e locomotivas)
+
+Picapes (Hilux 2.8, Ranger 3.2, Ram Cummins 6.7, Silverado Duramax, F-250 Power Stroke), o Mercedes 300D, o Golf TDI, a F-1000 com MWM, caminhões (Scania V8, Volvo FH, Cat C15), ônibus urbano, o Detroit Diesel 6V92 de dois tempos, um gerador de 500 kVA e as locomotivas EMD SD70ACe (dois tempos) e GE C30-7. O diesel não tem vela nem borboleta: o combustível acende sozinho no ar comprimido, e é a pancada dessa queima que dá a batida do motor. Na partida a frio as velas de aquecimento esperam antes de o motor girar. Dá para trocar a injeção (common-rail, bomba mecânica, pré-câmara), o turbo, o freio-motor (de descarga, pelo turbo, Jake) e onde o motor trabalha: num veículo com câmbio, num gerador de rotação fixa com degraus de carga, ou numa locomotiva com os oito pontos de aceleração (notches).
+
+**Teclas:** `I` liga · `W` acelera · `S` freia · `E` e `Q` trocam marcha · `M` muda o modo do câmbio automático · `B` escape ativo · `C` muda o microfone · `V` alterna entre ouvir junto ao veículo e parado na rua · `J` freio-motor · na locomotiva, `0` a `8` escolhem o notch e `+`/`−` sobem e descem · no gerador, `0` a `4` escolhem a carga (0, 25, 50, 75 e 100%).
 
 ## Radial (aviões a pistão)
 
@@ -82,6 +88,12 @@ Carros (Tesla Model 3, Nissan Leaf, BYD Dolphin, Fórmula E), trens e metrôs (o
 
 **Teclas:** `Espaço` liga e desliga · `↑` e `↓` acelerador · `R` regeneração (segure) · `M` modo de modulação.
 
+## Passagem (qualquer coisa passando por você)
+
+Aqui o motor vai dentro de um veículo que passa pelo ouvinte: um trem-bala de 10 vagões num túnel, um metrô freando na estação, um carro na rua, uma locomotiva a diesel ou a vapor, um avião de hélice, um jato, um caça acima da velocidade do som, um helicóptero, um drone. Você escolhe o que passa, a velocidade, o lugar (céu aberto, corte, estação, viaduto, túnel) e de onde ouve: parado ao lado da via ou preso ao veículo, girando em volta dele numa cena 3D (arraste a cabeça). O "modo de testes" libera todos os parâmetros: comprimento da via, altitude, distância, número de vagões, umidade e temperatura do ar.
+
+**Teclas:** `Espaço` dispara ou para a passagem · `R` liga e desliga a repetição · `G` alterna entre o ouvinte parado e preso ao veículo · `C` troca a câmera (clique antes na cena 3D).
+
 ## Dicas
 
 - Use fone de ouvido: o som tem esquerda e direita, e com a câmera atrás do carro ele soa fora da cabeça, como se o carro estivesse ali.
@@ -108,9 +120,11 @@ O projeto usa [Vite](https://vite.dev/), TypeScript e React. O React fica só na
 - `npm run build`: confere os tipos e gera o site estático em `dist/`. É o conteúdo de `dist/` que vai para `ezenere.com/data/engine/`; os caminhos são relativos, então ele funciona em qualquer pasta.
 - `npm run preview`: serve o `dist/` gerado, para testar o build antes de publicar.
 - `npx tsx tools/render.ts ronco mustang rev saida/`: renderiza um cenário para WAV sem navegador; `npx tsx tools/compare-wav.ts a.wav b.wav` compara dois WAVs amostra a amostra. Detalhes no começo de cada arquivo em `tools/`.
+- `npm run verificar`: roda todos os testes em ordem (paridades com o código antigo, testes e marcha lenta de cada família, tipos e build) e mostra um resumo; `npm run verificar:rapido` roda só a parte curta. <!-- AUDITOR: confirmar -->
+- `npm run teste:diesel`, `teste:radial`, `teste:rotativo`, `teste:vapor`, `teste:eletrico`, `teste:cena`: as medidas de cada família contra os alvos (o do Diesel leva uns 20 minutos); `npm run lenta:<família>` confere que nenhum motor apaga na marcha lenta; `npm run navegador:<página>` abre a página num Chromium sem janela e confere que ela toca (precisa de `npm run build` antes).
 
 Páginas: `index.html` (menu), `ronco.html`, `turbina.html`, `diesel.html`, `radial.html`, `rotativo.html`, `vapor.html`, `eletrico.html` e `passagem.html`, com o código em `src/pages/`. A estrutura das pastas está em [`docs/TECNICO.md`](docs/TECNICO.md).
 
 ## Quer saber como funciona por dentro?
 
-O documento [Como o Ronco e a Turbina funcionam](docs/TECNICO.md) explica a física e o processamento de som de cada parte: cilindros, escapamento, câmbio, temperatura, turbinas, estrondo sônico, e também como adicionar novos carros e aviões.
+O documento [Como os simuladores funcionam](docs/TECNICO.md) explica a física e o processamento de som de cada parte: cilindros, escapamento, câmbio, temperatura, turbinas, estrondo sônico, diesel, radiais, Wankel, vapor, motores elétricos e a Passagem, e também como adicionar novos carros, aviões e os outros veículos. O que se sabe que está errado ou incompleto está em [`docs/AUDITORIA.md`](docs/AUDITORIA.md). <!-- AUDITOR: confirmar -->
