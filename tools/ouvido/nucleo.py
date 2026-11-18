@@ -320,6 +320,49 @@ def hnr_bandas(sep, f0, bandas=BANDAS):
     return out
 
 
+def leito_ruido(y, K, f0, bandas=BANDAS, nb=256):
+    """O ruído que NÃO se repete e o seu LEITO contínuo, por banda: a medida do "som de ar".
+
+    Do sinal no ângulo tira-se o que se repete igual em todo ciclo (a média síncrona); o que sobra é o resíduo: ruído
+    de verdade mais a variação de uma explosão para outra. Em cada banda mede-se a potência do resíduo ao longo do
+    ciclo e compara-se o quarto mais quieto do ciclo com a média:
+        `liso` = potência do resíduo no vão ÷ potência média do resíduo   (1 = ruído contínuo, igual o ciclo inteiro:
+                 ar, mar, aspirador; perto de 0 = o ruído só existe colado às explosões)
+        `leito_db` = potência do resíduo × liso: o nível do chiado que está lá o tempo todo, inclusive no silêncio
+                 entre as explosões. É este que não pode passar do da gravação (que ainda soma o ruído do microfone e
+                 da sala: o leito da gravação é um teto para o do motor).
+    O vão é escolhido numa metade dos ciclos e medido na outra (sem viés: ruído estacionário dá liso ≈ 1).
+    Devolve uma lista de dicionários: `residuo_db`, `residuo_frac` (fração da potência da banda), `liso`, `leito_db`."""
+    nc = len(y) // K
+    vazio = {'residuo_db': float('nan'), 'residuo_frac': float('nan'), 'liso': float('nan'), 'leito_db': float('nan')}
+    if nc < 8 or K % nb:
+        return [dict(vazio) for _ in bandas]
+    Y = y[:nc * K].reshape(nc, K)
+    tot = Y.reshape(-1)
+    res = (Y - Y.mean(0)).reshape(-1)
+    fs_ang = K * f0
+    kb = K // nb
+    nuc = np.ones(5) / 5
+    out = []
+    for lo, hi in bandas:
+        if hi <= 1.5 * f0 or lo >= 0.45 * fs_ang:
+            out.append(dict(vazio)); continue
+        sos = signal.butter(4, [lo, min(hi, 0.49 * fs_ang)], 'bandpass', fs=fs_ang, output='sos')
+        rb = signal.sosfiltfilt(sos, res)
+        tb = signal.sosfiltfilt(sos, tot)
+        pr = (rb * rb).reshape(nc, nb, kb).mean(2)
+        A = pr[0::2].mean(0); B = pr[1::2].mean(0)
+        A = np.convolve(np.r_[A[-2:], A, A[:2]], nuc, 'valid'); B = np.convolve(np.r_[B[-2:], B, B[:2]], nuc, 'valid')
+        q = nb // 4
+        ia = np.argsort(A)[:q]; ib = np.argsort(B)[:q]
+        liso = 0.5 * (B[ia].mean() / max(B.mean(), EPS) + A[ib].mean() / max(A.mean(), EPS))
+        pres = float(np.mean(rb * rb)) * nc / (nc - 1)       # (a média de nc ciclos leva 1/nc do ruído embora)
+        ptot = float(np.mean(tb * tb))
+        out.append({'residuo_db': float(db10(pres)), 'residuo_frac': float(min(pres / max(ptot, EPS), 1.0)), 'liso': float(min(liso, 1.5)),
+                    'leito_db': float(db10(pres * liso)), '_perfil': 0.5 * (A + B) * nc / (nc - 1) / max(ptot, EPS)})
+    return out
+
+
 # ----------------------------------------------------------------------------------- envoltória e eventos
 _REF_RUIDO = {}
 
@@ -531,6 +574,7 @@ def analisar(x, fase, ev=None, voltas=2, fs=FS, bandas=BANDAS, tol=5e-4, detalhe
         raise ValueError(f'trecho curto demais: {nc} ciclos (mínimo {M})')
     sep = separar_linhas(P, M, L, tol)
     hb = hnr_bandas(sep, f0, bandas)
+    lt = leito_ruido(y, K, f0, list(bandas) + [(1000, 6000)])
     r['K'] = K; r['M'] = M; r['segmentos'] = L
     # ---- eventos por ciclo
     ev_estimado = False
@@ -567,6 +611,7 @@ def analisar(x, fase, ev=None, voltas=2, fs=FS, bandas=BANDAS, tol=5e-4, detalhe
         b['piso_db'] = float(db10(h['piso'])) if np.isfinite(h['piso']) else float('nan')   # potência do piso
         b['planura_piso'] = h['planura']
         b['n_linhas'] = h['n_linhas']
+        b['residuo_frac'] = lt[i]['residuo_frac']; b['ruido_liso'] = lt[i]['liso']; b['leito_db'] = lt[i]['leito_db']; b['residuo_db'] = lt[i]['residuo_db']
         # envoltória "do motor" e rápida
         fc = fc_envoltoria(lo, hi, f_ign)
         yb, e = envoltoria(x, lo, hi, fs, fc)
@@ -597,6 +642,7 @@ def analisar(x, fase, ev=None, voltas=2, fs=FS, bandas=BANDAS, tol=5e-4, detalhe
     fc16 = fc_envoltoria(1000, 6000, f_ign)
     y16, e16 = envoltoria(x, 1000, 6000, fs, fc16)
     g = estat_envoltoria(e16)
+    g['residuo_frac'] = lt[-1]['residuo_frac']; g['ruido_liso'] = lt[-1]['liso']; g['leito_db'] = lt[-1]['leito_db']; g['residuo_db'] = lt[-1]['residuo_db']
     g['ref_ruido'] = {k: round(v, 3) for k, v in ref_ruido(1000, 6000, fc16, fs).items()}
     K16 = k_para(fase, fs, max(fc16, 400.0), ev)
     e16a, _ = reamostrar_sincrono(e16, fase, K16, fator=1)
@@ -623,6 +669,7 @@ def analisar(x, fase, ev=None, voltas=2, fs=FS, bandas=BANDAS, tol=5e-4, detalhe
     r['tons'] = tons_fora_de_ordem(x, fase, f0, fs, sep)
     if detalhe:
         r['_sep'] = sep; r['_y_ang'] = y; r['_K'] = K; r['_e16_ang'] = e16a; r['_K16'] = K16; r['_mod'] = vet
+        r['_perfil_residuo_16'] = lt[-1].get('_perfil')
         r['_e16'] = e16; r['_Eb'] = Eb
     return r
 

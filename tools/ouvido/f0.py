@@ -248,7 +248,7 @@ def _escolher_n(pf, ang, PPL):
 
 
 # -------------------------------------------------------------------------------------------------- rastrear
-def rastrear(x, fs=nu.FS, fmin=4.0, fmax=60.0, nominal=None, folga=0.08, nmax=32, voltas=2, verbose=False):
+def rastrear(x, fs=nu.FS, fmin=4.0, fmax=60.0, nominal=None, folga=0.08, nmax=32, voltas=2, verbose=False, _segunda=False):
     """Rastreia o ciclo. Devolve um dicionário: `fase` (rad por amostra, 2π por ciclo), `f0` (mediana, Hz), `f0_p5`,
     `f0_p95`, `rpm`, `t`/`f0_t` (trajetória), `N` (harmônico do ciclo que a linha de referência é), `linha_hz`,
     `pente_hz` (o que o pente sozinho disse), `pf` (tabela das dobras), `confianca` (fração periódica média no N
@@ -288,33 +288,40 @@ def rastrear(x, fs=nu.FS, fmin=4.0, fmax=60.0, nominal=None, folga=0.08, nmax=32
         raise ValueError('nenhuma linha na faixa de busca')
     k_ref = max(niv, key=niv.get)
     f_linha = k_ref * pente_hz
+    # A banda do rastreio da fase (fc) é ~1/3 do ciclo: acompanha a lenta que caça sem deixar entrar as linhas vizinhas.
+    # Sem rotação nominal o ciclo ainda não é conhecido: a primeira volta usa o piso da busca e a segunda, o ciclo achado.
     fc = float(np.clip(0.35 * fmin_b, 3.0, 40.0))
-    fase_l, amp_l = _fase_linha(xd, fsd, t_q, f_trk, k_ref, fc)
-    # (segunda passada: re-demodula em volta da própria fase alisada, para tirar o erro do caminho em degraus)
-    fl = np.gradient(fase_l) * fsd / (2 * np.pi)
-    fl = nu.passa_baixa(fl, fc, fsd)
-    fase_l, amp_l = _fase_linha(xd, fsd, np.arange(len(xd)) / fsd, fl / k_ref, k_ref, fc)
-    # para a taxa original
-    fase_L = np.interp(np.arange(len(x)) / fs, np.arange(len(xd)) / fsd, fase_l)
-    f_linha = float(np.median(np.diff(fase_L)) * fs / (2 * np.pi))
-    # ---- dobramento em N períodos
-    if nominal:
-        n_user = max(1, int(round(f_linha / nominal)))
-        lim = min(nmax, max(n_user * 2, 8))
-    else:
-        lim = int(min(nmax, max(1, np.floor(f_linha / fmin))))
-    pf, ang, PPL = _dobras(x, fs, fase_L, f_linha, lim, fmax_lin)
-    n_dobra, rob, melhor, n_max = _escolher_n(pf, ang, PPL)
+    for volta in range(2):
+        fase_l, amp_l = _fase_linha(xd, fsd, t_q, f_trk, k_ref, fc)
+        # (segunda passada: re-demodula em volta da própria fase alisada, para tirar o erro do caminho em degraus)
+        fl = np.gradient(fase_l) * fsd / (2 * np.pi)
+        fl = nu.passa_baixa(fl, fc, fsd)
+        fase_l, amp_l = _fase_linha(xd, fsd, np.arange(len(xd)) / fsd, fl / k_ref, k_ref, fc)
+        # para a taxa original
+        fase_L = np.interp(np.arange(len(x)) / fs, np.arange(len(xd)) / fsd, fase_l)
+        f_linha = float(np.median(np.diff(fase_L)) * fs / (2 * np.pi))
+        # ---- dobramento em N períodos
+        if nominal:
+            n_user = max(1, int(round(f_linha / nominal)))
+            lim = min(nmax, max(n_user * 2, 8))
+        else:
+            lim = int(min(nmax, max(1, np.floor(f_linha / fmin))))
+        pf, ang, PPL = _dobras(x, fs, fase_L, f_linha, lim, fmax_lin)
+        n_dobra, rob, melhor, n_max = _escolher_n(pf, ang, PPL)
+        fc2 = float(np.clip(0.35 * f_linha / n_dobra, 3.0, 40.0))
+        if nominal or fc2 < 1.3 * fc:
+            break
+        fc = fc2
     if nominal:
         N = n_user
         if N in rob and n_dobra != N:
             if n_dobra % N == 0:
                 res = _residuo_periodico(ang, PPL, N, n_dobra)
                 if _significativo(res):
-                    avisos.append(f'com o f0 nominal ({nominal:.2f} Hz, N={N}) sobra som periódico num período {n_dobra // N}× mais longo (fração do resíduo: '
-                                  + ' / '.join('--' if not np.isfinite(v) else f'{v:.2f}' for v in res) + f'): confira a rotação (f0 = {f_linha / n_dobra:.2f} Hz?) '
-                                  f'ou é um padrão que se repete a cada {n_dobra // N} ciclos')
-            elif rob[N] < melhor - max(0.1, 0.25 * melhor):
+                    avisos.append(f'com o ciclo em {f_linha / N:.2f} Hz sobra som periódico num período {n_dobra // N}× mais longo (fração do resíduo no grave / acima / envoltória: '
+                                  + ' / '.join('--' if not np.isfinite(v) else f'{v:.2f}' for v in res) + f'): ou o ciclo é {f_linha / n_dobra:.2f} Hz (confira a rotação), '
+                                  f'ou a queima segue um padrão que se repete a cada {n_dobra // N} ciclos')
+            elif rob[N] < melhor - max(0.1, 0.25 * melhor) and not _segunda:
                 avisos.append(f'a dobra em N={N} (f0 nominal {nominal:.2f} Hz) explica {rob[N]:.2f} do sinal, e em N={n_dobra} explica {rob[n_dobra]:.2f}: '
                               f'confira a rotação (f0 = {f_linha / n_dobra:.2f} Hz?)')
     else:
@@ -329,6 +336,19 @@ def rastrear(x, fs=nu.FS, fmin=4.0, fmax=60.0, nominal=None, folga=0.08, nmax=32
     f0 = float(np.median(f0_t))
     if abs(pente_hz / f0 - 1) > 0.03:
         avisos.append(f'o pente sozinho dava {pente_hz:.2f} Hz ({pente_hz / f0:.2f}× o ciclo): corrigido pela dobra')
+    if not nominal and not _segunda:
+        # Segunda volta: com o ciclo achado, rastreia de novo como se a rotação tivesse sido dada. A janela do pente
+        # passa a ser a certa para esse ciclo (a da primeira volta é longa, dimensionada pelo piso da busca, e borra
+        # uma lenta que caça); o N já decidido não muda.
+        meia = 0.5 * (np.percentile(f0_t, 95) - np.percentile(f0_t, 5)) / f0
+        try:
+            r2 = rastrear(x, fs, fmin, fmax, nominal=f0, folga=float(np.clip(3 * meia, 0.08, 0.2)), nmax=nmax, voltas=voltas, _segunda=True)
+            if abs(r2['f0'] / f0 - 1) < 0.03 and r2['confianca'] >= np.nanmean(pf[N]) - 0.02:
+                r2['pente_hz'] = pente_hz
+                r2['avisos'] = avisos + [a for a in r2['avisos'] if 'fração periódica baixa' in a or 'some em parte' in a or 'sobra som periódico' in a]
+                return r2
+        except ValueError:
+            pass
     conf = float(np.nanmean(pf[N])) if N in pf else float('nan')
     if not np.isfinite(conf) or conf < 0.15:
         avisos.append(f'fração periódica baixa ({conf:.2f}): pouco som periódico no trecho, ou a rotação varia rápido demais')

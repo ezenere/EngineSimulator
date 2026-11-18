@@ -169,6 +169,37 @@ def distancias(R, S, relR, relS, pesos=PESOS):
     return d
 
 
+def leito_frac(b):
+    """Fração da potência da banda que é leito contínuo de ruído (resíduo não periódico × quanto dele é liso)."""
+    return _v(b, 'residuo_frac') * min(_v(b, 'ruido_liso'), 1.0)
+
+
+def defeitos(R, S, pesos=PESOS):
+    """Os três defeitos de um lado só que o ouvido do dono já rejeitou, em tolerâncias (0 = o simulado não passa do
+    real nesse sentido). A gravação soma o ruído do microfone e da sala ao do motor, então nestas contas ela é um TETO
+    de ruído e um PISO de pulso: só conta o que o simulado tem de pior que ela.
+      ar     leito de ruído a mais: a fração da potência de cada banda (≥ 400 Hz, e de 1–6 kHz) que é chiado contínuo,
+             presente até no silêncio entre as explosões, acima da fração da gravação (tolerância 0,10)
+      tom    tom a menos: HNR do simulado abaixo do da gravação (tolerância 4 dB): ruído sobrando ou linha faltando
+      pulso  pulso a menos: envoltória mais lisa que a da gravação (p90/p10 e vão, 3 dB; modulação na ignição, 0,12;
+             fração presa ao ciclo, 0,15)"""
+    nb = len(R['bandas'])
+    pares = [(R['bandas'][i], S['bandas'][i], pesos[i]) for i in range(nb) if R['bandas'][i]['env_valida'] and S['bandas'][i]['env_valida']]
+    pares.append((R['faixa_1_6k'], S['faixa_1_6k'], 2.0))
+    pos = lambda v: max(v, 0.0) if np.isfinite(v) else float('nan')
+    d = {}
+    d['ar'] = _rms_pond([(pos(leito_frac(bs) - leito_frac(br)) / 0.10, w) for br, bs, w in pares])
+    d['tom'] = _rms_pond([(pos(np.clip(_v(R['bandas'][i], 'hnr'), -15, 35) - np.clip(_v(S['bandas'][i], 'hnr'), -15, 35)) / 4.0, pesos[i]) for i in range(nb)])
+    it = []
+    for br, bs, w in pares:
+        it.append((pos(_v(br, 'p90_p10') - _v(bs, 'p90_p10')) / 3.0, w))
+        it.append((pos(_v(bs, 'vao') - _v(br, 'vao')) / 3.0, w))
+        it.append((pos(min(_v(br, 'm_ign'), 1.5) - min(_v(bs, 'm_ign'), 1.5)) / 0.12, w))
+        it.append((pos(_v(br, 'frac_ciclo') - _v(bs, 'frac_ciclo')) / 0.15, w))
+    d['pulso'] = _rms_pond(it)
+    return d
+
+
 # ------------------------------------------------------------------------------------------------ resumo
 def _faixas(idx):
     """Agrupa índices de banda contíguos: [3,4,5,7] → [(3,5),(7,7)]."""
@@ -248,6 +279,23 @@ def resumir(R, S, relR, relS, pesos=PESOS, n=5):
         it.append(melhor_env)
     if melhor_mod:
         it.append(melhor_mod)
+    # ---- leito contínuo de ruído (o "som de ar")
+    melhor_ar = None
+    for nome, br, bs, w in cand:
+        dl = leito_frac(bs) - leito_frac(br)
+        g = abs(dl) / 0.10 * min(w, 1.5)
+        if np.isfinite(g) and g > 1 and (melhor_ar is None or g > melhor_ar[0]):
+            if dl > 0:
+                t = (f"A MAIS: chiado contínuo em {nome}: {100 * leito_frac(bs):.0f}% da potência da banda é um leito de ruído liso, presente até entre as explosões, contra {100 * leito_frac(br):.0f}% "
+                     f"no real (o ruído não periódico é {100 * _v(bs, 'residuo_frac'):.0f}% da banda e {100 * min(_v(bs, 'ruido_liso'), 1):.0f}% dele é liso; no real, {100 * _v(br, 'residuo_frac'):.0f}% e {100 * min(_v(br, 'ruido_liso'), 1):.0f}%)")
+                g *= 1.3   # (é o defeito que o ouvido mais rejeitou: sobe na lista)
+            else:
+                t = (f"A MENOS: leito de ruído em {nome}: {100 * leito_frac(bs):.0f}% da potência da banda é ruído contínuo, contra {100 * leito_frac(br):.0f}% no real "
+                     f"(pode ser só o ruído da gravação: microfone, sala, vento)")
+                g *= 0.5
+            melhor_ar = (g, t)
+    if melhor_ar:
+        it.append(melhor_ar)
     # ---- eventos
     gr, gs = R['faixa_1_6k'], S['faixa_1_6k']
     for k, rot, tol in (('picos_irregulares_s', 'estalos fora do padrão do ciclo', 0.7), ('picos_s', 'picos 10 dB acima da mediana', 1.0)):
@@ -281,14 +329,19 @@ def resumir(R, S, relR, relS, pesos=PESOS, n=5):
 
 
 def tabela(R, S, relR, relS):
-    L = ['banda       nível re âncora   HNR (dB)      piso re âncora   planura   p90/p10 (dB)    vão (dB)      m ignição     fração ciclo',
-         '            real    sim       real   sim    real    sim      r    s    real   sim     real   sim    real  sim     real  sim']
+    L = ['banda      nível re âncora   HNR (dB)     piso re âncora  ruído não periódico  leito liso    p90/p10 (dB)   vão (dB)     m ignição    fração ciclo',
+         '           real    sim       real   sim   real    sim     % da banda  r   s    % da banda    real   sim    real   sim   real  sim    real  sim']
     f = lambda v, w=6, p=1: (' ' * (w - 2) + '--') if v is None or not np.isfinite(v) else f'{v:{w}.{p}f}'
+    pc = lambda v: '  --' if v is None or not np.isfinite(v) else f'{100 * v:4.0f}'
     for i, (br, bs) in enumerate(zip(R['bandas'], S['bandas'])):
         val = '' if (br['env_valida'] and bs['env_valida']) else '  (env. só indicativa)'
-        L.append(f"{nu.NOMES[i]:9s} {f(relR[i]['nivel'])}  {f(relS[i]['nivel'])}    {f(_v(br, 'hnr'))} {f(_v(bs, 'hnr'))}  {f(relR[i]['piso'])}  {f(relS[i]['piso'])}   "
-                 f"{f(_v(br, 'planura_piso'), 5)}{f(_v(bs, 'planura_piso'), 5)}  {f(_v(br, 'p90_p10'))} {f(_v(bs, 'p90_p10'))}   {f(_v(br, 'vao'))} {f(_v(bs, 'vao'))}   "
-                 f"{f(_v(br, 'm_ign'), 5, 2)} {f(_v(bs, 'm_ign'), 5, 2)}   {f(_v(br, 'frac_ciclo'), 5, 2)} {f(_v(bs, 'frac_ciclo'), 5, 2)}{val}")
+        L.append(f"{nu.NOMES[i]:8s} {f(relR[i]['nivel'])}  {f(relS[i]['nivel'])}    {f(_v(br, 'hnr'))} {f(_v(bs, 'hnr'))} {f(relR[i]['piso'])}  {f(relS[i]['piso'])}         "
+                 f"{pc(_v(br, 'residuo_frac'))} {pc(_v(bs, 'residuo_frac'))}       {pc(leito_frac(br))} {pc(leito_frac(bs))}   {f(_v(br, 'p90_p10'))} {f(_v(bs, 'p90_p10'))}  {f(_v(br, 'vao'))} {f(_v(bs, 'vao'))}  "
+                 f"{f(_v(br, 'm_ign'), 5, 2)} {f(_v(bs, 'm_ign'), 5, 2)}  {f(_v(br, 'frac_ciclo'), 5, 2)} {f(_v(bs, 'frac_ciclo'), 5, 2)}{val}")
+    gr, gs = R['faixa_1_6k'], S['faixa_1_6k']
+    L.append(f"{'1-6k':8s} {'':6s}  {'':6s}    {'':6s} {'':6s} {'':6s}  {'':6s}         "
+             f"{pc(_v(gr, 'residuo_frac'))} {pc(_v(gs, 'residuo_frac'))}       {pc(leito_frac(gr))} {pc(leito_frac(gs))}   {f(_v(gr, 'p90_p10'))} {f(_v(gs, 'p90_p10'))}  {f(_v(gr, 'vao'))} {f(_v(gs, 'vao'))}  "
+             f"{f(_v(gr, 'm_ign'), 5, 2)} {f(_v(gs, 'm_ign'), 5, 2)}  {f(_v(gr, 'frac_ciclo'), 5, 2)} {f(_v(gs, 'frac_ciclo'), 5, 2)}")
     return '\n'.join(L)
 
 
@@ -296,14 +349,17 @@ def tabela(R, S, relR, relS):
 def comparar(real, sim, ancora='auto', pesos=PESOS):
     """`real` e `sim` = saídas de `preparar`. Devolve o dicionário de comparação (distâncias, resumo, âncora…)."""
     R, S = real['med'], sim['med']
+    # banda inteira abaixo do ciclo não tem linha do motor (só vento e vibração): sai das distâncias
+    pesos = [0.0 if nu.BANDAS[i][1] <= min(R['f0'], S['f0']) else p for i, p in enumerate(pesos)]
     lo, hi, motivo = escolher_ancora(ancora, R['f_ign'])
     ancR = float(nu.db10(nu.energia_bandas(real['x'], real['fs'], [(lo, hi)])[0]))
     ancS = float(nu.db10(nu.energia_bandas(sim['x'], sim['fs'], [(lo, hi)])[0]))
     relR, relS = relativos(R, ancR), relativos(S, ancS)
     d = distancias(R, S, relR, relS, pesos)
+    df = defeitos(R, S, pesos)
     res = resumir(R, S, relR, relS, pesos)
     avisos = []
-    if abs(S['f0'] / R['f0'] - 1) > 0.05:
+    if abs(S['f0'] / R['f0'] - 1) > 0.07:
         avisos.append(f"condição NÃO casada: f0 do real {R['f0']:.2f} Hz e do simulado {S['f0']:.2f} Hz diferem {100 * (S['f0'] / R['f0'] - 1):+.0f}%")
     if R['ev'] != S['ev']:
         avisos.append(f"eventos por ciclo diferentes (real {R['ev']}, simulado {S['ev']}): passe --eventos-por-ciclo")
@@ -312,14 +368,16 @@ def comparar(real, sim, ancora='auto', pesos=PESOS):
     crit = (f'Normalização: o simulado foi escalado {ancR - ancS:+.1f} dB para ter a mesma potência do real na banda âncora {lo:.0f}–{hi:.0f} Hz ({motivo}); '
             f'todos os níveis em dB relativos a essa banda.')
     return {'ancora': [lo, hi], 'ancora_motivo': motivo, 'ancora_db_real': ancR, 'ancora_db_sim': ancS, 'ganho_sim_db': ancR - ancS, 'criterio': crit,
-            'pesos': list(pesos), 'distancias': d, 'resumo': [{'gravidade': round(g, 2), 'texto': t} for g, t in res], 'avisos': avisos,
+            'pesos': list(pesos), 'distancias': d, 'defeitos': df, 'resumo': [{'gravidade': round(g, 2), 'texto': t} for g, t in res], 'avisos': avisos,
             '_relR': relR, '_relS': relS}
 
 
 def texto_resumo(real, sim, comp):
     R, S = real['med'], sim['med']
     d = comp['distancias']
+    df = comp['defeitos']
     L = ['DISTÂNCIAS (em tolerâncias; 1 ≈ incerteza de uma gravação de celular):  ' + '   '.join(f"{NOME_COMP[k]} {d[k]:.2f}" for k in COMPONENTES) + f"   |  total {d['total']:.2f}",
+         f"DEFEITOS DE UM LADO SÓ (só o que o simulado tem de pior que a gravação):  ar (leito de ruído a mais) {df['ar']:.2f}   tom a menos {df['tom']:.2f}   pulso a menos {df['pulso']:.2f}",
          '',
          'O QUE O SIMULADO TEM A MAIS / A MENOS QUE O REAL (do mais grave para o menos):']
     if not comp['resumo']:
@@ -328,8 +386,8 @@ def texto_resumo(real, sim, comp):
         L.append(f"  {k}. {r['texto']}")
     L += ['', tabela(R, S, comp['_relR'], comp['_relS'])]
     gr, gs = R['faixa_1_6k'], S['faixa_1_6k']
-    L.append(f"1–6 kHz   p90/p10 {gr['p90_p10']:.1f} / {gs['p90_p10']:.1f} dB · vão {gr['vao']:.1f} / {gs['vao']:.1f} dB · curtose (mediana) {gr['curtose_mediana']:.1f} / {gs['curtose_mediana']:.1f} · "
-             f"picos {gr['picos_s']:.1f} / {gs['picos_s']:.1f} por s · fora do padrão {gr['picos_irregulares_s']:.1f} / {gs['picos_irregulares_s']:.1f} por s   (real / simulado)")
+    L.append(f"1–6 kHz   curtose (mediana) {gr['curtose_mediana']:.1f} / {gs['curtose_mediana']:.1f} · picos {gr['picos_s']:.1f} / {gs['picos_s']:.1f} por s · fora do padrão "
+             f"{gr['picos_irregulares_s']:.1f} / {gs['picos_irregulares_s']:.1f} por s · ruído liso daria p90/p10 {gs['ref_ruido']['p90_p10']:.1f} dB e vão {gs['ref_ruido']['vao']:.1f} dB   (real / simulado)")
     L.append(f"explosões  CV no grave {_v(R['grave'], 'cv_evento'):.2f} / {_v(S['grave'], 'cv_evento'):.2f} · mesmo cilindro {_v(R['grave'], 'cv_ciclo'):.2f} / {_v(S['grave'], 'cv_ciclo'):.2f} · "
              f"desigualdade fixa {_v(R['grave'], 'desigualdade'):.2f} / {_v(S['grave'], 'desigualdade'):.2f} · inclinação {R['inclinacao_db_oitava']:.1f} / {S['inclinacao_db_oitava']:.1f} dB/oitava · "
              f"fração harmônica {R['fracao_harmonica']:.2f} / {S['fracao_harmonica']:.2f}")

@@ -136,7 +136,8 @@ export function render(id: string, op: Op) {
   const rpm = somaRpm / Math.max(1, cont);
   const N = cfg.N;
   const info = { preset: id, modo, rpm: +rpm.toFixed(1), rpmMin: +rpmMin.toFixed(1), rpmMax: +rpmMax.toFixed(1), f0: +(rpm / 120).toFixed(4), fixo: modo.startsWith('travado'),
-    eventosPorCiclo: N, voltasPorCiclo: 2, pedal: Number.isFinite(pedal) ? +pedal.toFixed(4) : +d.thr.toFixed(4), coletorBar: +(d.pMan / 101325).toFixed(3), agua: Math.round(d.coolant),
+    // (o pedal vai com a precisão inteira: o conjunto do orçamento e os casos fabricados o reusam, e um arredondamento muda a trajetória)
+    eventosPorCiclo: N, voltasPorCiclo: 2, pedal: Number.isFinite(pedal) ? pedal : d.thr, coletorBar: +(d.pMan / 101325).toFixed(3), agua: Math.round(d.coolant),
     ouvinte: op.ouvinte, canal: op.canal, ambiente: op.ambiente, sem: op.sem, escala: op.escala, semente: op.semente ?? 12345, ganho: +d.cfgGain.toFixed(4), pico: +pico.toFixed(4), nan, estado: d.state,
     campo: op.campo, sr: SR, dur: op.dur };
   return { m, info };
@@ -157,7 +158,7 @@ function salvar(arq: string, r: { m: Float32Array; info: any }) {
   gravarMono(arq, r.m);
   fs.writeFileSync(arq.replace(/\.wav$/, '.json'), JSON.stringify(r.info, null, 1));
   const i = r.info;
-  console.log(`${arq}: ${i.modo} ${i.rpm} rpm (${i.rpmMin}–${i.rpmMax}), f0 ${i.f0} Hz, pedal ${i.pedal}, coletor ${i.coletorBar} bar, pico ${i.pico}${i.nan ? `, ${i.nan} NaN` : ''}${i.sem.length ? `, sem ${i.sem.join('+')}` : ''}`);
+  console.log(`${arq}: ${i.modo} ${i.rpm} rpm (${i.rpmMin}–${i.rpmMax}), f0 ${i.f0} Hz, pedal ${(+i.pedal).toFixed(4)}, coletor ${i.coletorBar} bar, pico ${i.pico}${i.nan ? `, ${i.nan} NaN` : ''}${i.sem.length ? `, sem ${i.sem.join('+')}` : ''}`);
 }
 
 if (process.argv[1] && process.argv[1].endsWith('render.ts')) {

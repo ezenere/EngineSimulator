@@ -19,9 +19,10 @@ Para cada fonte sai:
     do laço não linear e a diferença deixa de ser a fonte; vale a diferença de potência (tudo − sem), que pode até ser
     negativa. As duas contas saem no JSON (`propria` e `efeito`); quando divergem mais de 1 dB numa fonte que deveria
     somar, sai um aviso (interferência com outra fonte periódica, ou a saturação da saída);
-  · quanto do VÃO ela ocupa: a fração da potência da faixa (1–6 kHz e cada banda acima de 400 Hz) nos instantes em que
-    a envoltória do render completo está no quarto mais baixo (entre as explosões). É a conta que acha o "mar": a
-    fonte que domina o vão é a que o ouvido ouve como chiado contínuo.
+  · quanto do VÃO ela ocupa: a fração da potência da faixa (1–6 kHz e cada banda acima de 400 Hz) no quarto do ciclo
+    em que a envoltória média do render completo é mais baixa (entre as explosões; a máscara é no ângulo do ciclo,
+    igual para todos os arquivos). É a conta que acha o "mar": a fonte que domina o vão é a que o ouvido ouve como
+    chiado contínuo.
 Com `_semente2`: dois renders com sementes diferentes têm a mesma parte determinística e ruídos independentes, então
 potência estocástica = potência de (a − b)/√2, por banda, ponderada A e no vão. Só vale com giro travado (com o giro
 livre as duas trajetórias se afastam e tudo vira "estocástico").
@@ -109,10 +110,17 @@ def orcamento(pasta, prefixo=None, f0=None, ev=None, fixo=None, na_rede=NA_REDE,
     filt = {}
     masc = {}
     Evao = {}
+    # O vão é definido no ÂNGULO do ciclo, não instante a instante: o quarto do ciclo em que a envoltória MÉDIA do render
+    # completo é mais baixa. (Escolher os instantes em que este render em particular está baixo dá viés: qualquer outra
+    # realização, outra semente ou uma fonte desligada que mude a trajetória, parece ter mais energia ali.)
+    NB = 720
+    ib = np.minimum((np.mod(fase, 2 * np.pi) / (2 * np.pi) * NB).astype(int), NB - 1)
+    cont = np.maximum(np.bincount(ib, minlength=NB), 1)
     for nome, (lo, hi) in faixas.items():
         y, e = nu.envoltoria(x, lo, hi, fs, nu.fc_envoltoria(lo, hi, f_ign))
         filt[nome] = y
-        masc[nome] = e <= np.percentile(e, 25)
+        med = np.bincount(ib, weights=e, minlength=NB) / cont
+        masc[nome] = (med <= np.percentile(med, 25))[ib]
         Evao[nome] = float(np.mean(y[masc[nome]] ** 2))
     g16 = nu.estat_envoltoria(nu.envoltoria(x, 1000, 6000, fs, nu.fc_envoltoria(1000, 6000, f_ign))[1])
     out = {'prefixo': prefixo, 'arquivos': {k: os.path.basename(v) for k, v in arqs.items()}, 'f0': f0, 'ev': int(ev), 'rpm': f0 * 60 * voltas, 'duracao': n / fs,
@@ -173,19 +181,23 @@ def texto(r):
     L = [f"orçamento de {r['prefixo']}: {r['rpm']:.0f} rpm (f0 {r['f0']:.2f} Hz, {r['ev']} explosões por ciclo), {r['duracao']:.1f} s",
          f"render completo: vão de 1–6 kHz {r['total']['vao_1_6k_db']:.1f} dB re RMS, p90/p10 {r['total']['p90_p10_1_6k']:.1f} dB",
          '',
-         'fração da potência por banda (%), do total ponderado A, e do VÃO entre as explosões (quarto mais baixo da envoltória)',
+         'fração da potência por banda (%), do total ponderado A, e do VÃO entre as explosões (o quarto do ciclo com a envoltória média mais baixa)',
          'fonte         ' + ' '.join(f'{b:>7s}' for b in r['bandas']) + '  |  pond. A |  vão 400-1k  1-2,5k  2,5-6k  1–6 kHz | p90/p10 próprio']
     ordem = sorted(r['fontes'], key=lambda k: -r['fontes'][k]['vao_1_6k'])
     for k in ordem:
         f = r['fontes'][k]
         L.append(f"{k[:12]:12s}{'*' if f['na_rede'] else ' '} " + ' '.join(' ' + pct(v) for v in f['bandas_frac']) + f"  |  {pct(f['A_frac'])}  |      {pct(f['vao_400-1k'])}  {pct(f['vao_1-2,5k'])}  {pct(f['vao_2,5-6k'])}   {pct(f['vao_1_6k'])} |"
                  + (f"  {f['p90_p10_1_6k']:5.1f} dB" if 'p90_p10_1_6k' in f else '      --'))
+        if f['na_rede']:
+            L.append('  ↳ o que muda ' + ' '.join(' ' + pct(min(v, 9.99)) for v in f['propria']['bandas_frac']) + f"  |  {pct(min(f['propria']['A_frac'], 9.99))}  |  (potência de tudo − sem: inclui a mudança de trajetória)")
     if 'estocastico' in r:
         e = r['estocastico']
         L.append('-' * 60)
         L.append('ESTOCÁSTICO   ' + ' '.join(' ' + pct(v) for v in e['bandas_frac']) + f"  |  {pct(e['A_frac'])}  |      {pct(e['vao_400-1k'])}  {pct(e['vao_1-2,5k'])}  {pct(e['vao_2,5-6k'])}   {pct(e['vao_1_6k'])} |  (duas sementes)")
         L.append('determinístico' + ' '.join(' ' + pct(1 - v) for v in e['bandas_frac']) + f"  |  {pct(1 - e['A_frac'])}  |")
-    L.append('(* entra na rede de tubos: vale o efeito de desligar, não a potência da diferença · "·" = menos de 0,5%)')
+    L.append('(* entra na rede de tubos: a linha de cima é o EFEITO de desligar na potência; "o que muda" é a potência do sinal-diferença, que')
+    L.append('   soma a fonte e o que ela desvia na trajetória do motor: numa fonte de variação da queima é o quanto do som deixa de ser periódico')
+    L.append('   · "·" = menos de 0,5%)')
     if r['fontes']:
         k = ordem[0]
         L.append(f"quem mais enche o vão de 1–6 kHz: {k} ({100 * r['fontes'][k]['vao_1_6k']:.0f}%)")

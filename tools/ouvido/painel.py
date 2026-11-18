@@ -12,9 +12,13 @@ Linhas do painel, de cima para baixo:
 Cores: real = azul, simulado = laranja (os dois primeiros lugares da paleta categórica, conferidos para daltonismo);
 espectrogramas numa rampa de um só tom (claro = fraco, escuro = forte); bandas numa rampa ordinal do tom da série.
 """
+import os
+import sys
+
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from scipy import signal  # noqa: E402
@@ -90,9 +94,9 @@ def desenhar(lados, comp, saida, dpi=100, zoom=0.5, visao=8.0, titulo='', rodape
     """`lados` = {'real': {...}, 'sim': {...}} com x (já no ganho de exibição), fs, med (nucleo.analisar), rotulo, e
     `anc_db` (potência da banda âncora, dB). `comp` = resultado de comparar (distâncias, resumo, âncora)."""
     nomes = ['real', 'sim']
-    fig = plt.figure(figsize=(16, 25.5), facecolor=FUNDO)
-    gs = fig.add_gridspec(8, 2, height_ratios=[0.55, 3.0, 3.0, 2.6, 2.6, 2.4, 2.6, 3.3], hspace=0.42, wspace=0.10,
-                          left=0.055, right=0.955, top=0.985, bottom=0.015)
+    fig = plt.figure(figsize=(16, 27), facecolor=FUNDO)
+    gs = fig.add_gridspec(8, 2, height_ratios=[0.55, 3.0, 3.0, 2.6, 2.6, 2.4, 2.6, 4.6], hspace=0.40, wspace=0.10,
+                          left=0.055, right=0.955, top=0.986, bottom=0.008)
     # ------------------------------------------------------------------ cabeçalho
     axh = fig.add_subplot(gs[0, :]); axh.axis('off')
     axh.text(0, 0.95, titulo or 'ouvido: real × simulado', fontsize=14, color=TINTA, weight='bold', va='top')
@@ -183,7 +187,7 @@ def desenhar(lados, comp, saida, dpi=100, zoom=0.5, visao=8.0, titulo='', rodape
         ax.plot(hs, np.full(len(hs), topo + 3), '|', color=TINTA2, ms=3, mew=0.5, alpha=0.7)
         ax.set_xlim(0, fmax_fino); ax.set_ylim(topo - 85, topo + 9)
         ax.grid(axis='y', color=GRADE, lw=0.5)
-        _eixo(ax, f"3 · espectro fino no domínio das ordens · {'REAL' if n == 'real' else 'SIMULADO'}  (tracinhos: harmônicos do ciclo; verticais: múltiplos da ignição)",
+        _eixo(ax, f"3 · espectro fino (ordens) · {'REAL' if n == 'real' else 'SIMULADO'} · tracinhos: harmônicos do ciclo; verticais: ignição e múltiplos",
               'Hz (ordem × f0 mediano)', 'dB re âncora' if j == 0 else None)
         ax.legend(fontsize=7.5, loc='upper right', frameon=False, labelcolor=TINTA2, bbox_to_anchor=(1.0, 0.93))
 
@@ -263,14 +267,19 @@ def desenhar(lados, comp, saida, dpi=100, zoom=0.5, visao=8.0, titulo='', rodape
         if ev > 1 and K % ev == 0:
             mi = L.reshape(-1, K // ev).mean(0)
             ax.plot(xx, nu.db20(np.tile(mi, ev) / rms), color=TINTA, lw=1.0, ls=(0, (4, 2)), label='média dobrada na ignição')
+        pr = m.get('_perfil_residuo_16')
+        if pr is not None:
+            ax.plot((np.arange(len(pr)) + 0.5) / len(pr) * ev, nu.db10(pr), color=TINTA, lw=1.1, label='ruído não periódico (o que não se repete)')
         for k in range(1, ev):
             ax.axvline(k, color=GRADE, lw=0.6, zorder=0)
         ax.set_xlim(0, ev); ax.set_ylim(-26, 14)
         ax.grid(axis='y', color=GRADE, lw=0.5)
-        ax.legend(fontsize=8, loc='upper left', frameon=False, labelcolor=TINTA, ncol=2)
-        txt = (f"p90/p10 {g['p90_p10']:.1f} dB · vão {g['vao']:.1f} dB · crista {g['crista']:.1f} dB · desvio/média {g['desvio_media']:.2f}\n"
-               f"fração presa ao ciclo {g.get('frac_ciclo', float('nan')):.2f} · à ignição {g.get('frac_ign', float('nan')):.2f} · "
-               f"m na ignição {g.get('m_ign', float('nan')):.2f} · picos {g['picos_s']:.1f}/s")
+        ax.legend(fontsize=8, loc='upper left', frameon=False, labelcolor=TINTA, ncol=3)
+        lf = (g.get('residuo_frac') or float('nan')) * min(g.get('ruido_liso') or float('nan'), 1.0)
+        txt = (f"p90/p10 {g['p90_p10']:.1f} dB · vão {g['vao']:.1f} dB · crista {g['crista']:.1f} dB · fração presa ao ciclo {g.get('frac_ciclo', float('nan')):.2f} · "
+               f"m na ignição {g.get('m_ign', float('nan')):.2f}\n"
+               f"ruído não periódico: {100 * (g.get('residuo_frac') or float('nan')):.0f}% da faixa, {100 * min(g.get('ruido_liso') or float('nan'), 1.0):.0f}% dele liso"
+               f"  →  leito contínuo = {100 * lf:.0f}% da potência da faixa")
         ax.text(0.995, 0.03, txt, transform=ax.transAxes, fontsize=8, color=TINTA, ha='right', va='bottom',
                 bbox=dict(facecolor=FUNDO, edgecolor=GRADE, alpha=0.85, pad=2.5))
         _eixo(ax, f"6 · envoltória de 1–6 kHz dobrada no ciclo · {'REAL' if n == 'real' else 'SIMULADO'}", 'ângulo do ciclo (em períodos de ignição)',
@@ -278,6 +287,29 @@ def desenhar(lados, comp, saida, dpi=100, zoom=0.5, visao=8.0, titulo='', rodape
 
     # ------------------------------------------------------------------ 7. rodapé
     axr = fig.add_subplot(gs[7, :]); axr.axis('off')
-    axr.text(0, 1.0, rodape or '', fontsize=8.6, color=TINTA, va='top', family='DejaVu Sans Mono', linespacing=1.32)
+    import textwrap
+    linhas = []
+    for ln in (rodape or '').split('\n'):
+        linhas += textwrap.wrap(ln, 200, subsequent_indent='       ', break_long_words=False, drop_whitespace=False) or ['']
+    axr.text(0, 1.0, '\n'.join(linhas), fontsize=8.2, color=TINTA, va='top', family='DejaVu Sans Mono', linespacing=1.3)
     fig.savefig(saida, dpi=dpi, facecolor=FUNDO)
     plt.close(fig)
+
+
+def compactar(entrada, saida, largura=1150, cores=40):
+    """Versão pequena de um painel para entrar na documentação (o git só recebe painéis, e pequenos): reduz a largura
+    e a paleta (PNG de 8 bits). `python3 -I tools/ouvido/painel.py painel.png docs/ouvido/nome.png [largura] [cores]`."""
+    from PIL import Image
+    im = Image.open(entrada).convert('RGB')
+    if im.width > largura:
+        im = im.resize((largura, round(im.height * largura / im.width)), Image.LANCZOS)
+    im.quantize(colors=cores, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).save(saida, optimize=True)
+    return os.path.getsize(saida)
+
+
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) < 3:
+        print(compactar.__doc__); sys.exit(2)
+    n = compactar(sys.argv[1], sys.argv[2], *(int(v) for v in sys.argv[3:5]))
+    print(f'{sys.argv[2]}: {n / 1024:.0f} kB')

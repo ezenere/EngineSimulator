@@ -110,8 +110,15 @@ def t_liso_pulsado():
     d = c['distancias']
     confere('liso-x-pulsado', d['envoltoria'] > 3 and d['modulacao'] > 3 and d['tonal'] < 0.5,
             f"distâncias: envoltória {d['envoltoria']:.1f}, modulação {d['modulacao']:.1f} (as duas > 3); timbre tonal {d['tonal']:.2f} (< 0,5); piso {d['piso']:.2f}")
+    # o leito de ruído: no liso o ruído que não se repete é contínuo (liso ≈ 1); no pulsado ele só existe nos pulsos
+    confere('liso-x-pulsado', abs(gb['ruido_liso'] - 1.0) < 0.1 and ga['ruido_liso'] < 0.25,
+            f"quanto do ruído não periódico é contínuo: liso {gb['ruido_liso']:.2f} (≈ 1) × pulsado {ga['ruido_liso']:.2f}; leito = {100 * cp.leito_frac(gb):.0f}% × {100 * cp.leito_frac(ga):.0f}% da faixa de 1–6 kHz")
+    df = c['defeitos']; dfi = cp.comparar(b, a)['defeitos']
+    confere('liso-x-pulsado', df['ar'] > 3 and df['pulso'] > 3 and dfi['ar'] == 0 and dfi['pulso'] == 0,
+            f"defeitos de um lado só: simulado liso contra real pulsado → ar {df['ar']:.1f}, pulso a menos {df['pulso']:.1f}; ao contrário → {dfi['ar']:.1f} e {dfi['pulso']:.1f}")
     txt = ' | '.join(r['texto'] for r in c['resumo'][:2])
-    confere('liso-x-pulsado', 'A MENOS: pulso' in txt or 'A MENOS: modulação' in txt, f"o resumo aponta a falta de pulso primeiro: “{c['resumo'][0]['texto'][:90]}…”")
+    confere('liso-x-pulsado', 'A MAIS: chiado contínuo' in txt and ('A MENOS: pulso' in txt or 'A MENOS: modulação' in txt),
+            f"o resumo abre com o chiado contínuo e a falta de pulso: “{c['resumo'][0]['texto'][:88]}…”")
     dh = max(abs(max(ba['hnr'], -15) - max(bb['hnr'], -15)) for ba, bb in zip(a['med']['bandas'][1:6], b['med']['bandas'][1:6]))
     confere('liso-x-pulsado', dh < 1.5, f'o HNR não confunde ruído pulsado com tom: maior diferença {dh:.2f} dB (limite 1,5)')
 
@@ -177,6 +184,7 @@ def t_oitava():
     # (d) rotação dada com uma oitava de erro: o kit tem de avisar
     rd = F0.rastrear(x, FS, 4, 40, nominal=2 * f0)
     confere('oitava', any('confira a rotação' in a for a in rd['avisos']), 'rotação nominal dada com o dobro do valor: sai o aviso para conferir a rotação')
+    confere('oitava', not any('confira a rotação' in a for a in r['avisos'] + r2['avisos'] + rb['avisos'] + rc['avisos']), 'com o ciclo certo não sai aviso de rotação')
 
 
 # ------------------------------------------------------------------------------------------------- periodica
