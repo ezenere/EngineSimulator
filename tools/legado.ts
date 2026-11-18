@@ -82,7 +82,20 @@ export const CORRECOES_RONCO: Correcoes = {
 };
 
 /** Turbina: id do preset → campos corrigidos (valor novo) */
-export const CORRECOES_TURBINA: Correcoes = {};
+export const CORRECOES_TURBINA: Correcoes = {
+  // Nenhum destes campos entra no som: `tag` é o rótulo do preset e `thrust` só vai para o mostrador de empuxo
+  // (thrust100 em src/engines/turbina/dsp.ts, usado só na telemetria).
+  // GE90-115B: deixou de ser "o maior fan" com o GE9X do 777X (134 pol = 3,40 m, certificado em 25/9/2020;
+  // https://en.wikipedia.org/wiki/General_Electric_GE9X). O fan de 128 pol (3,25 m) e as 22 pás estão na ficha.
+  wide: { tag: '2× GE90-115B · fan de 3,25 m, 22 pás' },
+  // JT3D: não foi o primeiro turbofan; o primeiro motor com derivação a entrar em serviço foi o Rolls-Royce Conway
+  // (https://en.wikipedia.org/wiki/Rolls-Royce_Conway), no 707-420 e no DC-8-40, em 1960; o JT3D veio em 1961.
+  b707b: { tag: '4× JT3D · um dos primeiros turbofans' },
+  // Phenom 300: o PW535E dá 3 360 lbf = 14,95 kN POR MOTOR (PW535E1 do 300E: 3 478 lbf = 15,47 kN;
+  // https://en.wikipedia.org/wiki/Embraer_Phenom_300 e relatório TAR 13/21B/3 da CAA da Nova Zelândia). A ficha tinha
+  // 30 kN, que é a soma dos dois motores, num campo que é "kN por motor" (os outros três executivos estão por motor).
+  bizjet: { thrust: 15 },
+};
 
 /** O arquivo de presets legado (CommonJS, `module.exports = PRESETS`) com as correções aplicadas no fim. */
 export function comCorrecoes(fontePresets: string, correcoes: Correcoes): string {
