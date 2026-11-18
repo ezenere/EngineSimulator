@@ -12,6 +12,7 @@
 //                      que zera o torque líquido nessa rotação (a lenta, ou o motor segurado em vazio)
 //   --degrau c0,c1,t   com --rpm: transitório de enchimento do turbo. Giro travado, combustível c0 até o instante t (s,
 //                      dentro da gravação) e c1 depois; o turbo parte assentado em c0 e sobe com a constante de tempo dele
+//   --agua T           com --rpm: água fixa em T °C (motor frio recém-ligado); padrão 90
 //   --lenta            lenta livre pelo governador, como na página (com --rpm: a lenta regulada para R)
 //   --cenario nome     cenário de giro livre do tools/diesel-fontes.ts (carga, n8, ger, rev, wot…); --de/--ate recortam (s)
 //   --dur s            segundos gravados (padrão 12)       --descarta s  segundos jogados fora antes (padrão: o turbo assenta)
@@ -87,7 +88,7 @@ export function escalar(d: any, f: string, g: number) {
   }
 }
 
-type Op = { rpm?: number; comb?: number; degrau?: [number, number, number]; lenta?: boolean; cenario?: string; de?: number; ate?: number; dur: number; descarta?: number;
+type Op = { rpm?: number; comb?: number; agua?: number; degrau?: [number, number, number]; lenta?: boolean; cenario?: string; de?: number; ate?: number; dur: number; descarta?: number;
   ouvinte: string; ambiente: boolean; campo: any; sem: string[]; escala: [string, number][]; semente?: number };
 
 const spec = (id: string, campo: any) => {
@@ -122,8 +123,9 @@ function turboAssentado(d: any, rpm: number, comb: number) {
 }
 
 // motor quente, girando travado em `rpm` com o combustível mandado de fora (como um portador faria)
-function travar(d: any, rpm: number, comb: number) {
-  d.tempMode = 'fixed'; d.tempSet = 90; d.coolant = 90; d.warm = 1; d.runT = 100; d.tEsc = 300;
+function travar(d: any, rpm: number, comb: number, agua = 90) {
+  // (água fria: o motor "acabou de pegar", com a parede e o óleo frios; o `warm` sai da água no primeiro passo de controle)
+  d.tempMode = 'fixed'; d.tempSet = agua; d.coolant = agua; d.warm = agua >= 85 ? 1 : 0; d.runT = agua >= 85 ? 100 : 20; d.tEsc = 300; if (agua < 60) d.ambientT = Math.min(d.ambientT, agua);
   d.state = 'run'; d.lockOmega = true; d.omega = (rpm * 2 * Math.PI) / 60; d.rpmAvg = rpm;
   d.combExterno = comb; d.fuelCmd = comb; d.fuelM = comb; d.tw = turboAssentado(d, rpm, comb);
 }
@@ -144,13 +146,13 @@ export function render(id: string, op: Op) {
       let lo = 0.005, hi = 0.7;
       for (let it = 0; it < 14; it++) {
         comb = 0.5 * (lo + hi);
-        const x = novo(id, op).d; travar(x, op.rpm, comb);
+        const x = novo(id, op).d; travar(x, op.rpm, comb, op.agua);
         let s = 0, n = 0;
         for (let i = 0; i < 1.4 * SR; i += B) { x.process(l, r, B); if (i > 0.7 * SR) { s += x.tqMean; n++; } }
         if (s / n > 0) hi = comb; else lo = comb;
       }
     }
-    ({ d, sp } = novo(id, op)); travar(d, op.rpm, comb);
+    ({ d, sp } = novo(id, op)); travar(d, op.rpm, comb, op.agua);
     modo = op.degrau ? 'degrau travado' : 'travado'; fixo = true;
   } else {
     ({ d, sp } = novo(id, op));
@@ -159,8 +161,7 @@ export function render(id: string, op: Op) {
     d.message({ type: 'input', ignition: true });
     modo = 'lenta';
   }
-  const tauT = d.turbo ? Math.max(d.turboTau[0], d.turboTau[1]) : 0;
-  const descarta = cen ? op.de ?? 0 : op.descarta ?? (fixo ? Math.max(3, 2.5 * tauT) : 8);
+  const descarta = cen ? op.de ?? 0 : op.descarta ?? (fixo ? 2.5 : 8); // (travado: o turbo já parte assentado)
   const dur = cen ? (op.ate ?? cen.eventos[cen.eventos.length - 1][0]) - descarta : op.dur;
   const n0 = Math.round(descarta * SR), n = Math.round(dur * SR);
   const m = new Float32Array(n), tele: any[] = [];
@@ -212,7 +213,7 @@ if (process.argv[1] && process.argv[1].endsWith('diesel-ouvido-render.ts')) {
   const [id, saida] = pos;
   if (!id || !saida) { console.error('uso: tsx tools/diesel-ouvido-render.ts <preset> <saida.wav | pasta/ --cada> [--rpm R [--comb x | --degrau c0,c1,t] | --lenta | --cenario nome [--de s --ate s]] [--dur s] [--descarta s] [--ouvinte ext] [--ambiente] [--campo JSON] [--sem a,b] [--escala a=g] [--semente N]'); process.exit(2); }
   const op: Op = {
-    rpm: num('--rpm'), comb: num('--comb'), degrau: val('--degrau') ? (val('--degrau')!.split(',').map(Number) as [number, number, number]) : undefined, lenta: tem('--lenta'),
+    rpm: num('--rpm'), comb: num('--comb'), agua: num('--agua'), degrau: val('--degrau') ? (val('--degrau')!.split(',').map(Number) as [number, number, number]) : undefined, lenta: tem('--lenta'),
     cenario: val('--cenario'), de: num('--de'), ate: num('--ate'), dur: num('--dur') ?? 12, descarta: num('--descarta'), ouvinte: val('--ouvinte') || 'ext', ambiente: tem('--ambiente'),
     campo: JSON.parse(val('--campo') || '{}'), sem: (val('--sem') || '').split(',').filter(Boolean),
     escala: (val('--escala') || '').split(',').filter(Boolean).map((kv) => { const [k, v] = kv.split('='); return [k, +v] as [string, number]; }), semente: num('--semente'),
