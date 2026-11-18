@@ -1,17 +1,13 @@
 // Confere que os blocos de src/acoustics/ calculam exatamente o mesmo que as cópias de dentro de
-// src/dsp.js e src/jet-dsp.js: mesmas entradas, saídas comparadas bit a bit (Object.is).
+// src/dsp.js e src/jet-dsp.js legados: mesmas entradas, saídas comparadas bit a bit (Object.is).
 //   npx tsx tools/acoustics-paridade.ts
 // As classes legadas ficam presas dentro das fábricas; aqui a fábrica é recompilada com um `return`
-// que também as expõe. O arquivo legado não é alterado.
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+// que também as expõe. O legado é lido do histórico do git (REF_LEGADO em tools/legado.ts).
 import * as A from '../src/acoustics';
-
-const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+import { lerLegado } from './legado';
 
 function abrirFabrica(arquivo: string, nome: string, retornoOriginal: string, extras: string) {
-  const src = fs.readFileSync(path.join(RAIZ, arquivo), 'utf8');
+  const src = lerLegado(arquivo);
   if (!src.includes(retornoOriginal)) throw new Error(`${arquivo}: não achei "${retornoOriginal}"`);
   const aberto = src.replace(retornoOriginal, retornoOriginal.replace(' };', `, ${extras} };`));
   return new Function(`${aberto}\nreturn ${nome};`)()();
