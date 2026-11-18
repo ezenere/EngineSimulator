@@ -122,7 +122,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
   {
     id: 'ram67', family: 'leve', name: 'Ram 2500 6.7 Cummins', tag: 'ISB 6.7 · I6 common-rail · 2013',
     ...I6, ...CARRO, classe: 'leve', tempos: 4, displacement: 6.69, diametro: 107, curso: 124, cr: 17.3,
-    idle: 750, redline: 3200, rpmMax: 3200, rpmPotencia: 2800, power: 276, torque: 1152, inertia: 1.3,
+    idle: 750, redline: 3200, rpmMax: 3200, rpmPotencia: 2800, power: 276, torque: 1085, inertia: 1.3,
     injecao: 'common-rail', piloto: true, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.9, turboTipo: 'vgt', turboRpmMax: 130000, turboPas: 14, turboApito: -20, turboLenta: 0.24, turboTau: [1.0, 1.8],
     freioMotor: 'vgt', escape: leve(4.6, 4), muffler: 'stock', pipeLen: 4.6, pipeD: 4, glow: true, glowK: 0.3, mecanica: 10,
@@ -196,7 +196,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
   },
   {
     id: 'volvod13', family: 'pesado', name: 'Volvo FH D13', tag: 'D13A 480 · I6 injetor-bomba · VEB',
-    ...I6, ...CARRO, classe: 'pesado', tempos: 4, displacement: 12.8, diametro: 131, curso: 158, cr: 17.0,
+    ...I6, ...CARRO, classe: 'pesado', tempos: 4, displacement: 12.8, diametro: 131, curso: 158, cr: 18.1,
     idle: 600, redline: 2100, rpmMax: 2100, rpmPotencia: 1800, power: 353, torque: 2400, inertia: 1, J: 3.2,
     injecao: 'unitaria', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.7, turboTipo: 'wastegate', turboRpmMax: 110000, turboPas: 14, turboApito: -20, turboTau: [1.5, 2.5],
@@ -222,7 +222,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
   {
     id: 'onibusisl', family: 'pesado', name: 'Ônibus urbano Cummins ISL9', tag: 'ISL9 280 · I6 common-rail · motor traseiro',
     ...I6, ...CARRO, classe: 'pesado', tempos: 4, displacement: 8.9, diametro: 114, curso: 144.5, cr: 16.6, engine: 'rear',
-    idle: 650, redline: 2300, rpmMax: 2300, rpmPotencia: 2100, power: 206, torque: 1017, inertia: 1, J: 2.4,
+    idle: 650, redline: 2300, rpmMax: 2300, rpmPotencia: 2100, power: 209, torque: 1220, inertia: 1, J: 2.4,
     injecao: 'common-rail', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.6, turboTipo: 'vgt', turboRpmMax: 110000, turboPas: 14, turboApito: -20, turboTau: [1.5, 2.5],
     freioMotor: 'vgt', escape: { turbina: true, dpf: true, abafador: 'abafador-caminhao', comprimento: 6, diametro: 5, chamine: null, tempGas: 500 },
@@ -234,7 +234,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
   {
     id: 'dd6v92', family: 'pesado', name: 'Detroit Diesel 6V92TA (MCI MC-9)', tag: '6V92TA · V6 2 tempos · Roots + turbo',
     layout: 'v', cylinders: 6, crank: 'dd6v', bankAngle: 63.5, order: 'pms', header: 'short', routing: 'single', intake: 'airbox', cam: 0, engine: 'rear',
-    classe: 'pesado', tempos: 2, displacement: 9.05, diametro: 123.8, curso: 127, cr: 17.0,
+    classe: 'pesado', tempos: 2, displacement: 9.05, diametro: 123, curso: 127, cr: 17.0,
     idle: 550, redline: 2100, rpmMax: 2100, rpmPotencia: 2100, power: 224, torque: 1180, inertia: 1, J: 2.6,
     injecao: 'unitaria', piloto: false, idi: false, eletronico: false, governador: 'todas-as-rotacoes', droop: 0.07, limiteFumaca: 1.1,
     aspiration: 'turbo', boost: 1.2, turboTipo: 'fixo', turboRpmMax: 90000, turboPas: 14, turboApito: -20, turboTau: [1.5, 2.5],
