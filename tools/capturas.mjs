@@ -253,6 +253,11 @@ const ROTEIROS = {
     await c.passo('mapa da passagem', async () => { await n.chip('#groundMode', 'Passagem'); await espera(600); await n.mostrar('#obsMap'); await espera(1500); await c.foto('passagem-mapa'); await c.inteira('passagem-mapa'); await n.chip('#groundMode', 'Ao redor do motor'); });
     await c.passo('a bordo', async () => { await n.tecla('KeyV'); await espera(800); await n.mostrar('#obsMap'); await espera(300); await c.foto('a-bordo'); await n.tecla('KeyV'); await n.rolarPainel(0); await ev('window.scrollTo(0, 0)'); });
     await c.passo('F-16 com pós-combustão', async () => { await n.familia('Militares', 'fighter'); await espera(500); await n.tecla('Digit4'); await espera(5000); await c.foto('pos-combustao'); await n.tecla('KeyR'); await espera(1200); await c.foto('reversor'); await n.tecla('KeyR'); });
+    await c.passo('estrondo sônico', async () => {
+      await n.chip('#groundMode', 'Passagem'); await espera(400); await n.deslizar('speed', 2000); await n.deslizar('alt', 300); await n.mostrar('#obsMap');
+      await n.ate(`/estrondo:/.test(document.getElementById('roSpl').textContent)`, 25000, 100); await espera(150);
+      await c.foto('estrondo'); await n.chip('#groundMode', 'Ao redor do motor'); await n.rolarPainel(0); await ev('window.scrollTo(0, 0)');
+    });
     await c.passo('turboélice', async () => { await n.familia('Turboélices', 'regional'); await espera(3000); await c.tudo('turboelice'); });
     await cadaFamilia(c);
     await foco(c);
@@ -333,7 +338,7 @@ const ROTEIROS = {
     await n.deslizar('acelerador', 1); await espera(3500); await c.tudo('acelerando');
     await c.passo('regeneração', async () => { await n.deslizar('acelerador', 0); await n.deslizar('freio', 1); await espera(1200); await c.foto('regenerando'); await n.deslizar('freio', 0); });
     await c.passo('avançado', async () => { await n.clicar('#avancado'); await espera(300); await n.mostrar('#avancado'); await c.foto('avancado'); await c.inteira('avancado'); await c.painel('avancado'); await n.clicar('#avancado'); await n.rolarPainel(0); await ev('window.scrollTo(0, 0)'); });
-    await c.passo('ouvinte no gimbal', async () => { await n.chip('#ouvinte', 'Gimbal'); await espera(300); await n.mostrar('#ouvinte'); await c.foto('gimbal'); await n.chip('#ouvinte', 'Fora'); await n.rolarPainel(0); await ev('window.scrollTo(0, 0)'); });
+    await c.passo('ouvinte no gimbal', async () => { await n.chip('#ouvinte', 'Livre'); await espera(300); await n.mostrar('#ouvinte'); await c.foto('gimbal'); await n.chip('#ouvinte', 'Fora'); await n.rolarPainel(0); await ev('window.scrollTo(0, 0)'); });
     await c.passo('Taurus do-re-mi', async () => { await n.familia(2, 'taurus'); await espera(800); await c.foto('taurus-parado'); await n.deslizar('acelerador', 0.8); await espera(4500); await c.tudo('taurus-doremi'); await espera(5000); await c.foto('taurus-patamar'); await n.deslizar('acelerador', 0); });
     await c.passo('furadeira', async () => { await n.familia(4, 'furadeira'); await espera(600); await n.deslizar('acelerador', 1); await espera(2500); await c.foto('furadeira'); await n.deslizar('acelerador', 0); });
     await c.passo('drone', async () => { await n.familia(5, 'mavic'); await espera(2500); await c.tudo('drone'); });
