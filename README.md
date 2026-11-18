@@ -120,11 +120,11 @@ O projeto usa [Vite](https://vite.dev/), TypeScript e React. O React fica só na
 - `npm run build`: confere os tipos e gera o site estático em `dist/`. É o conteúdo de `dist/` que vai para `ezenere.com/data/engine/`; os caminhos são relativos, então ele funciona em qualquer pasta.
 - `npm run preview`: serve o `dist/` gerado, para testar o build antes de publicar.
 - `npx tsx tools/render.ts ronco mustang rev saida/`: renderiza um cenário para WAV sem navegador; `npx tsx tools/compare-wav.ts a.wav b.wav` compara dois WAVs amostra a amostra. Detalhes no começo de cada arquivo em `tools/`.
-- `npm run verificar`: roda todos os testes em ordem (paridades com o código antigo, testes e marcha lenta de cada família, tipos e build) e mostra um resumo; `npm run verificar:rapido` roda só a parte curta. <!-- AUDITOR: confirmar -->
+- `npm run verificar`: roda todos os testes em ordem (paridades com o código antigo, testes e marcha lenta de cada família, tipos e build) e mostra um resumo; `npm run verificar:rapido` roda só a parte curta.
 - `npm run teste:diesel`, `teste:radial`, `teste:rotativo`, `teste:vapor`, `teste:eletrico`, `teste:cena`: as medidas de cada família contra os alvos (o do Diesel leva uns 20 minutos); `npm run lenta:<família>` confere que nenhum motor apaga na marcha lenta; `npm run navegador:<página>` abre a página num Chromium sem janela e confere que ela toca (precisa de `npm run build` antes).
 
 Páginas: `index.html` (menu), `ronco.html`, `turbina.html`, `diesel.html`, `radial.html`, `rotativo.html`, `vapor.html`, `eletrico.html` e `passagem.html`, com o código em `src/pages/`. A estrutura das pastas está em [`docs/TECNICO.md`](docs/TECNICO.md).
 
 ## Quer saber como funciona por dentro?
 
-O documento [Como os simuladores funcionam](docs/TECNICO.md) explica a física e o processamento de som de cada parte: cilindros, escapamento, câmbio, temperatura, turbinas, estrondo sônico, diesel, radiais, Wankel, vapor, motores elétricos e a Passagem, e também como adicionar novos carros, aviões e os outros veículos. O que se sabe que está errado ou incompleto está em [`docs/AUDITORIA.md`](docs/AUDITORIA.md). <!-- AUDITOR: confirmar -->
+O documento [Como os simuladores funcionam](docs/TECNICO.md) explica a física e o processamento de som de cada parte: cilindros, escapamento, câmbio, temperatura, turbinas, estrondo sônico, diesel, radiais, Wankel, vapor, motores elétricos e a Passagem, e também como adicionar novos carros, aviões e os outros veículos. O que se sabe que está errado ou incompleto está em [`docs/AUDITORIA.md`](docs/AUDITORIA.md).

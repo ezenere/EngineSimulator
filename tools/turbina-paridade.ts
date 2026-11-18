@@ -49,16 +49,20 @@ let falhas = 0;
 const falha = (msg: string) => { falhas++; console.log(`FALHA ${msg}`); };
 
 // --------------------------------------------------------- 1. presets
+// (aviões e famílias acrescentados depois da migração ficam fora da paridade: não há legado para comparar)
+const MIGRADOS = PRESETS_TURBINA.filter((p) => PRESETS_LEG.some((a: any) => a.id === p.id));
 {
-  const a = JSON.stringify(PRESETS_LEG), b = JSON.stringify(PRESETS_TURBINA);
-  const fa = JSON.stringify(PRESETS_LEG.families), fb = JSON.stringify(PRESETS_TURBINA.families);
+  const NOVOS = PRESETS_TURBINA.filter((p) => !MIGRADOS.includes(p));
+  const a = JSON.stringify(PRESETS_LEG), b = JSON.stringify(MIGRADOS);
+  const fa = JSON.stringify(PRESETS_LEG.families), fb = JSON.stringify(PRESETS_TURBINA.families.filter((f) => PRESETS_LEG.families.some((x: any) => x.id === f.id)));
   if (a !== b) {
-    const i = PRESETS_LEG.findIndex((p, k) => JSON.stringify(p) !== JSON.stringify(PRESETS_TURBINA[k]));
+    const i = PRESETS_LEG.findIndex((p, k) => JSON.stringify(p) !== JSON.stringify(MIGRADOS[k]));
     falha(`presets diferentes (primeiro: ${PRESETS_LEG[i]?.id ?? i})`);
   } else if (fa !== fb) falha('famílias diferentes');
-  else console.log(`presets: ${PRESETS_TURBINA.length} aviões e ${PRESETS_TURBINA.families.length} famílias IDÊNTICOS (valores e ordem das chaves)`);
+  else console.log(`presets: ${MIGRADOS.length} aviões e ${PRESETS_LEG.families.length} famílias IDÊNTICOS (valores e ordem das chaves)`);
+  if (NOVOS.length) console.log(`aviões novos, fora da paridade (não existem no legado): ${NOVOS.map((x) => x.id).join(', ')}`);
 }
-const escolhidos = ids ? PRESETS_TURBINA.filter((p) => ids.split(',').includes(p.id)) : PRESETS_TURBINA;
+const escolhidos = ids ? MIGRADOS.filter((p) => ids.split(',').includes(p.id)) : MIGRADOS;
 if (!escolhidos.length) { console.error(`nenhum preset com id ${ids}`); process.exit(2); }
 const listaIds = escolhidos.map((p) => p.id).join(',');
 
