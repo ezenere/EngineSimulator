@@ -372,7 +372,8 @@ export function drawMap(c: ControleTurbina, cv: HTMLCanvasElement, note: HTMLEle
       const dirn = x > 0 ? 1 : -1, ex = dirn > 0 ? w - 4 : 4;
       g.beginPath(); g.moveTo(ex, ay); g.lineTo(ex - dirn * 10, ay - 6); g.lineTo(ex - dirn * 10, ay + 6); g.fill();
     }
-    g.fillStyle = C.faint; g.textAlign = 'right'; g.fillText(`altura ${fmt(alt)} m`, w - 6, ay - 9);
+    // (a altura fica do lado oposto ao do avião, para os dois não se cobrirem)
+    g.fillStyle = C.faint; g.textAlign = ax > w / 2 ? 'left' : 'right'; g.fillText(`altura ${fmt(alt)} m`, ax > w / 2 ? 6 : w - 6, ay - 9);
     const v = params.speed / 3.6, M = v / 340;
     if (M > 1 && vis) {
       // cone de Mach: atrás do avião, abrindo com ângulo asen(1/M); onde toca o chão, estrondo
