@@ -400,7 +400,7 @@ const AV = { aviation: true, partida: 'direta', cooling: 'air', ...NA, intake: '
 const hel = (B: number, D: number, J: number, passoFixo: boolean, extra = {}) => ({ helice: { B, D, J, passoFixo, ...extra }, portadores: ['helice', 'nenhum'] });
 const rot = (rotor: Record<string, any>) => ({ rotor, portadores: ['rotor', 'nenhum'] });
 export const PRESETS_AVIACAO: PresetRonco[] = [
-  car('c172', 'aviacao', 'Cessna 172 (Lycoming O-320)', 'boxer 4 · 5,2 L · 160 hp · passo fixo', B4, {
+  car('c172', 'aviacao', 'Cessna 172 (Lycoming O-320)', 'boxer 4 · 5,2 L · 150 hp · passo fixo', B4, {
     ...AV, ...avi(5.24, 0.3), compression: 7.0, redline: 2700, rpmMax: 2700, idle: 650, power: 112, fuel: 'carb',
     header: 'short', routing: 'single', muffler: 'classic', pipeLen: 0.8, pipeD: 1.75, breakout: 'old', ...hel(2, 1.93, 5, true), nivelEscape: 135 }),
   car('o360', 'aviacao', 'Piper Archer / RV-7 (Lycoming O-360)', 'boxer 4 · 5,9 L · 180 hp · passo fixo', B4, {
@@ -418,21 +418,22 @@ export const PRESETS_AVIACAO: PresetRonco[] = [
   car('rotax912', 'aviacao', 'Rotax 912 ULS', 'boxer 4 · 1,35 L · 100 hp · redutor 2,43:1', B4, {
     ...AV, ...avi(1.35, 0.08), compression: 10.8, redline: 5800, rpmMax: 5800, idle: 1400, power: 73, fuel: 'carb', cooling: 'water', reducao: 1 / 2.43,
     header: 'short', routing: 'single', muffler: 'sport', pipeLen: 0.6, pipeD: 1.5, breakout: 'old', ...hel(3, 1.7, 1.2, true), nivelEscape: 128 }),
-  car('bell47', 'aviacao', 'Bell 47G (Franklin 6V4)', 'boxer 6 · 5,7 L · 200 hp · rotor de 2 pás', B6, {
-    ...AV, ...avi(5.73, 0.4), compression: 7.0, redline: 3100, rpmMax: 3100, idle: 1500, power: 149, fuel: 'carb',
+  // (47G com o Franklin 6V4-200-C32: 335 pol³, rotor de 35 ft 1,5 in, 2350 lb, redução de 9:1 → 344 rpm de rotor a 3100 do motor)
+  car('bell47', 'aviacao', 'Bell 47G (Franklin 6V4)', 'boxer 6 · 5,5 L · 200 hp · rotor de 2 pás', B6, {
+    ...AV, ...avi(5.49, 0.4), compression: 7.0, redline: 3100, rpmMax: 3100, idle: 1500, power: 149, fuel: 'carb',
     header: 'short', routing: 'dual', muffler: 'straight', pipeLen: 0.6, pipeD: 1.75, breakout: 'old', nivelEscape: 136,
-    ...rot({ B: 2, R: 5.66, Nr: 370, sigma: 0.03, J_rot: 1100, Bc: 2, Rc: 0.89, ic: 1650 / 370, icx: 8.4, massa: 1340, engrenagens: [{ z: 43, rpm: 3100 }, { z: 9, rpm: 370 * 8 }],
+    ...rot({ B: 2, R: 5.35, Nr: 344, sigma: 0.03, J_rot: 1100, Bc: 2, Rc: 0.89, ic: 1650 / 344, icx: 9.0, massa: 1066, engrenagens: [{ z: 43, rpm: 3100 }, { z: 9, rpm: 344 * 8 }],
       posRotor: [0, 0, 2.8], posCauda: [-6.5, 0, 1.4], posCaixa: [0, 0, 2.0], posMotor: [-0.6, 0, 1.0], corpo: { comprimento: 13, largura: 2.3, altura: 2.8 } }) }),
   car('r22', 'aviacao', 'Robinson R22 (Lycoming O-360)', 'boxer 4 · 5,9 L · 124 hp · rotor de 2 pás', B4, {
     ...AV, ...avi(5.92, 0.35), compression: 8.5, redline: 2652, rpmMax: 2652, idle: 1500, power: 92, fuel: 'carb',
     header: 'short', routing: 'single', muffler: 'stock', pipeLen: 0.8, pipeD: 1.75, breakout: 'old', nivelEscape: 134,
     ...rot({ B: 2, R: 3.835, Nr: 530, sigma: 0.034, J_rot: 250, Bc: 2, Rc: 0.535, ic: 3330 / 530, icx: 5.0, massa: 620, engrenagens: [{ z: 57, rpm: 2652 }, { z: 9, rpm: 530 * 9.6 }],
       posRotor: [0.1, 0, 2.7], posCauda: [-5.3, 0, 1.6], posCaixa: [0, 0, 2.0], posMotor: [-0.5, 0, 1.0], corpo: { comprimento: 8.8, largura: 1.1, altura: 2.7 } }) }),
-  car('r44', 'aviacao', 'Robinson R44 (Lycoming O-540)', 'boxer 6 · 8,9 L · 245 hp · rotor de 2 pás', B6, {
-    ...AV, ...avi(8.87, 0.5), compression: 8.5, redline: 2718, rpmMax: 2718, idle: 1500, power: 183, fuel: 'carb',
+  car('r44', 'aviacao', 'Robinson R44 Raven II (Lycoming IO-540)', 'boxer 6 · 8,9 L · 245 hp · rotor de 2 pás', B6, {
+    ...AV, ...avi(8.87, 0.5), compression: 8.5, redline: 2718, rpmMax: 2718, idle: 1500, power: 183, fuel: 'efi',
     header: 'short', routing: 'single', muffler: 'stock', pipeLen: 0.9, pipeD: 2.0, breakout: 'old', nivelEscape: 137, ...rot({}) }),
   car('s300', 'aviacao', 'Schweizer 300C (Lycoming HIO-360)', 'boxer 4 · 5,9 L · 190 hp · rotor de 3 pás', B4, {
-    ...AV, ...avi(5.92, 0.35), compression: 8.5, redline: 3200, rpmMax: 3200, idle: 1500, power: 142, fuel: 'efi',
+    ...AV, ...avi(5.92, 0.35), compression: 10.0, redline: 3200, rpmMax: 3200, idle: 1500, power: 142, fuel: 'efi',
     header: 'short', routing: 'single', muffler: 'straight', pipeLen: 0.6, pipeD: 1.75, breakout: 'old', nivelEscape: 136,
     ...rot({ B: 3, R: 4.09, Nr: 471, sigma: 0.045, J_rot: 450, Bc: 2, Rc: 0.65, ic: 3000 / 471, icx: 6.8, massa: 930, engrenagens: [{ z: 51, rpm: 3200 }, { z: 11, rpm: 471 * 6.8 }],
       posRotor: [0, 0, 2.7], posCauda: [-5.8, 0, 1.4], posCaixa: [0, 0, 2.0], posMotor: [-0.4, 0, 0.9], corpo: { comprimento: 9.4, largura: 2.0, altura: 2.7 } }) }),
