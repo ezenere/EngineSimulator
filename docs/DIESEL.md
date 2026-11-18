@@ -1,5 +1,18 @@
 # Diesel: projeto da etapa 2
 
+> **O que mudou na implementação** (auditoria de 18/11/2026). Este documento é o projeto; o que está no código é o que o [`TECNICO.md`](TECNICO.md#diesel-ignição-por-compressão) descreve. Os pontos em que os dois diferem:
+>
+> - **Queima (decisão 4, 2.4).** Não é mais Wiebe dupla: a pré-misturada segue a Wiebe e a difusão queima pelo tempo de mistura do jato (pressão do trilho ou da bomba). A duração da injeção é escalada para a plena carga durar ~32° na rotação de potência ([Segunda passada](TECNICO.md#segunda-passada-som-combustão-e-câmbio)).
+> - **Governadores (decisão 6, 3.1).** Os ganhos fixos do texto (Kp 6, Ki 1,5/s na lenta; Kp 5 no gerador) davam caça de ±12%; são normalizados por motor, `Kp = ω_c/P`. No gerador e na locomotiva quem governa é o próprio motor (isócrono, `rpmAlvo`), não o portador ([Governadores, carga e partida](TECNICO.md#governadores-carga-e-partida)).
+> - **Pulso do escape.** Passou a `∝ √T` (gancho `ccDens`), e as fontes contínuas foram refeitas: sem chiado de borboleta, sopro do compressor no lugar do chiado do turbo, ruído da turbina e do sopro seguindo a pressão instantânea, fundo mecânico −18 dB ([Terceira passada](TECNICO.md#terceira-passada-o-mar-do-turbo-e-o-ar-da-lenta)).
+> - **Atrito (1.2, item 14).** +0,57 bar sobre o do Ronco, não ×1,6.
+> - **Jake (1.2 item 11, 3.4).** A janela é de −8° a +40° em volta do PMS de compressão; os 350–390° do texto caem no PMS de troca de gases.
+> - **Câmbio.** O automático do diesel é próprio (`cambio()` na subclasse, pontos pela rotação de potência); o do Ronco fica desligado.
+> - **Fichas (6.2).** São 16 presets: o MAN B&W (`manbw`, nº 17, extra) não foi feito. Hilux com raio de roda 0,375 m (0,39 no texto); Duramax com a ordem real escrita na numeração do Ronco (1-8-7-3-6-5-4-2); início de injeção EMD 8° e GE 19°.
+> - **Fontes para a Cena (decisão 10).** O apito do turbo sai na fonte `turbo` (não `compressor`), e ela substitui a `turbo` do portador locomotiva.
+> - **Alvos (decisão 12, tabela 4.4, Apêndice A).** O alvo principal dos testes passou a ser o conjunto de gravações "real3", que não está no repositório; as bandas do EMD e da GE da tabela 4.4 saíram dos testes. `npm run teste:diesel` passa com 66 medidas fora do alvo aceitas como desvio (seção "Desvios conhecidos" do Diesel).
+> - **Portadores.** O diesel não entrou no barco (`COMPAT.barco` o aceita, sem preset).
+
 Documento de projeto da etapa 2 (ver `PLANO.md`). Define como o motor diesel estende o `EngineDSP` do Ronco sem mudar o som a gasolina, o modelo de ignição por compressão, o governador, o ciclo de 2 tempos das locomotivas, o turbo, os presets com ficha técnica, a página `diesel.html` e o plano de implementação com medidas. A implementação segue este texto à letra; o que estiver marcado **decisão** não se renegocia dentro da etapa sem anotar no relatório. Unidades: SI (pascal, kelvin, kg, N·m, rad/s); pressões em **bar absolutos** quando ditas em bar; ângulos em graus de virabrequim (°) contados como no `dsp.ts` (0° = PMS de ignição do cilindro, ciclo de 720° no 4 tempos, 360° no 2 tempos). As linhas citadas (`dsp.ts:NNN`) são as do `src/engines/ronco/dsp.ts` no commit `b9b46c6`.
 
 - [0. Decisões](#0-decisões)

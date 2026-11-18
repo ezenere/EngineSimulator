@@ -1,5 +1,18 @@
 # Elétrico: projeto do DSP de máquinas elétricas (etapa 6)
 
+> **O que mudou na implementação** (auditoria de 18/11/2026). Este documento é o projeto; o que está no código é o que o [`TECNICO.md`](TECNICO.md#elétrico-síntese-espectral) descreve, na seção "Desvios conhecidos e escolhas". Os principais:
+>
+> - **Níveis de 4.2 mudados contra as gravações.** Inversor dos carros 62 dB(A) (72 aqui); furadeira, escovas 101 e ventilador 86 (94 e 90); Taurus, inversor 96 e auxiliar 77 (98 e 85).
+> - **Ficha do Metropolis (5).** `P_max` 150 kW por motor, não os 190 da ficha: foi baixado para o 0–80 km/h do teste sair nos 36 ± 4 s.
+> - **N700 (5, 4.3).** O trem de 16 carros não cabe nas 64 fontes da Cena; o N700 é ouvido no trem-bala de 10 vagões da Passagem.
+> - **Fontes do trem (decisão 4, 4.3).** Agrupadas por truque: `motor.g` (motor + redução + escovas) e `inversor.g` (inversor + soprador), mais o canal `aux` do conversor auxiliar; separadas, o metrô de 8 carros não caberia.
+> - **Inversor (decisão 3, 1.2).** Além dos seis modos há o CSI do TGV; o GTO do Taurus e o bonde usam um perfil de grupos medido (`perfilGrupos`) no lugar da tabela de Bessel.
+> - **AVAS e pneus (2, 3.3).** O AVAS é medido em campo livre, sem o asfalto, com o alto-falante 1 cm à frente do para-choque; os pneus a 7,5 m dão 70,7 dB(A) contra 73 (desvio).
+> - **Leis das ranhuras.** A frequência é conferida no Leaf de 48 ranhuras; as leis de amplitude, num Leaf de 46 (com 48 a linha cai sobre a ondulação de torque).
+> - **Variantes só de validação.** MP 73, furadeira de rede e drone 2 aparecem nos testes e não são presets; a chave 50/60 Hz do motor industrial não está na página.
+> - **Página (6).** O espectro mostrado é o da saída, depois do ouvinte, não "antes do ouvinte".
+> - **Gravações (3, decisão 7).** O grupo `gravacoes` do `teste:eletrico` não abre gravação nenhuma: compara com números copiados para o teste. Ver `AUDITORIA.md`.
+
 Documento de projeto da etapa 6 (ver `PLANO.md`). Define um DSP **novo**, `EletricoDSP`: síntese espectral determinística (bancos de senóides recursivas + ruídos com semente), sem termodinâmica; o motor como `Motor` do `CENA.md` (eixo + fontes), os portadores novos (carro elétrico com redução fixa, trem/metrô motorizado, bonde, trólebus, bancada, multirrotor) e a página `eletrico.html`. Unidades do CENA (m, s, rad/s, N·m, Pa, kg; 48 kHz, blocos de 128, controle a cada 64 amostras). Tudo que está marcado **decisão** não se renegocia dentro da etapa sem anotar no relatório; o que está marcado **≈** é valor de catálogo aproximado ou hipótese de projeto, a confirmar se aparecer fonte melhor.
 
 - [1. Física do som das máquinas elétricas](#1-física-do-som-das-máquinas-elétricas)
