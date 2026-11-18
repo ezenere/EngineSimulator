@@ -1,6 +1,6 @@
 // Painel de controles do Elétrico (ELETRICO.md 6). Como nas outras páginas, o painel inteiro é montado de novo quando algo
 // estrutural muda (tópico "painel"); acelerador e freio assinam também "estado" (o teclado mexe neles).
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { ChipGroup, Field, Section, Slider } from '../../ui';
 import { CARGAS, fmt, useTopico, type ControleEletrico, type IdOuvinte, type ModoAvasPagina } from './controle';
 import { AMBIENTES_ELETRICO } from './ambientes';
@@ -37,7 +37,7 @@ function Comando({ c }: { c: ControleEletrico }) {
   return (
     <>
       <Slider id="acelerador" rotulo={rot} min={0} max={1} passo={0.01} valor={c.acel} formatar={pct} aoMudar={(v) => c.setAcel(v)} />
-      {tp !== 'drone' && tp !== 'bancada' && <Slider id="freio" rotulo="Regeneração / freio" min={0} max={1} passo={0.01} valor={c.freio} formatar={pct} aoMudar={(v) => c.setFreio(v)} />}
+      {tp !== 'drone' && tp !== 'bancada' && <Slider id="freio" rotulo="Freio elétrico (regeneração)" min={0} max={1} passo={0.01} valor={c.freio} formatar={pct} aoMudar={(v) => c.setFreio(v)} />}
     </>
   );
 }
@@ -45,7 +45,6 @@ function Comando({ c }: { c: ControleEletrico }) {
 function Conteudo({ c }: { c: ControleEletrico }) {
   const p = c.base, tp = c.tipoPortador;
   const modos = c.modosPermitidos();
-  const [aberto, setAberto] = useState(false);
   const pa = c.preset();
   return (
     <>
@@ -85,7 +84,7 @@ function Conteudo({ c }: { c: ControleEletrico }) {
           <>
             <Slider id="velocidade" rotulo="Velocidade (dinamômetro)" min={0} max={c.vMax()} passo={1} valor={c.vKmh} formatar={(v) => `${fmt(v)} km/h`} aoMudar={(v) => c.setV(v)} />
             <Field rotulo="Impor a velocidade">
-              <ChipGroup id="impor" atual={c.impor} aoEscolher={(v) => c.setImpor(v)} opcoes={[{ valor: false, rotulo: 'Livre', titulo: 'O motor acelera o veículo' }, { valor: true, rotulo: 'Impor', titulo: 'Trava ω = v·i/r_w: dinamômetro de rolo' }]} />
+              <ChipGroup id="impor" atual={c.impor} aoEscolher={(v) => c.setImpor(v)} opcoes={[{ valor: false, rotulo: 'Livre', titulo: 'O motor acelera o veículo' }, { valor: true, rotulo: 'Impor', titulo: 'Trava a velocidade no valor acima, como num dinamômetro de rolo' }]} />
             </Field>
           </>
         )}
@@ -96,51 +95,46 @@ function Conteudo({ c }: { c: ControleEletrico }) {
         )}
       </Section>
 
-      <Section titulo="Ouvinte e ambiente">
-        <Field rotulo="Ouvinte">
+      <Section titulo="Escuta e ambiente">
+        <Field rotulo="Onde você ouve">
           <ChipGroup id="ouvinte" atual={c.ouvinte} aoEscolher={(v) => c.setOuvinte(v as IdOuvinte)} opcoes={[
             { valor: 'fora', rotulo: 'Fora, 7,5 m' },
             { valor: 'cabine', rotulo: 'Cabine', desabilitado: !c.temCabine() },
             { valor: 'cofre', rotulo: tp === 'trem' ? 'Sob o assoalho' : tp === 'carro' ? 'Cofre' : 'Junto ao motor' },
-            { valor: 'gimbal', rotulo: 'Gimbal' },
+            { valor: 'gimbal', rotulo: 'Livre', titulo: 'Escolha o ângulo e a distância em volta do veículo' },
           ]} />
         </Field>
         {c.ouvinte === 'gimbal' && (
           <>
-            <Slider id="gAz" rotulo="Azimute" min={-180} max={180} passo={1} valor={c.gimbal.az} formatar={(v) => `${fmt(v)}°`} aoMudar={(v) => c.setGimbal({ az: v })} />
-            <Slider id="gEl" rotulo="Elevação" min={-20} max={89} passo={1} valor={c.gimbal.el} formatar={(v) => `${fmt(v)}°`} aoMudar={(v) => c.setGimbal({ el: v })} />
+            <Slider id="gAz" rotulo="Ângulo em volta (0° = à frente)" min={-180} max={180} passo={1} valor={c.gimbal.az} formatar={(v) => `${fmt(v)}°`} aoMudar={(v) => c.setGimbal({ az: v })} />
+            <Slider id="gEl" rotulo="Ângulo acima do chão" min={-20} max={89} passo={1} valor={c.gimbal.el} formatar={(v) => `${fmt(v)}°`} aoMudar={(v) => c.setGimbal({ el: v })} />
             <Slider id="gR" rotulo="Distância" min={0.5} max={60} passo={0.5} valor={c.gimbal.r} formatar={(v) => `${fmt(v, 1)} m`} aoMudar={(v) => c.setGimbal({ r: v })} />
           </>
         )}
         <Field rotulo="Ambiente">
           <ChipGroup id="ambiente" atual={c.ambiente} aoEscolher={(v) => c.setAmbiente(v)} opcoes={AMBIENTES_ELETRICO.map((a) => ({ valor: a.id, rotulo: a.nome, titulo: a.nota }))} />
         </Field>
-        <Slider id="master" rotulo="Volume" min={0.05} max={2} passo={0.01} valor={c.master} formatar={(v) => `${fmt(20 * Math.log10(v), 1)} dB`} aoMudar={(v) => c.setMaster(v)} />
+        <Slider id="master" rotulo="Volume" min={0.05} max={2} passo={0.01} valor={c.master} formatar={pct} aoMudar={(v) => c.setMaster(v)} />
       </Section>
 
-      <section className="group avancado">
-        <h2><button type="button" id="avancado" className="chip" aria-expanded={aberto} onClick={() => setAberto(!aberto)}>Avançado {aberto ? '▾' : '▸'}</button></h2>
-        {aberto && (
-          <>
+      <Section titulo="Avançado" recolhivel idBotao="avancado" classe="avancado">
             {pa.inversor && pa.inversor.tipo !== 'csi' && (
-              <Slider id="avFc" rotulo="f_c (portadora)" min={100} max={20000} passo={10} valor={pa.inversor.fc} formatar={(v) => `${fmt(v)} Hz`} aoMudar={(v) => c.editarAvancado({ fc: v })} />
+              <Slider id="avFc" rotulo="Frequência da portadora do inversor" min={100} max={20000} passo={10} valor={pa.inversor.fc} formatar={(v) => `${fmt(v)} Hz`} aoMudar={(v) => c.editarAvancado({ fc: v })} />
             )}
             {pa.inversor && pa.inversor.tipo !== 'csi' && pa.inversor.tipo !== 'chopper' && (
-              <Slider id="avDelta" rotulo="δ (aleatória)" min={0.02} max={0.3} passo={0.01} valor={pa.inversor.delta ?? 0.1} formatar={(v) => `±${fmt(v * 100)}%`} aoMudar={(v) => c.editarAvancado({ delta: v })} />
+              <Slider id="avDelta" rotulo="Espalhamento da portadora aleatória" min={0.02} max={0.3} passo={0.01} valor={pa.inversor.delta ?? 0.1} formatar={(v) => `±${fmt(v * 100)}%`} aoMudar={(v) => c.editarAvancado({ delta: v })} />
             )}
-            <Slider id="avZs" rotulo="Z_s (ranhuras do estator)" min={0} max={96} passo={1} valor={pa.Zs} aoMudar={(v) => c.editarAvancado({ Zs: v })} />
+            <Slider id="avZs" rotulo="Ranhuras do estator" min={0} max={96} passo={1} valor={pa.Zs} aoMudar={(v) => c.editarAvancado({ Zs: v })} />
             {pa.reducao.estagios.length > 0 && (
-              <Slider id="avZp" rotulo="Z_p (pinhão, 1º estágio)" min={5} max={60} passo={1} valor={pa.reducao.estagios[0].Zp} aoMudar={(v) => c.editarAvancado({ Zp: v })} />
+              <Slider id="avZp" rotulo="Dentes do pinhão (1º estágio da redução)" min={5} max={60} passo={1} valor={pa.reducao.estagios[0].Zp} aoMudar={(v) => c.editarAvancado({ Zp: v })} />
             )}
-            <Slider id="avExc" rotulo="Excentricidade" min={0} max={1} passo={0.05} valor={pa.excentricidade ?? 0.2} formatar={(v) => fmt(v, 2)} aoMudar={(v) => c.editarAvancado({ excentricidade: v })} />
+            <Slider id="avExc" rotulo="Excentricidade do rotor" min={0} max={1} passo={0.05} valor={pa.excentricidade ?? 0.2} formatar={(v) => fmt(v, 2)} aoMudar={(v) => c.editarAvancado({ excentricidade: v })} />
             {pa.escovas && <Slider id="avDesg" rotulo="Desgaste das escovas" min={0} max={1} passo={0.05} valor={pa.escovas.desgaste} formatar={(v) => fmt(v, 2)} aoMudar={(v) => c.editarAvancado({ desgaste: v })} />}
             {pa.helice
-              ? <Slider id="avDetune" rotulo="Detune dos rotores (× o medido)" min={0} max={2} passo={0.05} valor={c.avancado.detune ?? 1} formatar={(v) => `× ${fmt(v, 2)}`} aoMudar={(v) => c.editarAvancado({ detune: v })} />
-              : (pa.nUnidades ?? 1) > 1 && <Slider id="avDetune" rotulo="Detune das unidades" min={0} max={0.02} passo={0.0005} valor={pa.detune ?? 0.003} formatar={(v) => `±${fmt(v * 100, 2)}%`} aoMudar={(v) => c.editarAvancado({ detune: v })} />}
+              ? <Slider id="avDetune" rotulo="Diferença de rotação entre as hélices (× a medida)" min={0} max={2} passo={0.05} valor={c.avancado.detune ?? 1} formatar={(v) => `× ${fmt(v, 2)}`} aoMudar={(v) => c.editarAvancado({ detune: v })} />
+              : (pa.nUnidades ?? 1) > 1 && <Slider id="avDetune" rotulo="Diferença de rotação entre os motores" min={0} max={0.02} passo={0.0005} valor={pa.detune ?? 0.003} formatar={(v) => `±${fmt(v * 100, 2)}%`} aoMudar={(v) => c.editarAvancado({ detune: v })} />}
             {pa.aprox?.length ? <p className="nota-aprox">Valores aproximados (≈) neste preset: {pa.aprox.join('; ')}.</p> : null}
-          </>
-        )}
-      </section>
+      </Section>
     </>
   );
 }

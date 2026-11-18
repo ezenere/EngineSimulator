@@ -10,7 +10,24 @@ import type { ControleEletrico } from './controle';
 import { fmt } from './controle';
 import { ganhoA } from '../../scene/filtros';
 
-const COR = { ink: '#e9e4d8', muted: '#8b93a1', faint: '#59616e', line: '#29313d', gold: '#dca54c', blue: '#7398e6', violet: '#a57ad8', hot: '#ff5b3d', green: '#7fc28a', panel: '#141920' };
+// cores e fontes do tema, lidas dos tokens de src/ui/estilo.css (os valores abaixo valem até a primeira leitura)
+const COR = { ink: '#e9e4d8', muted: '#9aa2b0', faint: '#838c9b', line: '#29313d', gold: '#dca54c', blue: '#7398e6', violet: '#a57ad8', hot: '#ff5b3d', panel: '#141920', mono: '"IBM Plex Mono", monospace' };
+let coresLidas = false;
+function lerCores() {
+  if (coresLidas || typeof document === 'undefined') return;
+  const css = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  for (const k of ['ink', 'muted', 'faint', 'line', 'gold', 'blue', 'violet', 'hot', 'panel'] as const) COR[k] = css(`--${k}`) || COR[k];
+  COR.mono = css('--f-mono') || COR.mono;
+  coresLidas = true;
+}
+
+// nome de cada linha do espectro para quem lê (a telemetria manda a notação da tabela: 2f_e, Z_s·f_rot, f_c…)
+const NOME_LINHA: Record<string, string> = {
+  '2f_e': '2× elétrica', '6f_e': '6× elétrica', 'Z_s·f_rot': 'ranhuras', 'Z_r·f_rot': 'ranhuras do rotor', 'excentr.': 'excentricidade', f_rot: 'rotação',
+  '2f_rede': '2× rede', ordem: 'ordem medida', 'k·f_e': 'harmônico elétrico', f_c: 'portadora', f_ch: 'chopper', 'N = 1': 'onda quadrada', aux: 'auxiliar',
+  'engren.': 'engrenagem', 'BPF vent.': 'ventilador', 'Z_c·f_rot': 'comutador', BPF: 'hélice', AVAS: 'som de aviso',
+};
+const nomeLinha = (id: string) => NOME_LINHA[id] ?? id;
 
 function fft(re: Float32Array, im: Float32Array) {
   const n = re.length;
@@ -76,19 +93,34 @@ function preparar(cv: HTMLCanvasElement) {
 }
 
 const F_LO = 20, F_HI = 12000, DB_LO = 0, DB_HI = 110;
+/** altura reservada no alto do espectro para os nomes das linhas (4 filas) */
+const FAIXA_NOMES = 54;
 const xDeF = (f: number, W: number) => ((Math.log(f) - Math.log(F_LO)) / (Math.log(F_HI) - Math.log(F_LO))) * W;
 const fDeX = (x: number, W: number) => Math.exp(Math.log(F_LO) + ((Math.log(F_HI) - Math.log(F_LO)) * x) / W);
 
 /** espectro (20 Hz–12 kHz) com as linhas da telemetria anotadas */
 export function desenharEspectro(c: ControleEletrico, m: Medidor, cv: HTMLCanvasElement) {
+  lerCores();
   const { g, W, H } = preparar(cv);
   g.fillStyle = COR.panel; g.fillRect(0, 0, W, H);
-  const y = (db: number) => H - 14 - ((Math.max(DB_LO, Math.min(DB_HI, db)) - DB_LO) / (DB_HI - DB_LO)) * (H - 26);
+  // o gráfico fica abaixo da faixa dos nomes; o eixo de dB vai à esquerda
+  const topo = Math.min(FAIXA_NOMES, H * 0.3);
+  const y = (db: number) => H - 14 - ((Math.max(DB_LO, Math.min(DB_HI, db)) - DB_LO) / (DB_HI - DB_LO)) * (H - 14 - topo);
+  g.font = `500 10px ${COR.mono}`; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
   g.strokeStyle = COR.line; g.lineWidth = 1;
-  for (let d = 20; d <= 100; d += 20) { g.beginPath(); g.moveTo(0, y(d)); g.lineTo(W, y(d)); g.stroke(); }
-  g.fillStyle = COR.muted; g.font = '10px "IBM Plex Mono", monospace';
-  for (const f of [50, 100, 200, 500, 1000, 2000, 5000, 10000]) { const x = xDeF(f, W); g.fillRect(x, H - 14, 1, 4); g.fillText(f >= 1000 ? `${f / 1000}k` : String(f), x + 2, H - 3); }
-  if (!c.audio) { g.fillStyle = COR.faint; g.font = '12px sans-serif'; g.fillText('espectro (ligue o motor)', 10, 20); cv.dataset.anotadas = '0'; return; }
+  for (let d = 20; d <= 100; d += 20) {
+    g.beginPath(); g.moveTo(0, y(d)); g.lineTo(W, y(d)); g.stroke();
+    if (d % 40 === 20) { g.fillStyle = COR.faint; g.fillText(d === 100 ? '100 dB SPL' : `${d} dB`, 4, y(d) - 3); }
+  }
+  g.fillStyle = COR.muted;
+  for (const f of [50, 100, 200, 500, 1000, 2000, 5000, 10000]) { const x = xDeF(f, W); g.fillRect(x, H - 14, 1, 4); g.textAlign = x > W - 24 ? 'right' : 'left'; g.fillText(f >= 1000 ? `${f / 1000}k` : String(f), x + (x > W - 24 ? -2 : 2), H - 3); }
+  g.textAlign = 'left';
+  if (!c.audio) {
+    g.fillStyle = COR.muted; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('ligue o motor para ver o espectro e o nome de cada linha', W / 2, (topo + H - 14) / 2);
+    cv.dataset.anotadas = '0';
+    return;
+  }
   // curva: o máximo das raias em cada pixel
   g.strokeStyle = COR.gold; g.lineWidth = 1.2; g.beginPath();
   const n = m.n, sr = m.sr;
@@ -101,22 +133,31 @@ export function desenharEspectro(c: ControleEletrico, m: Medidor, cv: HTMLCanvas
   // linhas da telemetria
   const L = c.tele?.portador.linhas ?? [];
   let anot = 0;
-  g.font = '10px "IBM Plex Mono", monospace';
-  // rótulos em até 4 filas, cada uma guardando onde o último rótulo terminou (sem sobrepor)
-  const fim = [-1e9, -1e9, -1e9, -1e9];
+  // Um traço por linha, até o nível dela. O nome aparece uma vez por tipo de linha (na mais forte: portadora e
+  // engrenagem têm muitas bandas e harmônicos), em até 4 filas, cada fila guardando os trechos já ocupados.
   const ord = L.filter((l) => l.f >= F_LO && l.f <= F_HI).sort((a, b) => a.f - b.f);
+  const forte = new Map<string, { f: number; v: number }>();
+  for (const l of ord) { const v = m.em(l.f), a = forte.get(l.id); if (!a || v > a.v) forte.set(l.id, { f: l.f, v }); }
+  const filas: [number, number][][] = [[], [], [], []];
+  g.strokeStyle = COR.blue;
   for (const l of ord) {
-    const x = xDeF(l.f, W), v = m.em(l.f), w = g.measureText(l.id).width + 4;
-    let fila = fim.findIndex((e) => e < x);
-    const tem = fila >= 0;
-    if (!tem) fila = 3;
-    const yl = 11 + fila * 11;
-    g.strokeStyle = 'rgba(115,152,230,0.55)'; g.beginPath(); g.moveTo(x, yl + 2); g.lineTo(x, y(v)); g.stroke();
-    if (tem) { g.fillStyle = COR.blue; g.fillText(l.id, Math.min(W - w, x + 2), yl); fim[fila] = x + 2 + w; }
+    const x = xDeF(l.f, W), v = m.em(l.f), principal = forte.get(l.id)!.f === l.f;
+    g.globalAlpha = principal ? 0.7 : 0.3;
+    g.beginPath(); g.moveTo(x, principal ? topo - 2 : y(v) - 14); g.lineTo(x, y(v)); g.stroke();
     anot++;
   }
+  g.globalAlpha = 1;
+  for (const [id, { f }] of [...forte.entries()].sort((a, b) => a[1].f - b[1].f)) {
+    const x = xDeF(f, W), nome = nomeLinha(id), w = g.measureText(nome).width;
+    const a = Math.max(2, Math.min(W - w - 2, x + 3)), b = a + w;
+    const fila = filas.findIndex((fl) => fl.every(([p, q]) => b + 6 < p || a - 6 > q));
+    if (fila < 0) continue;
+    filas[fila].push([a, b]);
+    const yl = 12 + fila * 12;
+    g.strokeStyle = COR.blue; g.globalAlpha = 0.7; g.beginPath(); g.moveTo(x, yl + 2); g.lineTo(x, topo - 2); g.stroke(); g.globalAlpha = 1;
+    g.fillStyle = COR.blue; g.fillText(nome, a, yl);
+  }
   cv.dataset.anotadas = String(anot);
-  g.fillStyle = COR.muted; g.fillText('dB SPL', W - 44, y(100) - 2);
 }
 
 /** espectrograma rolante de 10 s (eixo log 20 Hz–12 kHz) */
@@ -144,9 +185,11 @@ export class Espectrograma {
     }
     g.imageSmoothingEnabled = false;
     g.drawImage(this.off, 0, 0, W, H);
-    g.fillStyle = COR.muted; g.font = '10px "IBM Plex Mono", monospace';
-    for (const f of [100, 1000, 10000]) { const yy = H - xDeF(f, H); g.fillText(f >= 1000 ? `${f / 1000}k` : String(f), 3, yy - 2); g.fillRect(0, yy, 5, 1); }
-    g.fillText('10 s', W - 30, H - 4);
+    lerCores();
+    g.fillStyle = COR.ink; g.font = `500 10px ${COR.mono}`; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    for (const f of [100, 1000, 10000]) { const yy = H - xDeF(f, H); g.fillText(f >= 1000 ? `${f / 1000} kHz` : `${f} Hz`, 8, Math.max(11, yy - 3)); g.fillRect(0, yy, 5, 1); }
+    g.textAlign = 'right'; g.fillText('agora', W - 5, H - 5); g.textAlign = 'left'; g.fillText('há 10 s', 5, H - 5);
+    if (!c.audio) { g.fillStyle = COR.muted; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('ligue o motor para ver o espectrograma', W / 2, H / 2); }
   }
 }
 
@@ -154,8 +197,8 @@ export class Espectrograma {
 export interface Leituras { [k: string]: HTMLElement }
 
 const MODO_NOME: Record<string, string> = {
-  assincrona: 'assíncrona', escada: 'escada (do-re-mi)', sincrona: 'síncrona', bloco: 'onda quadrada (N = 1)', aleatoria: 'aleatória (random PWM)',
-  chopper: 'chopper CC', csi: 'inversor de corrente', desligado: 'sem pulsos', auto: 'auto',
+  assincrona: 'assíncrona', escada: 'escada (do-re-mi)', sincrona: 'síncrona', bloco: 'onda quadrada', aleatoria: 'aleatória',
+  chopper: 'chopper de CC', csi: 'inversor de corrente', desligado: 'sem pulsos', auto: 'automática',
 };
 
 export function escreverLeituras(c: ControleEletrico, m: Medidor, l: Leituras) {
@@ -165,19 +208,19 @@ export function escreverLeituras(c: ControleEletrico, m: Medidor, l: Leituras) {
   if (!t) return;
   set('rpm', `${fmt(t.rpm ?? 0)} rpm`);
   set('v', c.tipoPortador === 'bancada' ? 'bancada' : `${fmt(Math.abs(t.v) * 3.6)} km/h`);
-  set('fe', `${fmt(t.fE ?? 0, 1)} Hz · f_rot ${fmt(t.fRot ?? 0, 1)} Hz`);
+  set('fe', `${fmt(t.fE ?? 0, 1)} Hz · eixo ${fmt(t.fRot ?? 0, 1)} voltas/s`);
   const modo = t.modo ?? 'desligado';
-  const fc = modo === 'sincrona' || modo === 'bloco' ? `${fmt(t.fC ?? 0)} Hz · N ${t.N}` : modo === 'csi' ? `6f_e ${fmt(6 * (t.fE ?? 0))} Hz` : modo === 'desligado' ? '—' : `${fmt(t.fC ?? 0)} Hz`;
+  const fc = modo === 'sincrona' || modo === 'bloco' ? `${fmt(t.fC ?? 0)} Hz · ${t.N} por ciclo` : modo === 'csi' ? `${fmt(6 * (t.fE ?? 0))} Hz (6× elétrica)` : modo === 'desligado' ? '—' : `${fmt(t.fC ?? 0)} Hz`;
   set('fc', c.base.inversor ? fc : 'sem inversor');
-  set('modo', c.base.inversor ? `${MODO_NOME[modo] ?? modo}${modo === 'escada' && t.notaNome ? ` · ${t.notaNome}` : ''}${modo === 'chopper' ? ` · D ${fmt(t.D ?? 0, 2)}` : ''}` : c.base.maquina === 'bldc' ? 'ESC 6 passos (não sintetizado)' : 'rede/CC direto');
+  set('modo', c.base.inversor ? `${MODO_NOME[modo] ?? modo}${modo === 'escada' && t.notaNome ? ` · nota ${t.notaNome}` : ''}${modo === 'chopper' ? ` · ciclo ${fmt((t.D ?? 0) * 100)}%` : ''}` : c.base.maquina === 'bldc' ? 'ESC de 6 passos (não sintetizado)' : 'direto na rede ou em CC');
   const I = (t.corrente ?? 0) * 100, T = t.torque ?? 0;
-  set('corrente', `${I >= 0 ? '' : '−'}${fmt(Math.abs(I))}% I_n · ${fmt(T, Math.abs(T) < 10 ? 2 : 0)} N·m`);
+  set('corrente', `${I >= 0 ? '' : '−'}${fmt(Math.abs(I))}% · ${fmt(T, Math.abs(T) < 10 ? 2 : 0)} N·m`);
   const ec = l.corrente; if (ec) ec.style.color = I < -0.5 ? COR.blue : '';
   const P = (t.potencia ?? 0) / 1000;
   set('potencia', `${fmt(P, Math.abs(P) < 10 ? 2 : 0)} kW`);
   const ep = l.potencia; if (ep) ep.style.color = P < -0.01 ? COR.blue : '';
-  set('mfluxo', `M ${fmt(t.M ?? 0, 2)} · Φ ${fmt(t.fluxo ?? 0, 2)}`);
-  set('avas', c.base.avas === undefined ? '—' : `${c.avas === 'desligado' ? 'desligado' : c.avas.toUpperCase()}${(t.avas ?? 0) > 0.01 ? ' · tocando' : ''}`);
+  set('mfluxo', `${fmt((t.M ?? 0) * 100)}% da tensão · fluxo ${fmt((t.fluxo ?? 0) * 100)}%`);
+  set('avas', c.base.avas === undefined ? 'não tem' : `${c.avas === 'desligado' ? 'desligado' : c.avas === 'ue' ? 'padrão da UE' : 'padrão dos EUA'}${(t.avas ?? 0) > 0.01 ? ' · tocando' : ''}`);
 }
 
 /** teclado do do-re-mi: a tecla da nota atual acesa (índice 0..11; 12 = patamar) */
