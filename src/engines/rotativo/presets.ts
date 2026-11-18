@@ -74,7 +74,7 @@ export type FamiliaRotativo = { id: string; name: string };
 export const FAMILIAS_ROTATIVO: FamiliaRotativo[] = [
   { id: 'mazda', name: 'Mazda de rua' },
   { id: 'multi', name: 'Mazda 3 e 4 rotores' },
-  { id: 'europeus', name: 'Europeus' },
+  { id: 'europeus', name: 'Europeus e clássicos' },
   { id: 'aviacao', name: 'Aviação e UAV' },
   { id: 'x', name: 'X-Engine (aproximação)' },
   { id: 'palhetas', name: 'Palhetas (aproximação)' },
@@ -95,7 +95,7 @@ const pol = (mm: number) => mm / 25.4;
 
 export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] } = Object.assign([
   // ---- Mazda de rua (1–5)
-  { id: 'rx7fd', family: 'mazda', name: 'Mazda RX-7 FD 13B-REW', tag: '1992–2002 · 2 rotores · biturbo sequencial · 280 ps',
+  { id: 'rx7fd', family: 'mazda', name: 'Mazda RX-7 FD 13B-REW', tag: '1992–2002 · 2 rotores · biturbo sequencial · 280 cv',
     tipo: 'wankel', rotores: 2, geo: G['13B'], cilindradaCamara: 654, displacement: 1.308, cr: 9.0,
     janelas: { admissao: 'lateral4', escape: 'periferico', apv: [3750] }, velas: 2, idle: 750, rpmMax: 8000, power: 206, torque: 314, J: 0.25,
     aspiration: 'turbo', boost: 0.7, turbo: { sequencial: true, boost: 0.7, trocaRpm: 4500 },
@@ -115,7 +115,7 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     escape: { tipo: 'serie', Lp: 0.3, Dp: 45, presilencioso: false, reator: true, cat: false, downpipe: { L: 1.2, D: 50 }, saidas: [{ L: 3.6, D: 50, phi: 30 }] },
     muffler: 'classic', pipeD: pol(50), gears: 4, ratios: [3.683, 2.263, 1.397, 1.0], finalDrive: 3.9, mass: 900, wheelR: 0.3,
     overrun: 'lean', cat: false, limiter: 'fuel', limiterBand: 120, portadores: carro, aproximacao: 'corte de giro (o carro só tinha a cigarra de aviso)' },
-  { id: 'rx8hp', family: 'mazda', name: 'Mazda RX-8 Renesis 6 janelas', tag: '2003–12 · 13B-MSP Hi-Power · 231 hp a 8 200 rpm',
+  { id: 'rx8hp', family: 'mazda', name: 'Mazda RX-8 Renesis 6 janelas', tag: '2003–12 · 13B-MSP Hi-Power · 231 cv a 8 200 rpm',
     tipo: 'wankel', rotores: 2, geo: G['13B'], cilindradaCamara: 654, displacement: 1.308, cr: 10.0,
     janelas: { admissao: 'lateral6', escape: 'lateral', apv: [3750, 6250] }, velas: 2, idle: 750, rpmMax: 9000, power: 170, torque: 211, J: 0.22,
     escape: { tipo: 'serie', Lp: 0.35, Dp: 50, presilencioso: true, cat: true, downpipe: { L: 1.0, D: 60 }, saidas: [{ L: 4.2, D: 60, phi: 20 }, { L: 4.25, D: 60, phi: 160 }] },
@@ -123,9 +123,9 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     overrun: 'burble', cat: true, limiter: 'fuel', limiterBand: 60, limiterHold: 0.05, portadores: carro },
   { id: 'rx8std', family: 'mazda', name: 'Mazda RX-8 Renesis 4 janelas', tag: '2003–08 · 13B-MSP Standard · 189 hp',
     tipo: 'wankel', rotores: 2, geo: G['13B'], cilindradaCamara: 654, displacement: 1.308, cr: 10.0,
-    janelas: { admissao: 'lateral4', escape: 'lateral', apv: [3750] }, velas: 2, idle: 750, rpmMax: 7500, power: 141, torque: 222, J: 0.22,
+    janelas: { admissao: 'lateral4', escape: 'lateral', apv: [3750] }, velas: 2, idle: 750, rpmMax: 7500, power: 141, torque: 220, J: 0.22,
     escape: { tipo: 'serie', Lp: 0.35, Dp: 50, presilencioso: true, cat: true, downpipe: { L: 1.0, D: 60 }, saidas: [{ L: 4.2, D: 60, phi: 20 }, { L: 4.25, D: 60, phi: 160 }] },
-    muffler: 'stock', pipeD: pol(60), gears: 5, ratios: [3.815, 2.26, 1.64, 1.177, 0.832], finalDrive: 4.444, mass: 1340, wheelR: 0.327,
+    muffler: 'stock', pipeD: pol(60), gears: 5, ratios: [3.483, 2.015, 1.484, 1.0, 0.762], finalDrive: 4.444, mass: 1340, wheelR: 0.327,
     overrun: 'burble', cat: true, limiter: 'fuel', limiterBand: 60, limiterHold: 0.05, portadores: carro },
   // ---- Mazda 3 e 4 rotores (6–7)
   { id: 'cosmo20b', family: 'multi', name: 'Eunos Cosmo 20B-REW', tag: '1990–96 · 3 rotores · biturbo sequencial · automático',
@@ -133,7 +133,7 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     janelas: { admissao: 'lateral4', escape: 'periferico', apv: [3750] }, velas: 2, idle: 700, rpmMax: 7000, power: 206, torque: 403, J: 0.38,
     aspiration: 'turbo', boost: 0.6, turbo: { sequencial: true, boost: 0.6, trocaRpm: 4200 },
     escape: { tipo: 'serie', Lp: 0.3, Dp: 55, presilencioso: true, cat: true, downpipe: { L: 1.0, D: 70 }, saidas: [{ L: 3.8, D: 70, phi: 20 }, { L: 3.85, D: 70, phi: 160 }] },
-    muffler: 'stock', pipeD: pol(70), gears: 4, transmission: 'auto', shiftTime: 0.5, ratios: [2.784, 1.545, 1.0, 0.694], finalDrive: 3.909, mass: 1640, wheelR: 0.32,
+    muffler: 'stock', pipeD: pol(70), gears: 4, transmission: 'auto', shiftTime: 0.5, ratios: [2.784, 1.544, 1.0, 0.694], finalDrive: 3.909, mass: 1640, wheelR: 0.32,
     overrun: 'cut', cat: true, limiter: 'throttle', portadores: carro },
   { id: 'r26b', family: 'multi', name: 'Mazda 787B R26B', tag: 'Le Mans 1991 · 4 rotores · admissão periférica · megafone · 700 hp',
     tipo: 'wankel', rotores: 4, geo: G['13B'], cilindradaCamara: 654, displacement: 2.616, cr: 10.0,
@@ -141,12 +141,12 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     escape: { tipo: 'megafone', Lp: 0.9, Dp: 60, presilencioso: false, cat: false, megafone: { L: 0.5, Dboca: 120 }, saidas: [{ L: 0.5, D: 120, phi: 5 }] },
     muffler: 'straight', pipeD: pol(60), intake: 'sport', engine: 'mid', gears: 5, ratios: [2.8, 1.96, 1.53, 1.24, 1.04], finalDrive: 3.0, mass: 900, wheelR: 0.33, drag: 0.3,
     overrun: 'burble', cat: false, limiter: 'fuel', limiterBand: 60, limiterHold: 0.05, portadores: carro, vPassagem: 340, dispersao: 1, dispersaoRotor: 3 },
-  // ---- Europeus (8–10)
+  // ---- Europeus e clássicos (8–10): Ro80, Norton e o Cosmo 110S (Mazda de 1967, o clássico do grupo)
   { id: 'ro80', family: 'europeus', name: 'NSU Ro80 KKM 612', tag: '1967–77 · 2 rotores · uma vela · semiautomático',
     tipo: 'wankel', rotores: 2, geo: G.KKM612, cilindradaCamara: 497.5, displacement: 0.995, cr: 9.0,
     janelas: { admissao: 'lateral4', escape: 'periferico' }, velas: 1, idle: 900, rpmMax: 6500, power: 85, torque: 162, J: 0.2, fuel: 'carb',
     escape: { tipo: 'duplo', Lp: 0.3, Dp: 45, presilencioso: false, cat: false, downpipe: { L: 1.5, D: 50 }, saidas: [{ L: 1.5, D: 50, phi: 30 }] },
-    muffler: 'stock', pipeD: pol(50), gears: 3, transmission: 'auto', shiftTime: 0.6, ratios: [2.13, 1.21, 0.81], finalDrive: 4.86, mass: 1280, wheelR: 0.31,
+    muffler: 'stock', pipeD: pol(50), gears: 3, transmission: 'auto', shiftTime: 0.6, ratios: [2.056, 1.208, 0.788], finalDrive: 4.857, mass: 1280, wheelR: 0.31,
     overrun: 'lean', cat: false, limiter: 'fuel', limiterBand: 120, portadores: carro, aproximacao: 'corte de giro (carburado, sem central)' },
   { id: 'norton', family: 'europeus', name: 'Norton F1 / Commander', tag: 'moto 1988–92 · 2 rotores refrigerados pela carga · 95 hp',
     tipo: 'wankel', rotores: 2, geo: G.sachs294, cilindradaCamara: 294, displacement: 0.588, cr: 9.0,
@@ -158,7 +158,7 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     tipo: 'wankel', rotores: 2, geo: G['10A'], cilindradaCamara: 491, displacement: 0.982, cr: 9.4,
     janelas: { admissao: 'lateral4', escape: 'periferico' }, velas: 2, idle: 900, rpmMax: 7000, power: 81, torque: 130, J: 0.18, fuel: 'carb',
     escape: { tipo: 'duplo', Lp: 0.3, Dp: 40, presilencioso: false, cat: false, downpipe: { L: 1.4, D: 45 }, saidas: [{ L: 3.6, D: 45, phi: 20 }, { L: 3.65, D: 45, phi: 160 }] },
-    muffler: 'classic', pipeD: pol(45), gears: 4, ratios: [3.683, 2.263, 1.397, 1.0], finalDrive: 4.111, mass: 940, wheelR: 0.3,
+    muffler: 'classic', pipeD: pol(45), gears: 4, ratios: [3.379, 2.077, 1.39, 1.0], finalDrive: 4.111, mass: 940, wheelR: 0.3,
     overrun: 'lean', cat: false, limiter: 'fuel', limiterBand: 120, portadores: carro, aproximacao: 'corte de giro (carburado, sem central)' },
   // ---- Aviação e UAV (11–14)
   { id: 'mistral', family: 'aviacao', name: 'Mistral G-200', tag: 'aviação leve (Suíça) · 2 rotores 13B · redutor 2,56:1 · 200 hp',
