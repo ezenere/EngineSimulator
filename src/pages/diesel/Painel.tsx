@@ -90,7 +90,7 @@ function Escuta({ k, e }: P) {
       {mix('mxAir', 'Ar (jato, chiado)', 'air')}
       {mix('mxVol', 'Volume', 'master', 1.5)}
       <Field rotulo="Equalização">
-        <div className="chips"><button type="button" className="chip" onClick={() => k.setEq({ lo: 0, mid: 0, hi: 0 }, true)}>Zerar</button></div>
+        <div className="chips" role="group" aria-label="Equalização"><button type="button" className="chip" onClick={() => k.setEq({ lo: 0, mid: 0, hi: 0 }, true)}>Zerar</button></div>
       </Field>
       {tom('eqLo', 'Grave (abaixo de 160 Hz)', 'lo')}
       {tom('eqMid', 'Médio (900 Hz)', 'mid')}
@@ -259,7 +259,7 @@ function Temperatura({ k, e }: P) {
         ]} atual={e.tempMode} aoEscolher={(v) => k.setTempMode(v as 'real' | 'fixed')} />
       </Field>
       <AguaDoMotor k={k} />
-      <div className="chips">
+      <div className="chips" role="group" aria-label="Temperaturas prontas">
         <button type="button" className="chip" onClick={() => k.setCoolant(20)}>Partida a frio (20 °C)</button>
         <button type="button" className="chip" onClick={() => k.setCoolant(-10)}>Inverno (−10 °C)</button>
         <button type="button" className="chip" onClick={() => k.setCoolant(90)}>Motor quente (90 °C)</button>

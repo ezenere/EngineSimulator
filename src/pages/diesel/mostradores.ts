@@ -75,7 +75,7 @@ export class Mostradores {
     const p: number[] | undefined = tele.ptheta;
     const cyc = k.estado.motor.tempos === 2 ? 360 : 720;
     g.font = `500 10px ${C.mono}`; g.fillStyle = C.faint; g.textAlign = 'left'; g.textBaseline = 'top';
-    g.fillText('pressão no cilindro 1 × ângulo', 6, 5);
+    g.fillText('pressão no cilindro 1', 6, 5);
     if (!p || !p.length) {
       g.fillStyle = C.muted; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText('sem leitura: motor parado', w / 2, h / 2 + 6);
@@ -446,7 +446,7 @@ export class Mostradores {
       const ratio = 343 / (343 + (tele.vRad || 0));
       const pct = (ratio - 1) * 100;
       note.textContent = moving
-        ? `${dist} m · ${pct > 0 ? 'aproximando' : 'afastando'} · Doppler ${pct > 0 ? '+' : ''}${pct.toFixed(1)}% no tom · volta de ${tele.loop} m`
+        ? `${dist} m · ${pct > 0 ? 'aproximando' : 'afastando'} · Doppler ${pct > 0 ? '+' : '−'}${Math.abs(pct).toFixed(1).replace('.', ',')}% no tom · volta de ${tele.loop} m`
         : `${dist} m de você · carro parado. Engate e acelere para ele passar.`;
     }
   }

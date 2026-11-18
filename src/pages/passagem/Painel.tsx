@@ -180,7 +180,7 @@ function Ouvinte({ c }: { c: ControlePassagem }) {
         <ChipGroup id="modoOuvinte" atual={o.modo} aoEscolher={(v) => c.setModo(v)} opcoes={[{ valor: 'fixo' as const, rotulo: 'Parado junto à via' }, { valor: 'gimbal' as const, rotulo: 'No gimbal do corpo', titulo: 'Anda com o corpo, em torno dele ou de uma fonte' }]} />
       </Field>
       <Field rotulo="Atalhos">
-        <div className="chips" id="atalhos">
+        <div className="chips" id="atalhos" role="group" aria-label="Atalhos de posição do ouvinte">
           {c.atalhos().map((a) => <button key={a.id} type="button" className="chip" data-id={a.id} disabled={!a.ok} title={a.titulo} onClick={() => c.aplicarAtalho(a)}>{a.nome}</button>)}
         </div>
       </Field>
@@ -239,7 +239,7 @@ function Trem({ c }: { c: ControlePassagem }) {
       <Slider id="largura" rotulo="Largura" min={2.6} max={3.8} passo={0.02} valor={t.largura} formatar={m(2)} aoSoltar={(v) => c.setTrem({ largura: v })} />
       <Slider id="alturaTrem" rotulo="Altura" min={3} max={4.6} passo={0.05} valor={t.altura} formatar={m(2)} aoSoltar={(v) => c.setTrem({ altura: v })} />
       <Field rotulo="Pantógrafos (vagões)">
-        <div className="chips num" id="pantografos">
+        <div className="chips num" id="pantografos" role="group" aria-label="Vagões com pantógrafo">
           {vagoes.map((v) => <button key={v} type="button" className="chip num" aria-pressed={t.pantografos.includes(v)}
             onClick={() => c.setTrem({ pantografos: t.pantografos.includes(v) ? t.pantografos.filter((x) => x !== v) : [...t.pantografos, v].sort((a, b) => a - b) })}>{v}</button>)}
         </div>

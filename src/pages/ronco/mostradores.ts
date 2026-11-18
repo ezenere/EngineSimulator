@@ -390,7 +390,7 @@ export class Mostradores {
       const ratio = 343 / (343 + (tele.vRad || 0));
       const pct = (ratio - 1) * 100;
       note.textContent = moving
-        ? `${dist} m · ${pct > 0 ? 'aproximando' : 'afastando'} · Doppler ${pct > 0 ? '+' : ''}${pct.toFixed(1)}% no tom · volta de ${tele.loop} m`
+        ? `${dist} m · ${pct > 0 ? 'aproximando' : 'afastando'} · Doppler ${pct > 0 ? '+' : '−'}${Math.abs(pct).toFixed(1).replace('.', ',')}% no tom · volta de ${tele.loop} m`
         : `${dist} m de você · carro parado. Engate e acelere para ele passar.`;
     }
   }

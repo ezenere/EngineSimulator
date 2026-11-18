@@ -1,7 +1,7 @@
 /* Página do Elétrico: leituras (soltas, como nas outras páginas) e o teclado do do-re-mi à esquerda, espectro e
    espectrograma em quadro à direita, o painel ao lado. Peças e tokens de src/ui/estilo.css. */
 .eletrico .palco {
-  grid-template-columns: 290px minmax(0, 1fr);
+  grid-template-columns: 330px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas: "inst graf" "dica dica";
 }

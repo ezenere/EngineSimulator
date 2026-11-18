@@ -130,7 +130,7 @@ export class MostradoresRot {
     const [g, w, h] = fit(cv);
     g.clearRect(0, 0, w, h);
     g.font = `500 10px ${C.mono}`; g.fillStyle = C.faint; g.textAlign = 'left'; g.textBaseline = 'top';
-    g.fillText('pressão na câmara 1 × ângulo do eixo', 6, 5);
+    g.fillText('pressão na câmara 1', 6, 5);
     if (!tr || !k.estado.motor || !(t.rpm > 30)) {
       g.fillStyle = C.muted; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText('sem leitura: motor parado', w / 2, h / 2 + 6);

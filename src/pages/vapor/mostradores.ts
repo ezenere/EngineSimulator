@@ -66,7 +66,9 @@ export function desenharManometro(c: ControleVapor, cv: HTMLCanvasElement) {
   g.fillStyle = pc >= seg ? hot : ink; g.font = `800 ${Math.round(R * 0.3)}px ${display}`;
   g.fillText(fmt(pc, 1), cx, cy + R * 0.3);
   g.font = `500 ${miudo}px ${mono}`; g.fillStyle = muted;
-  g.fillText(`caldeira  ·  ${fmt(pc * 14.5038)} psi`, cx, cy + R * 0.5);
+  // (em mostrador pequeno a linha comprida encostaria nos algarismos da escala: fica só a pressão em psi)
+  const psi = `${fmt(pc * 14.5038)} psi`, linha2 = `caldeira  ·  ${psi}`;
+  g.fillText(g.measureText(linha2).width > R * 0.84 ? psi : linha2, cx, cy + R * 0.5);
   g.fillStyle = gold;
   g.fillText(`caixa de vapor ${fmt(pch, 1)} bar`, cx, cy + R * 0.63);
   if (m?.seguranca) {

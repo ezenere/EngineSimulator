@@ -211,7 +211,7 @@ function Temperatura({ k, e }: P) {
         <ChipGroup id="tempMode" opcoes={[{ valor: 'real', rotulo: 'Esquentando de verdade' }, { valor: 'fixed', rotulo: 'Fixa' }]} atual={e.tempMode} aoEscolher={(v) => k.setTempMode(v as 'real' | 'fixed')} />
       </Field>
       <Slider id="coolant" rotulo="Água do motor (alojamentos)" min={-10} max={120} passo={1} valor={agua} formatar={(v) => `${v} °C`} aoMudar={(v) => k.setCoolant(v)} />
-      <div className="chips">
+      <div className="chips" role="group" aria-label="Temperaturas prontas">
         <button type="button" className="chip" onClick={() => k.setCoolant(20)}>Partida a frio (20 °C)</button>
         <button type="button" className="chip" onClick={() => k.setCoolant(90)}>Motor quente (90 °C)</button>
       </div>
@@ -241,10 +241,10 @@ function Transmissao({ k, e }: P) {
       </Field>
       <Slider id="shiftTime" rotulo="Tempo de troca" min={0.04} max={1} passo={0.01} valor={s.shiftTime || (s.transmission === 'auto' ? 0.36 : 0.26)} formatar={(v) => `${virgula(v, 2)} s`} aoMudar={(v) => k.setSpec({ shiftTime: v }, nt)} />
       {ratios.map((r, i) => (
-        <Slider key={`ratio${i + 1}`} id={`ratio${i + 1}`} rotulo={`${i + 1}ª marcha`} min={0.4} max={5.5} passo={0.01} valor={r} formatar={(v) => `${v.toFixed(2)} : 1 · ${vmax(v)} km/h`}
+        <Slider key={`ratio${i + 1}`} id={`ratio${i + 1}`} rotulo={`${i + 1}ª marcha`} min={0.4} max={5.5} passo={0.01} valor={r} formatar={(v) => `${virgula(v, 2)} : 1 · ${vmax(v)} km/h`}
           aoMudar={(v) => { const next = k.currentRatios(); next[i] = v; k.setSpec({ ratios: next }, nt); }} />
       ))}
-      <Slider id="final" rotulo="Diferencial" min={1.5} max={8} passo={0.01} valor={fin} formatar={(v) => `${v.toFixed(2)} : 1`} aoMudar={(v) => k.setSpec({ finalDrive: v }, nt)} />
+      <Slider id="final" rotulo="Diferencial" min={1.5} max={8} passo={0.01} valor={fin} formatar={(v) => `${virgula(v, 2)} : 1`} aoMudar={(v) => k.setSpec({ finalDrive: v }, nt)} />
       <Slider id="mass" rotulo="Massa (com motorista)" min={150} max={2200} passo={10} valor={s.mass || 1300} formatar={(v) => `${v} kg`} aoMudar={(v) => k.setSpec({ mass: v }, nt)} />
       <Slider id="wheelR" rotulo="Raio da roda" min={0.25} max={0.45} passo={0.005} valor={rw} formatar={(v) => `${Math.round(v * 1000)} mm`} aoMudar={(v) => k.setSpec({ wheelR: v }, nt)} />
       <Slider id="drag" rotulo="Arrasto aerodinâmico (½·ρ·Cd·A)" min={0.1} max={1.2} passo={0.01} valor={s.drag ?? 0.42} formatar={(v) => `${virgula(v, 2)} N/(m/s)²`} aoMudar={(v) => k.setSpec({ drag: v }, nt)} />
