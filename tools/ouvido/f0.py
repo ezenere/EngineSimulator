@@ -173,7 +173,9 @@ def _refinar(xd, fsd, fase_c, f, P, t_q, fc, fmax_lin, n_ref):
 
 
 def _dobras(x, fs, fase_linha, f_linha, nmax, fmax_lin):
-    """Fração periódica dobrando em N períodos da linha, para três sinais. Devolve {N: (grave, acima, envoltória)}."""
+    """Fração periódica dobrando em N períodos da linha, para três sinais (a onda do grave em volta da linha, a onda
+    acima dela e a envoltória do médio-agudo). Devolve ({N: (grave, acima, envoltória)}, sinais no ângulo, pontos por
+    período da linha)."""
     PPL = 48  # pontos por período da linha
     lo1, hi1 = max(12.0, 0.2 * f_linha), 2.5 * f_linha
     lo2, hi2 = hi1, min(10 * f_linha, 0.45 * fs, max(fmax_lin, 4 * f_linha))
@@ -204,11 +206,33 @@ def _dobras(x, fs, fase_linha, f_linha, nmax, fmax_lin):
         if np.all(np.isnan(vals)):
             break
         out[N] = tuple(vals)
+    return out, ang, PPL
+
+
+def _residuo_periodico(ang, PPL, d, N):
+    """Depois de tirar o que se repete a cada d períodos da linha, que fração do que SOBRA ainda se repete a cada N
+    (N múltiplo de d)? ~0 se dobrar em d já explica tudo o que dobrar em N explica; alta se o ciclo é mais longo que d.
+    Uma linha forte sozinha não engana esta conta (ela sai inteira na primeira dobra). Devolve a lista por sinal."""
+    out = []
+    for y in ang:
+        if y is None or len(y) // (PPL * N) < 6:
+            out.append(float('nan'))
+            continue
+        G = nu.dobrar(y, PPL * N)
+        md = nu.dobrar(y, PPL * d).mean(0)
+        out.append(nu.fracao_periodica(G - np.tile(md, N // d)[None, :]))
     return out
 
 
-def _escolher_n(pf):
-    """Menor N cuja fração periódica (média dos três sinais, robusta pelos múltiplos de N) chega perto da melhor."""
+def _significativo(res):
+    res = [r for r in res if np.isfinite(r)]
+    return bool(res) and (float(np.mean(res)) >= 0.06 or max(res) >= 0.15)
+
+
+def _escolher_n(pf, ang, PPL):
+    """O ciclo é o MENOR período que explica o que há de periódico. Primeiro o N que mais explica (média dos três
+    sinais, robusta pelos múltiplos de N); depois, entre os divisores dele, o menor d tal que o que sobra da dobra
+    em d já não se repete em N."""
     Ns = sorted(pf)
     med = {N: float(np.nanmean(pf[N])) for N in Ns}
     rob = {}
@@ -216,11 +240,11 @@ def _escolher_n(pf):
         mult = [med[m] for m in Ns if m % N == 0]
         rob[N] = float(np.median(mult[:4])) if len(mult) >= 2 else med[N]
     melhor = max(rob.values())
-    eps = max(0.04, 0.10 * melhor)
-    for N in Ns:
-        if rob[N] >= melhor - eps:
-            return N, rob, melhor
-    return Ns[0], rob, melhor
+    n_max = min(N for N in Ns if rob[N] >= melhor - 1e-9)
+    for d in [d for d in Ns if n_max % d == 0]:
+        if d == n_max or not _significativo(_residuo_periodico(ang, PPL, d, n_max)):
+            return d, rob, melhor, n_max
+    return n_max, rob, melhor, n_max
 
 
 # -------------------------------------------------------------------------------------------------- rastrear
@@ -279,13 +303,20 @@ def rastrear(x, fs=nu.FS, fmin=4.0, fmax=60.0, nominal=None, folga=0.08, nmax=32
         lim = min(nmax, max(n_user * 2, 8))
     else:
         lim = int(min(nmax, max(1, np.floor(f_linha / fmin))))
-    pf = _dobras(x, fs, fase_L, f_linha, lim, fmax_lin)
-    n_dobra, rob, melhor = _escolher_n(pf)
+    pf, ang, PPL = _dobras(x, fs, fase_L, f_linha, lim, fmax_lin)
+    n_dobra, rob, melhor, n_max = _escolher_n(pf, ang, PPL)
     if nominal:
         N = n_user
-        if N in rob and rob[N] < melhor - max(0.1, 0.25 * melhor):
-            avisos.append(f'a dobra em N={N} (f0 nominal {nominal:.2f} Hz) explica {rob[N]:.2f} do sinal, e em N={n_dobra} explica {rob[n_dobra]:.2f}: '
-                          f'confira a rotação (f0 = {f_linha / n_dobra:.2f} Hz?)')
+        if N in rob and n_dobra != N:
+            if n_dobra % N == 0:
+                res = _residuo_periodico(ang, PPL, N, n_dobra)
+                if _significativo(res):
+                    avisos.append(f'com o f0 nominal ({nominal:.2f} Hz, N={N}) sobra som periódico num período {n_dobra // N}× mais longo (fração do resíduo: '
+                                  + ' / '.join('--' if not np.isfinite(v) else f'{v:.2f}' for v in res) + f'): confira a rotação (f0 = {f_linha / n_dobra:.2f} Hz?) '
+                                  f'ou é um padrão que se repete a cada {n_dobra // N} ciclos')
+            elif rob[N] < melhor - max(0.1, 0.25 * melhor):
+                avisos.append(f'a dobra em N={N} (f0 nominal {nominal:.2f} Hz) explica {rob[N]:.2f} do sinal, e em N={n_dobra} explica {rob[n_dobra]:.2f}: '
+                              f'confira a rotação (f0 = {f_linha / n_dobra:.2f} Hz?)')
     else:
         N = n_dobra
         # o ciclo não pode passar de fmax nem ficar abaixo de fmin

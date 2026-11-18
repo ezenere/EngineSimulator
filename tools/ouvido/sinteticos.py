@@ -79,15 +79,17 @@ def modular_no_ciclo(y, fase, ev, profundidade=0.9, largura=0.25):
     return z * (y.std() / z.std())
 
 
-def mesmo_espectro(y, alvo, fs=FS):
-    """Filtra `y` para ter o mesmo espectro médio de `alvo` (correção em bandas de 1/6 de oitava, fase zero)."""
+def mesmo_espectro(y, alvo, fs=FS, voltas=3):
+    """Filtra `y` para ter o mesmo espectro médio de `alvo` (correção de fase zero, repetida `voltas` vezes)."""
     n = len(y)
     f = np.fft.rfftfreq(n, 1 / fs)
-    fy, Py = signal.welch(y, fs, nperseg=4096)
-    fa, Pa = signal.welch(alvo, fs, nperseg=4096)
-    k = np.ones(25) / 25
-    g = np.sqrt(np.convolve(Pa, k, 'same') / np.maximum(np.convolve(Py, k, 'same'), 1e-30))
-    return np.fft.irfft(np.fft.rfft(y) * np.interp(f, fy, g), n)
+    k = np.ones(9) / 9
+    for _ in range(voltas):
+        fy, Py = signal.welch(y, fs, nperseg=16384)
+        fa, Pa = signal.welch(alvo, fs, nperseg=16384)
+        g = np.sqrt(np.convolve(Pa, k, 'same') / np.maximum(np.convolve(Py, k, 'same'), 1e-30))
+        y = np.fft.irfft(np.fft.rfft(y) * np.interp(f, fy, g), n)
+    return y
 
 
 def embaralhar_fases(x, semente=11):

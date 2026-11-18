@@ -110,11 +110,16 @@ def fc_envoltoria(lo, hi, f_ign=None, rapida=False):
     return min(float(np.clip(3.0 * f_ign, 50.0, 400.0)), teto)
 
 
+def alisar(e, fc, fs=FS):
+    """Passa-baixa gaussiano (−3 dB em fc). O núcleo não é negativo: a envoltória alisada nunca passa de zero para
+    baixo num vale fundo, o que um Butterworth faz e estraga o p10."""
+    return ndimage.gaussian_filter1d(e, 0.1325 * fs / fc, mode='nearest')
+
+
 def envoltoria(x, lo, hi, fs=FS, fc=None):
-    """(sinal da banda, envoltória |Hilbert| alisada)."""
+    """(sinal da banda, envoltória |Hilbert| alisada em fc)."""
     y = passa_faixa(x, lo, hi, fs)
-    e = hilbert_abs(y)
-    e = passa_baixa(e, fc if fc else fc_envoltoria(lo, hi), fs)
+    e = alisar(hilbert_abs(y), fc if fc else fc_envoltoria(lo, hi), fs)
     return y, np.maximum(e, 0.0)
 
 
@@ -323,6 +328,7 @@ def estat_envoltoria(e):
     """p90/p10 (dB), vão (p10 relativo ao RMS da envoltória, dB), crista (p99,9 ÷ RMS, dB) e desvio/média."""
     p10, p50, p90, p999 = np.percentile(e, [10, 50, 90, 99.9])
     rms = np.sqrt(np.mean(e * e))
+    p10 = max(p10, 1e-3 * rms)   # (chão de −60 dB)
     return {'p90_p10': float(db20(p90 / max(p10, 1e-15))), 'vao': float(db20(p10 / max(rms, 1e-15))),
             'crista': float(db20(p999 / max(rms, 1e-15))), 'desvio_media': float(e.std() / max(e.mean(), 1e-15))}
 
@@ -578,7 +584,7 @@ def analisar(x, fase, ev=None, voltas=2, fs=FS, bandas=BANDAS, tol=5e-4, detalhe
         b['mod_dominante_m'] = float(mm[j]) if len(mm) else float('nan')
         # eventos
         fcr = fc_envoltoria(lo, hi, rapida=True)
-        er = passa_baixa(hilbert_abs(yb), fcr, fs)
+        er = alisar(hilbert_abs(yb), fcr, fs)
         b['curtose'] = curtose(yb)
         b['curtose_mediana'] = curtose(yb, 0.5, fs)
         b['picos_s'] = picos_por_segundo(np.maximum(er, 0), fs)
@@ -595,7 +601,7 @@ def analisar(x, fase, ev=None, voltas=2, fs=FS, bandas=BANDAS, tol=5e-4, detalhe
     K16 = k_para(fase, fs, max(fc16, 400.0), ev)
     e16a, _ = reamostrar_sincrono(e16, fase, K16, fator=1)
     g.update(modulacao_angular(e16a, K16, ordens))
-    er16 = np.maximum(passa_baixa(hilbert_abs(y16), 400, fs), 0)
+    er16 = alisar(hilbert_abs(y16), 400, fs)
     g['picos_s'] = picos_por_segundo(er16, fs)
     g['picos_irregulares_s'] = _picos_irregulares(er16, fase, fs)
     g['curtose'] = curtose(y16); g['curtose_mediana'] = curtose(y16, 0.5, fs)

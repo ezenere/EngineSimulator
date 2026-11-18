@@ -347,6 +347,19 @@ def executar(arq_real, arq_sim, saida, f0_real=None, f0_sim=None, ev=None, volta
              rotulo_real=None, rotulo_sim=None):
     """Compara dois arquivos e grava painel.png, medidas.json e resumo.txt em `saida`. Devolve o dicionário gravado."""
     os.makedirs(saida, exist_ok=True)
+    # o render do kit (tools/ouvido/render.ts) grava ao lado do WAV um .json com a rotação: vale o que a linha de comando não disse
+    lado = os.path.splitext(str(arq_sim))[0] + '.json'
+    if os.path.exists(lado):
+        try:
+            with open(lado) as fh:
+                j = json.load(fh)
+            if f0_sim is None and j.get('f0'):
+                f0_sim = float(j['f0'])
+                fixo_sim = fixo_sim or bool(j.get('fixo'))
+            if ev is None and j.get('eventosPorCiclo'):
+                ev = int(j['eventosPorCiclo'])
+        except (ValueError, OSError):
+            pass
     real = preparar(arq_real, trecho_real, canal_real, f0_real, fixo_real, ev, voltas, fmin, fmax, folga)
     ev_s = ev or real['med']['ev']
     if f0_sim is None and not fixo_sim:

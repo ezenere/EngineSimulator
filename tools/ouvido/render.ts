@@ -10,7 +10,8 @@
 //   --rpm R            giro travado em R rpm, em neutro, com o pedal que zera o torque líquido (segurar o pedal parado)
 //   --pedal x          com --rpm: pedal fixo de 0 a 1 em vez do que zera o torque (1 = plena carga travada)
 //   --lenta            lenta livre e quente (padrão quando não há --rpm): o giro caça como no navegador
-//   --frio T           partida a frio de verdade a T °C (lenta acelerada, centelha atrasada); grava depois de pegar
+//   --frio T           partida a frio de verdade a T °C (lenta acelerada, centelha atrasada); grava depois de pegar.
+//                      Com --rpm: giro travado com a água fixa em T e o motor recém-ligado (o estado frio na rotação da gravação)
 //   --dur s            segundos gravados (padrão 12)        --descarta s   segundos jogados fora antes (padrão 3; 8 na lenta e no frio)
 //   --ouvinte ext|pipe|int|bay     posição (padrão ext: atrás do carro)      --canal media|e|d   (padrão media)
 //   --ambiente         deixa o som de ambiente ligado (padrão: desligado, para comparar o motor sozinho)
@@ -86,11 +87,14 @@ export function render(id: string, op: Op) {
   const l = new Float32Array(B), r = new Float32Array(B);
   let d: any, pedal = NaN, modo: string;
   if (op.rpm) {
-    // giro travado e quente; o integrador do controle de lenta fica congelado (REVISAO-DE-SOM, Armadilhas)
+    // giro travado; o integrador do controle de lenta fica congelado (REVISAO-DE-SOM, Armadilhas). Quente por padrão;
+    // com --frio T, a água fica fixa em T e o motor "acabou de pegar" (20 s): centelha atrasada, mecânica fria
+    const frio = op.frio;
     const mk = (thr: number) => {
       const x = novo(cfg, op);
-      x.tempMode = 'fixed'; x.tempSet = 90; x.coolant = 90; x.exhT = 450;
-      x.state = 'run'; x.lockOmega = true; x.KI = 0; x.runT = 60; x.omega = (op.rpm! * 2 * Math.PI) / 60; x.rpmAvg = op.rpm; x.thrTarget = thr; x.thr = thr;
+      if (frio !== undefined) { x.ambientT = frio; x.tempMode = 'fixed'; x.tempSet = frio; x.coolant = frio; x.exhT = 250; x.runT = 20; }
+      else { x.tempMode = 'fixed'; x.tempSet = 90; x.coolant = 90; x.exhT = 450; x.runT = 60; }
+      x.state = 'run'; x.lockOmega = true; x.KI = 0; x.omega = (op.rpm! * 2 * Math.PI) / 60; x.rpmAvg = op.rpm; x.thrTarget = thr; x.thr = thr;
       return x;
     };
     if (op.pedal !== undefined) pedal = op.pedal;
@@ -103,14 +107,14 @@ export function render(id: string, op: Op) {
         if (x.tqMean > 0) hi = pedal; else lo = pedal;
       }
     }
-    d = mk(pedal); modo = 'travado';
+    d = mk(pedal); modo = frio !== undefined ? 'travado frio' : 'travado';
   } else {
     d = novo(cfg, op);
     if (op.frio !== undefined) { d.ambientT = op.frio; d.message({ type: 'input', temp: { mode: 'real', value: op.frio } }); modo = 'frio'; }
     else { d.message({ type: 'input', temp: { mode: 'fixed', value: 90 } }); modo = 'lenta'; }
     d.message({ type: 'input', ignition: true });
   }
-  const descarta = op.descarta ?? (modo === 'travado' ? 3 : 8);
+  const descarta = op.descarta ?? (modo.startsWith('travado') ? 3 : 8);
   const n0 = Math.round(descarta * SR), n = Math.round(op.dur * SR);
   const L = new Float32Array(n), R = new Float32Array(n);
   let somaRpm = 0, cont = 0, rpmMin = Infinity, rpmMax = 0;
@@ -131,7 +135,7 @@ export function render(id: string, op: Op) {
   }
   const rpm = somaRpm / Math.max(1, cont);
   const N = cfg.N;
-  const info = { preset: id, modo, rpm: +rpm.toFixed(1), rpmMin: +rpmMin.toFixed(1), rpmMax: +rpmMax.toFixed(1), f0: +(rpm / 120).toFixed(4), fixo: modo === 'travado',
+  const info = { preset: id, modo, rpm: +rpm.toFixed(1), rpmMin: +rpmMin.toFixed(1), rpmMax: +rpmMax.toFixed(1), f0: +(rpm / 120).toFixed(4), fixo: modo.startsWith('travado'),
     eventosPorCiclo: N, voltasPorCiclo: 2, pedal: Number.isFinite(pedal) ? +pedal.toFixed(4) : +d.thr.toFixed(4), coletorBar: +(d.pMan / 101325).toFixed(3), agua: Math.round(d.coolant),
     ouvinte: op.ouvinte, canal: op.canal, ambiente: op.ambiente, sem: op.sem, escala: op.escala, semente: op.semente ?? 12345, ganho: +d.cfgGain.toFixed(4), pico: +pico.toFixed(4), nan, estado: d.state,
     campo: op.campo, sr: SR, dur: op.dur };
@@ -172,7 +176,7 @@ if (process.argv[1] && process.argv[1].endsWith('render.ts')) {
   };
   if (tem('--cada')) {
     fs.mkdirSync(saida, { recursive: true });
-    const cond = op.rpm ? `${Math.round(op.rpm)}rpm${op.pedal !== undefined ? `-p${Math.round(op.pedal * 100)}` : ''}` : op.frio !== undefined ? 'frio' : 'lenta';
+    const cond = op.rpm ? `${Math.round(op.rpm)}rpm${op.pedal !== undefined ? `-p${Math.round(op.pedal * 100)}` : ''}${op.frio !== undefined ? '-frio' : ''}` : op.frio !== undefined ? 'frio' : 'lenta';
     const base = path.join(saida, `${id}_${cond}_${op.ouvinte}`);
     const tudo = render(id, op);
     salvar(`${base}_tudo.wav`, tudo);
