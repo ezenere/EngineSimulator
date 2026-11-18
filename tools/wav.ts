@@ -2,7 +2,7 @@
 // Escreve float 32 bits por padrão (é o que permite comparar amostra a amostra) ou PCM 16 bits.
 import fs from 'node:fs';
 
-export type Wav = { sr: number; canais: Float32Array[]; formato: 'float32' | 'pcm16' | 'pcm24' };
+export type Wav = { sr: number; canais: Float32Array[]; formato: 'float32' | 'pcm16' | 'pcm24' | 'pcm32' };
 
 // Grava L/R e devolve o pico absoluto.
 export function gravarWav(arquivo: string, L: Float32Array, R: Float32Array, sr: number, formato: 'float32' | 'pcm16' = 'float32') {
@@ -50,12 +50,24 @@ export function lerWav(arquivo: string): Wav {
   if (fmt === 3 && bits === 32) formato = 'float32';
   else if (fmt === 1 && bits === 16) formato = 'pcm16';
   else if (fmt === 1 && bits === 24) formato = 'pcm24';
+  else if (fmt === 1 && bits === 32) formato = 'pcm32';
   else throw new Error(`${arquivo}: formato ${fmt}/${bits} bits não suportado`);
   for (let i = 0; i < n; i++) {
     for (let c = 0; c < nc; c++) {
       const o = (i * nc + c) * bpa;
-      canais[c][i] = formato === 'float32' ? dados.readFloatLE(o) : formato === 'pcm16' ? dados.readInt16LE(o) / 32768 : dados.readIntLE(o, 3) / 8388608;
+      canais[c][i] = formato === 'float32' ? dados.readFloatLE(o) : formato === 'pcm16' ? dados.readInt16LE(o) / 32768 : formato === 'pcm24' ? dados.readIntLE(o, 3) / 8388608 : dados.readInt32LE(o) / 2147483648;
     }
   }
   return { sr, canais, formato };
+}
+
+/**
+ * Mono pela média dos canais, em Float64Array: o que as ferramentas de bandas usam. Era reimplementado em
+ * tools/diesel-bandas.ts e tools/radial-bandas.ts, e as duas cópias liam errado, sem avisar, um float 32 com
+ * cabeçalho "extensible" (e a do Radial quebrava em PCM de 24 bits).
+ */
+export function lerWavMono(arquivo: string): { x: Float64Array; sr: number } {
+  const w = lerWav(arquivo), nc = w.canais.length, n = w.canais[0].length, x = new Float64Array(n);
+  for (let i = 0; i < n; i++) { let s = 0; for (let c = 0; c < nc; c++) s += w.canais[c][i]; x[i] = s / nc; }
+  return { x, sr: w.sr };
 }

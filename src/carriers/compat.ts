@@ -13,9 +13,11 @@ export const COMPAT: Record<TipoPortador, readonly FamiliaMotor[]> = {
   locomotiva: ['diesel', 'vapor'],
   trem: ['eletrico', 'nenhum'],
   aviao: ['turbina'],
-  // (vapor, VAPOR.md 4.4: trator a vapor e barco; o diesel marítimo fica para depois, sem preset)
+  // (vapor, VAPOR.md 4.4: trator a vapor e barco. O diesel marítimo saiu da tabela: `Barco` trata o motor como
+  // `VaporDSP` (carriers/barco.ts: `impor`, `wTrem`), então um diesel passava em `validarCompat` e quebrava no
+  // primeiro bloco. Volta quando o barco aceitar um `Motor` qualquer e houver preset de diesel marítimo.)
   trator: ['vapor'],
-  barco: ['vapor', 'diesel'],
+  barco: ['vapor'],
   nenhum: ['pistao', 'turbina', 'turboelice', 'turboeixo', 'diesel', 'radial', 'rotativo', 'vapor', 'eletrico'],
   // Elétrico (ELETRICO.md 4.3): o multirrotor
   drone: ['eletrico'],
