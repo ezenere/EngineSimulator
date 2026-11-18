@@ -26,7 +26,8 @@
 //   admissao    pulso grave da admissão (determinístico)                                     soma na saída
 //   mecanica    tiques do ápice, batida, engrenagem fixa, vedações, vibração                 soma na saída
 //   vedacoes    só o chiado contínuo das vedações (parte da mecânica: o "fundo")             soma na saída
-//   chiadoTurbo chiado do turbo (o apito tonal fica)                                         soma na saída
+//   chiadoTurbo chiado do turbo                                                              soma na saída
+//   apitoTurbo  apito tonal do turbo (determinístico)                                        soma na saída
 //   posBoca     pós-queima que queima na boca                                                ENTRA NA REDE (junto à boca)
 //   posQuente   pós-queima no ponto quente (antes do pré-silencioso)                         ENTRA NA REDE
 //   posPrim     pós-queima no primário do rotor                                              ENTRA NA REDE
@@ -45,7 +46,7 @@ import { RotativoDSP } from '../src/engines/rotativo/dsp';
 import { preset, cfgCalibrada, SR } from './rotativo-comum';
 
 const B = 128;
-export const FONTES = ['jato', 'chiadoAdm', 'admissao', 'mecanica', 'vedacoes', 'chiadoTurbo', 'posBoca', 'posQuente', 'posPrim', 'posqueima', 'janela', 'estouros', 'variacao'] as const;
+export const FONTES = ['jato', 'chiadoAdm', 'admissao', 'mecanica', 'vedacoes', 'chiadoTurbo', 'apitoTurbo', 'posBoca', 'posQuente', 'posPrim', 'posqueima', 'janela', 'estouros', 'variacao'] as const;
 export const NA_REDE = ['posBoca', 'posQuente', 'posPrim', 'posqueima', 'janela', 'estouros', 'variacao'];
 
 const zerarBiquad = (f: any, g: number) => { if (f) { f.b0 *= g; f.b1 *= g; f.b2 *= g; } };
@@ -59,6 +60,7 @@ export function escalar(d: any, f: string, g: number) {
     case 'mecanica': d.params.mech *= g; break;
     case 'vedacoes': if (d.kVed !== undefined) d.kVed *= g; else zerarBiquad(d.vedF, g); break;
     case 'chiadoTurbo': zerarBiquad(d.turboHiss, g); break;
+    case 'apitoTurbo': if (d.kApito !== undefined) d.kApito *= g; break;
     case 'posBoca': d.kBoca *= g; break;
     case 'posQuente': d.kQuente *= g; break;
     case 'posPrim': d.kPrim *= g; break;
@@ -144,8 +146,8 @@ export function render(id: string, op: Op) {
   const info = { preset: id, modo, rpm: +rpm.toFixed(1), rpmMin: +rpmMin.toFixed(1), rpmMax: +rpmMax.toFixed(1), f0: +(rpm / 60 / voltas).toFixed(4), fixo: modo === 'travado',
     eventosPorCiclo: d.N, voltasPorCiclo: voltas, rotores: d.rotores, fIgn: +((rpm / 60 / voltas) * d.N).toFixed(2),
     // (o pedal e o ar de lenta vão com a precisão inteira: o conjunto do orçamento os reusa, e um arredondamento muda a trajetória)
-    pedal: Number.isFinite(pedal) ? pedal : d.thr, iac: Number.isFinite(iac) ? iac : d.iac, coletorBar: +(d.pMan / 101325).toFixed(3), boostBar: +(d.boost || 0).toFixed(3),
-    pAberturaBar: +(d.pEO[0] / 1e5).toFixed(2), fHC: +d.fHCatual.toFixed(4), falha: +d.falhaRot.toFixed(4), estourosS: +((d.estourosTotal - estouros0) / op.dur).toFixed(2), tEscape: Math.round(d.exhT),
+    pedal: Number.isFinite(pedal) ? pedal : d.thr, iac: Number.isFinite(iac) ? iac : null, coletorBar: +(d.pMan / 101325).toFixed(3), boostBar: +(d.boost || 0).toFixed(3),
+    pAberturaBar: +(d.pEO[0] / 1e5).toFixed(2), fHC: +d.fHCatual.toFixed(4), falha: +d.falhaBase.toFixed(4), residual: +(d.xRes.reduce((x: number, y: number) => x + y, 0) / d.N).toFixed(3), estourosS: +((d.estourosTotal - estouros0) / op.dur).toFixed(2), tEscape: Math.round(d.exhT),
     ouvinte: op.ouvinte, ambiente: op.ambiente, sem: op.sem, escala: op.escala, semente: op.semente ?? null, ganho: +d.cfgGain.toFixed(4), mkIdle: +d.mkIdle.toFixed(3), pico: +pico.toFixed(4), nan, estado: d.state,
     campo: op.campo, sr: SR, dur: op.dur };
   return { m, info };
@@ -176,7 +178,7 @@ if (process.argv[1] && process.argv[1].endsWith('rotativo-fontes.ts')) {
   const val = (k: string) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : undefined; };
   const tem = (k: string) => a.includes(k);
   const [id, saida] = pos;
-  if (!id || !saida) { console.error('uso: tsx tools/rotativo-fontes.ts <preset> <saida.wav | pasta/ --cada> [--lenta | --rpm R [--pedal x] | --acelerada] [--dur s] [--descarta s] [--ouvinte ext] [--ambiente] [--campo JSON] [--sem a,b] [--escala a=g] [--semente N] [--grupos a+b,c+d] [--rotulo nome]'); process.exit(2); }
+  if (!id || !saida) { console.error('uso: tsx tools/rotativo-fontes.ts <preset> <saida.wav | pasta/ --cada> [--lenta | --rpm R [--pedal x] | --acelerada] [--dur s] [--descarta s] [--ouvinte ext] [--ambiente] [--campo JSON] [--sem a,b] [--escala a=g] [--semente N] [--fontes a,b] [--grupos a+b,c+d] [--rotulo nome]'); process.exit(2); }
   const op: Op = {
     rpm: val('--rpm') ? +val('--rpm')! : undefined, pedal: val('--pedal') !== undefined ? +val('--pedal')! : undefined, acelerada: tem('--acelerada'),
     dur: +(val('--dur') || 12), descarta: val('--descarta') !== undefined ? +val('--descarta')! : undefined, ouvinte: val('--ouvinte') || 'ext',
@@ -191,11 +193,11 @@ if (process.argv[1] && process.argv[1].endsWith('rotativo-fontes.ts')) {
     const tudo = render(id, op);
     salvar(`${base}_tudo.wav`, tudo);
     // (o pedal e o ar de lenta que zeram o torque são os do render completo: desligar uma fonte não pode mudar a carga)
-    const fixo: Op = op.rpm ? { ...op, pedal: tudo.info.pedal, iac: tudo.info.iac } : op;
+    const fixo: Op = op.rpm ? { ...op, pedal: tudo.info.pedal, iac: tudo.info.iac ?? undefined } : op;
     const sp = specDe(id, op.campo);
     const quais = val('--fontes') ? val('--fontes')!.split(',') : [...FONTES];
     for (const f of quais) {
-      if (f === 'chiadoTurbo' && !sp.turbo) continue;
+      if ((f === 'chiadoTurbo' || f === 'apitoTurbo') && !sp.turbo) continue;
       salvar(`${base}_sem-${f}.wav`, render(id, { ...fixo, sem: [...op.sem, f] }));
     }
     for (const g of (val('--grupos') || 'jato+chiadoAdm+vedacoes+chiadoTurbo').split(',').filter(Boolean)) salvar(`${base}_sem-${g}.wav`, render(id, { ...fixo, sem: [...op.sem, ...g.split('+')] }));

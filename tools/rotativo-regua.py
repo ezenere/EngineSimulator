@@ -18,6 +18,7 @@ acrescenta o que difere de flanco para flanco.
 Campos de um caso (`rotativo-regua.json`):
   id, titulo, nota
   real, trecho [a, b], rpm (do eixo, conferida com tools/ouvido/f0.py), folga (opcional), rotores
+  voltas (opcional): voltas do eixo em que o som se repete, quando não são as 3 do ciclo da câmara (6 na lenta do "brap")
   render: argumentos do rotativo-fontes.ts depois do preset e do arquivo (ex.: ["--rpm", "4846", "--pedal", "1"])
   preset: id do preset
 """
@@ -87,8 +88,12 @@ def um_caso(caso, a, refs):
         info = json.load(fh)
     v = float(info.get('voltasPorCiclo', 3))
     ev = int(info.get('eventosPorCiclo', 3 * caso.get('rotores', 2)))
+    f0s = info['f0']
+    if caso.get('voltas'):   # (lenta de janela de competição: o padrão queima/falha se repete a cada 2 ciclos da câmara, 6 voltas)
+        k = float(caso['voltas']) / v
+        v = float(caso['voltas']); ev = int(round(ev * k)); f0s = f0s / k
     f0r = caso['rpm'] / 60.0 / v
-    r = cp.executar(real, sim, pasta, f0_real=f0r, f0_sim=info['f0'], ev=ev, voltas=v, fixo_sim=bool(info.get('fixo')),
+    r = cp.executar(real, sim, pasta, f0_real=f0r, f0_sim=f0s, ev=ev, voltas=v, fixo_sim=bool(info.get('fixo')),
                     trecho_real=tuple(caso['trecho']) if caso.get('trecho') else None, canal_real=caso.get('canal', 'media'),
                     fmin=caso.get('fmin', 0.6 * f0r), fmax=caso.get('fmax', 1.6 * f0r), folga=caso.get('folga', 0.08), dpi=a.dpi, titulo=(a.rotulo + ' · ' if a.rotulo else '') + caso['titulo'],
                     painel=not a.sem_painel, ancora=caso.get('ancora', 'auto'), zoom=caso.get('zoom', 0.5))

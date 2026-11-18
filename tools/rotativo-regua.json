@@ -18,6 +18,37 @@
    "nota": "FC3S turbo com escape de rua, microfone atrás do carro; ignição em 24,8–25,1 Hz (743–754 rpm), conferida pela dobra"
   },
   {
+   "id": "bridge-lenta",
+   "titulo": "13B bridgeport turbo · lenta \"brap\" (de fora)",
+   "preset": "rx7fc",
+   "rotores": 2,
+   "real": "rx7-13b-bridgeport-lenta.wav",
+   "trecho": [
+    2,
+    14
+   ],
+   "rpm": 1980,
+   "folga": 0.1,
+   "voltas": 6,
+   "render": [
+    "--lenta",
+    "--campo",
+    {
+     "janelas": {
+      "admissao": "bridge"
+     },
+     "idle": 1950,
+     "muffler": "sport",
+     "escape": {
+      "presilencioso": false,
+      "cat": false
+     },
+     "cat": false
+    }
+   ],
+   "nota": "RX-7 com 13B bridgeport e turbo único (não é preset: o FC com a janela Bridge port do painel, sem pré-silencioso nem catalisador, abafador esportivo); rajadas a 5,5 Hz com a linha mais forte em 71,5 Hz = ignição de 66 Hz + 5,5 Hz, o padrão de 6 voltas (rpm/360) a ~1 980 rpm"
+  },
+  {
    "id": "fd-carga-cabine",
    "titulo": "RX-7 FD 13B-REW · 4 850 rpm em carga (cabine)",
    "preset": "rx7fd",
@@ -108,12 +139,13 @@
     26,
     36
    ],
-   "rpm": 1860,
-   "folga": 0.15,
+   "rpm": 1890,
+   "folga": 0.12,
    "render": [
     "--lenta"
    ],
-   "nota": "a lenta caminha de 1 600 a 1 980 rpm; gravação com clipping de 0,38% e chiado de câmera em 6–12 kHz"
+   "nota": "a lenta caminha de 1 600 a 1 980 rpm em rajadas a 5,2 Hz (uma a cada ~6 voltas do eixo: rpm/360); gravação com clipping de 0,38% e chiado de câmera em 6–12 kHz",
+   "voltas": 6
   },
   {
    "id": "787b-7700",
