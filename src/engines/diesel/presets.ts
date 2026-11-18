@@ -100,7 +100,7 @@ const leve = (comprimento: number, diametro = 2.5, dpf = true): EscapeDiesel => 
 export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.assign([
   // ------------------------------------------------------------- picapes e carros
   {
-    id: 'hilux28', family: 'leve', name: 'Toyota Hilux 2.8', tag: '1GD-FTV · I4 common-rail · 2016',
+    id: 'hilux28', family: 'leve', name: 'Toyota Hilux 2.8', tag: '1GD-FTV · I4 common-rail · 2020',
     ...I4, ...CARRO, classe: 'leve', tempos: 4, displacement: 2.755, diametro: 92, curso: 103.6, cr: 15.6,
     idle: 780, redline: 4400, rpmMax: 4400, rpmPotencia: 3400, power: 150, torque: 500, inertia: 1.6,
     injecao: 'common-rail', piloto: true, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
@@ -136,11 +136,11 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     injecao: 'common-rail', piloto: true, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.9, turboTipo: 'vgt', turboRpmMax: 140000, turboPas: 14, turboApito: -26, turboLenta: 0.3, turboTau: [1.0, 1.8],
     freioMotor: 'vgt', escape: leve(4.8, 4), muffler: 'stock', pipeLen: 4.8, pipeD: 4, glow: true, mecanica: 8, glowK: 0.3,
-    gears: 10, transmission: 'auto', shiftTime: 0.45, ratios: [4.54, 2.86, 2.06, 1.72, 1.38, 1.14, 1.0, 0.85, 0.68, 0.63], finalDrive: 3.42, wheelR: 0.4, mass: 3600, drag: 0.88,
+    gears: 10, transmission: 'auto', shiftTime: 0.45, ratios: [4.54, 2.87, 2.06, 1.72, 1.48, 1.26, 1.0, 0.85, 0.69, 0.63], finalDrive: 3.42, wheelR: 0.4, mass: 3600, drag: 0.88,
     portadores: ['carro', 'nenhum'],
   },
   {
-    id: 'psd73', family: 'leve', name: 'Ford F-250 7.3 Power Stroke', tag: 'Navistar T444E · V8 HEUI · 1999',
+    id: 'psd73', family: 'leve', name: 'Ford F-250 7.3 Power Stroke', tag: 'Navistar T444E · V8 HEUI · 2001',
     ...V8, ...CARRO, ordemReal: '1-2-7-3-4-5-6-8', classe: 'leve', tempos: 4, displacement: 7.3, diametro: 104.4, curso: 106.2, cr: 17.5,
     idle: 680, redline: 3300, rpmMax: 3300, rpmPotencia: 2600, power: 186, torque: 678, inertia: 1.3,
     injecao: 'heui', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.15,
@@ -183,7 +183,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
   },
   // ------------------------------------------------------------- caminhões e ônibus
   {
-    id: 'scaniav8', family: 'pesado', name: 'Scania R500 V8', tag: 'DC16.03 PDE · V8 injetor-bomba · Euro 3',
+    id: 'scaniav8', family: 'pesado', name: 'Scania R500 V8', tag: 'DC16 04 PDE · V8 injetor-bomba · Euro 3',
     ...V8, ...CARRO, ordemReal: '1-5-4-2-6-3-7-8', classe: 'pesado', tempos: 4, displacement: 15.6, diametro: 127, curso: 154, cr: 17.0,
     idle: 500, redline: 2100, rpmMax: 2100, rpmPotencia: 1900, power: 368, torque: 2400, inertia: 1, J: 3.6,
     injecao: 'unitaria', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
@@ -242,7 +242,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     freioMotor: 'nenhum', escape: { turbina: true, dpf: false, abafador: 'abafador-caminhao', comprimento: 3.0, diametro: 4, chamine: null, tempGas: 500 },
     janelas: { evo: 95, ipo: 130, ipc: 230, evc: 225 },
     muffler: 'stock', pipeLen: 3, pipeD: 4, glow: false, mecanica: 12,
-    gears: 4, transmission: 'auto', shiftTime: 0.9, driveMode: 'eco', ratios: [3.69, 2.01, 1.36, 1.0], finalDrive: 4.11, wheelR: 0.5, mass: 16000, drag: 3.0,
+    gears: 4, transmission: 'auto', shiftTime: 0.9, driveMode: 'eco', ratios: [3.69, 2.02, 1.38, 1.0], finalDrive: 4.11, wheelR: 0.5, mass: 16000, drag: 3.0,
     portadores: ['carro', 'nenhum'],
   },
   // ------------------------------------------------------------- geradores
