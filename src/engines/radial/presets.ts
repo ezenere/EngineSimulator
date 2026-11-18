@@ -112,7 +112,7 @@ export const PRESETS_RADIAL: PresetRadial[] & { families: FamiliaRadial[] } = Ob
     carburador: 'boia', superalimentador: { relacao: 8.26, pas: 14, boost: 0.25 }, partida: 'ar',
     escape: { tipo: 'anel', Danel: 0.9, Oanel: 60, Lp: 0.15, saidas: [{ L: 0.4, O: 60, phi: 120 }, { L: 0.4, O: 60, phi: 240 }] }, breakout: 'old', vazamento: -10,
     nivelEscape: 140, ...aviao, aeronave: { massa: 1300, comprimento: 7.7, envergadura: 9.3 } },
-  { ...R9, id: 'm14pf', family: 'sovieticos', name: 'Vedeneyev M-14PF', tag: 'Su-31 / Yak-55M · 400 hp · estaques acrobáticos',
+  { ...R9, id: 'm14pf', family: 'sovieticos', name: 'Vedeneyev M-14PF', tag: 'Su-31 · 400 hp · escapes individuais curtos',
     displacement: 10.16, cr: 6.3, idle: 700, rpmMax: 2950, power: 294, J: 0.7, reducao: 0.658, helice: { B: 3, D: 2.5, J: 5, nMax: 1940 },
     carburador: 'boia', superalimentador: { relacao: 8.26, pas: 14, boost: 0.3 }, partida: 'ar',
     escape: { tipo: 'tubos', Lt: 0.35, Ot: 45 }, breakout: 'old',
