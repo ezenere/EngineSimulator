@@ -3,7 +3,8 @@
 //   npx tsx tools/turbina-paridade.ts [ids separados por vírgula] [--legado <ref>] [--sem-render]
 //
 // 1. Presets: a lista nova tem de ser igual, objeto a objeto e na mesma ordem de chaves, à de
-//    `git show <ref>:src/jet-presets.js` (ref padrão: master).
+//    `git show <ref>:src/jet-presets.js` (ref padrão: REF_LEGADO de tools/legado.ts, o último commit de master
+//    com o legado), depois de aplicadas as correções de ficha declaradas lá (CORRECOES_TURBINA).
 // 2. Cenários do harness (start, takeoff, flyby): roda tools/render.ts duas vezes por cenário, com
 //    DSP=/PRESETS= do legado e do migrado, e compara as pastas com tools/compare-wav.ts e os JSON
 //    de telemetria byte a byte.
@@ -17,27 +18,32 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { JetDSP as JetNovo } from '../src/engines/turbina/dsp';
 import { PRESETS_TURBINA } from '../src/engines/turbina/presets';
+import { REF_LEGADO, lerLegado, comCorrecoes, contarCorrecoes, CORRECOES_TURBINA } from './legado';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const req = createRequire(import.meta.url);
 const argv = process.argv.slice(2);
 const iRef = argv.indexOf('--legado');
-const REF = iRef >= 0 ? argv[iRef + 1] : 'master';
+const REF = iRef >= 0 ? argv[iRef + 1] : REF_LEGADO;
 const semRender = argv.includes('--sem-render');
 const ids = argv.filter((a, i) => !a.startsWith('--') && (iRef < 0 || i !== iRef + 1))[0];
 
 // ------------------------------------------------------------- legado
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'turbina-paridade-'));
 const LEG_DSP = path.join(TMP, 'jet-dsp.legado.js'), LEG_PRE = path.join(TMP, 'jet-presets.legado.js');
-fs.writeFileSync(LEG_DSP, execFileSync('git', ['show', `${REF}:src/jet-dsp.js`], { cwd: RAIZ }));
-fs.writeFileSync(LEG_PRE, execFileSync('git', ['show', `${REF}:src/jet-presets.js`], { cwd: RAIZ }));
+fs.writeFileSync(LEG_DSP, lerLegado('src/jet-dsp.js', REF));
+fs.writeFileSync(LEG_PRE, comCorrecoes(lerLegado('src/jet-presets.js', REF), CORRECOES_TURBINA));
 const JetLegado = req(LEG_DSP)().JetDSP;
 const PRESETS_LEG = req(LEG_PRE);
-console.log(`legado: ${REF}:src/jet-dsp.js e ${REF}:src/jet-presets.js · temporários em ${TMP}\n`);
+console.log(`legado: ${REF}:src/jet-dsp.js e ${REF}:src/jet-presets.js · temporários em ${TMP}`);
+{
+  const n = contarCorrecoes(PRESETS_LEG, CORRECOES_TURBINA);
+  console.log(n ? `correções de ficha aplicadas ao legado (tools/legado.ts): ${n} campo(s) em ${Object.keys(CORRECOES_TURBINA).length} preset(s)\n` : '');
+}
 
 let falhas = 0;
 const falha = (msg: string) => { falhas++; console.log(`FALHA ${msg}`); };

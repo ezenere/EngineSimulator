@@ -1,9 +1,12 @@
-// Prova de que o Ronco migrado (src/engines/ronco/) soa igual ao legado de `master`.
+// Prova de que o Ronco migrado (src/engines/ronco/) soa igual ao legado (o último commit de `master` com
+// src/dsp.js: REF_LEGADO em tools/legado.ts; o legado saiu da árvore de trabalho e é lido do histórico do git).
 //
-//   npx tsx tools/ronco-paridade.ts [--ref master] [--rapido] [--j 16] [--dist] [--manter]
+//   npx tsx tools/ronco-paridade.ts [--ref <commit>] [--rapido] [--j 16] [--dist] [--manter]
 //
 // 1. Dados: os presets e a geometria em TypeScript são comparados campo a campo com os legados
-//    (todos os 68 presets; build() de cada virabrequim × ordem × coletor × ângulo do V).
+//    (todos os 68 presets; build() de cada virabrequim × ordem × coletor × ângulo do V). As correções de
+//    ficha declaradas em tools/legado.ts (CORRECOES_RONCO) são aplicadas ao legado antes de comparar e de
+//    renderizar: um preset que mude sem estar declarado lá continua sendo falha.
 // 2. Som: renderiza com tools/render.ts os mesmos cenários com o DSP legado (git show <ref>:src/dsp.js,
 //    geometry.js, presets.js) e com o migrado, e compara com tools/compare-wav.ts (amostra a amostra)
 //    e a telemetria JSON byte a byte:
@@ -22,19 +25,20 @@ import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { isDeepStrictEqual } from 'node:util';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import * as G from '../src/engines/ronco/geometria';
 import { PRESETS, ACESSORIOS_PADRAO } from '../src/engines/ronco/presets';
 import { EngineDSP, gearRatios, defaultFinal } from '../src/engines/ronco/dsp';
 import { configCalibrada } from '../src/engines/ronco/config';
+import { REF_LEGADO, lerLegado, comCorrecoes, contarCorrecoes, CORRECOES_RONCO } from './legado';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const req = createRequire(import.meta.url);
 const args = process.argv.slice(2);
 const opcao = (nome: string, padrao: string) => { const i = args.indexOf(nome); return i >= 0 ? args[i + 1] : padrao; };
-const REF = opcao('--ref', 'master');
+const REF = opcao('--ref', REF_LEGADO);
 const J = Math.max(1, +opcao('--j', String(Math.max(2, Math.floor(os.cpus().length * 0.75)))));
 const RAPIDO = args.includes('--rapido');
 
@@ -46,12 +50,17 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ronco-paridade-'));
 const refDir = path.join(tmp, 'ref');
 fs.mkdirSync(refDir);
 for (const [orig, dest] of [['src/dsp.js', 'dsp.js'], ['src/geometry.js', 'geometry.js'], ['src/presets.js', 'presets.js']]) {
-  fs.writeFileSync(path.join(refDir, dest), execFileSync('git', ['show', `${REF}:${orig}`], { cwd: RAIZ }));
+  const txt = lerLegado(orig, REF);
+  fs.writeFileSync(path.join(refDir, dest), dest === 'presets.js' ? comCorrecoes(txt, CORRECOES_RONCO) : txt);
 }
 const LG = req(path.join(refDir, 'geometry.js'));
 const LP = req(path.join(refDir, 'presets.js'));
 const LD = req(path.join(refDir, 'dsp.js'))();
 console.log(`referência: ${REF} · temporários em ${tmp}`);
+{
+  const n = contarCorrecoes(LP, CORRECOES_RONCO);
+  if (n) console.log(`correções de ficha aplicadas ao legado (tools/legado.ts): ${n} campo(s) em ${Object.keys(CORRECOES_RONCO).length} preset(s)`);
+}
 
 // ------------------------------------------------------------------ 1. dados
 {

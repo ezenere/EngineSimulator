@@ -1,5 +1,5 @@
-// Referências do legado para a tabela "não pode piorar" (CENA.md 2.11 e passo 12): renderiza o DSP de
-// `master` (git show master:src/dsp.js, master:src/jet-dsp.js e os presets/geometria de lá), mede e grava
+// Referências do legado para a tabela "não pode piorar" (CENA.md 2.11 e passo 12): renderiza o DSP legado
+// (src/dsp.js, src/jet-dsp.js e os presets/geometria do commit REF_LEGADO de tools/legado.ts), mede e grava
 // em tools/cena/referencias/legado.json. `compararLegado()` refaz as medidas e confere que o JSON é
 // reproduzido (o DSP legado é determinístico), e compara com o que a Cena nova já sabe fazer.
 //
@@ -22,6 +22,7 @@ import * as A from './analise';
 import { corteAr, POLO_POR_CORTE } from '../../src/scene/ar';
 import { mag2Polo, k1 } from '../../src/scene/filtros';
 import type { Linha } from './medidas';
+import { REF_LEGADO, lerLegado } from '../legado';
 import { raizesEmissao, parametrosEstrondo } from '../../src/scene/supersonico';
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
@@ -31,15 +32,14 @@ const req = createRequire(import.meta.url);
 const SR = 48000, B = 128;
 const r3 = (x: number) => Math.round(x * 1000) / 1000;
 
-/** extrai os arquivos legados de master para uma pasta temporária e carrega */
+/** extrai os arquivos legados do commit de referência para uma pasta temporária e carrega */
 function carregarMaster() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engine-legado-'));
   for (const f of ['dsp.js', 'jet-dsp.js', 'presets.js', 'jet-presets.js', 'geometry.js']) {
-    const txt = execFileSync('git', ['show', `master:src/${f}`], { cwd: RAIZ, encoding: 'utf8', maxBuffer: 64 << 20 });
-    fs.writeFileSync(path.join(dir, f), txt);
+    fs.writeFileSync(path.join(dir, f), lerLegado(`src/${f}`));
   }
   const L = (f: string) => req(path.join(dir, f));
-  const commit = execFileSync('git', ['rev-parse', '--short', 'master'], { cwd: RAIZ, encoding: 'utf8' }).trim();
+  const commit = execFileSync('git', ['rev-parse', '--short', REF_LEGADO], { cwd: RAIZ, encoding: 'utf8' }).trim();
   return { EngineDSP: L('dsp.js')().EngineDSP, JetDSP: L('jet-dsp.js')().JetDSP, PRESETS: L('presets.js'), JPRESETS: L('jet-presets.js'), G: L('geometry.js'), commit };
 }
 
