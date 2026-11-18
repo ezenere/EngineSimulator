@@ -51,6 +51,8 @@ export function Manete({ valor, max = 1, marcas, aoMudar, obter, passo = 0.1, ro
       <div className="lever-marks" id="leverMarks">
         {marcas.map(([v, r, classe]) => <span key={r} className={classe || ''} style={{ bottom: `${(v / max) * 100}%` }}>{r}</span>)}
       </div>
+      {/* dá à manete a largura da marca mais comprida, para os nomes não invadirem o instrumento ao lado */}
+      <div className="lever-medida" aria-hidden="true">{marcas.map(([, r]) => <i key={r}>{r}</i>)}</div>
       <div className="lever-knob" id="leverKnob" style={{ bottom: `calc(10px + (100% - 20px) * ${valor / max})` }} />
     </div>
   );
