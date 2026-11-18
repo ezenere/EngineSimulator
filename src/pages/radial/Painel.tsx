@@ -35,6 +35,7 @@ export function Painel({ k }: { k: ControleRadial }) {
 
 function Escuta({ k, e }: P) {
   const { params, eq } = e;
+  const terra = (e.spec.portadores || []).includes('carro'); // (tanque, carro e moto: sem hélice nem carenagem)
   const mix = (id: string, rotulo: string, chave: 'exhaust' | 'intake' | 'mech' | 'air' | 'master', max = 2) => (
     <Slider id={id} rotulo={rotulo} min={0} max={max} passo={0.01} valor={params[chave]} formatar={pct} aoMudar={(v) => k.setParams({ [chave]: v })} />
   );
@@ -42,8 +43,8 @@ function Escuta({ k, e }: P) {
     <Section titulo="Escuta e ambiente">
       <Field rotulo="Microfone">
         <ChipGroup id="mic" opcoes={[
-          { valor: 'pipe', rotulo: 'Junto à saída do escape' }, { valor: 'ext', rotulo: 'De fora (5 m do cubo)' },
-          { valor: 'int', rotulo: 'Cabine' }, { valor: 'bay', rotulo: 'Na carenagem' },
+          { valor: 'pipe', rotulo: 'Ao lado do escape' }, { valor: 'ext', rotulo: terra ? 'De fora, a 5 m' : 'De fora, a 5 m da hélice' },
+          { valor: 'int', rotulo: 'Cabine' }, { valor: 'bay', rotulo: terra ? 'Junto ao motor' : 'Dentro da carenagem' },
         ]} atual={e.carMic} aoEscolher={(v) => k.setCarMic(v)} />
       </Field>
       <Field rotulo="Ambiente">
@@ -80,8 +81,8 @@ function Motor({ k, e }: P) {
       <Field rotulo="Virabrequim">
         <ChipGroup id="crank" opcoes={[{ valor: m.crank.id, rotulo: m.crank.name }]} atual={m.crank.id} aoEscolher={() => {}} />
       </Field>
-      <Slider id="Lr" rotulo="Biela-mestra (L/r)" min={3.2} max={4.4} passo={0.05} valor={s.Lr ?? 3.8} formatar={(v) => virgula(v, 2)} aoSoltar={(v) => k.setSpec({ Lr: v })} />
-      <Slider id="rkr" rotulo="Pino das articuladas (r_k/r)" min={0.8} max={1.4} passo={0.05} valor={s.rkr ?? 1} formatar={(v) => virgula(v, 2)} aoSoltar={(v) => k.setSpec({ rkr: v })} />
+      <Slider id="Lr" rotulo="Comprimento da biela-mestra (÷ raio da manivela)" min={3.2} max={4.4} passo={0.05} valor={s.Lr ?? 3.8} formatar={(v) => virgula(v, 2)} aoSoltar={(v) => k.setSpec({ Lr: v })} />
+      <Slider id="rkr" rotulo="Raio dos pinos das bielas articuladas (÷ raio da manivela)" min={0.8} max={1.4} passo={0.05} valor={s.rkr ?? 1} formatar={(v) => virgula(v, 2)} aoSoltar={(v) => k.setSpec({ rkr: v })} />
       <Field rotulo="Ordem de ignição">
         <p className="note mono">{m.decorrente ? `${m.ordemTexto} (decorrente dos PMS: só leitura)` : m.ordemTexto}</p>
       </Field>
@@ -128,7 +129,7 @@ function Escapamento({ k, e }: P) {
     <Section titulo="Escapamento">
       <Field rotulo="Tipo">
         <ChipGroup id="escTipo" opcoes={[
-          { valor: 'anel', rotulo: 'Anel coletor' }, { valor: 'tubos', rotulo: 'Estaques' }, { valor: 'aranha', rotulo: 'Aranha' }, { valor: 'lados', rotulo: 'Dois lados' },
+          { valor: 'anel', rotulo: 'Anel coletor' }, { valor: 'tubos', rotulo: 'Tubos curtos', titulo: 'Um tubo curto por cilindro, direto para fora (os “stacks” dos caças)' }, { valor: 'aranha', rotulo: 'Aranha' }, { valor: 'lados', rotulo: 'Dois lados' },
         ]} atual={esc.tipo} aoEscolher={(v) => k.setEscape({ tipo: v })} />
       </Field>
       {e.motor.rows > 1 && esc.tipo === 'anel' && (
@@ -144,10 +145,10 @@ function Escapamento({ k, e }: P) {
         </>
       )}
       {esc.tipo === 'tubos' && (
-        <Slider id="Lt" rotulo="Comprimento dos estaques" min={0.2} max={1.0} passo={0.01} valor={Array.isArray(esc.Lt) ? esc.Lt[0] : esc.Lt ?? 0.6} formatar={(v) => `${virgula(v, 2)} m`} aoSoltar={(v) => k.setEscape({ Lt: v })} />
+        <Slider id="Lt" rotulo="Comprimento dos tubos curtos" min={0.2} max={1.0} passo={0.01} valor={Array.isArray(esc.Lt) ? esc.Lt[0] : esc.Lt ?? 0.6} formatar={(v) => `${virgula(v, 2)} m`} aoSoltar={(v) => k.setEscape({ Lt: v })} />
       )}
       {esc.turbina && <p className="note">Turbina na fuselagem: os anéis → {virgula(esc.turbina.Lantes, 1)} m → turbina → {virgula(esc.turbina.Ldepois, 1)} m.</p>}
-      <Field rotulo="Vedação do anel (breakout)">
+      <Field rotulo="Vedação do coletor">
         <ChipGroup id="breakout" opcoes={[{ valor: 'sealed', rotulo: 'Soldado' }, { valor: 'old', rotulo: 'Juntas deslizantes' }, { valor: 'leaky', rotulo: 'Chapa fina, vazando' }]}
           atual={e.spec.breakout || 'old'} aoEscolher={(v) => k.setSpec({ breakout: v })} />
       </Field>

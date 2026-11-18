@@ -182,7 +182,7 @@ function Caracteristicas({ k, e }: P) {
   const nt = { structural: false, render: false };
   return (
     <Section titulo="Características">
-      <Slider id="disp" rotulo="Cilindrada" min={0.25} max={9} passo={0.05} valor={spec.displacement} formatar={(v) => `${v.toFixed(2)} L`}
+      <Slider id="disp" rotulo="Cilindrada" min={0.25} max={9} passo={0.05} valor={spec.displacement} formatar={(v) => `${virgula(v, 2)} L`}
         aoMudar={(v) => k.tuneSpec({ displacement: v })} aoSoltar={(v) => k.setSpec({ displacement: v }, { render: false })} />
       <Slider id="redline" rotulo="Faixa vermelha" min={3000} max={20000} passo={100} valor={spec.redline} formatar={(v) => `${br(v)} rpm`}
         aoMudar={(v) => k.setSpec({ redline: v, idle: Math.min(spec.idle, v * 0.45) }, nt)} />
@@ -312,10 +312,10 @@ function Transmissao({ k, e }: P) {
         </Field>
       )}
       {ratios.map((r, i) => (
-        <Slider key={`ratio${i + 1}`} id={`ratio${i + 1}`} rotulo={`${i + 1}ª marcha`} min={0.4} max={5.5} passo={0.01} valor={r} formatar={(v) => `${v.toFixed(2)} : 1 · ${vmax(v)} km/h`}
+        <Slider key={`ratio${i + 1}`} id={`ratio${i + 1}`} rotulo={`${i + 1}ª marcha`} min={0.4} max={5.5} passo={0.01} valor={r} formatar={(v) => `${virgula(v, 2)} : 1 · ${vmax(v)} km/h`}
           aoMudar={(v) => { const next = k.currentRatios(); next[i] = v; k.setSpec({ ratios: next }, nt); }} />
       ))}
-      <Slider id="final" rotulo="Diferencial" min={1.5} max={12} passo={0.01} valor={fin} formatar={(v) => `${v.toFixed(2)} : 1`} aoMudar={(v) => k.setSpec({ finalDrive: v }, nt)} />
+      <Slider id="final" rotulo="Diferencial" min={1.5} max={12} passo={0.01} valor={fin} formatar={(v) => `${virgula(v, 2)} : 1`} aoMudar={(v) => k.setSpec({ finalDrive: v }, nt)} />
       <div className="chips"><button type="button" className="chip" onClick={() => k.setSpec({ ratios: undefined, finalDrive: undefined }, { structural: false })}>Escalonamento padrão</button></div>
       <Slider id="mass" rotulo="Massa (com motorista)" min={150} max={2600} passo={10} valor={spec.mass || massDef} formatar={(v) => `${v} kg`} aoMudar={(v) => k.setSpec({ mass: v }, nt)} />
       {/* roda e arrasto: com o diferencial, definem a velocidade em cada marcha e a final (o som não muda) */}
@@ -363,7 +363,7 @@ function Escapamento({ k, e }: P) {
           { valor: 'classic', rotulo: 'Original antigo', titulo: 'Caixa de lata só com câmaras, sem lã (Fusca, anos 60/70): o médio-agudo passa e a lata ressoa, estridente' },
         ]} atual={spec.muffler} aoEscolher={(v) => k.setSpec({ muffler: v })} />
       </Field>
-      <Slider id="pipe" rotulo="Comprimento do escape" min={0.8} max={5} passo={0.1} valor={spec.pipeLen} formatar={(v) => `${v.toFixed(1)} m`}
+      <Slider id="pipe" rotulo="Comprimento do escape" min={0.8} max={5} passo={0.1} valor={spec.pipeLen} formatar={(v) => `${virgula(v, 1)} m`}
         aoSoltar={(v) => k.setSpec({ pipeLen: v }, { render: false })} />
     </Section>
   );
@@ -478,7 +478,7 @@ function Admissao({ k, e }: P) {
         ]} atual={spec.aspiration} aoEscolher={(v) => k.setSpec({ aspiration: v, boost: v !== 'na' && !spec.boost ? 0.8 : spec.boost, ...(v !== 'turbo' && spec.overrun === 'antilag' ? { overrun: 'popbang' } : {}) })} />
       </Field>
       {spec.aspiration !== 'na' && (
-        <Slider id="boost" rotulo="Pressão máxima" min={0.3} max={2.5} passo={0.05} valor={spec.boost || 1} formatar={(v) => `${v.toFixed(2)} bar`} aoMudar={(v) => k.setSpec({ boost: v }, nt)} />
+        <Slider id="boost" rotulo="Pressão máxima" min={0.3} max={2.5} passo={0.05} valor={spec.boost || 1} formatar={(v) => `${virgula(v, 2)} bar`} aoMudar={(v) => k.setSpec({ boost: v }, nt)} />
       )}
       {spec.aspiration === 'super' && (
         <>
@@ -489,11 +489,11 @@ function Admissao({ k, e }: P) {
               { valor: 'centrifugal', rotulo: 'Centrífugo', titulo: 'Rotor de pás em rotação muito alta: assobio quase sem pulsação' },
             ]} atual={scType} aoEscolher={(v) => k.setSpec({ scType: v }, { structural: false })} />
           </Field>
-          <Slider id="scRatio" rotulo="Relação da polia" min={1} max={12} passo={0.01} valor={spec.scRatio || 2.4} formatar={(v) => `${v.toFixed(2)}:1`} aoMudar={(v) => k.setSpec({ scRatio: v }, nt)} />
+          <Slider id="scRatio" rotulo="Relação da polia" min={1} max={12} passo={0.01} valor={spec.scRatio || 2.4} formatar={(v) => `${virgula(v, 2)}:1`} aoMudar={(v) => k.setSpec({ scRatio: v }, nt)} />
           <Slider id="scLobes" rotulo={scType === 'centrifugal' ? 'Pás do rotor' : scType === 'roots' ? 'Lóbulos de cada rotor' : 'Lóbulos do rotor da correia'} min={2} max={12} passo={1}
             valor={spec.scLobes || 6} formatar={(v) => `${v}`} aoMudar={(v) => k.setSpec({ scLobes: v }, nt)} />
           <Slider id="scWhine" rotulo="Volume do uivo" min={-30} max={12} passo={1} valor={spec.scWhine ?? 0} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ scWhine: v }, nt)} />
-          <p className="note">{`O uivo fica em ${order.toFixed(1)}× o giro: ${Math.round(order * spec.redline / 60)} Hz na faixa vermelha, mais os harmônicos.`}</p>
+          <p className="note">{`O uivo fica em ${virgula(order, 1)}× o giro: ${Math.round(order * spec.redline / 60)} Hz na faixa vermelha, mais os harmônicos.`}</p>
         </>
       )}
       <Field rotulo="Alimentação">
