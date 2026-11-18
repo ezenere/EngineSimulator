@@ -44,6 +44,7 @@ export class DieselDSP extends EngineDSP {
   declare dinamico: any; declare ptBuf: any; declare ptUlt: any; declare ptI: any; declare telN: any; declare classe: any; declare boostAlvo: any; declare partida: any;
   declare gChiado: any; declare lamInst: any; declare subidaTq: any; declare gMec: any; declare g0Rad: any; declare govBancada: any; declare boostD: any; declare aquec: any; declare estadoAnt: any; declare lentaFixa: any; declare vF: any; declare vAmp: any; declare vDec: any; declare vEnv: any; declare fundoF: any; declare fundoAmp: any; declare fundoM: any; declare pumpAmp: any; declare oilAmp: any;
   declare wBuf: any; declare gwI: any; declare wSoma: any; declare wK: any; declare wSomaK: any; declare boostFixo: any; declare queimasBoas: any; declare cicloEv: any; declare lentaBaixa: any; declare kIdi: any; declare kPre: any; declare egtN: any; declare egtD: any; declare egtNs: any; declare egtDs: any; declare soiM: any; declare thInjM: any; declare thMix: any; declare eD: any; declare pInjMax: any; declare injK: any; declare tauK: any; declare injA: any; declare jTurb: any; declare turbNzF: any; declare linTurb: any; declare pTM: any; declare kModT: any; declare zTurb: any; declare uPonta: any; declare whooshF: any; declare turboLenta: any; declare mecLP: any; declare trocaT: any; declare trocaDir: any;
+  declare kBatida: any; declare kChocalho: any; declare kRot: any; declare kVar: any;
 
   constructor(fs: number) {
     super(fs);
@@ -61,6 +62,8 @@ export class DieselDSP extends EngineDSP {
     this.velas = 0; this.aquec = 0; this.manual = 0; this.portador = 'carro'; this.notch = 0; this.degrau = 0; this.cargaBancada = 0; this.rpmAlvoPainel = 0; this.rpmAlvo = 0;
     this.Pcarga = 0; this.Tcarga = 0; this.Jcarga = 0; this.regCarga = 1; this.dinamico = false; this.telN = 0; this.boostAlvo = 0;
     this.wBuf = new Float64Array(512); this.gwI = 0; this.wSoma = 0; this.wK = 0; this.wSomaK = 0;
+    // ganhos de medida (tools/diesel-ouvido-render.ts isola as fontes por eles; 1 = som normal)
+    this.kBatida = 1; this.kChocalho = 1; this.kRot = 1; this.kVar = 1;
     this.queimasBoas = 0; this.cicloEv = 0; this.egtN = 0; this.egtD = 0; this.egtNs = 0; this.egtDs = 0; this.lentaBaixa = false; this.fuelLenta = 0.1; this.fuelPartida = 0.5;
   }
 
@@ -386,7 +389,7 @@ export class DieselDSP extends EngineDSP {
   // pré-misturada, e com ela o dp/dθ, segue o atraso
   atrasoEvento(c, p, T, rpm, k = 1) {
     // (os pesados, de câmara grande e injeção mais longa, variam menos: CV do knock das gravações 0,15–0,22 contra 0,17–0,29)
-    const s = (this.classe === 'leve' ? 0.16 : 0.11) + 0.12 * (1 - this.warm);
+    const s = ((this.classe === 'leve' ? 0.16 : 0.11) + 0.12 * (1 - this.warm)) * this.kVar;
     return this.atraso(p, T, rpm, k) * (this.tauK ? this.tauK[c] : 1) * Math.exp(clamp(s * this.rng.gauss(), -2.5 * s, 2.5 * s));
   }
 
@@ -449,7 +452,7 @@ export class DieselDSP extends EngineDSP {
       const Tef = Math.max(T, T * Math.pow(this.Vprev[c] / this.Vc, 0.35)) + this.aquec;
       if (msTau > 4 || Tef < 620) { kQ = clamp((Tef - 560) / 120, 0, 1) * (0.2 + 0.8 * this.rng.next()); dD *= 2; lento = 2; }
       else if (this.pParcial > 0 && this.rng.next() < this.pParcial) { kQ = 0.4 + 0.4 * this.rng.next(); dD *= 2; lento = 2; }
-      const cold = 1 - this.warm, sigma = 0.02 + 0.025 * (1 - clamp(fuel, 0, 1)) + 0.05 * cold; // (σ da energia de cada queima: maior em carga leve, onde a mistura é mais desigual)
+      const cold = 1 - this.warm, sigma = (0.02 + 0.025 * (1 - clamp(fuel, 0, 1)) + 0.05 * cold) * this.kVar; // (σ da energia de cada queima: maior em carga leve, onde a mistura é mais desigual)
       this.Qm[c] = mm * LHV * this.etaC(this.lam[c]) * this.cylQ[c] * kQ * clamp(1 + sigma * this.rng.gauss(), 0.6, 1.4);
       if (this.Qp[c] > 0) this.Qp[c] *= kQ > 0.6 ? 1 : kQ;
       this.igM[c] = soi + tau; this.phiP[c] = phi; this.dthP[c] = dP; this.dthD[c] = dD;
@@ -457,7 +460,7 @@ export class DieselDSP extends EngineDSP {
       // que escala com o diâmetro (o caminho até a parede) e cai com a velocidade do jato, √(pressão de injeção)
       this.soiM[c] = soi; this.thInjM[c] = thInj; this.eD[c] = 0;
       // (a turbulência da câmara varia de ciclo a ciclo: a mistura, e com ela a subida de pressão, também)
-      this.thMix[c] = this.tMistura(fuel, rpm) * 0.006 * Math.max(rpm, 30) * lento * Math.exp(clamp((0.18 + 0.35 * clamp(fuel, 0, 1)) * this.rng.gauss(), -0.9, 0.9));
+      this.thMix[c] = this.tMistura(fuel, rpm) * 0.006 * Math.max(rpm, 30) * lento * Math.exp(clamp((0.18 + 0.35 * clamp(fuel, 0, 1)) * this.kVar * this.rng.gauss(), -0.9, 0.9));
       this.queima[c] = 1;
       this.fechaRel[c] = soi + thInj;
       this.queimasBoas = kQ > 0.6 ? this.queimasBoas + 1 : 0;
@@ -473,7 +476,7 @@ export class DieselDSP extends EngineDSP {
     if (combust) {
       // injetor: vazão própria do cilindro e a variação de tiro a tiro (maior nas bombas mecânicas e em lenta, onde o
       // débito é pequeno perto das folgas do êmbolo)
-      const sq = (this.injTipo === 'common-rail' ? 0.01 : this.eletronico ? 0.015 : 0.02) * (1 + 1.5 * (1 - clamp(this.fuelCmd, 0, 1)));
+      const sq = (this.injTipo === 'common-rail' ? 0.01 : this.eletronico ? 0.015 : 0.02) * (1 + 1.5 * (1 - clamp(this.fuelCmd, 0, 1))) * this.kVar;
       mf = Math.max(0, this.fuelCmd * this.mapa(rpm) * (this.injK ? this.injK[c] : 1) + (this.injA ? this.injA[c] : 0)) * this.mfMax * clamp(1 + sq * this.rng.gauss(), 0.85, 1.15);
       if (this.limiteFumaca > 1.0001) mf = Math.min(mf, ar / (ESTEQ * this.limiteFumaca));
     }
@@ -659,7 +662,7 @@ export class DieselDSP extends EngineDSP {
     s = this.kLP.run(s);
     this.kEnv += (Math.abs(s) - this.kEnv) * 0.01;
     // 70% determinístico + 30% "chocalho" (ruído modulado pela mesma envoltória); as folgas do frio transmitem mais
-    let y = (0.7 * s + 0.3 * 1.4 * this.kEnv * rng.bi()) * (1 + 0.5 * coldN); // (0,3 do DIESEL.md dava +4,9 dB a −10 °C; o alvo é +8 ± 3)
+    let y = (this.kBatida * 0.7 * s + this.kChocalho * 0.3 * 1.4 * this.kEnv * rng.bi()) * (1 + 0.5 * coldN); // (0,3 do DIESEL.md dava +4,9 dB a −10 °C; o alvo é +8 ± 3)
     const ay = Math.abs(y); if (ay > this.kPk) this.kPk = ay; else this.kPk *= 0.99995;
     const ref = (this.refKnock || 0.5), kr = ref * K_MEC * this.gMec;
     y *= K_MEC * this.gMec;
@@ -695,7 +698,7 @@ export class DieselDSP extends EngineDSP {
       // anel de roletes da VP37: harmônicos k·N·rpm/120, k = 8–12, −26 dB
       this.phRot += (this.N * rpm / 120) * dt; if (this.phRot > 1e3) this.phRot -= 1e3;
       let w = 0; for (let k = 8; k <= 12; k++) w += Math.sin(TAU * k * this.phRot);
-      m += w * 0.2 * kr * 0.05 * (0.3 + 0.7 * rf);
+      m += w * 0.2 * kr * 0.05 * (0.3 + 0.7 * rf) * this.kRot;
     } else if (this.injTipo === 'heui') {
       // bomba de óleo de alta: chiado 1–2 kHz, −18 dB, ∝ combustível
       m += this.oilF.run(rng.bi()) * this.oilAmp * kr * 0.125 * clamp(this.fuelCmd, 0.05, 1);
