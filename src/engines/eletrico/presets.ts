@@ -64,7 +64,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     portador: { tipo: 'carro', massa: 1580, CdA: 0.28 * 2.27, Crr: 0.011, rw: 0.316 },
   },
   {
-    id: 'dolphin', name: 'BYD Dolphin', tag: 'PMSM 8 polos · SiC aleatória', family: 'carros', nome: 'BYD Dolphin', familia: 'eletrico',
+    id: 'dolphin', name: 'BYD Dolphin Plus', tag: 'PMSM 8 polos · SiC aleatória', family: 'carros', nome: 'BYD Dolphin Plus (150 kW)', familia: 'eletrico',
     maquina: 'pmsm', p: 4, Zs: 48, Tn: 310, Pmax: 150000, rpmBase: 4620, rpmMax: 16000, J: 0.035,
     inversor: { tipo: 'sic', fc: 10000, modo: 'aleatoria', delta: 0.1 },
     reducao: { estagios: [{ Zp: 19, Zc: 61 }, { Zp: 20, Zc: 66 }], eta: 0.97 }, ventilacao: null, carcaca: 'carro',
@@ -154,7 +154,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     },
   },
   {
-    id: 'cptm9000', name: 'CPTM Série 9000', tag: 'CAF · IGBT 2,3 kHz', family: 'trens', nome: 'CPTM Série 9000 (CAF)', familia: 'eletrico',
+    id: 'cptm9000', name: 'CPTM Série 9000', tag: 'Alstom · IGBT 2,3 kHz', family: 'trens', nome: 'CPTM Série 9000 (Alstom)', familia: 'eletrico',
     maquina: 'inducao', p: 2, Zs: 44, Tn: 1700, Pmax: 200000, rpmBase: 1120, rpmMax: 4100, J: 4, escorregamentoNominal: 0.02,
     inversor: { tipo: 'igbt', fc: 2300, modo: 'auto', sincrona: IGBT_TREM },
     // ordens medidas 1 : 1,44 : 2,45 (3.2): engrenamento Z_p 18, ranhuras 44 (44/18 = 2,44) e a linha de 1,44·18 = 25,9·f_rot,
@@ -171,7 +171,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     },
   },
   {
-    id: 'metropolis', name: 'Alstom Metropolis', tag: 'Frota I · Onix · troca de marcha', family: 'trens', nome: 'Alstom Metropolis (Frota I, Metrô SP)', familia: 'eletrico',
+    id: 'metropolis', name: 'Alstom Metropolis', tag: 'Frota G · Onix · troca de marcha', family: 'trens', nome: 'Alstom Metropolis (Frota G, Metrô SP)', familia: 'eletrico',
     maquina: 'inducao', p: 2, Zs: 48, Tn: 1110, Pmax: 150000, rpmBase: 1290, rpmMax: 4000, J: 3, escorregamentoNominal: 0.02,
     inversor: { tipo: 'igbt', fc: 1250, modo: 'auto', sincrona: [15, 9, 5, 3, 1] },
     reducao: { estagios: [{ Zp: 15, Zc: 102 }], eta: 0.96 }, ventilacao: null, carcaca: 'trem',
