@@ -1,14 +1,36 @@
-// Banco de testes offline: monta um preset como o app.js faz (geometria + calibração) e renderiza cenários.
-// `use(arquivo)` troca o dsp.js (ex.: a versão do git HEAD, para comparar).
+// Banco de testes offline: monta um preset como a página faz (geometria + calibração) e renderiza cenários.
+// Carrega o DSP em TypeScript (src/engines/ronco/), o mesmo do site: o `tsx` (dependência de desenvolvimento do
+// projeto, `npm install`) compila os .ts na hora, então `node render.js …` e `node regressao.js` continuam valendo.
+// `use(arquivo)` troca o DSP, para comparar duas versões:
+//   · 'legado'        o src/dsp.js de antes da reestruturação, lido do histórico do repositório (REF_LEGADO em
+//                     tools/legado.ts);
+//   · um arquivo .js  fábrica CommonJS como a do legado (uma cópia antiga de src/dsp.js guardada num arquivo);
+//   · um arquivo .ts  módulo que exporta EngineDSP. Uma versão antiga do DSP em TypeScript importa `../../acoustics`,
+//                     então precisa estar numa árvore completa (uma segunda cópia de trabalho do repositório naquele
+//                     commit): DSP=../engine-antes/src/engines/ronco/dsp.ts
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
+const tsx = require('tsx/cjs/api');
 const ROOT = path.join(__dirname, '..', '..', 'src');
-const G = require(path.join(ROOT, 'geometry.js'));
-const PRESETS = require(path.join(ROOT, 'presets.js'));
-const Factory = require(path.join(ROOT, 'dsp.js'));
-let { EngineDSP } = Factory();
-function use(file) { EngineDSP = require(file)().EngineDSP; module.exports.EngineDSP = EngineDSP; }
+const ts = (arquivo) => tsx.require(arquivo, __filename);
+const G = ts(path.join(ROOT, 'engines', 'ronco', 'geometria.ts'));
+const { PRESETS, ACESSORIOS_PADRAO } = ts(path.join(ROOT, 'engines', 'ronco', 'presets.ts'));
+let { EngineDSP } = ts(path.join(ROOT, 'engines', 'ronco', 'dsp.ts'));
+function use(file) {
+  if (file === 'legado') {
+    const { lerLegado } = ts(path.join(__dirname, '..', 'legado.ts'));
+    file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ronco-legado-')), 'dsp.js');
+    fs.writeFileSync(file, lerLegado('src/dsp.js'));
+  }
+  const m = /\.tsx?$/.test(file) ? ts(path.resolve(file)) : require(path.resolve(file));
+  EngineDSP = (typeof m === 'function' ? m() : m).EngineDSP; // fábrica legada ou módulo que exporta EngineDSP
+  if (!EngineDSP) throw new Error(file + ': não achei EngineDSP');
+  module.exports.EngineDSP = EngineDSP;
+}
 
-const STOCK = { valve: 'none', pipeD: 2.5, reso: false, twoStep: 'off', launchRpm: undefined, fuel: 'efi', shiftTime: undefined, driveMode: 'auto', limiter: 'ign', limiterBand: 70, limiterHold: 0.07, power: undefined, mass: undefined, wheelR: undefined, drag: undefined, ratios: undefined, finalDrive: undefined };
+// acessórios que o preset não define: os mesmos da página (ACESSORIOS_PADRAO de src/engines/ronco/presets.ts)
+const STOCK = ACESSORIOS_PADRAO;
 const FS = 48000;
 
 function config(id, patch = {}) {
