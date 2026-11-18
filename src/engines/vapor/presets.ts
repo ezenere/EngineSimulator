@@ -111,7 +111,9 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
     cilindros: { n: 2, diametro: pol(39), curso: pol(32) }, motores: 2, derivaFase: 0.008,
     compound: { ap: { n: 2, diametro: pol(25) }, bp: { n: 2, diametro: pol(39) }, receptor: 1.2 },
     dRoda: pol(58), pNominal: psi(300), superaquecido: true, evaporacaoMax: 9.0,
-    massa: 275, massaAderente: 275, tender: { massa: 160, eixos: 6, comprimento: 16 }, vMax: 80,
+    // 611 520 lb (277 t) em ordem de marcha, 548 500 lb (249 t) sobre as motrizes (o resto nos eixos guia e de arrasto);
+    // tênder de 22 000 galões: 378 600 lb (172 t)
+    massa: 277, massaAderente: 249, tender: { massa: 172, eixos: 6, comprimento: 16 }, vMax: 80,
     escape: { dBico: 0.17, lDescarga: 0.9, vCaixa: 7, lChamine: 1.6, dChamine: 0.55 },
     apito: { tubos: [196, 233, 294], tipo: 'chime' }, sino: { f: 640, batidasPorS: 2.0 }, bombaAr: BOMBA2, folga: 0.3,
     geometria: { comprimento: 25, largura: 3.3, altura: 4.9, xCilindros: 10, xChamine: 9, xDomo: 2.5, xCabine: -9.5, zTopo: 4.75 },
@@ -179,7 +181,8 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
   {
     id: 'stanley', nome: 'Stanley Steamer 735', familia: 'carro', tag: '20 hp · 1920 · condensador',
     cilindros: { n: 2, diametro: pol(4), curso: pol(5) }, reducao: 1.5, dRoda: 0.91, pNominal: psi(600), superaquecido: true, evaporacaoMax: 0.12,
-    massa: 1.2, massaAderente: 0.7, vMax: 100, J: 4,
+    // 735 de turismo: 3 650–3 900 lb em ordem de marcha (Stanley Register 1919; Auburn Heights, 735 de 1918: 3 850 lb)
+    massa: 1.75, massaAderente: 1.0, vMax: 100, J: 4,
     escape: { dBico: 0.03, lDescarga: 0.8, vCaixa: 0.02, lChamine: 0.6, dChamine: 0.05, destino: 'condensador', pCondensador: 1.0e5 },
     apito: { tubos: [800], tipo: 'simples', nivelDb: 120 }, folga: 0.3,
     geometria: { comprimento: 4.2, largura: 1.7, altura: 1.8, xCilindros: -1.3, yCilindros: 0.25, xChamine: -1.6, xDomo: 1.4, xCabine: -0.3, zTopo: 0.9 },
