@@ -120,7 +120,7 @@ try {
   confere((await ev('document.title')) === 'Diesel', 'título');
   const ini = await ev(`({ familias: document.querySelectorAll('.fam').length, presets: document.querySelectorAll('.preset').length, marcado: document.querySelector('.preset[aria-pressed=true]')?.dataset.id, placa: document.querySelector('.plate')?.textContent, secoes: [...document.querySelectorAll('.controls h2')].map((h) => h.textContent), sliders: document.querySelectorAll('.controls input[type=range]').length, ordem: document.getElementById('roOrder').textContent })`);
   confere(ini.familias === 4 && ini.presets === 8 && ini.marcado === 'hilux28', 'presets: 4 famílias, 8 picapes e carros, Hilux marcada', JSON.stringify([ini.familias, ini.presets, ini.marcado]));
-  confere(/^4 em linha .* 2\.8 L · 4 tempos · common-rail · turbo 2\.4 bar/.test(ini.placa), 'placa', ini.placa);
+  confere(/^4 em linha .* 2,8 L · 4 tempos · common-rail · turbo 2,4 bar/.test(ini.placa), 'placa', ini.placa);
   const esperadas = 'Escuta e ambiente,Carga,Motor,Características,Governador,Temperatura do motor,Transmissão,Escapamento,Acessórios,Fumaça e frio,Admissão';
   confere(ini.secoes.join(',') === esperadas, 'seções do painel', ini.secoes.join(','));
   confere(ini.sliders >= 30, 'sliders no painel', String(ini.sliders));
@@ -194,7 +194,7 @@ try {
   await espera(4000);
   t = await tele();
   confere(t.portador === 'gerador' && Math.abs(t.rpm - 1800) < 60 && t.cargaKW > 150, 'gerador a 1800 rpm com 50% de carga (tecla 2)', `${Math.round(t.rpm)} rpm, ${Math.round(t.cargaKW)} kW, ${t.hz?.toFixed(1)} Hz`);
-  confere(/Hz · \d+ kW no alternador/.test(await texto('#dCarga')), 'leitura kW/Hz do gerador', await texto('#dCarga'));
+  confere(/^[\d.]+ kW · \d+,\d Hz$/.test(await texto('#dCarga')) && (await ev(`document.getElementById('dCarga').closest('.ro-row').querySelector('.k').textContent`)) === 'Alternador', 'leitura kW/Hz do alternador do gerador', await texto('#dCarga'));
   await tecla('Digit0');
 
   // locomotiva EMD (2 tempos): notches pelo teclado
