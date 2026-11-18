@@ -483,6 +483,44 @@ python tools/analise-som/auditoria.py --ffmin 55 --ffmax 80 sync --case real:/tm
 node tools/analise-som/regressao.js
 ```
 
+### O kit ouvido
+
+`tools/ouvido/` (Python: numpy, scipy, matplotlib; rodar com `python3 -I`) é o instrumento da rodada de som de
+novembro de 2026. Ele mede o que as tabelas de bandas não medem e que o ouvido rejeitou nas famílias novas: quanto de
+cada banda é linha do motor e quanto é ruído entre as linhas (HNR), quanto desse ruído é um **leito contínuo** que
+enche o silêncio entre as explosões (o "som de ar"), como a envoltória pulsa e em que ritmo, estalos, irregularidade
+entre explosões e tons que não são ordens. O [`README` do kit](../tools/ouvido/README.md) explica cada medida, o que
+ela pega e o que não pega, e quando usar o kit ou as ferramentas acima.
+
+```
+python3 -I tools/ouvido/f0.py GRAVACAO.wav --linha-do-tempo          # trechos estáveis e rotação, sem cair na oitava errada
+npx tsx tools/ouvido/render.ts fusca /tmp/fusca.wav --rpm 1410       # o preset do Ronco na condição da gravação
+python3 -I tools/ouvido/comparar.py GRAVACAO.wav /tmp/fusca.wav --trecho-real 44-54 --rpm-real 1410 --eventos-por-ciclo 4 --saida /tmp/cmp/
+python3 -I tools/ouvido/orcamento.py PASTA/                          # de que fonte vem o ruído e quem enche o vão
+npm run ouvido:teste                                                 # 32 conferências com resposta plantada
+```
+
+O `comparar.py` grava um painel lado a lado (`painel.png`), todas as medidas por banda (`medidas.json`) e um resumo de
+cinco linhas com o que o simulado tem a mais e a menos que o real. **Olhe o painel antes e depois de mexer.** Exemplos
+em [`docs/ouvido/`](ouvido/): o Mustang e o Fusca aprovados, o Mustang com um chiado liso exagerado de propósito e o
+Diesel da primeira passada.
+
+**A régua.** Os quatro carros revisados neste documento (Fusca, Mustang, Fórmula 1, Hellcat), comparados com as suas
+gravações em nove condições, dão a faixa de "aprovado pelo ouvido": distância total de 1,1 a 2,2 tolerâncias e
+defeito "ar" (leito de ruído a mais que o da gravação) de 0 a 0,6. Três casos com ruído alisado ou exagerado de
+propósito dão "ar" de 2,2 a 4,2 com as mesmas bandas médias; o Diesel da primeira passada dá total 2,9, com timbre
+tonal 4,6 e eventos 2,7. A tabela, as ressalvas e o modo de usar numa família nova estão no README. As gravações
+ficam em `referencias/gasolina/` (fora do git), com fonte, microfone, trechos e rotação no `INDEX.md` de lá.
+
+Três coisas que a régua mostrou e que valem como método:
+
+- **Um som aprovado não está perto da gravação nas bandas.** O Mustang aprovado tem 15 a 22 dB a menos de 400 Hz a
+  2,5 kHz. O que o ouvido aprovou foi o caráter: ruído colado ao motor, sem leito.
+- **Ruído alisado com o mesmo espectro passa em todas as medidas simétricas** (bandas, envoltória contra uma gravação
+  de envoltória lisa) e só é pego pelo leito: a parte do ruído que não se repete, medida ao longo do ciclo.
+- **A gravação é teto de ruído e piso de pulso.** Ela soma sala, vento e microfone. Simulado mais limpo que a gravação
+  não é defeito; mais liso, é.
+
 ## O que olhar em cada tipo de veículo
 
 - **Antigos (carburador, anos 50–80):** taxa de compressão baixa, abafador sem lã, juntas e paredes que vazam,

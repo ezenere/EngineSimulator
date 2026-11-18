@@ -151,12 +151,15 @@ def main():
             + ' | '.join(f"{min(x['defeitos'][k] for x in ap_):.2f}–{max(x['defeitos'][k] for x in ap_):.2f}" for k in DEF) + ' | |')
         faixa = {k: [min(x['distancias'][k] for x in ap_), max(x['distancias'][k] for x in ap_)] for k in cp.COMPONENTES + ['total']}
         faixa.update({k: [min(x['defeitos'][k] for x in ap_), max(x['defeitos'][k] for x in ap_)] for k in DEF})
+    print('\n' + '\n'.join(md))
+    if so:   # (rodada parcial: não sobrescreve a tabela completa)
+        print(f"\npainéis e medidas dos casos pedidos em {a.saida}/ (regua.md e regua.json só são regravados na rodada completa)")
+        return
     os.makedirs(a.saida, exist_ok=True)
     with open(os.path.join(a.saida, 'regua.md'), 'w') as fh:
         fh.write('\n'.join(md) + '\n')
     with open(os.path.join(a.saida, 'regua.json'), 'w') as fh:
         json.dump(nu.limpar({'casos': linhas, 'faixa_aprovados': faixa}), fh, ensure_ascii=False, indent=1)
-    print('\n' + '\n'.join(md))
     print(f"\ngravado em {a.saida}/: regua.md, regua.json e um painel por caso")
 
 
