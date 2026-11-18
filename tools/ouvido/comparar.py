@@ -329,8 +329,9 @@ def resumir(R, S, relR, relS, pesos=PESOS, n=5):
 
 
 def tabela(R, S, relR, relS):
-    L = ['banda      nível re âncora   HNR (dB)     piso re âncora  ruído não periódico  leito liso    p90/p10 (dB)   vão (dB)     m ignição    fração ciclo',
-         '           real    sim       real   sim   real    sim     % da banda  r   s    % da banda    real   sim    real   sim   real  sim    real  sim']
+    L = [f"{'banda':8s} {'nível re âncora':>14}    {'HNR (dB)':>13} {'piso re âncora':>14}{'não periódico %':>18}{'leito liso %':>16}   {'p90/p10 (dB)':>13}  {'vão (dB)':>13}  {'m ignição':>11}  {'fração ciclo':>11}",
+         f"{'':8s} {'real':>6}  {'sim':>6}    {'real':>6} {'sim':>6} {'real':>6}  {'sim':>6}         {'real':>4} {'sim':>4}       {'real':>4} {'sim':>4}   {'real':>6} {'sim':>6}  {'real':>6} {'sim':>6}  "
+         f"{'real':>5} {'sim':>5}  {'real':>5} {'sim':>5}"]
     f = lambda v, w=6, p=1: (' ' * (w - 2) + '--') if v is None or not np.isfinite(v) else f'{v:{w}.{p}f}'
     pc = lambda v: '  --' if v is None or not np.isfinite(v) else f'{100 * v:4.0f}'
     for i, (br, bs) in enumerate(zip(R['bandas'], S['bandas'])):
