@@ -7,6 +7,7 @@
 // `velas` (1–3) e `trailingOn`, `rpmMax`, `power` (kW), `torque` (N·m), `J` (kg·m² do motor sozinho), `turbo`
 // ({ sequencial, boost, trocaRpm }), `escape` (2.1), `fHCextra`, `vedacoes`, `nivelEscape` (L_W dB re 1 pW: aviação, UAV,
 // gerador), `reducao`/`helice`/`rotor` (como no radial), `portadores`, `aproximacao`, `palhetas` (5.3), `gerador`.
+// Som de ar (rodada de 11/2026): `hcTurb`, `kBoca`, `kVed`, `kApito`, todos com controle no painel e padrão do lado baixo.
 // `displacement` é a cilindrada NOMINAL (Mazda: uma câmara por rotor; 13B = 1,308 L): o Ronco a usa para escalar
 // dinâmica e atrito; o volume termodinâmico vem de (R, e, b).
 import type { PresetRonco } from '../ronco/presets';
@@ -55,6 +56,12 @@ export type PresetRotativo = Partial<PresetRonco> & {
   fHCextra?: number;
   /** espalhamento da pós-queima até o ponto quente e a boca (ms; 9 se ausente): 0 = cada evento com o seu chiado */
   hcEspalha?: number;
+  /** flutuação turbulenta da pós-queima (0–1; 0,2 se ausente ≈ 10% rms da taxa de queima): o chiado de cada pulso, dentro do tubo */
+  hcTurb?: number;
+  /** parte da pós-queima que queima como chama na boca (0–1; 0 se ausente): só no escape curto e aberto de corrida */
+  kBoca?: number;
+  /** chiado contínuo das vedações (× o de referência; 0,5 se ausente) e apito do turbo (× o do Ronco; 0,3 se ausente) */
+  kVed?: number; kApito?: number;
   vedacoes?: 'novas' | 'gastas';
   nivelEscape?: number;
   reducao?: number; helice?: HelicePreset; rotor?: Record<string, any>;
