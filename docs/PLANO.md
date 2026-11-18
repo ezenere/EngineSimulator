@@ -54,7 +54,7 @@ Para a cena 3D (modo de testes e Passagem) podem ser usados modelos, malhas e te
 
 ## Rodada de auditoria e som (a partir de 18/11/2026)
 
-Todas as famílias estão na branch. O dono ouviu e o veredito é: **os sons novos estão ruins** (ar, mar, aspirador, pipoco, falta de peso; ver `docs/REVISAO-DE-SOM.md`, casos dos Rotativos, do Radial e as três passadas do Diesel no TECNICO). Esta rodada corrige o som, audita o projeto e arruma o que está incorreto, incompleto ou feio. Só agentes Fable.
+Todas as famílias estão na branch. O dono ouviu e o veredito é: **os sons novos estão ruins** (ar, mar, aspirador, pipoco, falta de peso; ver `docs/REVISAO-DE-SOM.md`, casos dos Rotativos, do Radial e as três passadas do Diesel no TECNICO). Esta rodada corrige o som, audita o projeto e arruma o que está incorreto, incompleto ou feio. Modelo dos agentes: Fable só onde o julgamento é difícil (acertar som contra gravação, diagnosticar por que um som está errado); Opus para o resto (fichas, documentação, limpeza, correções de interface a partir de lista pronta, ferramentas, mesclagens). Poucos agentes ao mesmo tempo, e nenhum agente abre subagentes por conta própria.
 
 **Por que as passadas anteriores falharam.** Cada uma acertou números (bandas médias, taxas) e errou o ouvido. O padrão que se repetiu: fontes de **ruído largo contínuo** (chiado de admissão, sopro de turbo, pós-queima, jato da ponteira, fundo mecânico) acabam dominando, e o que é **tonal e impulsivo** (as ordens do motor, o pulso de cada explosão) fica fraco embaixo delas. A calibração de volume esconde isso: sobe tudo junto. Bandas médias não distinguem um chiado liso de um chiado colado ao pulso, nem um espectro de linhas de um espectro de ruído com a mesma energia.
 
