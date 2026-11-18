@@ -52,10 +52,10 @@ function dial(g: CanvasRenderingContext2D, cx: number, cy: number, R: number, va
   g.fillStyle = hot ? C.hot : C.ink;
   g.font = `800 ${Math.round(R * 0.36)}px ${C.display}`;
   g.fillText(fmt(value, digits), cx + R * 0.95, cy + R * 0.62);
-  g.textAlign = 'left';
-  g.font = `500 ${Math.max(9, Math.round(R * 0.09))}px ${C.mono}`;
+  // nome e unidade acima do número, no quadrante livre (embaixo à esquerda o arco e o ponteiro em zero passam por cima)
+  g.font = `500 ${Math.max(10, Math.round(R * 0.09))}px ${C.mono}`;
   g.fillStyle = C.muted;
-  g.fillText(`${label}${unit ? ' · ' + unit : ''}`, cx - R * 0.95, cy + R * 0.62);
+  g.fillText(`${label}${unit ? ' · ' + unit : ''}`, cx + R * 0.95, cy + R * 0.62 - R * 0.36);
 }
 
 export function drawEicas(c: ControleTurbina, cv: HTMLCanvasElement) {
@@ -68,8 +68,12 @@ export function drawEicas(c: ControleTurbina, cv: HTMLCanvasElement) {
   let big = narrow ? Math.min(w * 0.27, (h - 112) / 2.1) : Math.min(w * 0.3, h * 0.4), small = Math.min(w * 0.17, big * 0.68);
   const gap = w - 2 * big - 2 * small - 20;
   if (gap < 0) { const k = (w - 20) / (2 * big + 2 * small); big *= k; small *= k; }
-  const cx1 = big + 6, cy1 = big + 8;
-  const cx2 = w - small - 6, cy2 = small + 8;
+  const nLinhas = prop ? 4 : 3;
+  // o conjunto fica centrado na altura do canvas (sobrava um vazio embaixo quando a largura é que limita os mostradores)
+  const usado = narrow ? big + 8 + big * 0.75 + 18 + (nLinhas - 1) * 24 + 10 : Math.max(big * 1.8 + 8, small * 1.95 + 24 + (nLinhas - 1) * 24 + 10);
+  const topo = Math.max(0, (h - usado) / 2 - 4);
+  const cx1 = big + 6, cy1 = big + 8 + topo;
+  const cx2 = w - small - 6, cy2 = small + 8 + topo;
   dial(g, cx1, cy1, big, prop ? tele.np || 0 : tele.n1 || 0, 110, 104, prop ? 'NP' : 'N1', '%', 1, false);
   dial(g, cx2, cy2, small, tele.egt || 0, 1100, 950, 'EGT', '°C', 0, (tele.ab || 0) > 0.1);
   const rows = [
@@ -113,7 +117,8 @@ export function drawFan(c: ControleTurbina, cv: HTMLCanvasElement, now: number, 
   const [g, w, h] = fit(cv);
   g.clearRect(0, 0, w, h);
   const prop = spec.arch === 'turboprop';
-  const cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.42;
+  // (o raio deixa lugar para as palhetas do estator e para a legenda embaixo, sem uma passar por cima da outra)
+  const R = Math.max(20, Math.min(w * 0.42, (h - 26) / 2.3)), cx = w / 2, cy = (h - 18) / 2;
   const age = Math.min(0.05, Math.max(0, (now - (tele.t || now)) / 1000));
   const f = prop ? tele.fp || 0 : tele.f1 || 0;
   const ph = ((prop ? tele.phP : tele.ph) || 0) + f * age;
@@ -179,7 +184,7 @@ export function drawFan(c: ControleTurbina, cv: HTMLCanvasElement, now: number, 
   g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(sa) * R * hub * 0.85, cy + Math.sin(sa) * R * hub * 0.85); g.stroke();
   g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillStyle = C.faint; g.font = `500 10px ${C.mono}`;
-  if (R > 90) g.fillText(prop ? `${B} pás · tempo real` : `${B} pás · ${spec.vanes} palhetas · tempo real`, cx, cy + R * 1.24 > h - 6 ? h - 8 : cy + R * 1.24);
+  if (R > 60) g.fillText(prop ? `${B} pás · tempo real` : `${B} pás · ${spec.vanes} palhetas · tempo real`, cx, Math.min(h - 7, cy + R * 1.15 + 13));
 }
 
 // Leituras de texto ao lado do fan (os <span> são do React, mas o texto é escrito aqui)
@@ -194,7 +199,7 @@ export function renderReadout(c: ControleTurbina, r: Leituras) {
   const on = (tele.n2 || 0) > 1;
   if (prop) {
     escrever(r.roFan, on ? `hélice ${fmt(((tele.np || 0) / 100) * spec.propRpm)} rpm · pás ${fmt((spec.propB * (tele.fp || 0)), 0)} Hz` : '—');
-    escrever(r.roTip, on ? `Mach ${fmt(tele.Mh || 0, 2)}` : '—');
+    escrever(r.roTip, on ? `Mach ${fmt(tele.Mh || 0, 2)}` : '—', `v mono${(tele.Mh || 0) > 0.9 ? ' warn' : ''}`);
     escrever(r.roCut, 'hélice aberta: sem duto', 'v mono');
   } else {
     escrever(r.roFan, on ? `${fmt((tele.f1 || 0) * 60)} rpm · BPF ${fmt(tele.bpf || 0)} Hz` : '—');
@@ -221,9 +226,19 @@ export function drawScope(c: ControleTurbina, cv: HTMLCanvasElement) {
   const mid = h * 0.32;
   g.strokeStyle = C.line; g.lineWidth = 1;
   g.beginPath(); g.moveTo(0, mid); g.lineTo(w, mid); g.stroke();
-  g.font = `500 10px ${C.mono}`; g.fillStyle = C.faint; g.textAlign = 'left'; g.textBaseline = 'top';
-  g.fillText('pressão no ouvido do observador', 10, 8);
-  if (!audio) { g.fillText('dê a partida para ver a onda e o espectro', 10, h - 18); return; }
+  g.font = `500 10px ${C.mono}`; g.textAlign = 'left'; g.textBaseline = 'top';
+  // legenda com fundo, para a onda não passar por cima das letras
+  const legenda = (t: string, x: number, y: number, cor: string) => {
+    const lw = g.measureText(t).width, x0 = g.textAlign === 'right' ? x - lw : x;
+    g.fillStyle = C.panel; g.globalAlpha = 0.82; g.fillRect(x0 - 3, y - 2, lw + 6, 14); g.globalAlpha = 1;
+    g.fillStyle = cor; g.fillText(t, x, y);
+  };
+  if (!audio) {
+    legenda('pressão no ouvido do observador', 10, 8, C.faint);
+    g.fillStyle = C.muted; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('dê a partida para ver a onda e o espectro', w / 2, h * 0.66);
+    return;
+  }
   const an = audio.analyser;
   if (!tBuf) { tBuf = new Float32Array(an.fftSize); fBuf = new Float32Array(an.frequencyBinCount); }
   an.getFloatTimeDomainData(tBuf);
@@ -265,18 +280,26 @@ export function drawScope(c: ControleTurbina, cv: HTMLCanvasElement) {
     if ((tele.fJet || 0) > 20) marks.push([tele.fJet, 'jato', C.hot]);
     if ((tele.fShock || 0) > 0) marks.push([tele.fShock, 'choque', C.hot]);
   }
-  let lastX = -1e9, row = 0;
+  // cada rótulo vai na primeira linha em que não encosta nos que já estão lá (à direita do traço; perto da borda, à esquerda)
+  const fimDaLinha: [number, number][][] = [[], [], [], []];
   for (const [f, label, col] of marks.sort((a, b) => a[0] - b[0])) {
     if (!(f > f0 && f < f1)) continue;
-    const x = fx(f);
-    row = x - lastX < 70 ? row + 1 : 0; lastX = x;
+    const x = fx(f), texto = `${label} ${fmt(f)} Hz`, lw = g.measureText(texto).width;
+    const esq = x + 6 + lw > w - 4;
+    const a = esq ? x - 6 - lw : x + 6, b = a + lw;
+    let row = fimDaLinha.findIndex((linha) => linha.every(([p, q]) => b + 8 < p || a - 8 > q));
+    if (row < 0) row = fimDaLinha.length - 1;
+    fimDaLinha[row].push([a, b]);
+    const y = top - h * 0.26 + row * 14;
     g.strokeStyle = col; g.setLineDash([3, 3]);
-    g.beginPath(); g.moveTo(x, top - h * 0.28 + row * 12); g.lineTo(x, bot); g.stroke(); g.setLineDash([]);
-    g.fillStyle = col; g.textAlign = x > w - 110 ? 'right' : 'left';
-    g.fillText(`${label} ${fmt(f)} Hz`, x + (x > w - 110 ? -6 : 6), top - h * 0.26 + row * 12);
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x, bot); g.stroke(); g.setLineDash([]);
+    g.textAlign = 'left';
+    legenda(texto, a, y, col);
   }
   g.fillStyle = C.faint; g.textAlign = 'right';
-  for (const f of [50, 100, 200, 500, 1000, 2000, 5000, 10000]) g.fillText(f >= 1000 ? `${f / 1000}k` : String(f), fx(f) - 2, bot - 12);
+  for (const f of [50, 100, 200, 500, 1000, 2000, 5000, 10000]) if (fx(f) > 24) g.fillText(f >= 1000 ? `${f / 1000}k` : String(f), fx(f) - 2, bot - 12);
+  g.textAlign = 'left';
+  legenda('pressão no ouvido do observador', 10, 8, C.faint);
 }
 
 // Mapa do observador: vista de cima (ao redor do motor) ou de lado (passagem).
@@ -295,7 +318,8 @@ export function drawMap(c: ControleTurbina, cv: HTMLCanvasElement, note: HTMLEle
     const { ox, oy, rad } = mapGeom(w, h);
     // anéis de distância
     g.strokeStyle = C.line; g.lineWidth = 1; g.fillStyle = C.faint; g.textAlign = 'left';
-    for (const d of [10, 50, 150, 300]) { g.beginPath(); g.arc(ox, oy, rad(d), 0, Math.PI * 2); g.stroke(); g.fillText(`${d} m`, ox + rad(d) + 3, oy - 6); }
+    // (os rótulos dos anéis vão na diagonal de baixo, fora dos lóbulos e do avião)
+    for (const d of [10, 50, 150, 300]) { g.beginPath(); g.arc(ox, oy, rad(d), 0, Math.PI * 2); g.stroke(); if (d > 10) g.fillText(`${d} m`, ox + rad(d) * 0.707 + 3, oy + rad(d) * 0.707 + 5); }
     // lóbulos de diretividade: frente (fan) e trás (jato), proporcionais ao nível
     const lobe = (dirFn: (th: number) => number, col: string) => {
       g.beginPath();
@@ -348,7 +372,7 @@ export function drawMap(c: ControleTurbina, cv: HTMLCanvasElement, note: HTMLEle
       const dirn = x > 0 ? 1 : -1, ex = dirn > 0 ? w - 4 : 4;
       g.beginPath(); g.moveTo(ex, ay); g.lineTo(ex - dirn * 10, ay - 6); g.lineTo(ex - dirn * 10, ay + 6); g.fill();
     }
-    g.fillStyle = C.faint; g.textAlign = 'left'; g.fillText(`${fmt(alt)} m`, 4, ay - 8);
+    g.fillStyle = C.faint; g.textAlign = 'right'; g.fillText(`altura ${fmt(alt)} m`, w - 6, ay - 9);
     const v = params.speed / 3.6, M = v / 340;
     if (M > 1 && vis) {
       // cone de Mach: atrás do avião, abrindo com ângulo asen(1/M); onde toca o chão, estrondo

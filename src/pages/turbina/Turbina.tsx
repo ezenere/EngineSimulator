@@ -65,15 +65,15 @@ function Conteudo({ c }: { c: ControleTurbina }) {
       <Navegacao c={c} />
       <main className="cluster">
         <section className="tach-wrap" aria-label="Instrumentos do motor">
-          <canvas id="eicas" ref={eicas} />
+          <canvas id="eicas" ref={eicas} role="img" aria-label="Instrumentos do motor: N1, temperatura dos gases, N2, combustível, empuxo e avisos" />
           <Manete c={c} />
         </section>
         <section className="firing" aria-label="Face do fan">
-          <canvas id="fan" ref={fan} />
+          <canvas id="fan" ref={fan} role="img" aria-label="Face do fan (ou a hélice) girando na rotação real" />
           <Leitura leituras={leituras} />
         </section>
         <section className="scope-wrap" aria-label="Forma de onda e espectro">
-          <canvas id="scope" ref={scope} />
+          <canvas id="scope" ref={scope} role="img" aria-label="Forma de onda e espectro do som no ouvido do observador, com as frequências de cada fonte" />
         </section>
         <Posicoes c={c} />
       </main>
@@ -89,7 +89,8 @@ function Placa({ c }: { c: ControleTurbina }) {
 
 function Ignicao({ c }: { c: ControleTurbina }) {
   useTopico(c, 'ignicao');
-  return <BotaoIgnicao ligado={c.running} rotulo={c.rotuloIgnicao()} aoClicar={() => c.setRunning(!c.running)} />;
+  const rotulo = c.rotuloIgnicao();
+  return <BotaoIgnicao id="ignition" ligado={c.running} rotulo={rotulo} aoClicar={() => c.setRunning(!c.running)} estado={rotulo.endsWith('…') ? 'ocupado' : undefined} />;
 }
 
 // família em cima, aeronaves dela embaixo
@@ -126,7 +127,7 @@ function Posicoes({ c }: { c: ControleTurbina }) {
         {det(0.8, '2 · subida')}
         {det(1, '3 · decolagem')}
         {det(1.3, '4 · pós-combustão', 'abKey', !canAB)}
-        <button type="button" className="key wide" id="revKey" aria-pressed={c.reverser} onClick={() => c.setReverser(!c.reverser)}>R · reversor</button>
+        <button type="button" className="key wide" id="revKey" aria-pressed={c.reverser} title="Reversor de empuxo" onClick={() => c.setReverser(!c.reverser)}>R · reversor</button>
       </div>
       <p className="hints"><kbd>W</kbd>/<kbd>↑</kbd> avança · <kbd>S</kbd>/<kbd>↓</kbd> recua · <kbd>1</kbd>–<kbd>4</kbd> posições · <kbd>R</kbd> reversor · <kbd>I</kbd> partida · <kbd>C</kbd> posição · <kbd>V</kbd> a bordo/no solo</p>
     </section>

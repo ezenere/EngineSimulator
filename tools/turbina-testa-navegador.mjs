@@ -125,9 +125,9 @@ const estrutura = await J(`({
 })`);
 console.log('estrutura:', JSON.stringify(estrutura));
 confere(estrutura.familias === 6 && estrutura.presets === 5, 'famílias (6) e aviões da 1ª família (5)');
-confere(JSON.stringify(estrutura.secoes) === JSON.stringify(['Motor', 'Aeronave', 'Fan', 'Jato', 'Acessórios', 'Escuta']), 'seções do turbofan');
-confere(estrutura.sliders.join() === 'spool,thrust,n2Idle,n1Idle,span,cockpitX,length,shape,fanB,vanes,fanD,n1Max,hpcB,lptB,n2Max,bpr,jetV,nozD,angle,dist,mxFan,mxCore,mxJet,mxVol', 'sliders do 737 no solo', estrutura.sliders.length);
-confere(estrutura.chips.join() === 'arch,engines,spools,mount,ab,nozzle,suppressor,liners,sync,observer,groundMode,env', 'grupos de chips', estrutura.chips.length);
+confere(JSON.stringify(estrutura.secoes) === JSON.stringify(['Escuta e ambiente', 'Motor', 'Aeronave', 'Fan', 'Jato', 'Acessórios']), 'seções do turbofan (a escuta primeiro, como nas outras páginas)');
+confere(estrutura.sliders.join() === 'angle,dist,mxFan,mxCore,mxJet,mxVol,spool,thrust,n2Idle,n1Idle,span,cockpitX,length,shape,fanB,vanes,fanD,n1Max,hpcB,lptB,n2Max,bpr,jetV,nozD', 'sliders do 737 no solo', estrutura.sliders.length);
+confere(estrutura.chips.join() === 'observer,groundMode,env,arch,engines,spools,mount,ab,nozzle,suppressor,liners,sync', 'grupos de chips', estrutura.chips.length);
 confere(estrutura.placa === 'Turbofan · 2× · 24 pás · bypass 5,5 · 121 kN', 'placa', estrutura.placa);
 confere(estrutura.canvas.every((c) => !/:0x|x0$/.test(c)) && estrutura.canvas.length === 4, 'canvas com tamanho', estrutura.canvas);
 confere(estrutura.posicoes.at(3).includes('desab.'), 'pós-combustão desabilitada no 737');
