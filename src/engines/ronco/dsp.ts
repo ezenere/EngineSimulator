@@ -348,10 +348,9 @@ export class EngineDSP implements DSPDeAudio {
     this.limHold = clamp(cfg.limiterHold ?? 0.07, 0, 0.5);
     // ---- médios e jato da ponteira (docs/TECNICO.md → Ronco). Sem o campo no preset vale o legado, bit a bit:
     // carcaça do escape e batida periódica da mecânica, em dB sobre o nível de referência; no piso do controle, desligadas
-    // (a parede que irradia é a do abafador e dos tubos: cresce com o comprimento do escape e muda com o abafador: o direto não
-    // tem caixa, só tubo; o original tem parede dupla; a caixa de lata do antigo é a mais fina)
-    this.carcK = cfg.carcaca != null && cfg.carcaca > CARCACA.piso
-      ? CARCACA.ref * Math.pow(10, cfg.carcaca / 20) * (CARCACA.abafador[cfg.muffler] ?? 1) * clamp((cfg.pipeLen || 3) / 3, 0.3, 1.5) : 0;
+    // (a parede que irradia é sobretudo a do abafador: o direto não tem caixa, só tubo; o original tem parede dupla; a caixa de
+    // lata do antigo é a mais fina)
+    this.carcK = cfg.carcaca != null && cfg.carcaca > CARCACA.piso ? CARCACA.ref * Math.pow(10, cfg.carcaca / 20) * (CARCACA.abafador[cfg.muffler] ?? 1) : 0;
     this.batK = cfg.batida != null && cfg.batida > BATIDA.piso ? BATIDA.ref * Math.pow(10, cfg.batida / 20) : 0;
     this.batQ0 = Math.max(1e-9, (this.Vd || 5e-4) * 1.2 * 2.6e6); // (calor de uma carga cheia a 1 bar: a batida segue a força da explosão)
     // jato da ponteira: 'sonico' = segue a vazão do pulso e satura no escoamento sônico; sem o campo, a lei antiga (1/área²)
@@ -372,7 +371,7 @@ export class EngineDSP implements DSPDeAudio {
     const r: any = {};
     if (cfg.carcaca != null) r.carcaca = undefined;
     if (cfg.batida != null) r.batida = undefined;
-    if (cfg.jato != null) { r.jato = undefined; r.tipD = undefined; }
+    if (cfg.jato === 'sonico') { r.jato = undefined; r.tipD = undefined; } // (com o jato novo a ponteira também fica fora da sonda; na lei antiga ela entrava, e continua entrando)
     if (cfg.bombaAr != null) r.bombaAr = undefined;
     return r;
   }
@@ -1239,7 +1238,7 @@ export class EngineDSP implements DSPDeAudio {
         // Na lenta quase não se ouve; com o motor girando leve é ela que enche os médios; em plena carga o escape a cobre
         if (batK) {
           const bf = this.batF, br = rf * Math.sqrt(rf), bc = this.batC * br; // (impacto ∝ rotação, e mais forte quanto mais rápido: rf^1,5)
-          mech += bf[3].run(bf[0].run(bc) + BATIDA.peso2 * bf[1].run(bc) + BATIDA.pesoV * bf[2].run(this.batV * br)) * batK * (1 + 1.2 * coldN);
+          mech += bf[3].run(bf[0].run(bc) + BATIDA.peso2 * bf[1].run(bc) + BATIDA.pesoV * bf[2].run(this.batV * br)) * batK * (1 + 0.8 * coldN); // (frio: pistão e tuchos com mais folga)
           this.batC = 0; this.batV = 0;
         }
         this.phW += omega * dt; if (this.phW > 1e4) this.phW -= TAU * 1000;

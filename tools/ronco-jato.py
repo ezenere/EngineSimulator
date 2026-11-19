@@ -13,6 +13,8 @@ Por ponto (preset, condição, tubo, ponteira), com as medidas do kit ouvido (`t
   ar          defeito "ar" do kit contra o MESMO preset e condição nos diâmetros do preset (`--ref-pasta`: os do preset
               numa outra varredura, por exemplo a do som aprovado): quanto leito a mais do que a referência, em
               tolerâncias. Sem gravação de cada condição, a régua é o próprio carro no diâmetro de fábrica
+  ar s/ jato  o mesmo defeito medido nos renders SEM o jato (ponto e referência): o que sobra não é do jato (é outra
+              fonte de ruído que não muda com o diâmetro e pesa mais quando o tom do escape fica mais baixo)
   linhas      nível das linhas de 400 Hz–2,5 kHz relativo ao de 150–400 Hz (dB): o que o estreitamento faz ao tom
   total       nível total relativo ao ponto de referência (dB): o estreitamento "prende" o som?
 """
@@ -48,11 +50,12 @@ def medir(base):
     f0 = inf['f0']
     fase = nu.fase_constante(n, f0, fs)
     med = nu.analisar(x, fase, inf.get('ev'), 2, fs, detalhe=False)
+    med_sj = nu.analisar(sj, fase, inf.get('ev'), 2, fs, detalhe=False)
     b = {q['banda']: q for q in med['bandas']}
     lin = lambda k: 10 ** (b[k]['harm_db'] / 10)
     return {**inf, 'jato_A': pot_a(jato, fs) / max(pa, 1e-30), 'jato_db': float(nu.db10(np.mean(jato ** 2) / max(np.mean(sj ** 2), 1e-30))),
             'valv_A': (pa - pot_a(sv, fs)) / max(pa, 1e-30), 'leito': cp.leito_frac(med['faixa_1_6k']), 'total_db': med['nivel_total_db'],
-            'linhas_med': float(nu.db10((lin('400-1k') + lin('1-2,5k')) / max(lin('150-400'), 1e-30))), 'hnr': [q['hnr'] for q in med['bandas']], '_med': med}
+            'linhas_med': float(nu.db10((lin('400-1k') + lin('1-2,5k')) / max(lin('150-400'), 1e-30))), 'hnr': [q['hnr'] for q in med['bandas']], '_med': med, '_med_sj': med_sj}
 
 
 def main():
@@ -78,15 +81,15 @@ def main():
         cand = [p for p in refs.get((pre, cond), lista) if p['pipeD'] == d0 and p['tipD'] is None]
         ref = cand[0] if cand else None
         print(f"\n== {pre} · {cond} · {lista[0]['rpm']:.0f} rpm, pedal {lista[0]['pedal']:.3f}  (referência: tubo {d0}\" com a ponteira do tubo{', da pasta de referência' if a.ref_pasta else ''})")
-        print('  tubo  ponteira |  jato A   jato dB | válv. A |  leito 1–6k |   ar  | linhas 0,4–2,5k | total re ref')
+        print('  tubo  ponteira |  jato A   jato dB | válv. A |  leito 1–6k |   ar  ar s/ jato | linhas 0,4–2,5k | total re ref')
         for p in sorted(lista, key=lambda q: (q['tipD'] is not None, q['pipeD'], q['tipD'] or 0)):
-            ar = float('nan')
+            ar = ar_sj = float('nan')
             if ref is not None:
-                d = cp.defeitos(ref['_med'], p['_med'])
-                ar = d['ar']
+                ar = cp.defeitos(ref['_med'], p['_med'])['ar']
+                ar_sj = cp.defeitos(ref['_med_sj'], p['_med_sj'])['ar']
             dom = '  DOMINA' if p['jato_A'] > 0.5 else ''
-            print(f"  {p['pipeD']:4.2f}  {('tubo' if p['tipD'] is None else format(p['tipD'], '4.2f')):>8} | {100 * p['jato_A']:5.1f}%  {p['jato_db']:7.1f} | {100 * p['valv_A']:6.1f}% | {100 * p['leito']:9.0f}%  | {ar:5.2f} | {p['linhas_med']:14.1f}  | {p['total_db'] - (ref['total_db'] if ref else 0):8.1f}{dom}")
-            saida.append({k: v for k, v in p.items() if not k.startswith('_')} | {'ar': ar, 'total_re_ref': p['total_db'] - (ref['total_db'] if ref else 0)})
+            print(f"  {p['pipeD']:4.2f}  {('tubo' if p['tipD'] is None else format(p['tipD'], '4.2f')):>8} | {100 * p['jato_A']:5.1f}%  {p['jato_db']:7.1f} | {100 * p['valv_A']:6.1f}% | {100 * p['leito']:9.0f}%  | {ar:5.2f}  {ar_sj:9.2f} | {p['linhas_med']:14.1f}  | {p['total_db'] - (ref['total_db'] if ref else 0):8.1f}{dom}")
+            saida.append({k: v for k, v in p.items() if not k.startswith('_')} | {'ar': ar, 'ar_sem_jato': ar_sj, 'total_re_ref': p['total_db'] - (ref['total_db'] if ref else 0)})
     if a.json:
         with open(a.json, 'w') as fh:
             json.dump(nu.limpar(saida), fh, indent=1)
@@ -95,7 +98,7 @@ def main():
     for cond in ('lenta', 'parcial', 'plena'):
         s = [q for q in saida if q['cond'] == cond]
         if s:
-            print(f"  {cond}: jato A máximo {100 * max(q['jato_A'] for q in s):.0f}% · pontos em que domina {sum(q['jato_A'] > 0.5 for q in s)}/{len(s)} · ar máximo {np.nanmax([q['ar'] for q in s]):.2f} · leito máximo {100 * max(q['leito'] for q in s):.0f}%")
+            print(f"  {cond}: jato A máximo {100 * max(q['jato_A'] for q in s):.0f}% · pontos em que domina {sum(q['jato_A'] > 0.5 for q in s)}/{len(s)} · ar máximo {np.nanmax([q['ar'] for q in s]):.2f} (sem o jato {np.nanmax([q['ar_sem_jato'] for q in s]):.2f}; pontos com ar > 0,6: {sum(q['ar'] > 0.6 for q in s)}, dos quais por causa do jato {sum(q['ar'] > 0.6 and q['ar_sem_jato'] <= 0.6 for q in s)}) · leito máximo {100 * max(q['leito'] for q in s):.0f}%")
 
 
 if __name__ == '__main__':

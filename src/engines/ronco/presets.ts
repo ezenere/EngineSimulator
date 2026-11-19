@@ -116,7 +116,8 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
   car('mustang', 'muscle', 'Ford Mustang GT', '5.0 V8 Coyote · DOHC 7500 rpm', V8X, {
     order: '1-8-7-2-6-5-4-3', displacement: 5.0, redline: 7500, idle: 700, cam: 0.35, inertia: 0.95,
     header: 'unequal', routing: 'xpipe', muffler: 'sport', pipeLen: 3.0, ...NA, intake: 'sport', overrun: 'cut', cat: true, ...DBW, gears: 10, transmission: 'auto', shiftTime: 0.3,
-    valve: 'sport', pipeD: 3, ...veh(343, 1750, [4.70, 2.99, 2.15, 1.80, 1.52, 1.28, 1.00, 0.85, 0.69, 0.64], 3.55, 0.35) }),
+    valve: 'sport', pipeD: 3, ...veh(343, 1750, [4.70, 2.99, 2.15, 1.80, 1.52, 1.28, 1.00, 0.85, 0.69, 0.64], 3.55, 0.35),
+    bombaAr: 'sem' }), // (o Coyote esquenta o catalisador só com a centelha atrasada: não tem bomba de ar secundário, e a gravação do carro não tem o tom dela)
   car('gt500', 'muscle', 'Shelby GT500', '5.2 V8 com compressor', V8X, {
     order: '1-8-7-2-6-5-4-3', displacement: 5.2, redline: 7500, idle: 750, cam: 0.45, inertia: 0.9,
     header: 'equal', routing: 'xpipe', muffler: 'sport', pipeLen: 3.0, ...blower(0.83), scType: 'roots', scRatio: 2.4, scLobes: 4, scWhine: -9, intake: 'sport', overrun: 'cut', cat: true, ...DBW, gears: 7, transmission: 'auto', shiftTime: 0.12,

@@ -55,12 +55,12 @@ export function montarMedios(d: any, _cfg: any) {
   // estreitamento do tubo, contado duas vezes, porque a onda num tubo fino já é maior). Aqui, abaixo de 2,5" o sopro
   // não cresce com o estreitamento (o gás de um pulso a Mach 0,05–0,3 não chia mais por sair de um cano fino); acima,
   // cai como antes (gás mais lento). O que o estreitamento faz é subir a velocidade na ponteira (vazão ÷ área), que
-  // satura no escoamento sônico (`jatoM`: Mach por unidade de `vel`), e o tom do chiado (∝ 1/diâmetro)
+  // satura no escoamento sônico (`jatoM`: Mach por unidade de `vel`): perto dele o sopro para de crescer.
+  // (Subir o tom do chiado com 1/diâmetro, como num jato de verdade, foi medido e não entrou: levava o chiado para
+  // 2,5–6 kHz, onde o tom do motor é fraco, e o leito de ruído dessa banda passava da régua em plena carga)
   d.jatoQ = Math.min(1, pipeA) / (2.5e4 * Math.max(1, tipA));
   d.jatoM = (JATO_MACH * pipeA) / tipA / (2.5e4 * d.jatoQ);
   if (d.jatoFis) {
-    const td = Math.sqrt(tipA);
-    if (td < 1) d.jetF = rads.map(() => [new Biquad().bp(fs, 450 / td, 0.5), new Biquad().bp(fs, 1400 / td, 0.6)]);
     // ponteira mais fina que o tubo: bocal na boca (contrapressão, pulso mais mole); a boca da válvula de escape não muda
     const sigma = tipA / pipeA;
     if (sigma < 0.98) for (const rd of rads) if (rd.valve === undefined) { rd.kBocal = (1 / (sigma * sigma) - 1) / (2 * GAM * P0); rd.wMax = 1e5 * sigma; rd.step = stepBocal; }
