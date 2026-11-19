@@ -611,8 +611,8 @@ export class DieselDSP extends EngineDSP {
   }
 
   // Pancada mecânica na estrutura (agulha do injetor, assento de válvula, êmbolo da bomba): um impulso no banco de
-  // modos, pelo caminho da peça (`tab`: 0 injetor, 1 válvula, 2 bomba, 3 saia do pistão; `linha`: o cilindro, ou N para o corpo da
-  // bomba). O instante e a força variam um pouco de uma vez para outra (EST.jitter, EST.ampJitter): com os impactos
+  // modos, pelo caminho da peça (`tab`: 0 injetor, 1 válvula, 2 bomba, 3 saia do pistão; `linha`: o cilindro, ou N para
+  // o corpo da bomba). O instante e a força variam um pouco de uma vez para outra (EST.jitter, EST.ampJitter): com os impactos
   // exatamente periódicos, as linhas iam até 6 kHz e o motor zumbia; com 0,06 ms de desvio elas somem acima de ~2,5 kHz,
   // como nas gravações (HNR +5 dB em 400–1000 Hz, −1 em 1–2,5 kHz, −12 em 2,5–6 kHz no OM617 em lenta)
   impacto(tab, linha, amp) {
@@ -633,23 +633,24 @@ export class DieselDSP extends EngineDSP {
     if (this.injTipo === 'em-linha' || this.injTipo === 'pld') this.impacto(2, this.N, k * kp * ref * 0.6 * this.kTiques);
   }
 
-  // cliques do trem de válvulas (×1,5: válvulas maiores), ar por ciclo e massa presa nos 2T (itens 8 e 9)
+  // trem de válvulas, ar por ciclo e massa presa nos 2T (itens 8 e 9)
   valvulas(c, a, ap) {
     const evo = this.evo, evc = this.evc, ivo = this.ivo, ivc = this.ivc, rng = this.rng;
     const cruza = (x) => ap < x && a >= x;
-    // trem de válvulas: nível relativo ao pico da batida de lenta quente; frio, as folgas batem mais. (As pancadas vão
-    // para a estrutura; os cliques de ruído do Ronco, o clickEnv, ficam só para o relé das velas)
-    // (a válvula assenta com a velocidade que o came lhe dá: a pancada cresce com a rotação)
-    const kv = (this.refKnock || 0.5) * K_VALV * (1 + 1.6 * (1 - this.warm)) * clamp(this.rpmAvg / this.idle, 0.5, 4) * this.kValvulas;
+    // Trem de válvulas: pancadas na estrutura (os cliques de ruído do Ronco, o clickEnv, ficam só para o relé das velas).
+    // O nível é relativo ao pico da batida de lenta quente; frio, as folgas batem mais; e a válvula assenta com a
+    // velocidade que o came lhe dá, então a pancada cresce com a rotação. O assento é a pancada (a válvula fecha contra
+    // a sede); na abertura só a folga do balancim é tomada
+    const kv0 = () => (this.refKnock || 0.5) * K_VALV * (1 + 1.6 * (1 - this.warm)) * this.kValvulas;
+    const kv = () => kv0() * clamp(this.rpmAvg / this.idle, 0.5, 4);
     if (this.tempos === 4) {
-      // (o assento é a pancada: a válvula fecha contra a sede; na abertura só a folga do balancim é tomada)
       const fecha = cruza(evc) || cruza(ivc);
-      if (fecha || cruza(evo) || cruza(ivo)) { const k = 0.5 + 0.5 * rng.next(); this.impacto(1, c, k * (fecha ? 1 : 0.5) * kv); }
+      if (fecha || cruza(evo) || cruza(ivo)) { const k = 0.5 + 0.5 * rng.next(); this.impacto(1, c, k * (fecha ? 1 : 0.5) * kv()); }
       if (cruza(ivo)) this.air[c] = 0;
       // (o pistão escravo do Jake abre a válvula contra 30–50 bar: a pancada no balancim é a metralhadora que se ouve do motor)
-      if (this.jakeOn && this.jakeCil[c] && cruza(712)) this.impacto(1, c, 16 * kv);
+      if (this.jakeOn && this.jakeCil[c] && cruza(712)) this.impacto(1, c, 16 * kv0());
     } else {
-      if (cruza(evo) || cruza(evc)) { const k = 0.5 + 0.5 * rng.next(); this.impacto(1, c, k * (cruza(evc) ? 1 : 0.5) * kv); }
+      if (cruza(evo) || cruza(evc)) { const k = 0.5 + 0.5 * rng.next(); this.impacto(1, c, k * (cruza(evc) ? 1 : 0.5) * kv()); }
       if (cruza(ivo)) this.air[c] = 0;
       if (cruza(ivc)) this.arPreso[c] = this.m[c];
     }
@@ -846,10 +847,12 @@ export class DieselDSP extends EngineDSP {
       // parado e puro soa como um apito eletrônico
       this.tjit += 0.0004 * (rng.bi() * 40 - this.tjit);
       this.phTT += TAU * f * (1 + 0.004 * this.tjit) * dt; if (this.phTT > TAU) this.phTT -= TAU;
-      let lvl = tn * tn * (0.25 + 0.75 * Math.min(1, carga)) * this.gApito;
+      // (∝ rotação³: cresce mais depressa que o som do motor, então some na lenta, com o turbo girando à toa; com o
+      // quadrado, o tom de lenta da Hilux ficava 21 dB acima do fundo em 6,7 kHz, e a gravação não tem tom nenhum)
+      let lvl = tn * tn * tn * (0.25 + 0.75 * Math.min(1, carga)) * this.gApito;
       // (geometria variável que segura o turbo girando na lenta com as palhetas fechadas, `turboLenta` do preset: o gás
       // entra na turbina por frestas, rápido, e a passagem das pás fica mais forte; é o assobio de lenta do Cummins 6.7)
-      if (this.apitoLenta) lvl *= 1 + 1.5 * (1 - Math.min(1, 2 * carga));
+      if (this.apitoLenta) lvl *= 1 + 6 * (1 - Math.min(1, 2 * carga));
       if (f > 16000) lvl *= (16000 / f) * (16000 / f);
       if (f > 0.45 * this.fs) lvl = 0;
       const h2 = 2 * f < 0.45 * this.fs ? 0.3 * (2 * f > 16000 ? (16000 / (2 * f)) ** 2 : 1) : 0;

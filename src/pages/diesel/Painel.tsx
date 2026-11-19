@@ -196,7 +196,7 @@ function Motor({ k, e }: P) {
       </Field>
       <Slider id="cetano" rotulo="Número de cetano" min={40} max={55} passo={1} valor={spec.cetano || 48} formatar={(v) => `${v}${v >= 51 ? ' (europeu)' : v >= 48 ? ' (S10)' : ''}`} aoMudar={(v) => k.setSpec({ cetano: v }, nt)} />
       <Slider id="cam" rotulo="Cruzamento de válvulas" min={0} max={0.3} passo={0.01} valor={clamp(spec.cam || 0, 0, 0.3)} formatar={(v) => virgula(v, 2)} aoMudar={(v) => k.setSpec({ cam: v }, nt)} />
-      <Slider id="mecanica" rotulo="Batida e mecânica do motor (nível)" min={-20} max={30} passo={1} valor={spec.mecanica || 0} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ mecanica: v }, nt)} />
+      <Slider id="mecanica" rotulo="Batida e mecânica do motor (nível)" min={-20} max={40} passo={1} valor={spec.mecanica || 0} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ mecanica: v }, nt)} />
       <Slider id="ressonancia" rotulo="Ressonância do bloco (quanto cada batida soa depois da pancada)" min={0.5} max={2.5} passo={0.05} valor={spec.ressonancia ?? 1}
         formatar={(v) => `${virgula(v, 2)}× · ${v < 0.8 ? 'seco' : v < 1.35 ? 'normal' : 'ressoa'}`} aoSoltar={(v) => k.setSpec({ ressonancia: v }, { render: false })} />
       <Slider id="desigualdade" rotulo="Diferença entre cilindros (para quem ouve)" min={0} max={2} passo={0.05} valor={spec.desigualdade ?? 1}

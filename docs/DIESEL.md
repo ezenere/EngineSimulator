@@ -172,6 +172,8 @@ Gasolina (Ronco, para contraste): lenta 15–25 bar, plena 60–90 bar, escape 9
 
 ### 2.6 O "knock" diesel como fonte estrutural
 
+> **Quarta passada (novembro de 2026): o que vale hoje.** A excitação e a estrutura descritas abaixo foram trocadas (ver `TECNICO.md` → Diesel → Quarta passada). A excitação é a taxa de subida de pressão que a própria queima produz, `(γ−1)·dQ/V` por unidade de tempo (bar/ms), áspera como a de uma chama real (`K_ASPEREZA`, com uma parte que se repete igual em todo ciclo de cada cilindro), e não mais `dp/dθ` com passa-altas. A estrutura é um banco de 30 modos de 150 Hz a 7 kHz (`EST` em `constantes.ts`), com um caminho por cilindro até quem ouve (peso e sinal por modo: cada cilindro tem a sua voz), que responde também às pancadas mecânicas (injetores, válvulas, saia do pistão, bomba) como impulsos, e não mais como rajadas de ruído branco. Os 30% de "chocalho" sorteado pela envoltória deixaram de existir. O que segue fica como registro do projeto original; os alvos medidos e a forma do tique continuam valendo.
+
 **Excitação.** Em cada amostra de combustão (`xb[c] < 1`), `dpdθ = max(0, p − p_prev)/deg` (bar/°); `knockSrc += dpdθ·cylK[c]` com `cylK` o sorteio fixo por cilindro (±5%, o mesmo `sr` de `dsp.ts:202`). O máximo por ciclo vai à telemetria. A excitação é portanto **determinística e colada ao ciclo** (não um ruído sorteado como o `knockEnv` do Ronco): a variação de ciclo a ciclo vem da variação real da queima (σ de `Q`, 2,5% quente, até 8% frio) e da dispersão fixa entre cilindros.
 
 **Estrutura.** `knockSrc` → `hp 300 Hz` (1 polo; tira o empuxo lento) → banco de 4 passa-faixas em paralelo (bloco, cárter, tampa de válvulas) + 1 ressonância da câmara:
@@ -198,6 +200,8 @@ Gasolina (Ronco, para contraste): lenta 15–25 bar, plena 60–90 bar, escape 9
 Forma de cada tique (banda 0,8–8 kHz, média alinhada ao pico): subida 0,6–1,1 ms, −3 dB em 0,3–0,4 ms, −6 dB em 0,5–1,0 ms; centroide do tique 1,4–2,3 kHz, com o contraste tique-fundo máximo (+4 a +6 dB) nos terços de 1000–1600 Hz. **Frio:** a −10 °C, à mesma rotação, a banda 1–4 kHz sobe 8 ± 3 dB em relação ao motor quente (o atraso dobra, `φ_p` → 0,9, `dp/dθ` 1,6×). Gasolina de referência (Camaro em lenta, `TECNICO.md`): 1–2,5 kHz a −17 dB, centroide 266 Hz; o diesel em lenta tem 10–20 dB mais energia em 1–4 kHz do que um gasolina na mesma posição.
 
 ### 2.7 Ruído de injeção
+
+> **Quarta passada.** O tique não é mais ruído filtrado com envoltória: é um impulso no banco de modos da estrutura (2.6), pelo caminho do injetor de cada cilindro, com o peso espectral nas duas faixas da tabela abaixo. O instante e a força variam um pouco de uma vez para outra (0,06 ms e 25%), a força cresce com a pressão de injeção (expoente 0,7 sobre a razão para a pressão da lenta, em vez do fator `a`), e o injetor-bomba passou de +6 para 0 dB (a +6 ele era 56–62% de 1–6 kHz na lenta do caminhão, à frente da batida da queima). O chiado contínuo da bomba de óleo do HEUI virou pancadas a 7 por volta.
 
 Cada evento de injeção gera um tique curto no canal `mech` (filtros dedicados em `buildFilters`), além do knock. Nível em dB relativo ao pico do knock de lenta quente do mesmo motor; decaimento em ms (envelope `exp(−t/τ)` excitando ruído filtrado); amplitude ∝ `(a + (1 − a)·fuel)`:
 
@@ -343,6 +347,8 @@ Pressões absolutas no coletor: picapes 2,2–2,9 bar; caminhões 2,6–3,0; loc
 | GE 7FDL | GE turbo livre | 15 500 | 20 | 1,0 kHz (3 krpm) → 5,2 kHz | 4 / 6 (o atraso da fumaçada) | `fixo` |
 | MAN B&W 6S50MC | ABB TPL77 + sopradores auxiliares elétricos | 12 000 | 24 | 2,4 → 4,8 kHz; sopradores auxiliares abaixo de 40% de carga (zumbido 100 Hz + pás) | 8 / 12 | `fixo` |
 
+> **Quarta passada: o turbo é um detalhe fino.** `turboPas` passou a contar só as pás principais do compressor (7 nos caminhões e nas picapes grandes, 6 nas pequenas; 27 no EMD e 20 na GE ficam), e `turboRpmMax` dos pesados foi a 95 000 rpm: a passagem das pás em carga cai em 7–9,4 kHz, onde a gravação do Cat C15 a mostra (com as pás intermediárias contadas ela ficava acima de 16 kHz e não se ouvia). O nível segue `(N/N_max)³·(0,25 + 0,75·pressão/pressão máxima)` e some na lenta; só os presets com `turboLenta` (Cummins 6.7, Duramax) têm o assobio de lenta das palhetas fechadas. O tom oscila um pouco e tem uma saia estreita de ruído (dois passa-faixas de Q 30). A banda larga do compressor caiu 30 dB e a da turbina 22 dB (`K_SOPRO`, `K_CHIADO_TURBO`, `K_TURBINA`): eram a fonte dominante em carga, o "som de mar". Números em `TECNICO.md` → Diesel → Quarta passada. O texto abaixo é o projeto original.
+
 Realização (item 23): `N_turbo = turboW·turboRpmMax` (ou `max` com o engrenado); apito `f = z·N_turbo/60` com 2º harmônico a −12 dB, Q equivalente 30 (jitter 0,3%), nível `turboApito` (dB do preset) × `(N/N_max)²·(0,2 + 0,8·pMan/pUp)`; se `f > 16 kHz` o nível cai 12 dB por oitava acima (fora do audível, sobra o chiado); chiado `bp 4,8 kHz` ∝ `turboW²·(0,3 + boost)` como hoje, modulado ±15% pela admissão (`scIn`) para não virar "mar" (`REVISAO-DE-SOM.md`). Wastegate: abre quando `boost > boostAlvo` → chiado curto. VGT: em lenta e freio as palhetas fecham, `turboW` mínimo 0,15 (o apito de lenta); em carga abrem. O 2º estágio (ACERT) não se modela.
 
 **Escape depois da turbina.** A turbina é o `TwoPort 'turbo'` existente (−6 dB acima de 1,3 kHz, corte 3,5 kHz, `gT` 0,74). Depois dela: picapes e carros modernos têm DOC + DPF (`DoisPortasDiesel 'dpf'`: 2 × `lp 1200 Hz`, `gT` 0,85, `rA` 0,3, `rB` 0,15) e abafador `'stock'`; caminhões: abafador grande (`'abafador-caminhao'`: `lp 900` ×2, `peak 90 Hz +3`, `gT` 0,9) e chaminé vertical de 3–4 m e 5" (`ds` 2: `Y` ×4, `fRad` 1 kHz) ou saída horizontal; locomotivas: só a chaminé (0,6–1,0 m, Ø 0,45 m: `fRad` = 400/(2π·0,225) = 283 Hz, perda `exp(−0,09·L)` desprezível); gerador: silencioso residencial (`'stock'` + 2 m de tubo Ø 150 mm). **Sem catalisador quente**: `hasCat` não produz nada no diesel (`catNoise` = 1, nenhuma bomba de ar, nenhum atraso de aquecimento), a colmeia do DPF entra só como o filtro acima; a saída do escape em lenta fica a 120–200 °C e nenhum combustível acende no tubo. Antigos (OM617, MWM, 12v, 7.3, 6V92, EMD, GE): sem DPF.
@@ -370,6 +376,13 @@ Realização (item 23): `N_turbo = turboW·turboRpmMax` (ou `max` com o engrenad
 | `janelas?` | `{ evo, ipo, ipc, evc }` | só 2T |
 | `J?` | kg·m² | inércia do motor (sobrepõe a fórmula) |
 | `glow` | boolean | velas de aquecimento |
+| `mecanica` | dB, −20 a +40 | nível da batida e da mecânica do motor (o banco de modos da estrutura) sobre o escape; acertado por preset contra as gravações |
+| `ressonancia` | 0,5–2,5 (padrão 1) | quanto o bloco ressoa depois de cada pancada: multiplica o fator de qualidade dos modos (4ª passada) |
+| `desigualdade` | 0–2 (padrão 1) | quanto os cilindros soam diferentes entre si para quem ouve: multiplica a dispersão dos caminhos (4ª passada) |
+| `cofre` | dB, −30 a +3 (padrão −10) | reflexões do cofre (capô, chão, carroceria) sobre o som direto da mecânica (4ª passada) |
+| `jato` | dB (padrão 0) | chiado do jato livre na boca do escape, que agora segue U⁸ e só aparece em giro alto com carga (4ª passada) |
+| `ponteira` | polegadas (padrão: o diâmetro do escape) | boca de saída, de que depende o jato; o painel a mantém quando se mexe no diâmetro do tubo (4ª passada) |
+| `turboChiado` | dB (padrão 0) | sopro de banda larga do turbo; o padrão é quase nada |
 | `portadores` | `('carro' \| 'gerador' \| 'locomotiva' \| 'nenhum')[]` | tabela de compatibilidade |
 | `locomotiva?`, `gerador?` | tabelas de notch / dados do alternador | passados ao portador |
 

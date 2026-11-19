@@ -142,7 +142,7 @@ export const K_CHIADO_TURBO = 0.0006;
 // A em qualquer condição, e na Hilux 40–96% de 2,5–6 kHz ("soavam como vento"). Aqui o ganho do jato segue a
 // velocidade média do gás na boca ao quadrado até V0 (com a do pulso ao quadrado, do Ronco, dá a quarta potência na
 // amplitude, U⁸ na potência) e satura acima de V1 (boca pequena demais: o escoamento engasga, não rasga)
-export const K_JATO = 0.25;
+export const K_JATO = 0.1;
 export const JATO_V0 = 1.0;
 export const JATO_V1 = 1.5;
 
