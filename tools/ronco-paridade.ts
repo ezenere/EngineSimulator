@@ -19,6 +19,15 @@
 //    com os globais do AudioWorklet simulados, faz a calibração como a página (sonda fora da thread de
 //    áudio, `config` com gain/mkIdle/powerModel) e confere que ele toca igual ao DSP em TypeScript.
 //
+// MODO LEGADO (obrigatório desde a rodada de som de 18/11/2026). Os padrões do produto mudaram o som dos carros de
+// propósito (carcaça do escape, batida periódica, jato sônico, bomba de ar: docs/TECNICO.md → Ronco → Médios). Esta
+// prova força cada campo novo ao seu valor legado no lado migrado ANTES de renderizar (MODO_LEGADO_RONCO em
+// tools/legado.ts; aqui na ferramenta, não nos padrões do produto) e ignora esses campos na comparação dos presets.
+// Ela garante que, com os controles novos na posição legada, o DSP migrado é o legado, amostra a amostra; não diz
+// nada sobre o som novo. Para o portão não virar enfeite, ela também confere que os padrões do produto de fato
+// diferem do legado (se não diferissem, o modo legado não estaria provando nada) e que o EngineDSP sem os campos
+// toca igual ao EngineDSP com os valores legados explícitos.
+//
 // Sai com código 0 só se tudo for idêntico. --manter não apaga a pasta temporária com os WAVs.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -32,7 +41,7 @@ import * as G from '../src/engines/ronco/geometria';
 import { PRESETS, ACESSORIOS_PADRAO } from '../src/engines/ronco/presets';
 import { EngineDSP, gearRatios, defaultFinal } from '../src/engines/ronco/dsp';
 import { configCalibrada } from '../src/engines/ronco/config';
-import { REF_LEGADO, lerLegado, comCorrecoes, contarCorrecoes, CORRECOES_RONCO } from './legado';
+import { REF_LEGADO, lerLegado, comCorrecoes, contarCorrecoes, CORRECOES_RONCO, MODO_LEGADO_RONCO, semCamposNovos, presetsEmModoLegado } from './legado';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const req = createRequire(import.meta.url);
@@ -68,7 +77,8 @@ console.log(`referência: ${REF} · temporários em ${tmp}`);
   if (LP.length !== PRESETS.length) falha(`${LP.length} presets no legado, ${PRESETS.length} no migrado`);
   let iguais = 0;
   for (let i = 0; i < LP.length; i++) {
-    const a = LP[i], b = PRESETS[i];
+    // (os campos dos mecanismos novos não existem no legado: saem da comparação; o resto, valor e ordem, tem de bater)
+    const a = LP[i], b = PRESETS[i] && semCamposNovos(PRESETS[i]);
     // mesma ordem de campos também (é a ordem em que o painel e o DSP os veem)
     if (!b || !isDeepStrictEqual(a, b) || JSON.stringify(Object.keys(a)) !== JSON.stringify(Object.keys(b))) falha(`preset ${a.id} difere`);
     else iguais++;
@@ -124,8 +134,36 @@ function executar(argv: string[], env: Record<string, string>): Promise<{ codigo
 }
 const LADOS = {
   ref: { DSP: path.join(refDir, 'dsp.js'), PRESETS: path.join(refDir, 'presets.js'), GEOMETRY: path.join(refDir, 'geometry.js') },
-  novo: { DSP: 'src/engines/ronco/dsp.ts', PRESETS: 'src/engines/ronco/presets.ts', GEOMETRY: 'src/engines/ronco/geometria.ts' },
+  // (lado migrado em MODO LEGADO: os presets passam por um módulo gerado aqui que força os campos novos ao valor legado)
+  novo: { DSP: 'src/engines/ronco/dsp.ts', PRESETS: path.join(tmp, 'presets-modo-legado.ts'), GEOMETRY: 'src/engines/ronco/geometria.ts' },
 };
+fs.writeFileSync(LADOS.novo.PRESETS, presetsEmModoLegado(path.join(RAIZ, 'src/engines/ronco/presets')));
+console.log(`modo legado: campos forçados no lado migrado antes de renderizar: ${Object.keys(MODO_LEGADO_RONCO).join(', ')} (tools/legado.ts)`);
+
+// o modo legado prova alguma coisa? (1) os padrões do produto têm de soar diferente do legado; (2) o DSP sem os campos
+// tem de tocar igual ao DSP com os valores legados explícitos (o "valor legado" é o campo ausente)
+{
+  const tocar1s = (spec: any) => {
+    const d: any = new EngineDSP(48000); d.params.ambSound = false;
+    d.setConfig(configCalibrada(spec, 48000));
+    d.message({ type: 'input', temp: { mode: 'fixed', value: 90 } }); d.state = 'run'; d.lockOmega = true; d.omega = (spec.redline * 0.5 * Math.PI * 2) / 60; d.rpmAvg = spec.redline * 0.5; d.thrTarget = 0.5; d.thr = 0.5;
+    const n = 48000, L = new Float32Array(n), R = new Float32Array(n), bl = new Float32Array(128), br = new Float32Array(128);
+    for (let i = 0; i < n; i += 128) { d.process(bl, br, 128); L.set(bl.subarray(0, Math.min(128, n - i)), i); R.set(br.subarray(0, Math.min(128, n - i)), i); }
+    return [L, R];
+  };
+  const igual = (x: Float32Array[], y: Float32Array[]) => x.every((c, k) => c.every((v, i) => Object.is(v, y[k][i])));
+  let difere = 0;
+  for (const id of ['muscle', 'fusca', 'golfgti']) {
+    const p = PRESETS.find((x) => x.id === id)!;
+    const produto = tocar1s({ ...ACESSORIOS_PADRAO, ...p });
+    const legadoExplicito = tocar1s({ ...ACESSORIOS_PADRAO, ...p, ...MODO_LEGADO_RONCO });
+    const semCampos = tocar1s(semCamposNovos({ ...ACESSORIOS_PADRAO, ...p }));
+    if (!igual(legadoExplicito, semCampos)) falha(`${id}: o DSP com os valores legados explícitos difere do DSP sem os campos novos`);
+    if (!igual(produto, legadoExplicito)) difere++;
+  }
+  if (!difere) falha('os padrões do produto soam igual ao legado: o modo legado não está forçando nada (os mecanismos novos estão desligados nos padrões?)');
+  else console.log(`modo legado: os padrões do produto diferem do legado em ${difere}/3 presets conferidos (é o som novo); sem os campos e com os valores legados explícitos o DSP toca igual`);
+}
 
 async function renderizarTudo() {
   const fila: (() => Promise<void>)[] = [];

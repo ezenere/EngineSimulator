@@ -21,6 +21,8 @@ import os
 import shutil
 import subprocess
 import sys
+
+sys.dont_write_bytecode = True  # (este programa carrega tools/ronco-linhas.py: sem __pycache__ em tools/)
 from concurrent.futures import ThreadPoolExecutor
 
 AQUI = os.path.dirname(os.path.abspath(__file__))

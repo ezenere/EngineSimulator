@@ -31,6 +31,38 @@ export function extrairLegado(arquivos: readonly string[], pasta: string, ref = 
 }
 
 // ---------------------------------------------------------------------------------------------------------------
+// Modo legado do Ronco (rodada de som de 18/11/2026: "Médios" e "Jato da ponteira", docs/TECNICO.md → Ronco).
+//
+// O motor-base ganhou mecanismos que MUDAM o som dos carros de propósito: a irradiação da carcaça do escape
+// (`carcaca`), a batida periódica da mecânica (`batida`), o jato da ponteira que satura no escoamento sônico (`jato`)
+// e a bomba de ar secundário de linha larga ou ausente (`bombaAr`). Os padrões do produto (ACESSORIOS_PADRAO e os
+// presets em src/engines/ronco/presets.ts) saem com eles ligados. Cada um tem um VALOR LEGADO com que o EngineDSP toca
+// exatamente como antes; a prova de paridade (tools/ronco-paridade.ts) força esses valores no lado migrado antes de
+// renderizar, aqui na ferramenta e não nos padrões do produto, e por isso continua sendo amostra a amostra. Assim:
+//   · a paridade prova que, com os mecanismos novos na posição legada, o DSP migrado É o legado;
+//   · ela NÃO prova nada sobre o som novo (quem julga é o ouvido do dono; as medidas estão em tools/ronco-medios.py,
+//     tools/ronco-jato.py e na régua do kit ouvido);
+//   · um campo novo que mude o som e não esteja nesta tabela faz a paridade FALHAR: nenhum outro desvio é aceito.
+// Valor legado = o campo ausente (`undefined`): é como os presets das outras famílias (Diesel, Radial, Rotativos e a
+// aviação a pistão) chegam ao EngineDSP, e por isso o som delas não mudou (tools/ronco-heranca.ts confere por hash).
+// No painel do Ronco a posição legada de cada controle é: Carcaça e Batida no mínimo ("sem · legado"), Jato da
+// ponteira em "Legado" e Bomba de ar secundário em "Tom parado (legado)".
+export const MODO_LEGADO_RONCO: Record<string, undefined> = { carcaca: undefined, batida: undefined, jato: undefined, bombaAr: undefined };
+
+/** o preset sem os campos dos mecanismos novos (para a comparação campo a campo com o legado, que não os tem) */
+export function semCamposNovos<T extends Record<string, unknown>>(p: T): T {
+  const r: Record<string, unknown> = {};
+  for (const k of Object.keys(p)) if (!(k in MODO_LEGADO_RONCO)) r[k] = p[k];
+  return r as T;
+}
+
+/** módulo de presets do lado migrado com os campos novos forçados ao valor legado (texto TypeScript; o render o carrega por PRESETS=) */
+export function presetsEmModoLegado(caminhoPresets: string): string {
+  const campos = Object.entries(MODO_LEGADO_RONCO).map(([k, v]) => `${k}: ${v === undefined ? 'undefined' : JSON.stringify(v)}`).join(', ');
+  return `import { PRESETS } from ${JSON.stringify(caminhoPresets)};\nexport default PRESETS.map((p) => ({ ...p, ${campos} }));\n`;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
 // Correções de ficha feitas depois da migração (docs/AUDITORIA.md).
 //
 // A paridade prova que o DSP migrado é o legado: mesmo preset → mesmo WAV, amostra a amostra. Os presets também
