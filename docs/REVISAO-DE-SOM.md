@@ -17,6 +17,8 @@ qualquer veículo, antigo ou novo.
 - [Caso: o compressor do Hellcat](#caso-o-compressor-do-hellcat)
 - [Caso: o som de ar dos Rotativos](#caso-o-som-de-ar-dos-rotativos)
 - [Caso: os pipocos do radial](#caso-os-pipocos-do-radial)
+- [Caso: os médios](#caso-os-médios)
+- [Caso: papel rasgando](#caso-papel-rasgando)
 - [Ferramentas](#ferramentas)
 - [O que olhar em cada tipo de veículo](#o-que-olhar-em-cada-tipo-de-veículo)
 
@@ -452,6 +454,118 @@ T-28, R-2800 em banco, Rotec e Sh-14):
   estouros) mudava o resultado de +2,6 a +5,9%: era sorte, não margem.
 - **Duas gravações em sentidos opostos.** O M-14P tem 3× os picos do Yak-52 na lenta, mas o T-6G, também de carburador de
   boia, tem 14× os do R-1340 simulado. Com as duas puxando para lados opostos, o galope de boia não mudou.
+
+## Caso: os médios
+
+**Queixa:** "No geral os motores estão sem médios. Eles têm agudos e grave, mas pecam nos médios." E a regra de gosto que
+vale acima da gravação: o simulador tem de soar mais motor e menos som de ar do motor. Médio que entra, entra como
+linha, não como chiado.
+
+**Como se achou** (`tools/ronco-estagios.ts`, `tools/ronco-linhas.py`, `tools/ronco-medios.py`; números e a tabela das
+cinco hipóteses em `TECNICO.md` → Médios):
+
+1. **Linhas, não bandas.** A energia média de 400 Hz–2,5 kHz soma linha e ruído. O déficit foi medido no nível das
+   linhas (os harmônicos do ciclo, com o sinal reamostrado no ângulo) e no HNR, banda a banda.
+2. **Por estágio, com a mesma semente.** O gancho `tap` do DSP entrega o pulso que as válvulas põem nos primários, o que
+   cada ponteira irradia e cada fonte na mistura do ouvinte. O espectro já cai 15 dB por oitava acima de 300 Hz na
+   fonte: o pulso de descarga em carga leve é uma corcova lisa de ~5 ms. Não era o abafador nem o microfone.
+3. **Um pulso conhecido pela rede.** Com as válvulas fechadas, um impulso num primário: o caminho até a ponteira
+   devolve médios (+6 a +17 dB relativos ao grave, pela irradiação), não tira. Só o abafador original tira.
+4. **Onde falta.** Ponderado A, os médios são 4–22% da potência na lenta e em carga parcial e 83–97% em plena carga. O
+   buraco é do motor girando leve, que é como se ouve um carro em ponto morto.
+5. **Cada hipótese com o seu experimento**, inclusive as que caíram: a abertura da válvula mais rápida enchia os médios
+   em carga leve e subia 3–5 dB o agudo em plena carga; a admissão fica 20–30 dB abaixo no `ext`; a cadeia de saída só
+   pesa na medida em mono.
+
+**O que foi implementado** (cada um com campo, controle no painel e valor legado):
+
+| Mudança | Campo / controle | Por quê |
+|---|---|---|
+| Carcaça do escape | `carcaca` (dB) · "Carcaça do escape", em Escapamento | A parede dos tubos e do abafador responde à onda que passa por dentro e irradia em 0,5–2,5 kHz. Filtro fixo sobre onda periódica: sai em linhas |
+| Batida periódica | `batida` (dB) · "Batida da mecânica", em Características | Pistão e válvulas dão o mesmo impacto todo ciclo; o bloco responde em 0,75–2,1 kHz. Cresce com a rotação, quase não depende da carga: enche os médios onde o escape não tem |
+| Bomba de ar secundário | `bombaAr` · "Bomba de ar secundário", em Temperatura | Os dois senos parados (760 e 1520 Hz) viram um zumbido de linha larga; o Mustang GT não tem a bomba |
+
+**Resultado** (linhas em dB relativos a 150–400 Hz; antes → agora; gravação):
+
+| | 400 Hz–1 kHz | 1–2,5 kHz | 2,5–6 kHz |
+|---|---|---|---|
+| Fusca, 1410 rpm | −10,0 → −5,9 (real −5,2) | −23,9 → −5,9 (real −7,1) | −21,7 → −13,6 (real −9,7) |
+| Hellcat, lenta quente | −23,8 → −22,1 (real −25,2) | −34,8 → −28,4 (real −31,2) | −53,0 → −41,7 (real −45,2) |
+| Mustang frio, 1251 rpm | −19,5 → −18,7 (real −5,1) | −39,1 → −33,5 (real −18,8) | sem linha no real |
+| Camaro, 2500 rpm em carga parcial | −11,2 → −10,0 | −34,3 → −24,1 | −54,3 → −37,8 |
+| Golf GTI, 2500 rpm em carga parcial | −20,2 → −17,9 | −35,6 → −23,5 | −51,1 → −37,2 |
+| S2000, plena carga a 6500 rpm | +8,5 → +10,5 | +7,1 → +9,7 | −7,4 → −6,9 |
+
+**Erros que quase custaram rodadas:**
+
+- **"Carga parcial" pelo pedal.** 30% de pedal a 2500 rpm dava 0,95 bar no coletor: era quase plena carga, e a primeira
+  tabela dizia que os médios estavam bem. Carga é o coletor (0,5 bar ≈ 12% de pedal), não o pedal.
+- **Um mecanismo linear sobe tudo junto.** A carcaça responde à mesma onda que a boca: o que ela soma em carga leve,
+  soma na mesma proporção em plena carga. Com ela 8 dB acima do padrão os médios da carga leve enchiam, e a plena carga
+  subia 3 a 9 dB no total. O que enche só onde falta é uma fonte que não dependa da carga (a mecânica).
+- **A primeira carcaça era um passa-faixa em 620 Hz.** Deixava passar 300 Hz, onde o pulso é forte, e não chegava a
+  1–2,5 kHz. A física da parede (rígida abaixo da ressonância: 12 dB por oitava) dá o passa-alta ressonante.
+- **A primeira batida subia o agudo.** Com um modo em 2,8 kHz e sem corte, as linhas de 2,5–6 kHz subiam 20 dB na
+  lenta. Corte em 2,2 kHz e impacto ∝ rotação^1,5: na lenta ela quase some.
+- **O tom parado de 1520 Hz do Mustang** saía do código como hipótese (2º harmônico da bomba de ar). Confirmar é
+  desligar a fonte com a mesma semente: os tons de 760 e 1520 Hz caem 19 dB, até o piso.
+- **Número que bate não prova o caráter.** As linhas do Fusca ficaram a 1–4 dB da gravação, mas a batida periódica é a
+  terceira tentativa do "clec clec" (as duas primeiras, rajada de ruído ampliada e ressonância estreita, o ouvido
+  rejeitou). Por isso ela tem controle próprio e posição legada.
+
+**Pendente:**
+
+- **Mustang frio:** continua 13–15 dB abaixo em 400 Hz–2,5 kHz. O motor real está no aquecimento do catalisador, com a
+  queima invadindo o escape; o pulso chega à ponteira com a frente muito mais íngreme. Falta essa queima no tubo.
+- **400 Hz–1 kHz** subiu pouco (+1 a +4 dB): a parede e o bloco respondem acima disso. Quem quiser mais sobe a carcaça.
+- **Fórmula 1:** as gravações de bordo têm a ordem 2 (~600 Hz) onde o simulado tem a ignição. É a posição da câmera.
+- **Carga parcial e motor solto não têm gravação casada.** Tudo o que se diz deles aqui é contra o som de antes.
+
+## Caso: papel rasgando
+
+**Queixa:** com "Diâmetro do escape" em 1,50" e "Ponteira (saída)" em 1,25" (os mínimos), "o som de ar tinha a ver com
+isso: eu mudava e o som parecia que tava rasgando papel. É um som feio."
+
+**Como se achou.** O jato da ponteira só soma na saída: o render com ele menos o render sem ele, com a mesma semente, é
+o jato, exato. `tools/ronco-jato.ts` varre os dois controles do mínimo ao máximo em quatro presets e três condições
+(108 pontos, três renders cada) e `tools/ronco-jato.py` mede a fração do nível ponderado A que é o jato, o leito de
+ruído e o defeito `ar` contra o mesmo carro nos diâmetros do preset.
+
+- Nos diâmetros de fábrica o jato era 0,3 a 2,6% do nível ponderado A na lenta e em carga parcial. Com o tubo em 1,5",
+  94 a 100%; com a ponteira em 1,25", 46 a 99%; com os dois no mínimo, 77 a 100%, até 32 dB acima de todo o resto.
+- A lei era `chiado ∝ (onda ÷ área da ponteira)²`. A onda num tubo fino já é maior (1/área do tubo): com a ponteira
+  acompanhando o tubo o estreitamento entrava duas vezes, +15 dB de 2,5" para 2" e +19 dB de 2" para 1,5".
+- O chiado do vão da válvula e o da borboleta, que eram suspeitos, não passam de 12% e de −60 dB.
+
+**O que foi implementado** (`jato: 'sonico'`, com controle "Jato da ponteira" e posição legada; detalhes em `TECNICO.md`):
+
+| Mudança | Por quê |
+|---|---|
+| O sopro segue a vazão do pulso | Abaixo de 2,5" ele não cresce com o estreitamento: gás a Mach 0,05–0,3 não chia mais por sair de um cano fino |
+| A velocidade na ponteira satura no escoamento sônico | Perto do sônico o sopro para de crescer |
+| Ponteira mais fina que o tubo é um bocal (Bernoulli) | Sobe a contrapressão e amolece o pulso em vez de criar chiado |
+
+**Resultado:** o jato não é a fonte dominante em nenhum dos 108 pontos (máximo 3% na lenta, 2% em carga parcial, 16% em
+plena carga, este no Golf com os diâmetros de fábrica, onde eram 37%). Nos diâmetros dos presets o chiado é o de antes
+(a menos de 0,5 dB na lenta e em carga parcial). Estreitar continua mudando o som: com 1,5" o carro fica 3 a 14 dB mais
+baixo e mais anasalado;
+a ponteira de 1,25" tira 3 a 6 dB em plena carga e comprime o pulso.
+
+**Lições:**
+
+- **Varra o controle inteiro, não só o padrão.** Nos diâmetros de fábrica o jato estava certo (afinado de ouvido); o
+  defeito morava na extrapolação. Todo controle de preset tem de ser ouvido e medido nos dois extremos.
+- **Um efeito afinado de ouvido não é a lei física com o mesmo nome.** O "puf" de cada explosão não é ruído de jato de
+  verdade (a essas velocidades ele seria inaudível); extrapolá-lo com a lei de um jato (ou com 1/área²) leva o chiado
+  para onde nenhum escape vai.
+- **A física "certa" pode piorar o que o ouvido rejeitou.** Subir o tom do chiado com a velocidade ÷ diâmetro, como num
+  jato real, punha o ruído em 2,5–6 kHz. Foi medido antes de ficar e saiu.
+- **O defeito `ar` contra o próprio carro.** Sem gravação de cada condição, a régua foi o mesmo preset nos diâmetros de
+  fábrica. Ela também mostrou o que não era o jato: no Fusca com tubo ou ponteira no mínimo, em plena carga, o `ar`
+  fica em 0,9–1,25 com ou sem o jato. É a rajada do vazamento do coletor pesando mais porque o tom ficou mais baixo.
+
+**Pendente:** o vazamento do Fusca nos diâmetros mínimos em plena carga (acima); e a contrapressão quase não tira
+torque no modelo (a rede de tubos devolve ao motor pouco do que reflete depois do abafador).
 
 ## Ferramentas
 

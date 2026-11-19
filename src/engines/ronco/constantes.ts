@@ -26,7 +26,7 @@ export const CARCACA = { f0: 950, q: 2.2, fMassa: 2600, ref: 0.25, piso: -30, ab
 // Batida periódica da mecânica: modos do bloco excitados pelo pistão (f1, f2) e do cabeçote pelas válvulas (fV), o peso
 // de cada um, o corte acima deles (a estrutura não irradia o agudo do impacto), o ganho de referência (0 dB no controle
 // `batida`) e o piso do controle
-export const BATIDA = { f1: 750, q1: 1.8, f2: 1500, q2: 2.0, fV: 2100, qV: 1.8, peso2: 0.7, pesoV: 0.3, fCorte: 2200, ref: 6, piso: -30 };
+export const BATIDA = { f1: 750, q1: 1.8, f2: 1500, q2: 2.0, fV: 2100, qV: 1.8, peso2: 0.7, pesoV: 0.3, fCorte: 2200, ref: 12, piso: -30 };
 // Mach na ponteira por unidade da velocidade normalizada do jato: 25 kPa de onda num tubo de 2,5" são ~100 m/s de gás
 // (ρc ≈ 250 Pa·s/m), com o som a ~400 m/s na ponta
 export const JATO_MACH = 0.25;
