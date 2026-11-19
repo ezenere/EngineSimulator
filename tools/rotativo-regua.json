@@ -209,6 +209,48 @@
     "8"
    ],
    "nota": "a mesma gravação de bordo contra o ouvinte de fora: o carro de corrida não tem a cabine fechada do filtro do Ronco"
+  },
+  {
+   "id": "norton-lenta",
+   "titulo": "Norton Classic · lenta a 1 850 rpm (~2 m)",
+   "preset": "norton",
+   "rotores": 2,
+   "real": "norton-classic-lenta.wav",
+   "trecho": [
+    22,
+    36
+   ],
+   "rpm": 1846,
+   "render": [
+    "--lenta",
+    "--campo",
+    {
+     "idle": 1850
+    }
+   ],
+   "nota": "Norton Classic refrigerada a ar, celular a ~2 m: ignição em 61,5 Hz (linhas em 30,8 / 61,5 / 92,3 / 123 Hz)"
+  },
+  {
+   "id": "ro80-lenta",
+   "titulo": "NSU Ro80 · lenta quente a 1 100 rpm (cofre aberto)",
+   "preset": "ro80",
+   "rotores": 2,
+   "real": "ro80-partida-lenta.wav",
+   "trecho": [
+    18,
+    24
+   ],
+   "rpm": 1105,
+   "render": [
+    "--lenta",
+    "--ouvinte",
+    "bay",
+    "--campo",
+    {
+     "idle": 1100
+    }
+   ],
+   "nota": "microfone no cofre aberto, gravação baixa (−23 dBFS): série fraca de 73 / 110 / 149 / 185 Hz"
   }
  ]
 }

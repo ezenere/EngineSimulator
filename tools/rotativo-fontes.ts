@@ -147,7 +147,7 @@ export function render(id: string, op: Op) {
     eventosPorCiclo: d.N, voltasPorCiclo: voltas, rotores: d.rotores, fIgn: +((rpm / 60 / voltas) * d.N).toFixed(2),
     // (o pedal e o ar de lenta vão com a precisão inteira: o conjunto do orçamento os reusa, e um arredondamento muda a trajetória)
     pedal: Number.isFinite(pedal) ? pedal : d.thr, iac: Number.isFinite(iac) ? iac : null, coletorBar: +(d.pMan / 101325).toFixed(3), boostBar: +(d.boost || 0).toFixed(3),
-    pAberturaBar: +(d.pEO[0] / 1e5).toFixed(2), fHC: +d.fHCatual.toFixed(4), falha: +d.falhaBase.toFixed(4), residual: +(d.xRes.reduce((x: number, y: number) => x + y, 0) / d.N).toFixed(3), estourosS: +((d.estourosTotal - estouros0) / op.dur).toFixed(2), tEscape: Math.round(d.exhT),
+    pAberturaBar: +(d.pEO[0] / 1e5).toFixed(2), fHC: +d.fHCatual.toFixed(4), falha: +(typeof d.falhaBase === 'number' ? d.falhaBase : +d.falhaRot || 0).toFixed(4), residual: d.xRes ? +(d.xRes.reduce((x: number, y: number) => x + y, 0) / d.N).toFixed(3) : null, estourosS: +((d.estourosTotal - estouros0) / op.dur).toFixed(2), tEscape: Math.round(d.exhT),
     ouvinte: op.ouvinte, ambiente: op.ambiente, sem: op.sem, escala: op.escala, semente: op.semente ?? null, ganho: +d.cfgGain.toFixed(4), mkIdle: +d.mkIdle.toFixed(3), pico: +pico.toFixed(4), nan, estado: d.state,
     campo: op.campo, sr: SR, dur: op.dur };
   return { m, info };
