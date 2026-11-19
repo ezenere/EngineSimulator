@@ -41,7 +41,8 @@
     "teste:vapor": "tsx tools/vapor-valida.ts",
     "lenta:vapor": "tsx tools/vapor-lenta.ts",
     "gravacoes:vapor": "tsx tools/vapor-gravacoes.ts",
-    "navegador:vapor": "node tools/vapor-navegador.mjs"
+    "navegador:vapor": "node tools/vapor-navegador.mjs",
+    "ouvido:teste": "python3 -I tools/ouvido/autoteste.py"
   },
   "dependencies": {
     "react": "^19.3.1",
