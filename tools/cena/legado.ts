@@ -154,7 +154,9 @@ export function compararLegado(): Linha[] {
   const igual = JSON.stringify({ ...agora, geradoEm: '' }) === JSON.stringify({ ...guardado, geradoEm: '' });
   out.push({ passo: '12', nome: 'referências do legado reproduzidas (JSON idêntico)', alvo: 'idêntico', medido: igual ? `idêntico (${guardado.geradoEm})` : 'DIFERENTE', ok: igual });
   const c = guardado.carro;
-  out.push({ passo: '2.11', nome: 'legado: carro a 6 m, Doppler da ignição de 200 Hz', alvo: 'registro (216/183 Hz no TECNICO.md)', medido: `${c.dopplerChegando} / ${c.dopplerIndo} Hz (teoria ${c.teoria.join(' / ')})`, ok: true });
+  out.push({ passo: '2.11', nome: 'legado: carro a 6 m, Doppler da ignição de 200 Hz', alvo: 'teoria ± 2 Hz', medido: `${c.dopplerChegando} / ${c.dopplerIndo} Hz (teoria ${c.teoria.join(' / ')})`,
+    // (a linha tinha `ok` fixo em true; a folga é a resolução da medida de frequência no legado)
+    ok: Math.abs(c.dopplerChegando - c.teoria[0]) <= 2 && Math.abs(c.dopplerIndo - c.teoria[1]) <= 2 });
   const a = guardado.aviao;
   out.push({ passo: '2.11', nome: 'legado: avião a 1500 m, 4 kHz rel. 500 Hz no ponto mais próximo', alvo: '≤ −20 dB', medido: `${a.oitava4kRel500} dB`, ok: a.oitava4kRel500 <= -20 });
   const e = guardado.estrondo;
