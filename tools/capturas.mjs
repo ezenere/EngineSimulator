@@ -2,10 +2,12 @@
 // Fala CDP direto com o Chromium headless, sem dependências (o padrão de tools/*-navegador.mjs).
 //
 //   node tools/capturas.mjs [--saida pasta] [--paginas menu,ronco,…] [--larguras 1440,1100,768,400]
-//                           [--estados regex] [--url http://…/] [--porta N] [--sem-auditoria]
+//                           [--estados regex] [--so-parado] [--url http://…/] [--porta N] [--sem-auditoria]
 //
 // Sem --url, serve o dist/ (rode npm run build antes) em http://127.0.0.1:<porta+1>/data/engine/, como no site.
-// --saida: pasta dos PNG (padrão .claude/capturas/agora/, fora do git). --estados filtra os estados pelo nome.
+// --saida: pasta dos PNG (padrão .claude/capturas/agora/, fora do git). --estados filtra os estados pelo nome (o roteiro
+// roda inteiro, só as capturas são filtradas); --so-parado para depois do primeiro estado de cada página (uns 5 minutos
+// para as 36 combinações: serve para refazer só a auditoria automática).
 //
 // Para cada página × largura o roteiro da página passa pelos estados (parado, motor ligado em lenta, acelerando, painel
 // rolado, um preset de cada família e os estados próprios de cada página) e grava `<página>-<largura>-<estado>.png`:
@@ -30,6 +32,8 @@ const saida = path.resolve(RAIZ, opc('--saida', '.claude/capturas/agora'));
 const larguras = opc('--larguras', '1440,1100,768,400').split(',').map(Number);
 const filtroEstados = opc('--estados') ? new RegExp(opc('--estados')) : null;
 const semAuditoria = args.includes('--sem-auditoria');
+const soParado = args.includes('--so-parado');
+const FIM = '__fim do roteiro__';
 const ALTURAS = { 1440: 900, 1100: 800, 768: 1024, 400: 800 };
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 fs.mkdirSync(saida, { recursive: true });
@@ -195,7 +199,7 @@ function contexto(pagina, largura) {
       await n.rolarPainel(0);
     },
     /** janela + página inteira + painel, com a auditoria */
-    tudo: async (estado) => { await c.foto(estado, { auditar: true }); await c.inteira(estado); await c.painel(estado); },
+    tudo: async (estado) => { await c.foto(estado, { auditar: true }); await c.inteira(estado); await c.painel(estado); if (soParado) throw new Error(FIM); },
     /** um passo que pode falhar sem derrubar o resto do roteiro */
     passo: async (rotulo, f) => { try { await f(); } catch (e) { console.log(`   (pulou ${chave} ${rotulo}: ${String(e.message).slice(0, 140)})`); } },
   };
@@ -402,7 +406,7 @@ for (const pagina of paginas) {
     await cmd('Page.navigate', { url: base + (ARQUIVO[pagina] || `${pagina}.html`) });
     await n.ate(`document.readyState === 'complete' && !!document.querySelector('#raiz > *') && (!document.fonts || document.fonts.status === 'loaded')`, 10000);
     await espera(1200);
-    try { await ROTEIROS[pagina](c); } catch (e) { console.log(`   ERRO no roteiro de ${pagAtual}: ${e.message}`); }
+    try { await ROTEIROS[pagina](c); } catch (e) { if (e.message !== FIM) console.log(`   ERRO no roteiro de ${pagAtual}: ${e.message}`); }
     console.log(`${pagAtual}: ${total - antes} capturas (${((Date.now() - t0) / 1000).toFixed(0)} s)`);
   }
 }

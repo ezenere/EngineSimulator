@@ -236,7 +236,7 @@ kbd { font: 500 var(--t-mini) var(--f-mono); padding: 1px 5px; border: 1px solid
 .group { display: grid; gap: var(--e-3); padding: var(--e-4); border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); min-width: 0; }
 .group h2 { margin: 0; font: 600 var(--t-secao)/1.1 var(--f-display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); text-wrap: balance; }
 /* seção que abre e fecha: o título inteiro é o botão */
-.group h2 .dobra { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: var(--e-2); width: 100%; cursor: pointer; }
+.group h2 .dobra { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: var(--e-2); width: 100%; min-height: 28px; cursor: pointer; }
 .group h2 .dobra::after { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); rotate: -45deg; transition: rotate .15s; margin-right: 4px; }
 .group h2 .dobra[aria-expanded="true"]::after { rotate: 45deg; }
 .group h2 .dobra:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; border-radius: var(--r-p); }
