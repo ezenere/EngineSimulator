@@ -352,7 +352,7 @@ function Admissao({ k, e }: P) {
             <ChipGroup id="sequencial" opcoes={[{ valor: true, rotulo: 'Ligado', titulo: 'Primário pequeno até a troca; o secundário entra com o "soluço" de 0,1–0,2 bar' }, { valor: false, rotulo: 'Desligado' }]} atual={!!t.sequencial} aoEscolher={(v) => k.setTurbo({ sequencial: v })} />
           </Field>
           {t.sequencial && <Slider id="trocaRpm" rotulo="Rotação da troca" min={3000} max={6000} passo={50} valor={t.trocaRpm ?? 4500} formatar={(v) => `${br(v)} rpm`} aoSoltar={(v) => k.setTurbo({ trocaRpm: v })} />}
-          <Slider id="kApito" rotulo="Apito do turbo" min={0} max={1} passo={0.05} valor={s.kApito ?? 0.3} formatar={pct} aoMudar={(v) => k.setSpec({ kApito: v }, { structural: false, render: false })} />
+          <Slider id="kApito" rotulo="Som do turbo (apito e sopro)" min={0} max={1} passo={0.05} valor={s.kApito ?? 0.3} formatar={pct} aoMudar={(v) => k.setSpec({ kApito: v }, { structural: false, render: false })} />
         </>
       )}
       <Field rotulo="Entrada de ar">

@@ -59,7 +59,7 @@ export function escalar(d: any, f: string, g: number) {
     case 'admissao': d.inGain *= g; break;
     case 'mecanica': d.params.mech *= g; break;
     case 'vedacoes': if (d.kVed !== undefined) d.kVed *= g; else zerarBiquad(d.vedF, g); break;
-    case 'chiadoTurbo': zerarBiquad(d.turboHiss, g); break;
+    case 'chiadoTurbo': zerarBiquad(d.turboHiss, g); if (d.thB) d.thB = d.thB.map((v: number) => v * g); break;
     case 'apitoTurbo': if (d.kApito !== undefined) d.kApito *= g; break;
     case 'posBoca': d.kBoca *= g; break;
     case 'posQuente': d.kQuente *= g; break;

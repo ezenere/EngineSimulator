@@ -18,6 +18,24 @@
    "nota": "FC3S turbo com escape de rua, microfone atrás do carro; ignição em 24,8–25,1 Hz (743–754 rpm), conferida pela dobra"
   },
   {
+   "id": "fc-3550",
+   "titulo": "RX-7 FC 13B-T · ~3 550 rpm segurados, carga leve (traseira)",
+   "preset": "rx7fc",
+   "rotores": 2,
+   "real": "rx7-fc3s-13b-turbo-lenta-aceleradas.wav",
+   "trecho": [
+    2,
+    14
+   ],
+   "rpm": 3545,
+   "folga": 0.1,
+   "render": [
+    "--rpm",
+    "3545"
+   ],
+   "nota": "começo do vídeo: uma linha forte em 118 Hz caindo devagar, tomada pela ignição (3 545 rpm); a dobra não distingue (é quase um tom só) e a gravação é baixa (−26 dBFS): rotação menos confiável que a dos outros casos"
+  },
+  {
    "id": "bridge-lenta",
    "titulo": "13B bridgeport turbo · lenta \"brap\" (de fora)",
    "preset": "rx7fc",

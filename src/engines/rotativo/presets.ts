@@ -147,7 +147,7 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     janelas: { admissao: 'periferica', escape: 'periferico' }, velas: 3, idle: 1900, rpmMax: 9000, power: 522, torque: 608, J: 0.3,
     escape: { tipo: 'megafone', Lp: 0.9, Dp: 60, presilencioso: false, cat: false, megafone: { L: 0.5, Dboca: 120 }, saidas: [{ L: 0.5, D: 120, phi: 5 }] },
     muffler: 'straight', pipeD: pol(60), intake: 'sport', engine: 'mid', gears: 5, ratios: [2.8, 1.96, 1.53, 1.24, 1.04], finalDrive: 3.0, mass: 900, wheelR: 0.33, drag: 0.3,
-    overrun: 'burble', cat: false, limiter: 'fuel', limiterBand: 60, limiterHold: 0.05, portadores: carro, vPassagem: 340, dispersao: 1, dispersaoRotor: 3 },
+    overrun: 'burble', cat: false, limiter: 'fuel', limiterBand: 60, limiterHold: 0.05, portadores: carro, vPassagem: 340, dispersao: 1, dispersaoRotor: 1.5 },
   // ---- Europeus (8–10)
   { id: 'ro80', family: 'europeus', name: 'NSU Ro80 KKM 612', tag: '1967–77 · 2 rotores · uma vela · semiautomático',
     tipo: 'wankel', rotores: 2, geo: G.KKM612, cilindradaCamara: 497.5, displacement: 0.995, cr: 9.0,

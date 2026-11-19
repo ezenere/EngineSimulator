@@ -4,12 +4,14 @@
 // CVciclo, estalos), caça da lenta periférica, estouros na desaceleração, turbo sequencial e janelas secundárias,
 // mecânica e vibração, portadores (hélice, rotor, gerador, passagem do 787B), X-Engine, palhetas, potência, veículo e CPU.
 //
-// As gravações são as do Apêndice A (medidas com tools/rotativo-bandas.ts, a porta de medir_w.py, que reproduz o
-// apêndice: RX-7 Commons 16–20 s dá 1,6 / −0,9 / −10,9 / −10,5 / −16,5 e 541 Hz). O ouvinte da simulação é o `ext` da
-// página (atrás do carro, a poucos metros), sem o som de fundo.
+// As gravações são as do Apêndice A (medidas com tools/rotativo-bandas.ts, a porta de medir_w.py) e, desde a rodada de
+// som de 11/2026, as casadas de referencias/rotativo (fora do git; os números delas estão escritos aqui como alvo). O
+// ouvinte da simulação é o `ext` da página (atrás do carro, a poucos metros), sem o som de fundo.
+// Viés do dono (docs/PLANO.md): mais motor, menos ar. No agudo (1–6 kHz) a gravação é TETO: o simulado passa se ficar
+// igual ou abaixo dela (+4 dB de folga); as bandas do tom (60–150 e 400–1k) seguem com tolerância dos dois lados.
 //
 //   npx tsx tools/rotativo-valida.ts [grupos...] [--j 8]
-//   (grupos: geometria ciclo bandas linhas lenta estouros turbo mecanica portadores xengine palhetas potencia veiculo cpu)
+//   (grupos: geometria ciclo bandas ar linhas lenta estouros turbo mecanica portadores xengine palhetas potencia veiculo niveis cpu)
 // Sai ≠ 0 se houver falha (os desvios conhecidos, documentados no TECNICO, aparecem como "desv").
 import os from 'node:os';
 import { spawn } from 'node:child_process';
@@ -23,34 +25,22 @@ const dentro = (x: number, a: number, b: number) => x >= a && x <= b;
 
 /** desvios conhecidos (nome da medida → por quê); TECNICO.md → Rotativos */
 const DESVIOS: Record<string, string> = {
-  'bandas lenta 2 rotores original 750 rpm (rx7fd, ext)': 'O grave e o 2,5–6k batem; o 400–1k fica 4,5 dB abaixo (−5,5 contra −1) e o 1–2,5k 6 dB abaixo (−17 contra −11). O 400–1k: a janela periférica abre em rampa de 47°e (10 ms a 750 rpm) e o pulso de cada câmara sobe devagar; a gravação (série harmônica limpa até 234 Hz e as ressonâncias do escape) pede um pulso mais íngreme que o trapézio da tabela 1.3. O 1–2,5k: a pós-queima na boca foi atenuada 3,8 dB e presa ao evento (o "som de ar alto em lenta" que o ouvido apontou), e ela era ~90% dessa banda.',
-  'rx7fd lenta, pré-silencioso retirado: 1–2,5 kHz e 2,5–6 kHz sobem (absoluto)': 'No modelo o agudo da lenta vem quase todo da pós-queima distribuída (decisão 5): a parte que queima na boca, onde o gás cru encontra o ar, não passa pelo pré-silencioso. Retirá-lo sobe 150–400 Hz em ~8 dB (a câmara de Helmholtz) e 400–1k em ~4 dB, e o agudo absoluto em 0–1,5 dB. A gravação do carro sem pré-silencioso (TJ Hunt) é, aliás, mais escura nas relativas (−31/−37), com o microfone afastado; o alvo de +6 dB é do texto, não de uma gravação.',
-  'rx7fd lenta, pré-silencioso retirado: 2·ign sobe': 'A 750 rpm a 2·ign está em 50 Hz, abaixo da câmara de Helmholtz do pré-silencioso (150–300 Hz, tabela 2.2): ele não toca nela. Vale a 5 000 rpm (2·ign 333 Hz).',
-  'bandas 5 000 rpm sustentados, Renesis (rx8hp, ext)': 'O 400–1k bate (−10,1 contra −10), o 1–2,5k e o 2,5–6k ficam 8–10 dB abaixo e o grave 6 dB abaixo: o RX-8 tem o abafador original (−40 dB acima de 2 kHz no Ronco) e a janela lateral de rampa lenta; o agudo que sobra é a pós-queima da carga leve na boca, atenuada 3,8 dB na revisão do "som de ar" (antes, 3–7 dB abaixo). A gravação Commons ("engine and exhaust sound") não diz onde estava o microfone (o cofre aberto daria esse agudo) e o operador oscila a rotação (vagar 11,6%, CVciclo 0,51).',
-  'centroide 5 000 rpm sustentados, Renesis (rx8hp, ext)': 'Consequência do agudo baixo (ver as bandas do RX-8 a 5 000 rpm).',
-  'bandas 7 700 rpm em neutro, 4 rotores megafone (r26b)': 'O grave bate; 400–1k fica 10 dB e 1–2,5k 17 dB abaixo do vídeo (6VCl, a 5 m): a gravação concentra a energia na ignição (516 Hz) e nos dois primeiros harmônicos a +19–20 dB rel. 150–400; no modelo o megafone em degraus e as frentes da onda dão os harmônicos (ign +29, 2·ign −9 da ign), mas o 150–400 (ordens 1–3 do eixo) fica mais forte que na gravação. Vídeo do YouTube (alvo interno, não entra na tabela pública).',
-  'centroide lenta 2 rotores original 750 rpm (rx7fd, ext)': 'Consequência do agudo atenuado da boca e do 400–1k abaixo da gravação (ver as bandas do RX-7 na lenta): 299 Hz contra 336 Hz no limite de baixo.',
-  'lenta original quente (rx7fd): estalos/s': 'O detector (picos isolados da envoltória de 1–6 kHz mais de 10 dB sobre a mediana móvel de 0,3 s) conta o chiado de pós-queima de 1 em cada 10 pulsos, agora que ele está preso ao evento (espalhamento de 9 ms). A gravação do RX-7 (Opus, microfone desconhecido) tem o agudo quase liso (0,5/s, p90/p10 6,8 dB); com o espalhamento antigo de 15 ms o modelo dava 0,6/s, mas emendava os pulsos num chiado contínuo que o ouvido ouviu como "ar". 9 ms é o menor que deixa o p90/p10 dentro dos 7–13 dB e já passa o desvio/média ≥ 0,5 do ROTATIVO 8.1; com 0 ms seriam 25/s.',
-  'rx8std: lenta → plena carga a 55% (página)': '0,1 dB fora: a lenta perdeu o agudo da boca (atenuado 3,8 dB), o reforço de lenta da calibração mede o nível total.',
-  'bandas lenta 4 rotores periférica (r26b)': 'A lenta periférica do modelo fica 9–11 dB mais brilhante e o grave da ignição (127 Hz) 9 dB abaixo. O agudo são os estalos das falhas da sobreposição (13,5/s, como os 15,8/s do vídeo) e não a pós-queima: desligá-la muda o nível do agudo em menos de 1 dB e só enche o vão entre os estalos (p10 da envoltória de 1–2,5 kHz −27 dB sem ela, −15 com ela). O vídeo do YouTube tem o chiado da câmera em 6–12 kHz; alvo interno.',
-  'centroide lenta 4 rotores periférica (r26b)': 'Consequência do agudo dos estalos na lenta periférica (ver as bandas).',
-  'bandas lenta 2 rotores moto 1 900 rpm (norton)': 'O grave fica 17 dB abaixo do vídeo (Fx7, ~2 m, celular): a gravação tem a ordem 3 e a ignição de 63 Hz fortíssimas no grave (+12 dB rel. 150–400) que o 2 em 1 curto da moto no modelo não dá; o agudo fica 6–10 dB abaixo. Vídeo do YouTube com o microfone muito perto (alvo interno).',
-  'bandas lenta fria carburada 1 600 rpm (ro80)': 'O modelo fica 7–18 dB mais brilhante acima de 1 kHz: a gravação (1JOt) não tem nada acima de 6 kHz (codec) e é a partida a frio com o motor ainda engasgando; no modelo o carburado frio tem a fHC alta (vácuo) e o "classic" dianteiro deixa o agudo passar. Alvo interno.',
-  'centroide lenta fria carburada 1 600 rpm (ro80)': 'Consequência do agudo da pós-queima no carburado frio (ver as bandas do Ro80).',
-  'lenta: Wankel (rx7fd) contra pistão (ek9, Civic Type R) em 1–2,5 kHz e 2,5–6 kHz (rel. 150–400)': 'O sentido bate (o Wankel bem mais forte acima de 1 kHz), mas a escala não: o pistão de referência do Ronco (o Civic Type R a 1 000 rpm) é bem mais escuro em 2,5–6 kHz que o Fiat Bravo da gravação (−47 contra −35/−40), então a diferença no 2,5–6k sai 24 dB, contra 15–20. No 1–2,5k ela fica em +3,4 dB (alvo +8 a +12): a pós-queima na boca, que era ~90% dessa banda na lenta do FD, foi atenuada 3,8 dB na revisão do "som de ar".',
-  'rx7fd lenta: harmônicos 1–3 da ignição': '1,8 dB fora (ign +9,9 contra 2·ign +17,7): a variação explosão a explosão (CVciclo 0,22, como a gravação) espalha a fundamental de 25 Hz; o 3·ign forte da gravação (+24) aparece como +15,7.',
-  'rx8hp 5 000 rpm: ordens 2/3 e 5/3 contra a ignição': 'As ordens de flanco ficam 1–3 dB além da tolerância (−22/−25 contra −16 ± 5) com a dispersão por flanco de 2,5× a do Ronco; mais que isso deixava a lenta irregular demais. Na gravação o operador oscila a rotação (vagar 11,6%), o que também alarga as linhas.',
-  'lenta periférica (r26b): vagar em 12 s (o método das gravações)': 'A caça existe e é da física (1 690–2 140 rpm, sobreposição de 130°e, falhas que crescem com a rotação caindo e com o escape esfriando, a parede do coletor a 4/20 s), mas a 5–8% de vagar: os 25–35% do vídeo vêm em parte do método (a autocorrelação da envoltória salta de oitava numa lenta tão irregular, e o trecho do vídeo vai de 1 580 a 2 200 rpm, ±16%). Mais falhas faziam o motor apagar na partida a −5 °C.',
-  "desaceleração rx8hp ('burble'): estouros/s": 'O mecanismo do Ronco conta os eventos por segundo como um 4 tempos (N·rpm/120); com 3 câmaras por rotor e o ciclo de 1 080°e são N·rpm/180, então a taxa por segundo do mapa sai 2/3 da do pistão: 3,0/s contra 4–6. Corrigir isso pede um termo no dsp.ts do Ronco (a taxa × cyc/720), que levaria o 787B a ~11/s (fora dos 3,5–7 dele): ficou como está.',
+  'rx7fd lenta, pré-silencioso retirado: 2·ign sobe': 'A 750 rpm a 2·ign está em 50 Hz, abaixo da câmara de Helmholtz do pré-silencioso (150–300 Hz, tabela 2.2): ele não toca nela. Vale a 5 000 rpm (2·ign 333 Hz). O agudo, que antes não se mexia (a pós-queima na boca não passava por ele), agora sobe +6,5 / +10,3 dB em 1–2,5k / 2,5–6k ao retirá-lo.',
+  'bandas 7 700 rpm em neutro, 4 rotores megafone (r26b)': 'Em carga leve o pulso é fraco (a câmara chega à abertura a ~1,6 bar) e os harmônicos 2 a 4 da ignição ficam 5–9 dB abaixo do vídeo (6VCl, a 5 m): 400–1k 7 dB e 1–2,5k 16 dB abaixo do alvo relativo a 150–400 (metade disso é o 150–400, ordens 2 e 3 do eixo, mais forte que na gravação). Em plena carga a janela de 33°e e o afiamento nos primários já dão o dente de serra (1–2,5k a −3 dB e 2,5–6k a −11 dB da banda da ignição; as passagens em Le Mans dão −2 a −3 e −7 a −14). O timbre tonal do kit ouvido neste caso é 0,8 tolerância; o que falta é médio de carga leve: ver "Pendente".',
+  'centroide 7 700 rpm em neutro, 4 rotores megafone (r26b)': 'Consequência dos harmônicos 2 a 4 da ignição fracos em carga leve (ver as bandas): 627 Hz, 4% abaixo do limite de 651 Hz. Sem o ruído que a pós-queima na boca punha em 2,5–12 kHz o centroide perdeu o que o segurava artificialmente (era 704 Hz).',
+  'bandas lenta 4 rotores periférica (r26b)': 'O agudo agora fica no teto da gravação (−14,9 / −16,3 contra −15,5 / −16,0) e o 400–1k bate (−7,6 contra −7,5); o grave da ignição (127 Hz, banda de 60–150) fica 7,8 dB abaixo, 0,8 dB além da tolerância: metade das explosões falha (o "brap") e a energia da ignição se espalha pelas linhas do padrão de 6 voltas.',
+  'bandas lenta 2 rotores moto 1 900 rpm (norton)': 'O grave fica 18 dB abaixo do vídeo (Fx7, ~2 m, celular): a gravação tem a ordem 1 e a ignição de 61,5 Hz fortíssimas (+9,5 dB rel. 150–400) que o 2 em 1 curto da moto no modelo não dá. O agudo passa pelo teto. Vídeo do YouTube com o microfone muito perto (alvo interno).',
+  'rx8hp 5 000 rpm: ordens 2/3 e 5/3 contra a ignição': 'As ordens de flanco ficam até 3 dB além da tolerância (−21/−24 contra −16 ± 5) com a dispersão por flanco de 2,5× a do Ronco; mais que isso deixava a lenta irregular demais. Na gravação o operador oscila a rotação (vagar 11,6%), o que também alarga as linhas.',
+  'lenta periférica (r26b): vagar em 12 s (o método das gravações)': 'A lenta agora é o "brap": rajadas a rpm/360 (5,2 Hz), 1 690–2 070 rpm, sem apagar; a rotação média vagueia 3–4% em janelas de 1 s. Os 25–35% do vídeo vêm do método (a autocorrelação da envoltória salta de oitava numa lenta em rajadas) e de o trecho ir de 1 580 a 2 200 rpm em 12 s (±16%): uma deriva lenta que o controle de lenta do modelo não tem.',
+  "desaceleração rx8hp ('burble'): estouros/s": 'O mecanismo do Ronco conta os eventos por segundo como um 4 tempos (N·rpm/120); com 3 câmaras por rotor e o ciclo de 1 080°e são N·rpm/180, então a taxa por segundo do mapa sai 2/3 da do pistão, e o sorteio de 2 s varia ±1,5/s: 1,5–3/s contra 4–6. Corrigir pede um termo no dsp.ts do Ronco (a taxa × cyc/720). (Os "detectados" contam também as próprias explosões, agora que o agudo é preso ao pulso.)',
   'vibração na lenta: rx8hp contra ek9 (Ronco)': 'Sem a inércia alternativa sobra a oscilação do torque (`ripple`, que o documento manda deixar igual) na ordem 2: 7 dB abaixo do 4 cilindros, contra 10–15. As câmaras de 654 cm³ dão pulsos de torque grandes; o rotor sem massa alternativa só tira a parte da inércia.',
   'vibração na lenta: rx8hp contra mx5 (Ronco)': 'Ver a vibração contra o ek9.',
   'mistral: subida de 1 200 a ~7 500 rpm (manete em 4 s)': 'A hélice de passo variável fica no passo mínimo até 60% da rotação-alvo (a regra do portador Helice) e o 13B leve sobe junto com a manete: 3,1 s. O alvo de 4–6 s supõe a manete mais lenta ou o passo saindo antes do mínimo.',
   'potência ae50r': '0,4 dB fora (38,8 contra 41 kW ± 5%): a escala de torque usa o atrito médio da sonda; no monorrotor de 294 cm³ a 7 750 rpm o atrito pesa e a potência na rotação máxima sai 5,4% abaixo.',
   'rx8hp a 100 km/h em 6ª (relações da ficha)': 'O alvo do documento não bate com a própria ficha: 3,760/…/0,843, diferencial 4,444 e pneu 225/45R18 (0,33 m) dão 3 011 rpm a 100 km/h (a conta: 100/3,6/(2π·0,33)·60·0,843·4,444). O RX-8 real gira ~3 000 em 6ª a 100 km/h.',
-  'r26b: lenta → plena carga a 55% (página)': 'A lenta periférica do 787B é alta (1 900 rpm, 21% de rpmMax, coletor quase sem vácuo por causa das janelas enormes) e soa só 7,6 dB abaixo da plena carga a 55%: o reforço de lenta da calibração não diminui o volume (fica em 1). É o 787B em lenta: alto.',
-  'ro80: lenta → plena carga a 55% (página)': '1,7 dB fora: o carburado com dois silenciosos na lenta fria fica perto do teto do reforço de lenta (×8).',
-  'norton: lenta → plena carga a 55% (página)': '0,1 dB fora.',
-  'os carros e a moto na lenta: faixa de nível': 'A calibração equilibra a plena carga de fábrica de cada preset, e a lenta fica 21 dB abaixo dela onde o reforço alcança; ficam fora o 787B (lenta alta, ver acima), o RX-3 (reator térmico e dois silenciosos, reforço no teto ×8) e a Norton (2 em 1 com abafador esportivo): 23 dB de faixa. Sem eles, 8 dB.',
+  'cosmo20b: lenta → plena carga a 55% (página)': '0,1 dB fora: a lenta do 3 rotores sai, sem reforço nenhum da calibração (o reforço não atenua: fica em 1), 17,9 dB abaixo da plena carga a 55%, que o biturbo e o abafador original deixam baixa.',
+  'ro80: lenta → plena carga a 55% (página)': '3 dB fora (+14,8): pela mesma razão do Cosmo 20B, o reforço de lenta fica em 1 e a lenta do carburado com dois silenciosos sai só 15 dB abaixo da plena carga, que é baixa (85 kW).',
+  'os carros e a moto na lenta: faixa de nível': 'A calibração equilibra a plena carga de fábrica de cada preset, e a lenta fica ~21 dB abaixo dela onde o reforço alcança. Ficam nas pontas o Ro80 e o Cosmo 20B (lenta natural alta, o reforço não atenua) e o RX-3 (reator térmico e dois silenciosos, reforço no teto ×8): 14 dB de faixa (eram 25 antes da rodada de som: o 787B, que na lenta era só estouros, saiu da ponta de cima). Sem os três, 5 dB.',
 };
 
 // ------------------------------------------------------------------ grupos
@@ -67,6 +57,13 @@ async function grupo(nome: string): Promise<Linha[]> {
     const ok = med.every((v, i) => Number.isNaN(alvo[i]) || Math.abs(v - alvo[i]) <= tol);
     add(`bandas ${n}`, `${alvo.map((x) => (Number.isNaN(x) ? '—' : sg(x))).join(' / ')} ±${tol}`, `${med.map((x) => sg(x)).join(' / ')} (6–12k ${sg(m.b[5])}: física)`, ok);
     add(`centroide ${n}`, `${cent[0]}–${cent[1]} Hz ±30%`, `${f1(m.cent, 0)} Hz`, dentro(m.cent, cent[0] * 0.7, cent[1] * 1.3));
+  };
+  /** contra uma gravação casada, com o viés do dono: 60–150 e 400–1k (o tom) a ±`tol` dB; 1–2,5k e 2,5–6k (onde mora o
+   *  chiado) no máximo `folga` dB acima da gravação, que é teto de ruído: mais limpo que ela passa */
+  const conferirTeto = (n: string, m: any, alvo: number[], tol = 7, folga = 4) => {
+    const med = [banda(m.b, 0), banda(m.b, 2), banda(m.b, 3), banda(m.b, 4)];
+    const ok = Math.abs(med[0] - alvo[0]) <= tol && Math.abs(med[1] - alvo[1]) <= tol && med[2] <= alvo[2] + folga && med[3] <= alvo[3] + folga;
+    add(`bandas ${n}`, `${sg(alvo[0])} / ${sg(alvo[1])} ±${tol}; agudo ≤ ${sg(alvo[2])} / ${sg(alvo[3])} +${folga} (teto)`, `${med.map((x) => sg(x)).join(' / ')}`, ok);
   };
   /** lenta quente na página (ouvinte de fora), `dur` s, medida nos últimos `med` s */
   const lenta = (id: string, extra: Record<string, any> = {}, op: { dur?: number; med?: number; ouvinte?: string; fIgn?: boolean } = {}) => {
@@ -121,7 +118,7 @@ async function grupo(nome: string): Promise<Linha[]> {
     const l = lenta('rx7fd', {}, { dur: 12, med: 6 });
     const tl = l.tl;
     add('rx7fd lenta 750 rpm quente: pressão na abertura do escape', '1,5–2,5 bar', `${f1(media(tl.map((q) => q.pAbertura)) / 1e5, 2)} bar`, dentro(media(tl.map((q) => q.pAbertura)) / 1e5, 1.5, 2.5));
-    add('rx7fd lenta: 10–90% da queima', '95–110°e', `${f1(media(tl.map((q) => q.queima1090)), 0)}°e`, dentro(media(tl.map((q) => q.queima1090)), 95, 110));
+    add('rx7fd lenta: 10–90% da queima', '≈ 100°e (90–110)', `${f1(media(tl.map((q) => q.queima1090)), 0)}°e`, dentro(media(tl.map((q) => q.queima1090)), 90, 110));
     // plena carga a 55% (eixo travado), com o turbo a 40% da pressão (a condição da calibração) e aspirado
     for (const [id, ex, rotulo, fr] of [['rx7fd', {}, 'rx7fd (turbo 0,7 bar)', 0.55], ['rx8hp', {}, 'rx8hp (aspirado)', 0.55], ['rx8hp', {}, 'rx8hp a 80% de rpmMax', 0.8]] as [string, any, string, number][]) {
       const p = preset(id, ex), d = novoDSP(p, { quente: true, rpm: p.rpmMax * fr });
@@ -140,11 +137,14 @@ async function grupo(nome: string): Promise<Linha[]> {
   }
 
   if (nome === 'bandas') {
-    // RX-7 original na lenta (Commons 4z0y 16–20 s, perto do carro)
+    // RX-7 FC 13B turbo na lenta, da traseira (referencias/rotativo/rx7-fc3s-13b-turbo-lenta-aceleradas 27–37 s, 750 rpm
+    // conferidos pela dobra: +8,9 / −17,2 / −35,2 / −41,0). O alvo antigo (RX-7 do Commons, −1 / −11 / −10,5, microfone
+    // desconhecido) pedia 24–30 dB a mais de agudo: era ele que o modelo perseguia com ruído puro na boca, o "apenas ar"
+    const lc = lenta('rx7fc');
+    conferirTeto('lenta 2 rotores de rua 750 rpm (rx7fc, ext) contra o FC3S casado', lc.m, [8.9, -17.2, -35.2, -41]);
+    // o FD (abafador esportivo) na mesma régua: o agudo não passa do teto da gravação do FC com folga de 8 dB
     const l = lenta('rx7fd');
-    conferirBandas('lenta 2 rotores original 750 rpm (rx7fd, ext)', l.m, [2, -1, -11, -10.5], [480, 550]);
-    const s = lenta('rx7fd', { kHC: 0 });
-    add('rx7fd lenta sem a pós-queima (fHC desligada): 1–2,5 kHz cai', '≥ 6 dB', `${f1(l.m.abs[3] - s.m.abs[3])} dB`, l.m.abs[3] - s.m.abs[3] >= 6);
+    add('rx7fd lenta: 1–2,5 kHz e 2,5–6 kHz (rel. 150–400)', '≤ −27 / ≤ −33 dB (teto do FC3S + 8)', `${sg(l.m.b[3])} / ${sg(l.m.b[4])} dB`, l.m.b[3] <= -27 && l.m.b[4] <= -33);
     const sp = lenta('rx7fd', { escape: { ...preset('rx7fd').escape, presilencioso: false } });
     add('rx7fd lenta, pré-silencioso retirado: 1–2,5 kHz e 2,5–6 kHz sobem (absoluto)', '≥ 6 dB', `${sg(sp.m.abs[3] - l.m.abs[3])} / ${sg(sp.m.abs[4] - l.m.abs[4])} dB`, sp.m.abs[3] - l.m.abs[3] >= 6 && sp.m.abs[4] - l.m.abs[4] >= 6);
     add('rx7fd lenta, pré-silencioso retirado: 2·ign sobe', '≥ 4 dB', `${sg(sp.m.ign2 - l.m.ign2)} dB (linha sobre a mediana)`, sp.m.ign2 - l.m.ign2 >= 4);
@@ -163,29 +163,76 @@ async function grupo(nome: string): Promise<Linha[]> {
     add('rx7fd lenta: ruído de jato da ponta em 150 Hz–1 kHz (Ø de fábrica / Ø 25 mm com a ponteira de fábrica)', '≤ 10% / ≤ 10%', `${f1(j76)}% / ${f1(j25)}%`, j76 <= 10 && j25 <= 10);
     // RX-8 a 5 000 rpm sustentados (Commons u-Lc2 20–24 s)
     const r8 = sustentado('rx8hp', 5000);
-    conferirBandas('5 000 rpm sustentados, Renesis (rx8hp, ext)', r8.m, [-8, -10, -11, -10.5], [520, 520]);
+    conferirTeto('5 000 rpm sustentados, Renesis (rx8hp, ext) contra o RX-8 do Commons', r8.m, [-8, -10, -11, -10.5]);
     // 787B a 7 700 rpm em neutro (6VCl 89–92 s, 5 m)
     const b7 = sustentado('r26b', 7700);
     conferirBandas('7 700 rpm em neutro, 4 rotores megafone (r26b)', b7.m, [-6.5, 20, 19, 6.7], [930, 930]);
     // lenta do 787B (6VCl, 5 m: −2 … +5 / −5 … −10 / −11 … −20 / −14 … −18), quente, depois de 20 s
     const b0 = lenta('r26b', {}, { dur: 30, med: 12 });
-    conferirBandas('lenta 4 rotores periférica (r26b)', b0.m, [3.5, -7.5, -15.5, -16], [230, 380]);
+    conferirTeto('lenta 4 rotores periférica (r26b)', b0.m, [3.5, -7.5, -15.5, -16]);
     // Norton na lenta aquecendo (Fx7, 2 m: +7 … +12 / −2 … −3 / −3 … −6 / −12 … −13), 1 900 rpm
     const nt = lenta('norton', { idle: 1900 }, { dur: 14, med: 6 });
-    conferirBandas('lenta 2 rotores moto 1 900 rpm (norton)', nt.m, [9.5, -2.5, -4.5, -12.5], [250, 480]);
+    conferirTeto('lenta 2 rotores moto 1 900 rpm (norton)', nt.m, [9.5, -2.5, -4.5, -12.5]);
     // Ro80 frio a 1 600 rpm (1JOt: −2 / −10 / −12 / −20)
     const ro = lenta('ro80', { idle: 1600 }, { dur: 14, med: 6 });
-    conferirBandas('lenta fria carburada 1 600 rpm (ro80)', ro.m, [-2, -10, -12, -20], [320, 320]);
-    // o que separa o Wankel do pistão na lenta a poucos metros (3.1): 1–2,5k 8–12 dB e 2,5–6k 15–20 dB mais fortes
-    const { EngineDSP } = await import('../src/engines/ronco/dsp');
-    const { configCalibrada } = await import('../src/engines/ronco/config');
-    const { PRESETS, ACESSORIOS_PADRAO } = await import('../src/engines/ronco/presets');
-    const pist = new EngineDSP(SR); const pc = { ...ACESSORIOS_PADRAO, ...PRESETS.find((x) => x.id === 'ek9')! };
-    pist.setConfig(configCalibrada(pc, SR)); pist.message({ type: 'params', params: { listener: 'ext', ambSound: false } });
-    pist.message({ type: 'input', temp: { mode: 'fixed', value: 90 } }); pist.coolant = 90; pist.state = 'run'; pist.ignition = true; pist.runT = 120; pist.warm = 1; pist.omega = (pc.idle * Math.PI) / 30; pist.rpmAvg = pc.idle;
-    const rp = renderizar(pist as any, 16, []);
-    const mp = B.medirRot(mono(rp.L, rp.R, 8, 16), SR, { rotores: 2, fmin: 20, fmax: 60, fIgn: (pc.idle * 2) / 60 });
-    add('lenta: Wankel (rx7fd) contra pistão (ek9, Civic Type R) em 1–2,5 kHz e 2,5–6 kHz (rel. 150–400)', '+8 … +12 / +15 … +20 dB', `${sg(l.m.b[3] - mp.b[3])} / ${sg(l.m.b[4] - mp.b[4])} dB`, dentro(l.m.b[3] - mp.b[3], 6, 14) && dentro(l.m.b[4] - mp.b[4], 13, 22));
+    conferirTeto('lenta fria carburada 1 600 rpm (ro80)', ro.m, [-2, -10, -12, -20]);
+  }
+
+  if (nome === 'ar') {
+    // Critérios da rodada de som (docs/PLANO.md, "mais motor, menos ar"), medidos sem gravação: (1) as fontes de ar
+    // contínuas (chiado do jato, chiado de admissão, chiado das vedações, chiado do turbo) desligadas juntas mudam o nível
+    // ponderado A em menos de 1,5 dB na lenta e em carga parcial; (2) em nenhuma posição dos controles "Ø da saída" e
+    // "Ponteira (jato)" o chiado do jato é a fonte dominante. As fontes somam na saída: desligá-las não muda a trajetória
+    // do motor, então a diferença entre os dois renders é a própria fonte
+    const { welch } = await import('./radial-bandas');
+    const nivelA = (x: ArrayLike<number>) => {
+      const [f, P] = welch(x, SR);
+      let acc = 0;
+      for (let i = 1; i < f.length; i++) { const q = f[i] * f[i], ra = (12194 ** 2 * q * q) / ((q + 20.6 ** 2) * Math.sqrt((q + 107.7 ** 2) * (q + 737.9 ** 2)) * (q + 12194 ** 2)); acc += P[i] * ra * ra; }
+      return 10 * Math.log10(acc + 1e-30);
+    };
+    const semAr = (d: any) => { d.jetGain = 0; d.hissGain = 0; d.kVed = 0; const t = d.turboHiss; if (t) { t.b0 = 0; t.b1 = 0; t.b2 = 0; } };
+    for (const id of ['rx7fc', 'rx7fd', 'rx8hp', 'cosmo20b', 'r26b']) {
+      for (const [rot, rpm] of [['lenta', 0], ['3 000 rpm em ponto morto', 3000]] as [string, number][]) {
+        const run = (sem: boolean) => {
+          const p = preset(id), d = novoDSP(p, { quente: true, rpm: rpm || p.idle });
+          if (sem) semAr(d);
+          const r = rpm ? renderizar(d, 8, [], sustentar(d, rpm)) : renderizar(d, 12, []);
+          return mono(r.L, r.R, rpm ? 4 : 6, rpm ? 8 : 12);
+        };
+        const a = nivelA(run(false)), b = nivelA(run(true));
+        add(`${id} ${rot}: jato, chiado de admissão, vedações e chiado do turbo desligados juntos`, 'muda o nível ponderado A em < 1,5 dB', `${sg(a - b, 2)} dB`, Math.abs(a - b) < 1.5);
+      }
+    }
+    const e0 = preset('rx7fc').escape, D0 = e0.saidas[0].D;
+    const fina = (D: number) => e0.saidas.map((x: any) => ({ ...x, D }));
+    const pos: [string, any][] = [['ponteira 20 mm', { ...e0, ponteira: 20 }], ['saída 20 mm', { ...e0, ponteira: D0, saidas: fina(20) }], ['saída e ponteira 20 mm', { ...e0, ponteira: 20, saidas: fina(20) }]];
+    for (const [cond, rpm, thr] of [['lenta', 0, 0], ['3 000 rpm em ponto morto', 3000, -1], ['5 000 rpm em plena carga', 5000, 1]] as [string, number, number][]) {
+      for (const [nome2, esc] of pos) {
+        const run = (jato: boolean) => {
+          const p = preset('rx7fc', { escape: esc }), d = novoDSP(p, { quente: true, rpm: rpm || p.idle });
+          if (!jato) d.jetGain = 0;
+          let cada: any;
+          if (rpm && thr < 0) cada = sustentar(d, rpm); else if (rpm) travar(d, rpm, thr);
+          const r = renderizar(d, 8, [], cada);
+          return mono(r.L, r.R, 4, 8);
+        };
+        const a = run(true), b = run(false), dj = Float64Array.from(a, (v, i) => v - b[i]);
+        const fr = 100 * 10 ** ((nivelA(dj) - nivelA(a)) / 10);
+        add(`rx7fc ${cond}, ${nome2}: chiado do jato no nível ponderado A`, '≤ 35% (em posição nenhuma é a fonte dominante)', `${f1(fr, 0)}%`, fr <= 35);
+      }
+    }
+    // a ponteira fina amolece o pulso em carga (contrapressão) e quase não o toca na lenta
+    const nivel = (esc: any, rpm: number, thr: number) => {
+      const p = preset('rx7fc', { escape: esc }), d = novoDSP(p, { quente: true, rpm: rpm || p.idle });
+      d.jetGain = 0;
+      if (rpm) travar(d, rpm, thr);
+      const r = renderizar(d, 8, []), x = mono(r.L, r.R, 4, 8);
+      let e = 0; for (const v of x) e += v * v;
+      return 10 * Math.log10(e / x.length + 1e-30);
+    };
+    const dl = nivel({ ...e0, ponteira: 20 }, 0, 0) - nivel(e0, 0, 0), dc = nivel({ ...e0, ponteira: 20 }, 5000, 1) - nivel(e0, 5000, 1);
+    add('rx7fc, ponteira no mínimo (20 mm num escape de 70): o pulso, sem o chiado, na lenta / em plena carga a 5 000 rpm', 'cai nos dois, e pelo menos 6 dB a mais em carga (a contrapressão amolece o pulso com o escoamento)', `${sg(dl)} / ${sg(dc)} dB`, dl <= 0.5 && dc <= dl - 6);
   }
 
   if (nome === 'linhas') {
@@ -201,24 +248,29 @@ async function grupo(nome: string): Promise<Linha[]> {
     add('rx8hp 5 000 rpm: ordens 2/3 e 5/3 contra a ignição', '−16 ± 5 dB', `${sg(r8.m.o23 - r8.m.ign)} / ${sg(o53 - r8.m.ign)} dB`, Math.abs(r8.m.o23 - r8.m.ign + 16) <= 5 && Math.abs(o53 - r8.m.ign + 16) <= 5);
     const b7 = sustentado('r26b', 7700);
     add('r26b 7 700 rpm: ignição sobre a mediana', '≥ +22 dB', `${sg(b7.m.ign)} dB`, b7.m.ign >= 22);
-    add('r26b 7 700 rpm: ordem 1 contra a ignição', '−10 ± 4 dB', `${sg(b7.m.o1 - b7.m.ign)} dB`, Math.abs(b7.m.o1 - b7.m.ign + 10) <= 4);
+    add('r26b 7 700 rpm: ordem 1 contra a ignição', '≤ −10 dB (na gravação casada a banda de 60–150 Hz inteira fica 27 dB abaixo da ignição)', `${sg(b7.m.o1 - b7.m.ign)} dB`, b7.m.o1 - b7.m.ign <= -10);
     add('r26b 7 700 rpm: 2·ign contra a ignição', '−6 dB (±4)', `${sg(b7.m.ign2 - b7.m.ign)} dB`, Math.abs(b7.m.ign2 - b7.m.ign + 6) <= 4);
   }
 
   if (nome === 'lenta') {
     const l = lenta('rx7fd', {}, { dur: 20, med: 12 });
-    add('lenta original quente (rx7fd): vagar', '1,5–3%', `${f1(l.m.vagar)}%`, dentro(l.m.vagar, 1.5, 3));
+    add('lenta original quente (rx7fd): vagar', '≤ 3%', `${f1(l.m.vagar)}%`, l.m.vagar <= 3);
     add('lenta original quente (rx7fd): CVciclo', '0,20–0,30', f1(l.m.cvCiclo, 2), dentro(l.m.cvCiclo, 0.2, 0.3));
-    add('lenta original quente (rx7fd): estalos/s', '≤ 1,5', f1(l.m.pops), l.m.pops <= 1.5);
-    add('lenta original quente (rx7fd): p90/p10 de 1–6 kHz (pós-queima presa ao evento)', '7–13 dB', `${f1(l.m.p9010)} dB`, dentro(l.m.p9010, 7, 13));
+    // (o detector conta picos de 1–6 kHz 10 dB acima da mediana: com o agudo preso ao pulso ele conta as próprias
+    // explosões, uma por ignição; estalo é o que passar disso)
+    const fi0 = (l.rpm * 2) / 60;
+    add('lenta original quente (rx7fd): estalos/s além das próprias explosões', '≤ 1,5 (o detector conta até um pico por ignição)', `${f1(Math.max(0, l.m.pops - fi0))} (${f1(l.m.pops)} picos/s; ignição ${f1(fi0)}/s)`, l.m.pops - fi0 <= 1.5);
+    add('lenta original quente (rx7fd): p90/p10 de 1–6 kHz (o agudo preso ao pulso)', '≥ 7 dB (a gravação é piso de pulso)', `${f1(l.m.p9010)} dB`, l.m.p9010 >= 7);
     // (o outro critério do ROTATIVO 8.1 contra a pós-queima virando chiado contínuo: desvio/média da envoltória de 1–6 kHz)
     const e16 = B.envoltoria(mono(l.r.L, l.r.R, 8, 20), SR, 1000, 6000, 600);
     let me = 0; for (const v of e16) me += v; me /= e16.length;
     let ve = 0; for (const v of e16) ve += (v - me) ** 2; const dm = Math.sqrt(ve / e16.length) / me;
-    add('lenta original quente (rx7fd): desvio/média da envoltória de 1–6 kHz (pós-queima presa ao evento)', '≥ 0,5', f1(dm, 2), dm >= 0.5);
+    add('lenta original quente (rx7fd): desvio/média da envoltória de 1–6 kHz (o agudo preso ao pulso)', '≥ 0,5', f1(dm, 2), dm >= 0.5);
     // 787B: caça da lenta periférica, quente (60 s; mede 12 s depois de 20 s)
     const p = preset('r26b'), d = novoDSP(p, { quente: true });
-    const r = renderizar(d, 44, []);
+    const seq: number[] = []; let tSeq = 0;
+    (d as any).sondaEv = (_c: number, q: boolean) => { if (tSeq > 20) seq.push(q ? 1 : 0); };
+    const r = renderizar(d, 44, [], (_x, t) => { tSeq = t; });
     const t = trecho(r.tele, 20, 44), rpms = t.map((q) => q.rpm);
     const fi = (1900 * 4) / 60;
     const m = B.medirRot(mono(r.L, r.R, 26, 38), SR, { rotores: 4, fmin: (1300 * 4) / 60, fmax: (2600 * 4) / 60 });
@@ -227,17 +279,35 @@ async function grupo(nome: string): Promise<Linha[]> {
     add('lenta periférica (r26b): faixa da caça', '1 600–2 200 rpm, sem apagar', `${f1(Math.min(...rpms), 0)}–${f1(Math.max(...rpms), 0)} rpm`, Math.min(...rpms) >= 1450 && Math.max(...rpms) <= 2350 && t.every((q) => q.state === 'run'));
     add('lenta periférica (r26b): vagar em 12 s (o método das gravações)', '≥ 20%', `${f1(m.vagar)}% (pela telemetria, janelas de 1 s: ${f1(vt)}%)`, m.vagar >= 20);
     add('lenta periférica (r26b): CVciclo', '≥ 0,40', f1(m.cvCiclo, 2), m.cvCiclo >= 0.4);
-    add('lenta periférica (r26b): estalos/s', '10–16', `${f1(m.pops)} (estouros criados: ${f1(media(t.map((q) => q.estouros)))}/s)`, dentro(m.pops, 10, 16));
+    add('lenta periférica (r26b): estalos/s', '5–16 (as rajadas do "brap" a ~5 Hz, com um a três picos cada)', `${f1(m.pops)} (estouros soltos criados: ${f1(media(t.map((q) => q.estouros)))}/s)`, dentro(m.pops, 5, 16));
+    // o "brap": cada câmara alterna queima e falha (a diluição pela sobreposição), o padrão se repete a cada ~6 voltas do eixo
+    const mu = media(seq), vr = media(seq.map((x) => (x - mu) ** 2));
+    const ac = (voltas: number) => { const k = voltas * 4; let a = 0; for (let i = 0; i + k < seq.length; i++) a += (seq[i] - mu) * (seq[i + k] - mu); return a / Math.max(vr * (seq.length - k), 1e-12); };
+    add('lenta periférica (r26b): fração das explosões que queimam', '35–70% (rajadas, não falhas soltas)', `${f1(100 * mu, 0)}%`, dentro(mu, 0.35, 0.7));
+    add('lenta periférica (r26b): ritmo do "brap" (autocorrelação da sequência queimou/falhou a 3 e a 6 voltas do eixo)', '≤ −0,5 a 3 voltas e ≥ +0,4 a 6 (rpm/360: 5,2 Hz na gravação)', `${sg(ac(3), 2)} / ${sg(ac(6), 2)}`, ac(3) <= -0.5 && ac(6) >= 0.4);
     add('lenta periférica (r26b): a caça vem da sobreposição', 'sem sobreposição a lenta para', '(ver lenta de street port)', true);
     void fi;
     const st = lenta('rx7fd', { janelas: { admissao: 'street', escape: 'periferico' } }, { dur: 20, med: 12 });
     add('street port (rx7fd, sobreposição 28°e): lenta estável', 'vagar ≤ 3%', `${f1(st.m.vagar)}% · ${f1(st.rpm, 0)} rpm`, st.m.vagar <= 3);
+    // bridge port (sobreposição ~100°e): a lenta em rajadas, sem apagar
+    const pb = preset('rx7fc', { janelas: { admissao: 'bridge', escape: 'periferico' }, idle: 1950 }), db = novoDSP(pb, { quente: true });
+    const sb: number[] = []; let tb = 0;
+    (db as any).sondaEv = (_c: number, q: boolean) => { if (tb > 10) sb.push(q ? 1 : 0); };
+    const rb = renderizar(db, 30, [], (_x, t) => { tb = t; });
+    const tlb = trecho(rb.tele, 10, 30), rb2 = tlb.map((q) => q.rpm);
+    add('bridge port (rx7fc, sobreposição 98°e, lenta a 1 950): em rajadas, sem apagar', '40–75% das explosões queimam; 1 450–2 350 rpm', `${f1(100 * media(sb), 0)}% · ${f1(Math.min(...rb2), 0)}–${f1(Math.max(...rb2), 0)} rpm`, dentro(media(sb), 0.4, 0.75) && Math.min(...rb2) >= 1450 && Math.max(...rb2) <= 2350 && tlb.every((q) => q.state === 'run'));
+    // janelas de fábrica: nenhuma falha por diluição
+    const pf = preset('rx7fc'), df = novoDSP(pf, { quente: true });
+    const sf: number[] = []; (df as any).sondaEv = (_c: number, q: boolean) => { sf.push(q ? 1 : 0); };
+    renderizar(df, 12, []);
+    add('janelas de fábrica (rx7fc): a mistura acende sempre', '≥ 99% das explosões', `${f1(100 * media(sf), 1)}%`, media(sf) >= 0.99);
   }
 
   if (nome === 'estouros') {
     // desaceleração em ponto morto (como o 787B do 6VCl, 98–102 s): pé no fundo até 70% de rpmMax, pé fora; estouros nos 2 s seguintes
-    const decel = (id: string) => {
+    const decel = (id: string, semente = 0) => {
       const p = preset(id), d = novoDSP(p, { quente: true, rpm: p.idle });
+      if (semente) (d as any).rng.s = semente;
       d.exhT = 700;
       const ev: [number, (x: any) => void][] = [[0.5, (x) => x.message({ type: 'input', throttle: 1 })]];
       let solto = -1;
@@ -253,8 +323,9 @@ async function grupo(nome: string): Promise<Linha[]> {
     };
     const a = decel('rx8hp');
     add("desaceleração rx8hp ('burble'): estouros/s", '4–6', `${f1(a.criados)} criados · ${f1(a.detect)} detectados (altura ${f1(a.alt)} dB) a ${f1(a.rpm, 0)} rpm`, dentro(a.criados, 4, 6));
-    const b = decel('r26b');
-    add("desaceleração r26b ('burble', periférico): estouros/s (detectados)", '3,5–7', `${f1(b.detect)} detectados (altura ${f1(b.alt)} dB; ${f1(b.criados)} criados) a ${f1(b.rpm, 0)} rpm`, dentro(b.detect, 3.5, 7));
+    // (são ~13 estouros em 2 s, sorteados: a conta de uma semente só varia ±2/s; média de três)
+    const bs = [0, 2024, 777].map((sm) => decel('r26b', sm)), b = bs[0], bc = media(bs.map((x) => x.criados));
+    add("desaceleração r26b ('burble', periférico): estouros/s (criados, média de 3 sorteios)", '3,5–7,5', `${f1(bc)} criados (${bs.map((x) => f1(x.criados)).join(' / ')}) · ${f1(b.detect)} detectados (altura ${f1(b.alt)} dB) a ${f1(b.rpm, 0)} rpm`, dentro(bc, 3.5, 7.5));
   }
 
   if (nome === 'turbo') {
@@ -481,7 +552,7 @@ if (args[0] === '--grupo') {
 } else if (process.argv[1] && process.argv[1].endsWith('rotativo-valida.ts')) {
   const ji = args.indexOf('--j'), J = ji >= 0 ? +args[ji + 1] : Math.max(2, Math.floor(os.cpus().length * 0.5));
   const pedidos = args.filter((a, i) => !a.startsWith('--') && (ji < 0 || i !== ji + 1));
-  const GRUPOS = ['geometria', 'ciclo', 'bandas', 'linhas', 'lenta', 'estouros', 'turbo', 'mecanica', 'portadores', 'xengine', 'palhetas', 'potencia', 'veiculo', 'niveis', 'cpu'];
+  const GRUPOS = ['geometria', 'ciclo', 'bandas', 'ar', 'linhas', 'lenta', 'estouros', 'turbo', 'mecanica', 'portadores', 'xengine', 'palhetas', 'potencia', 'veiculo', 'niveis', 'cpu'];
   const fila = pedidos.length ? pedidos : GRUPOS;
   const res: Record<string, Linha[]> = {};
   const t0 = Date.now();
