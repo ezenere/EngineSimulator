@@ -168,6 +168,7 @@ function Caracteristicas({ k, e }: P) {
         <ChipGroup id="vedacoes" opcoes={[{ valor: 'novas', rotulo: 'Novas' }, { valor: 'gastas', rotulo: 'Gastas', titulo: 'Folga ×3: menos compressão, partida demorada, a lenta fria falha mais' }]}
           atual={s.vedacoes || 'novas'} aoEscolher={(v) => k.setSpec({ vedacoes: v as any }, { structural: false })} />
       </Field>
+      <Slider id="variacao" rotulo="Variação entre explosões" min={0.5} max={5} passo={0.1} valor={s.variacao ?? 3.5} formatar={(v) => `${virgula(v, 1)}×`} aoMudar={(v) => k.setSpec({ variacao: v }, { structural: false, render: false })} />
       <Slider id="kVed" rotulo="Chiado das vedações (fundo mecânico)" min={0} max={2} passo={0.05} valor={s.kVed ?? 0.5} formatar={pct} aoMudar={(v) => k.setSpec({ kVed: v }, { structural: false, render: false })} />
     </Section>
   );

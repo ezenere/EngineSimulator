@@ -62,6 +62,8 @@ export type PresetRotativo = Partial<PresetRonco> & {
   kBoca?: number;
   /** chiado contínuo das vedações (× o de referência; 0,5 se ausente) e apito do turbo (× o do Ronco; 0,3 se ausente) */
   kVed?: number; kApito?: number;
+  /** variação da queima de explosão para explosão (× a do Ronco; 3,5 se ausente: CV 0,22 na lenta dos Mazda) */
+  variacao?: number;
   vedacoes?: 'novas' | 'gastas';
   nivelEscape?: number;
   reducao?: number; helice?: HelicePreset; rotor?: Record<string, any>;
@@ -157,7 +159,7 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     overrun: 'lean', cat: false, limiter: 'fuel', limiterBand: 120, portadores: carro, aproximacao: 'corte de giro (carburado, sem central)' },
   { id: 'norton', family: 'europeus', name: 'Norton F1 / Commander', tag: 'moto 1988–92 · 2 rotores refrigerados pela carga · 95 hp',
     tipo: 'wankel', rotores: 2, geo: G.sachs294, cilindradaCamara: 294, displacement: 0.588, cr: 9.0,
-    janelas: { admissao: 'sachs', escape: 'sachs' }, velas: 1, idle: 1200, rpmMax: 10000, power: 70, torque: 76, J: 0.04, fuel: 'carb',
+    janelas: { admissao: 'sachs', escape: 'sachs' }, velas: 1, idle: 1200, rpmMax: 10000, power: 70, torque: 76, J: 0.04, fuel: 'carb', variacao: 1.5,
     escape: { tipo: '2em1', Lp: 0.5, Dp: 42, presilencioso: false, cat: false, saidas: [{ L: 0.6, D: 50, phi: 120 }] },
     muffler: 'sport', pipeD: pol(50), engine: 'mid', gears: 5, ratios: [2.846, 1.947, 1.545, 1.333, 1.153], finalDrive: 5.0, mass: 272, wheelR: 0.32, drag: 0.3,
     overrun: 'lean', cat: false, limiter: 'fuel', limiterBand: 60, limiterHold: 0.05, portadores: carro },

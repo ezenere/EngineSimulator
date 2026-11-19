@@ -56,7 +56,7 @@
       "admissao": "bridge"
      },
      "idle": 1950,
-     "muffler": "sport",
+     "muffler": "straight",
      "escape": {
       "presilencioso": false,
       "cat": false
@@ -64,7 +64,7 @@
      "cat": false
     }
    ],
-   "nota": "RX-7 com 13B bridgeport e turbo único (não é preset: o FC com a janela Bridge port do painel, sem pré-silencioso nem catalisador, abafador esportivo); rajadas a 5,5 Hz com a linha mais forte em 71,5 Hz = ignição de 66 Hz + 5,5 Hz, o padrão de 6 voltas (rpm/360) a ~1 980 rpm"
+   "nota": "RX-7 com 13B bridgeport e turbo único (não é preset: o FC com a janela Bridge port do painel, sem pré-silencioso nem catalisador, abafador direto); rajadas a 5,5 Hz com a linha mais forte em 71,5 Hz = ignição de 66 Hz + 5,5 Hz, o padrão de 6 voltas (rpm/360) a ~1 980 rpm"
   },
   {
    "id": "fd-carga-cabine",

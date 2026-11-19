@@ -52,12 +52,13 @@ const rampaPeriferica = (abre: number, fecha: number) => (fecha - abre - 360) / 
 /**
  * Escape (tabela 1.3). Periférico: EO 195 (75° antes do PMI), EC 588, rampa pela cinemática (33°e), área 15 cm² =
  * 0,17·boreEq². Lateral (Renesis, 2 janelas por rotor, descobertas pela face lateral do rotor): EO ≈ 220, EC ≈ 537, rampa
- * lenta (≈ 80°e), 2 × 7 cm². Sachs: EO ≈ 200, EC ≈ 580 (20°e de rampa). X-Engine: EO 170 (só 10° antes do PMI: expansão
- * prolongada), EC 380.
+ * lenta (≈ 80°e), 2 × 7 cm². Sachs: EO ≈ 200, EC ≈ 580. X-Engine: EO 170 (só 10° antes do PMI: expansão
+ * prolongada), EC 380. (Os eventos da Sachs são estimativas, "a conferir": a altura da janela não sai deles com
+ * confiança, então a rampa dela fica a da tabela, 46°e, e não a da cinemática.)
  */
 export const ESCAPE: Record<TipoEscape | 'sachs', Janela> = {
   periferico: { abre: 195, fecha: 588, ra: rampaPeriferica(195, 588), rf: rampaPeriferica(195, 588), area: 0.17 },
-  sachs: { abre: 200, fecha: 580, ra: rampaPeriferica(200, 580), rf: rampaPeriferica(200, 580), area: 0.17 },
+  sachs: { abre: 200, fecha: 580, ra: 0.12, rf: 0.15, area: 0.17 },
   lateral: { abre: 220, fecha: 537, ra: 0.25, rf: 0.2, area: 0.158 },
   x: { abre: 170, fecha: 380, ra: 0.2, rf: 0.2, area: 0.12 },
 };
