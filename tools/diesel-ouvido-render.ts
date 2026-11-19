@@ -35,7 +35,8 @@
 //   fundo       ar        fundo mecânico contínuo (engrenagens, bombas, correias) como ruído
 //   apito                 tom da passagem das pás do compressor
 //   batida                a batida da combustão: resposta do bloco ao dp/dθ de cada queima (determinística)
-//   chocalho              a parte da batida que é ruído (folgas, pistão), colada à mesma envoltória
+//   chocalho              a parte da batida que é ruído (a chama turbulenta), colada à mesma subida de pressão
+//   saia                  a saia do pistão batendo na camisa depois do PMS de queima
 //   tiques                injetores e bomba (rajadas coladas a cada injeção)
 //   valvulas              trem de válvulas (rajadas coladas a cada abertura e fechamento)
 //   cliques               cliques de válvula herdados do Ronco
@@ -43,6 +44,7 @@
 //   vib                   vibração do bloco pelo torque (determinística)
 //   variacao    rede      irregularidade da queima: atraso, injetor, mistura e energia de ciclo para ciclo
 //   ambiente              som de fundo da cena (só com --ambiente)
+//   escape                o som que sai da boca do escape (os pulsos e o jato): para ouvir só o resto
 // Grupos: `ar` (as marcadas), `turbo` (sopro, turbina, wastegate, apito), `turboLargo` (sem o apito), `mecanica`
 // (batida, chocalho, tiques, valvulas, cliques, fundo). A saída passa por um tanh suave: a soma é exata só em nível baixo.
 import fs from 'node:fs';
@@ -56,10 +58,10 @@ import { CEN_EXTRA } from './diesel-fontes';
 const SR = 48000, B = 128;
 export const AR = ['jato', 'valvula', 'chiadoAdm', 'sopro', 'turbina', 'wastegate', 'fundo'] as const;
 export const NA_REDE = ['valvula', 'turbina', 'variacao'];
-export const FONTES = [...AR, 'apito', 'batida', 'chocalho', 'tiques', 'valvulas', 'cliques', 'admissao', 'vib', 'variacao'] as const;
+export const FONTES = [...AR, 'apito', 'batida', 'chocalho', 'saia', 'tiques', 'valvulas', 'cliques', 'admissao', 'vib', 'variacao'] as const;
 export const GRUPOS: Record<string, string[]> = {
   ar: [...AR], turbo: ['sopro', 'turbina', 'wastegate', 'apito'], turboLargo: ['sopro', 'turbina', 'wastegate'],
-  mecanica: ['batida', 'chocalho', 'tiques', 'valvulas', 'cliques', 'fundo'],
+  mecanica: ['batida', 'chocalho', 'saia', 'tiques', 'valvulas', 'cliques', 'fundo'],
 };
 const bq = (f: any, g: number) => { if (f) { f.b0 *= g; f.b1 *= g; f.b2 *= g; } };
 
@@ -67,6 +69,7 @@ const bq = (f: any, g: number) => { if (f) { f.b0 *= g; f.b1 *= g; f.b2 *= g; } 
 export function escalar(d: any, f: string, g: number) {
   if (GRUPOS[f]) { for (const x of GRUPOS[f]) escalar(d, x, g); return; }
   switch (f) {
+    case 'escape': d.params.exhaust *= g; break;
     case 'jato': { d.kJatoMed = (d.kJatoMed ?? 1) * g; const fr = d.freio.bind(d); d.freio = (dtc: number) => { fr(dtc); d.jetGain *= d.kJatoMed; }; d.jetGain *= g; break; } // (o freio-motor repõe o ganho a cada passo de controle)
     case 'valvula': d.valveNoise *= g; break;
     case 'chiadoAdm': d.hissGain *= g; break;
@@ -75,14 +78,15 @@ export function escalar(d: any, f: string, g: number) {
     case 'wastegate': bq(d.wgF, g); bq(d.fbF, g); break;
     case 'fundo': d.fundoAmp = d.fundoAmp.map((a: number) => a * g); break;
     case 'apito': d.gApito *= g; break;
-    case 'batida': d.kBatida = (d.kBatida ?? 1) * g; break;
-    case 'chocalho': d.kChocalho = (d.kChocalho ?? 1) * g; break;
-    case 'tiques': d.injAmp = d.injAmp.map((a: number) => a * g); d.pumpAmp *= g; d.oilAmp *= g; d.kRot = (d.kRot ?? 1) * g; break;
-    case 'valvulas': d.vAmp = d.vAmp.map((a: number) => a * g); break;
+    case 'batida': d.kBatida *= g; break;
+    case 'chocalho': d.kChocalho *= g; break;
+    case 'tiques': d.kTiques *= g; d.kRot *= g; break;
+    case 'valvulas': d.kValvulas *= g; break;
+    case 'saia': d.kSaia *= g; break;
     case 'cliques': for (const q of d.clickF) bq(q, g); break;
     case 'admissao': d.inGain *= g; break;
     case 'vib': bq(d.vibLP, g); break;
-    case 'variacao': d.kVar = (d.kVar ?? 1) * g; break;
+    case 'variacao': d.kVar *= g; break;
     case 'ambiente': if (g === 0) d.params.ambSound = false; break;
     default: throw new Error(`fonte desconhecida: ${f} (${[...FONTES, ...Object.keys(GRUPOS), 'ambiente'].join(', ')})`);
   }
@@ -174,7 +178,7 @@ export function render(id: string, op: Op) {
       const k = Math.min(B, n - i);
       for (let j = 0; j < k; j++) { const v = 0.5 * (l[j] + r[j]); m[i + j] = v; if (!Number.isFinite(v)) nan++; else if (Math.abs(v) > pico) pico = Math.abs(v); }
       somaRpm += d.rpmAvg; cont++; rpmMin = Math.min(rpmMin, d.rpmAvg); rpmMax = Math.max(rpmMax, d.rpmAvg);
-      if ((i / B) % 8 === 0) tele.push({ t: +(i / SR).toFixed(4), rpm: +d.rpmAvg.toFixed(1), comb: +d.fuelCmd.toFixed(4), turbo: +(d.turboW || 0).toFixed(4), boost: +(d.boost || 0).toFixed(4), lambda: +(d.lamM || 0).toFixed(2), dpdth: +(d.dpM || 0).toFixed(2), pMax: +((d.pMaxM || 0) / 1e5).toFixed(1), marcha: d.gear });
+      if (cont % 8 === 1) tele.push({ t: +(i / SR).toFixed(4), rpm: +d.rpmAvg.toFixed(1), comb: +d.fuelCmd.toFixed(4), turbo: +(d.turboW || 0).toFixed(4), boost: +(d.boost || 0).toFixed(4), lambda: +(d.lamM || 0).toFixed(2), dpdth: +(d.dpM || 0).toFixed(2), pMax: +((d.pMaxM || 0) / 1e5).toFixed(1), marcha: d.gear });
     }
   }
   const rpm = somaRpm / Math.max(1, cont), voltas = d.tempos / 2;

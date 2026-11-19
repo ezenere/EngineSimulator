@@ -14,14 +14,83 @@ import {
 } from '../../acoustics';
 import { EngineDSP } from '../ronco/dsp';
 import { T_MAN, T_EXREF } from '../ronco/constantes';
-import { LHV, ESTEQ, CETANO_PADRAO, K_ATRASO, R_UNIV, BSFC, INJECAO, NOTCH_POT, K_MEC, K_VALV, K_FUNDO, K_VIB, K_CALOR, K_MISTURA, K_TURBINA, K_SOPRO, K_MOD_TURBO, K_CHOQUE } from './constantes';
+import { LHV, ESTEQ, CETANO_PADRAO, K_ATRASO, R_UNIV, BSFC, INJECAO, NOTCH_POT, K_MEC, K_VALV, K_FUNDO, K_VIB, K_CALOR, K_MISTURA, K_TURBINA, K_SOPRO, K_CHIADO_TURBO, K_MOD_TURBO, K_CHOQUE, EST, EST_COMB, EST_VALV, K_ASPEREZA, ASPEREZA_FIXA, F_ASPEREZA, K_JATO, JATO_V0, JATO_V1, COFRE, EST_SAIA, SAIA, EXP_TIQUE } from './constantes';
 import { DoisPortasDiesel } from './escape';
 
 // Carga e comando vindos de um portador externo (CENA.md 1.2). TODO(integração carriers/): trocar por
 // `import type { Carga } from '../../scene/tipos'` quando a camada de portadores entrar na branch.
 export interface CargaExterna { torque(omega: number): number; inercia: number }
 
+const RUG_FIXA = Math.sqrt(ASPEREZA_FIXA), RUG_SOLTA = Math.sqrt(1 - ASPEREZA_FIXA);
 const enbw = (fs: number, f: number, q: number) => Math.sqrt(Math.min(1, (Math.PI / 2) * (f / q) / (fs / 2)));
+
+// ---- Estrutura do motor: banco de modos (constantes.ts → EST). As tabelas (frequências, fatores de qualidade e os
+// pesos de cada caminho) dependem só do motor e são sorteadas uma vez, com semente fixa: ficam em cache, porque a
+// calibração monta várias sondas do mesmo motor.
+type Estrutura = { M: number; b0: Float64Array; a1: Float64Array; a2: Float64Array; f: Float64Array; Wc: Float64Array; Wi: Float64Array; Wv: Float64Array; Wb: Float64Array; Wp: Float64Array; rug: Float32Array };
+const cacheEst = new Map<string, Estrutura>();
+// peso por frequência: pares [Hz, peso] interpolados em log f
+const perfil = (pts: [number, number][], f: number) => {
+  if (f <= pts[0][0]) return pts[0][1];
+  for (let k = 1; k < pts.length; k++) if (f <= pts[k][0]) return pts[k - 1][1] + (Math.log(f / pts[k - 1][0]) / Math.log(pts[k][0] / pts[k - 1][0])) * (pts[k][1] - pts[k - 1][1]);
+  return pts[pts.length - 1][1];
+};
+// duas faixas [f, peso] de ±0,45 oitava (os dois passa-faixas do tique de cada tipo de injeção, INJECAO)
+const sino = (fx: [number, number][], f: number) => fx.reduce((a, [fc, w]) => a + w * Math.exp(-0.5 * (Math.log2(f / fc) / 0.45) ** 2), 0);
+function estrutura(fs: number, N: number, B: number, injBp: [number, number][], ress: number, desig: number): Estrutura {
+  const ch = [fs, N, B.toFixed(4), injBp.map((x) => x[0]).join('/'), ress, desig].join('|');
+  const pronto = cacheEst.get(ch);
+  if (pronto) return pronto;
+  const M = EST.modos, r = new RNG(0xb10c0 + N * 7919 + Math.round(B * 1e4));
+  const g = () => clamp(r.gauss(), -2.5, 2.5), dB = (x: number) => Math.pow(10, x / 20);
+  const sLo = Math.sqrt(0.1 / B), sHi = Math.pow(0.1 / B, 0.25);
+  const e: Estrutura = { M, b0: new Float64Array(M), a1: new Float64Array(M), a2: new Float64Array(M), f: new Float64Array(M),
+    Wc: new Float64Array((N + 1) * M), Wi: new Float64Array((N + 1) * M), Wv: new Float64Array((N + 1) * M), Wb: new Float64Array((N + 1) * M), Wp: new Float64Array((N + 1) * M), rug: new Float32Array(N * 256) };
+  const gan = new Float64Array(M);
+  for (let i = 0; i < M; i++) {
+    const u = i / (M - 1), f = Math.min(0.42 * fs, EST.fMin * Math.pow(EST.fMax / EST.fMin, u) * (sLo + (sHi - sLo) * u) * (1 + EST.espalha * r.bi()));
+    const q = (EST.qMin + (EST.qMax - EST.qMin) * u) * ress;
+    const bq = new Biquad().bp(fs, f, q);
+    e.f[i] = f; e.b0[i] = bq.b0; e.a1[i] = bq.a1; e.a2[i] = bq.a2;
+    // resposta ao degrau de força: a aceleração de cada modo (o que irradia) não depende da frequência nem do
+    // amortecimento; o passa-faixa de pico unitário responde a um impulso com ω0/Q, então o ganho é Q/f
+    gan[i] = (q * 1000) / f;
+  }
+  // assinatura da aspereza da queima de cada cilindro (a parte que se repete): 256 amostras a partir da ignição
+  for (let i = 0; i < e.rug.length; i++) e.rug[i] = r.bi();
+  // linha N: o corpo da bomba e os acessórios (uma peça só, o mesmo caminho para todos os cilindros)
+  const inj: [number, number][] = [[injBp[0][0], 1], [injBp[1][0], 0.6]];
+  for (let c = 0; c <= N; c++) {
+    const gc = c < N ? dB(EST.caminho * desig * g()) : 1;
+    for (let i = 0; i < M; i++) {
+      const o = c * M + i, f = e.f[i], sn = () => (r.next() < 0.5 ? -1 : 1) * dB(EST.modo * g());
+      e.Wc[o] = gc * sn() * gan[i] * perfil(EST_COMB, f) * EST.ganho;
+      e.Wi[o] = gc * sn() * gan[i] * sino(inj, f);
+      e.Wv[o] = gc * sn() * gan[i] * perfil(EST_VALV, f);
+      e.Wb[o] = sn() * gan[i] * sino([[1300, 1], [2600, 0.4]], f);
+      e.Wp[o] = gc * sn() * gan[i] * perfil(EST_SAIA, f);
+    }
+  }
+  // os impactos são normalizados pelo pico da resposta a um impulso unitário (média quadrática entre os caminhos):
+  // uma pancada de amplitude 1 dá, em média, um pico 1 na saída do banco; a desigualdade entre os caminhos fica
+  const pico = (W: Float64Array) => {
+    let soma = 0;
+    for (let c = 0; c <= N; c++) {
+      const z1 = new Float64Array(M), z2 = new Float64Array(M);
+      let pk = 0;
+      for (let n = 0; n < 0.012 * fs; n++) {
+        let y = 0;
+        for (let i = 0; i < M; i++) { const x = n === 0 ? W[c * M + i] : 0, v = e.b0[i] * x + z1[i]; z1[i] = z2[i] - e.a1[i] * v; z2[i] = -e.b0[i] * x - e.a2[i] * v; y += v; }
+        if (Math.abs(y) > pk) pk = Math.abs(y);
+      }
+      soma += pk * pk;
+    }
+    return Math.sqrt(soma / (N + 1));
+  };
+  for (const W of [e.Wi, e.Wv, e.Wb, e.Wp]) { const k = 1 / Math.max(pico(W), 1e-12); for (let i = 0; i < W.length; i++) W[i] *= k; }
+  cacheEst.set(ch, e);
+  return e;
+}
 
 export class DieselDSP extends EngineDSP {
   // estado próprio do diesel (declarados só para o TypeScript, como no EngineDSP)
@@ -44,7 +113,10 @@ export class DieselDSP extends EngineDSP {
   declare dinamico: any; declare ptBuf: any; declare ptUlt: any; declare ptI: any; declare telN: any; declare classe: any; declare boostAlvo: any; declare partida: any;
   declare gChiado: any; declare lamInst: any; declare subidaTq: any; declare gMec: any; declare g0Rad: any; declare govBancada: any; declare boostD: any; declare aquec: any; declare estadoAnt: any; declare lentaFixa: any; declare vF: any; declare vAmp: any; declare vDec: any; declare vEnv: any; declare fundoF: any; declare fundoAmp: any; declare fundoM: any; declare pumpAmp: any; declare oilAmp: any;
   declare wBuf: any; declare gwI: any; declare wSoma: any; declare wK: any; declare wSomaK: any; declare boostFixo: any; declare queimasBoas: any; declare cicloEv: any; declare lentaBaixa: any; declare kIdi: any; declare kPre: any; declare egtN: any; declare egtD: any; declare egtNs: any; declare egtDs: any; declare soiM: any; declare thInjM: any; declare thMix: any; declare eD: any; declare pInjMax: any; declare injK: any; declare tauK: any; declare injA: any; declare jTurb: any; declare turbNzF: any; declare linTurb: any; declare pTM: any; declare kModT: any; declare zTurb: any; declare uPonta: any; declare whooshF: any; declare turboLenta: any; declare mecLP: any; declare trocaT: any; declare trocaDir: any;
-  declare kBatida: any; declare kChocalho: any; declare kRot: any; declare kVar: any;
+  declare kBatida: any; declare kChocalho: any; declare kRot: any; declare kVar: any; declare kTiques: any; declare kValvulas: any; declare kEv: any; declare kFrio: any;
+  declare eM: any; declare eB0: any; declare eA1: any; declare eA2: any; declare eZ1: any; declare eZ2: any; declare eAcc: any; declare eWc: any; declare eWi: any; declare eWv: any; declare eWb: any; declare eWp: any; declare pInj0: any; declare kSaia: any; declare eRug: any; declare nQ: any; declare rgF: any; declare rgS: any; declare kRug: any; declare apitoLenta: any;
+  declare evN: any; declare evT: any; declare evW: any; declare evO: any; declare evA: any; declare nivInj: any; declare gRess: any; declare gDesig: any; declare gJato: any; declare jatoM: any;
+  declare apF: any; declare apF2: any; declare apFreq: any; declare apNorm: any; declare apAm: any; declare cfB: any; declare cfN: any; declare cfI: any; declare cfG: any; declare cfLP: any; declare cfK: any; declare cfA: any; declare gCofre: any;
 
   constructor(fs: number) {
     super(fs);
@@ -54,7 +126,7 @@ export class DieselDSP extends EngineDSP {
     this.ccAdmissao = this.admitir; this.ccMecanica = this.mecanica; this.ccTurbo = this.turboSom; this.ccDens = this.densidade;
     this.fmepK = 1; this.pmeCarga = 0; this.rpmPartida = 330; this.tParede = 430;
     this.fuelCmd = 0; this.gI = 0.1; this.gX = 0; this.gV = 0; this.sobre = false; this.sonda = false; this.combExterno = null; this.cargaExterna = null;
-    this.knockSrc = 0; this.kEnv = 0; this.kPk = 0; this.refKnock = 0; this.injEnv = 0; this.pumpEnv = 0; this.phPump = 0; this.phRot = 0;
+    this.kPk = 0; this.refKnock = 0; this.phPump = 0; this.phRot = 0;
     this.tw = 0; this.nTurbo = 0; this.phTT = 0; this.tjit = 0; this.mExM = 1e-6; this.pTM = 1e-6; this.kModT = K_MOD_TURBO; this.wgAmt = 0; this.boostR = 0;
     this.freioOn = false; this.freioAtivo = false; this.pBack = 0; this.jakeOn = false; this.nJake = 6;
     this.fuelM = 0; this.lamM = 10; this.etaM = 0.98; this.fumaca = 0; this.fumacaBranca = 0; this.pParcial = 0;
@@ -63,7 +135,8 @@ export class DieselDSP extends EngineDSP {
     this.Pcarga = 0; this.Tcarga = 0; this.Jcarga = 0; this.regCarga = 1; this.dinamico = false; this.telN = 0; this.boostAlvo = 0;
     this.wBuf = new Float64Array(512); this.gwI = 0; this.wSoma = 0; this.wK = 0; this.wSomaK = 0;
     // ganhos de medida (tools/diesel-ouvido-render.ts isola as fontes por eles; 1 = som normal)
-    this.kBatida = 1; this.kChocalho = 1; this.kRot = 1; this.kVar = 1;
+    this.kBatida = 1; this.kChocalho = 1; this.kRot = 1; this.kVar = 1; this.kTiques = 1; this.kValvulas = 1; this.kSaia = 1; this.kEv = 1; this.kFrio = 1;
+    this.evN = 0; this.evT = new Int32Array(64); this.evW = new Uint8Array(64); this.evO = new Int32Array(64); this.evA = new Float64Array(64); this.jatoM = 0; this.apFreq = 0; this.apNorm = 0; this.apAm = 0;
     this.queimasBoas = 0; this.cicloEv = 0; this.egtN = 0; this.egtD = 0; this.egtNs = 0; this.egtDs = 0; this.lentaBaixa = false; this.fuelLenta = 0.1; this.fuelPartida = 0.5;
   }
 
@@ -194,7 +267,9 @@ export class DieselDSP extends EngineDSP {
     // chiado do jato na abertura da válvula de escape (o "rasgado" do Ronco): no diesel a pressão na abertura é maior
     // em lenta (sem borboleta, 2–3 bar contra 1,5 no gasolina), o Mach do jato satura e o chiado contínuo de 1–2,5 kHz
     // ficava 7–10 dB acima das gravações da GE e dos caminhões em lenta; o diesel tem o gás mais frio e mais lento
-    this.valveNoise = 0.02;
+    // (4ª passada: 0,02 → 0,012; nos 2 tempos, 0,004: com 16 cilindros abrindo o escape a cada volta, ainda sob 3–5 bar,
+    // as rajadas se emendam num chiado contínuo que era 55–68% de 400 Hz–2,5 kHz do EMD em notch intermediário)
+    this.valveNoise = this.tempos === 2 ? 0.004 : 0.012;
     this.hasCat = false; this.catNoise = 1; this.overrun = 'cut'; this.twoStep = false; this.twoStepMode = 'off';
     this.blower = !!cfg.soprador; this.soprador = cfg.soprador || null;
     // combustível máximo por ciclo e cilindro (2.2)
@@ -205,6 +280,11 @@ export class DieselDSP extends EngineDSP {
     this.subidaTq = 1; // (a subida de torque da ficha nas bombas mecânicas, mesmo só no batente de plena carga, tirava a lenta
     // do F-1000 da janela de ±8% depois das aceleradas e ainda não levava o aspirado a λ < 1,3: fica desligada, ver TECNICO.md)
     this.gMec = Math.pow(10, (cfg.mecanica || 0) / 20);
+    // estrutura: quanto o bloco ressoa depois de cada pancada (multiplica o fator de qualidade dos modos) e quanto os
+    // cilindros soam diferentes entre si para quem ouve (multiplica a dispersão do caminho de cada um)
+    this.gRess = clamp(cfg.ressonancia ?? 1, 0.3, 3); this.gDesig = clamp(cfg.desigualdade ?? 1, 0, 3);
+    this.gJato = Math.pow(10, (cfg.jato || 0) / 20);
+    this.gCofre = Math.pow(10, (cfg.cofre ?? COFRE.nivel) / 20);
     this.piloto = !!cfg.piloto; this.idi = !!cfg.idi; this.eletronico = !!cfg.eletronico;
     this.cetano = cfg.cetano || CETANO_PADRAO;
     this.limiteFumaca = cfg.limiteFumaca || 1.25;
@@ -215,6 +295,7 @@ export class DieselDSP extends EngineDSP {
     this.qInj = (this.mfMax * 0.006 * this.rpmNom) / 32 / (this.idi ? 0.6 : 1) * 1;
     this.kPre = this.piloto ? 0.45 : this.idi ? 0.6 : 1;
     this.pInjMax = ({ 'common-rail': 200, unitaria: 180, heui: 150, rotativa: 90, 'em-linha': 80, pld: 120 } as any)[this.injTipo] || 150;
+    this.pInj0 = this.pressaoInjecao(0.08, this.idle); // (pressão de injeção da lenta: a referência do nível dos tiques)
     this.advFixo = cfg.avanco;
     this.gov = cfg.governador || 'min-max';
     this.droop = cfg.droop ?? 0.08;
@@ -224,6 +305,7 @@ export class DieselDSP extends EngineDSP {
     // turbo
     this.turboTipo = cfg.turboTipo || (this.turbo ? 'wastegate' : 'nenhum');
     this.turboRpmMax = cfg.turboRpmMax || 0; this.turboPas = cfg.turboPas || 0; this.uPonta = cfg.turboPonta || 480; this.turboLenta = cfg.turboLenta || 0.15;
+    this.apitoLenta = this.turboTipo === 'vgt' && !!cfg.turboLenta;
     this.turboTau = cfg.turboTau || [1, 2]; this.gApito = Math.pow(10, (cfg.turboApito || 0) / 20);
     this.iEng = cfg.turboEngrenagem || 0;
     this.gChiado = Math.pow(10, (cfg.turboChiado || 0) / 20);
@@ -329,35 +411,34 @@ export class DieselDSP extends EngineDSP {
     this.itdD = rads.map((r) => { const p = (r.panR - r.panL) / (r.panR + r.panL + 1e-9), d = Math.round(Math.abs(p) * 0.0006 * fs); return p > 0 ? [d, 0] : [0, d]; });
     this.jetF = rads.map(() => [new Biquad().bp(fs, 450, 0.5), new Biquad().bp(fs, 1400, 0.6)]);
     this.jetEnv = rads.map(() => 0);
-    const td = clamp((cfg.tipD || esc.diametro || 2.5) / 2.5, 0.5, 8); this.tipA = td * td;
+    // a boca de saída é um campo próprio (`ponteira`, em polegadas), como a tipD do Ronco: o diâmetro do tubo muda o tom, a
+    // boca muda o jato. Sem ele vale o diâmetro do tubo
+    const td = clamp((cfg.ponteira || cfg.tipD || esc.diametro || 2.5) / 2.5, 0.5, 8); this.tipA = td * td;
   }
 
   buildFilters(cfg) {
     super.buildFilters(cfg);
     const fs = this.fs;
-    // banco estrutural do knock (2.6): 3 modos do bloco que escalam com o diâmetro, tampa/cárter e a câmara
-    const B = this.bore || 0.1, sb = Math.sqrt(0.1 / B);
-    const fCam = (1.84 * 830) / (Math.PI * B);
-    // (o passa-alta de 1 polo em 300 Hz do DIESEL.md deixava a subida lenta da pressão dominar 400–1000 Hz, +16 dB
-    // sobre a gravação: aqui são dois de 2ª ordem em 700 Hz, que tiram o "empuxo" e deixam o que bate no bloco)
-    this.kHP = [new Biquad().hp(fs, 700 * sb, 0.7), new Biquad().hp(fs, 700 * sb, 0.7)]; // (escala com o banco: 460 Hz no EMD)
-    const banco: [number, number, number][] = [[1200 * sb, 4, 1.0], [1900 * sb, 5, 0.8], [2800 * sb, 6, 0.6], [4200, 6, 0.3], [fCam, 12, 0.2]];
-    this.kBank = banco.map(([f, q]) => new Biquad().bp(fs, f, q));
-    this.kW8 = banco.map(([, , w]) => w);
-    this.kLP = new Biquad().lp(fs, 6000, 0.7);
-    this.mecLP = new Biquad().lp(fs, Math.min(0.45 * fs, 7000 * Math.pow(0.1 / B, 0.8)), 0.7);
-    this.kEnv = 0; this.kPk = 0; this.knockSrc = 0;
-    // tiques de injeção (2.7)
+    // estrutura do motor: banco de modos excitado pela queima e pelos impactos (constantes.ts → EST)
+    const B = this.bore || 0.1;
     const ij = this.inj || INJECAO['common-rail'];
-    this.injF = ij.bp.map(([f, q]) => new Biquad().bp(fs, f, q));
-    this.injAmp = ij.bp.map(([f, q]) => 1 / enbw(fs, f, q));
-    this.injDec = Math.exp(-1 / (ij.tau * 1e-3 * fs));
-    this.injEnv = 0; this.injIn = 0; this.pumpEnv = 0; this.injSobe = 1 - Math.exp(-1 / (0.3e-3 * fs));
-    this.pumpF = new Biquad().bp(fs, 1300, 6); this.pumpAmp = 1 / enbw(fs, 1300, 6);
-    this.oilF = new Biquad().bp(fs, 1500, 1.2); this.oilAmp = 1 / enbw(fs, 1500, 1.2);
-    // trem de válvulas e fundo mecânico
-    this.vF = [new Biquad().bp(fs, 2000, 2), new Biquad().bp(fs, 4500, 2.5)]; this.vAmp = [1 / enbw(fs, 2000, 2), 1 / enbw(fs, 4500, 2.5)];
-    this.vDec = Math.exp(-1 / (0.6e-3 * fs)); this.vEnv = 0;
+    const est = estrutura(fs, this.N, B, ij.bp, this.gRess || 1, this.gDesig ?? 1);
+    this.eM = est.M; this.eB0 = est.b0; this.eA1 = est.a1; this.eA2 = est.a2; this.eWc = est.Wc; this.eWi = est.Wi; this.eWv = est.Wv; this.eWb = est.Wb; this.eWp = est.Wp; this.eRug = est.rug; this.nQ = new Int32Array(this.N); this.rgF = new Float64Array(this.N); this.rgS = new Float64Array(this.N);
+    this.kRug = 1 - Math.exp((-TAU * F_ASPEREZA * (0.1 / B)) / fs);
+    this.eZ1 = new Float64Array(est.M); this.eZ2 = new Float64Array(est.M); this.eAcc = new Float64Array(est.M); this.evN = 0;
+    // parede do bloco: quanto maior o cilindro, mais grossa a parede e mais pesado o bloco; o agudo da mecânica cai
+    // (passa-baixa de 2ª ordem em 7,5 kHz na picape de 92 mm, 5,4 kHz no caminhão de 137 mm, 3,6 kHz na locomotiva)
+    this.mecLP = new Biquad().lp(fs, Math.min(0.45 * fs, 7000 * Math.pow(0.1 / B, 0.8)), 0.7);
+    this.kPk = 0;
+    // reflexões do cofre (constantes.ts → COFRE): 4 linhas de atraso realimentadas por uma matriz de Householder
+    const sz = Math.sqrt(B / 0.1);
+    this.cfN = COFRE.atrasos.map((ms) => Math.max(8, Math.round(ms * 1e-3 * fs * sz)));
+    this.cfB = this.cfN.map((n) => new Float64Array(n)); this.cfI = [0, 0, 0, 0]; this.cfLP = [0, 0, 0, 0];
+    this.cfG = this.cfN.map((n) => Math.pow(10, (-3 * n) / (COFRE.t60 * 1e-3 * sz * fs)));
+    this.cfK = 1 - Math.exp((-TAU * COFRE.corte) / fs); this.cfA = 0;
+    // nível do tique de cada injetor, relativo ao pico da batida de lenta quente (DIESEL.md 2.7)
+    this.nivInj = Math.pow(10, ij.nivel / 20) * 0.35;
+    // fundo mecânico contínuo (o que sobrou dele: ver K_FUNDO)
     this.fundoF = [new Biquad().bp(fs, 1500, 0.7), new Biquad().bp(fs, 3500, 0.9)]; this.fundoAmp = [1 / enbw(fs, 1500, 0.7), 1 / enbw(fs, 3500, 0.9)]; this.fundoM = 0;
     this.wgF = new Biquad().bp(fs, 3000, 1.5);
     // vibração do bloco: o pico de torque do diesel é 2–3× o do gasolina e o `ripple` do Ronco (por N·m da ficha)
@@ -370,6 +451,7 @@ export class DieselDSP extends EngineDSP {
     // ruído de banda larga do compressor (o "whoosh" sob carga): médio-grave, largo; o 4,8 kHz do Ronco era o chiado
     // de um turbo de gasolina soprando contra a borboleta
     this.turboHiss = new Biquad().bp(fs, 1300, 0.55);
+    this.apF = new Biquad().bp(fs, 3000, 30); this.apF2 = new Biquad().bp(fs, 3000, 30); this.apFreq = 0; this.apNorm = 0;
     this.turbNzF = [new Biquad().hp(fs, 350, 0.6), new Biquad().lp(fs, 14000, 0.6)];
     this.whooshF = [new Biquad().hp(fs, 250, 0.6), new Biquad().lp(fs, 1500, 0.6)];
   }
@@ -389,7 +471,7 @@ export class DieselDSP extends EngineDSP {
   // pré-misturada, e com ela o dp/dθ, segue o atraso
   atrasoEvento(c, p, T, rpm, k = 1) {
     // (os pesados, de câmara grande e injeção mais longa, variam menos: CV do knock das gravações 0,15–0,22 contra 0,17–0,29)
-    const s = ((this.classe === 'leve' ? 0.16 : 0.11) + 0.12 * (1 - this.warm)) * this.kVar;
+    const s = ((this.classe === 'leve' ? 0.10 : 0.08) + 0.10 * (1 - this.warm)) * this.kVar;
     return this.atraso(p, T, rpm, k) * (this.tauK ? this.tauK[c] : 1) * Math.exp(clamp(s * this.rng.gauss(), -2.5 * s, 2.5 * s));
   }
 
@@ -398,7 +480,7 @@ export class DieselDSP extends EngineDSP {
     const cyc = this.ciclo, h = cyc / 2;
     // fechamento do injetor (tique)
     const aRel = a < h ? a : a - cyc, apRel = ap < h ? ap : ap - cyc;
-    if (apRel < this.fechaRel[c] && aRel >= this.fechaRel[c]) { this.fechaRel[c] = 1e9; if (this.inj.fecha) this.tique(0.7); }
+    if (apRel < this.fechaRel[c] && aRel >= this.fechaRel[c]) { this.fechaRel[c] = 1e9; if (this.inj.fecha) this.tique(c, 0.7); }
     if (a >= h && a < 0.75 * cyc) {
       if (!this.armed[c]) { this.armed[c] = 1; this.fimDoCiclo(c); this.etapa[c] = this.piloto ? 0 : 1; }
       return;
@@ -418,7 +500,7 @@ export class DieselDSP extends EngineDSP {
         const T = this.tCil(c), tau = this.atrasoEvento(c, this.p[c], T, rpm);
         this.igP[c] = soi - 12 + tau;
         this.Qp[c] = mp * LHV * this.etaC(this.lam[c]) * this.cylQ[c];
-        this.queima[c] = 1; this.tique(1);
+        this.queima[c] = 1; this.tique(c, 1);
       }
       this.etapa[c] = 1;
     }
@@ -440,8 +522,10 @@ export class DieselDSP extends EngineDSP {
       else if (this.eletronico) q = this.qInj * (0.55 + 0.45 * clamp(rpm / this.rpmNom, 0, 1.2));
       else q = this.qInj * 0.8 * clamp(rpm / this.rpmNom, 0.15, 1.2);
       const thInj = Math.max(1.5, (mm / q) * 0.006 * rpm); // (kg ÷ kg/ms = ms; ms × 0,006·rpm = graus)
-      // pré-misturada: o que já está na câmara quando acende (2.4)
-      const phi = clamp(tau / thInj, 0.08, 0.9) * this.kPre;
+      // pré-misturada: o que já está na câmara quando acende (2.4). Quanto do que foi injetado no atraso está de fato
+      // misturado varia de uma injeção para outra (o jato, o redemoinho): a força da batida muda mais que o instante dela
+      const prep = Math.exp(clamp((this.classe === 'leve' ? 0.22 : 0.16) * this.kVar * this.rng.gauss(), -0.6, 0.6));
+      const phi = clamp((tau / thInj) * prep, 0.08, 0.9) * this.kPre;
       let dP = Math.max(5, 5 + 3 * (tau / 3)) * (this.idi ? 1.6 : 1);
       let dD = Math.min(90, 40 + 25 * fuel + 0.006 * rpm);
       // frio (2.8): atraso longo ou ar frio na injeção → queima parcial, tarde, e sai fumaça branca
@@ -464,7 +548,7 @@ export class DieselDSP extends EngineDSP {
       this.queima[c] = 1;
       this.fechaRel[c] = soi + thInj;
       this.queimasBoas = kQ > 0.6 ? this.queimasBoas + 1 : 0;
-      this.tique(1);
+      this.tique(c, 1);
       this.eventoInjecao(c, mm + this.mPil[c], msTau, T, kQ);
     }
   }
@@ -526,24 +610,46 @@ export class DieselDSP extends EngineDSP {
     this.pPk[c] = 0; this.dpPk[c] = 0;
   }
 
-  tique(k) {
-    const ij = this.inj;
-    this.injIn = (this.injIn || 0) + k * (ij.a + (1 - ij.a) * clamp(this.fuelCmd, 0, 1));
-    // bomba em linha / PLD: o êmbolo bate junto, ∝ combustível·√(rpm/rpm_nom)
-    if (this.injTipo === 'em-linha' || this.injTipo === 'pld') this.pumpEnv += k * clamp(this.fuelCmd, 0.1, 1) * Math.sqrt(clamp(this.rpmAvg / this.rpmNom, 0.1, 1.3));
+  // Pancada mecânica na estrutura (agulha do injetor, assento de válvula, êmbolo da bomba): um impulso no banco de
+  // modos, pelo caminho da peça (`tab`: 0 injetor, 1 válvula, 2 bomba, 3 saia do pistão; `linha`: o cilindro, ou N para o corpo da
+  // bomba). O instante e a força variam um pouco de uma vez para outra (EST.jitter, EST.ampJitter): com os impactos
+  // exatamente periódicos, as linhas iam até 6 kHz e o motor zumbia; com 0,06 ms de desvio elas somem acima de ~2,5 kHz,
+  // como nas gravações (HNR +5 dB em 400–1000 Hz, −1 em 1–2,5 kHz, −12 em 2,5–6 kHz no OM617 em lenta)
+  impacto(tab, linha, amp) {
+    const rng = this.rng, sj = EST.jitter * 1e-3 * this.fs;
+    const atraso = Math.max(1, Math.round(sj * (3 + clamp(rng.gauss(), -3, 3))));
+    const a = amp * this.kEv * clamp(1 + EST.ampJitter * rng.gauss(), 0.3, 1.8);
+    const n = this.evN; if (n >= 64) return;
+    this.evT[n] = atraso; this.evW[n] = tab; this.evO[n] = linha * this.eM; this.evA[n] = a; this.evN = n + 1;
+  }
+
+  // tique de injeção no cilindro c (abertura e fechamento da agulha; nos injetores-bomba, o balancim), no nível do tipo
+  // (INJECAO.nivel, relativo ao pico da batida de lenta quente); nas bombas em linha e PLD o êmbolo bate junto
+  tique(c, k) {
+    const ref = this.refKnock || 0.5;
+    // (a força cresce com a pressão de injeção: EXP_TIQUE)
+    const kp = Math.pow(this.pressaoInjecao(this.fuelCmd, this.rpmAvg) / this.pInj0, EXP_TIQUE);
+    this.impacto(0, c, k * kp * ref * this.nivInj * this.kTiques);
+    if (this.injTipo === 'em-linha' || this.injTipo === 'pld') this.impacto(2, this.N, k * kp * ref * 0.6 * this.kTiques);
   }
 
   // cliques do trem de válvulas (×1,5: válvulas maiores), ar por ciclo e massa presa nos 2T (itens 8 e 9)
   valvulas(c, a, ap) {
     const evo = this.evo, evc = this.evc, ivo = this.ivo, ivc = this.ivc, rng = this.rng;
     const cruza = (x) => ap < x && a >= x;
+    // trem de válvulas: nível relativo ao pico da batida de lenta quente; frio, as folgas batem mais. (As pancadas vão
+    // para a estrutura; os cliques de ruído do Ronco, o clickEnv, ficam só para o relé das velas)
+    // (a válvula assenta com a velocidade que o came lhe dá: a pancada cresce com a rotação)
+    const kv = (this.refKnock || 0.5) * K_VALV * (1 + 1.6 * (1 - this.warm)) * clamp(this.rpmAvg / this.idle, 0.5, 4) * this.kValvulas;
     if (this.tempos === 4) {
-      if (cruza(evo) || cruza(evc) || cruza(ivo) || cruza(ivc)) { const k = 0.5 + 0.5 * rng.next(); this.clickEnv += 1.5 * k; this.vEnv += k; }
+      // (o assento é a pancada: a válvula fecha contra a sede; na abertura só a folga do balancim é tomada)
+      const fecha = cruza(evc) || cruza(ivc);
+      if (fecha || cruza(evo) || cruza(ivo)) { const k = 0.5 + 0.5 * rng.next(); this.impacto(1, c, k * (fecha ? 1 : 0.5) * kv); }
       if (cruza(ivo)) this.air[c] = 0;
       // (o pistão escravo do Jake abre a válvula contra 30–50 bar: a pancada no balancim é a metralhadora que se ouve do motor)
-      if (this.jakeOn && this.jakeCil[c] && cruza(712)) { this.vEnv += 16; this.clickEnv += 6; }
+      if (this.jakeOn && this.jakeCil[c] && cruza(712)) this.impacto(1, c, 16 * kv);
     } else {
-      if (cruza(evo) || cruza(evc)) { const k = 0.5 + 0.5 * rng.next(); this.clickEnv += 1.5 * k; this.vEnv += k; }
+      if (cruza(evo) || cruza(evc)) { const k = 0.5 + 0.5 * rng.next(); this.impacto(1, c, k * (cruza(evc) ? 1 : 0.5) * kv); }
       if (cruza(ivo)) this.air[c] = 0;
       if (cruza(ivc)) this.arPreso[c] = this.m[c];
     }
@@ -588,9 +694,27 @@ export class DieselDSP extends EngineDSP {
       if (aRel > ig) {
         const dp = (p - this.pAnt[c]) / 1e5 / Math.max(deg, 1e-6);
         if (dp > this.dpPk[c]) this.dpPk[c] = dp;
-        if (dp > 0) this.knockSrc += dp * this.cylK[c];
       }
-      if ((aRel > this.igM[c] + this.dthP[c] && this.eD[c] >= 0.997 * (1 - this.phiP[c]) * this.Qm[c]) || aRel > 0.45 * cyc) this.queima[c] = 0;
+      // A batida: o que excita a estrutura é a taxa de subida de pressão que a queima produz, (γ−1)·dQ/V por unidade de
+      // tempo (bar/ms). Na lenta e no frio quase todo o combustível queima pré-misturado, de uma vez: um degrau de
+      // pressão em ~1 ms, que toca os modos do médio (o "nhe nhe nhe"). Em carga, e com a injeção piloto, a queima é
+      // de difusão: uma subida longa e mansa, que só empurra os modos graves (o "rom rom rom"). A subida é áspera
+      // (constantes.ts → K_ASPEREZA): uma parte da aspereza é a assinatura do cilindro, igual em todo ciclo, e o resto
+      // é sorteado a cada queima
+      if (dQ > 0) {
+        const k = this.nQ[c]++, kr = this.kRug;
+        // (aspereza passada por um polo: constantes.ts → F_ASPEREZA)
+        this.rgF[c] += kr * ((k < 256 ? RUG_FIXA * this.eRug[c * 256 + k] : 0) - this.rgF[c]);
+        this.rgS[c] += kr * ((k < 256 ? RUG_SOLTA : 1) * this.rng.bi() - this.rgS[c]);
+        const x = (((GAM - 1) * dQ) / (V * this.dt)) * 1e-8 * this.cylK[c] * this.kFrio * (this.kBatida * (1 + K_ASPEREZA * this.rgF[c]) + this.kChocalho * K_ASPEREZA * this.rgS[c]);
+        const W = this.eWc, M = this.eM, o = c * M, acc = this.eAcc;
+        for (let i = 0; i < M; i++) acc[i] += x * W[o + i];
+      }
+      // batida de saia: a força lateral da biela troca de lado no PMS e o pistão atravessa a folga e bate na camisa; a
+      // pancada cresce com a pressão que há no cilindro nesse instante (carga), com a rotação (atravessa a folga mais
+      // depressa) e com a folga (frio)
+      if (aRel >= SAIA.angulo && aRel - deg < SAIA.angulo) this.impacto(3, c, SAIA.nivel * (p / (SAIA.p0 * 1e5)) * Math.sqrt(clamp(this.rpmAvg / this.idle, 0.5, 5)) * (1 + SAIA.frio * (1 - this.warm)) * (this.refKnock || 0.5) * this.kSaia);
+      if ((aRel > this.igM[c] + this.dthP[c] && this.eD[c] >= 0.997 * (1 - this.phiP[c]) * this.Qm[c]) || aRel > 0.45 * cyc) { this.queima[c] = 0; this.nQ[c] = 0; this.rgF[c] = 0; this.rgS[c] = 0; }
     }
     this.pAnt[c] = p;
     return dQ;
@@ -648,94 +772,102 @@ export class DieselDSP extends EngineDSP {
     return 0;
   }
 
-  // mecânica do diesel: knock estrutural, tiques de injeção, trem de válvulas, bombas e o fundo mecânico (item 22).
-  // Tudo é referido ao pico do knock de lenta quente do próprio motor (medido na sonda de calibração, `refKnock`) e
-  // escalado por K_MEC: o nível relativo entre as fontes é o do DIESEL.md 2.7 e o absoluto foi acertado nas bandas
-  // do ouvinte `bay` contra as gravações (Apêndice A)
+  // Mecânica do diesel (item 22): a estrutura do motor (banco de modos) respondendo à queima e aos impactos, mais o
+  // pouco que não passa por ela (anel da bomba rotativa, fundo contínuo). O nível absoluto é K_MEC × `mecanica` do
+  // preset; os impactos são referidos ao pico da batida de lenta quente do próprio motor (`refKnock`, medido na sonda
+  // de calibração só com a queima), como no DIESEL.md 2.7
   mecanica(rf, coldN, pMan) {
-    const rng = this.rng;
-    // knock: dp/dθ do próprio cilindro → passa-alta → banco estrutural → parede (passa-baixa 6 kHz) (2.6)
-    let x = this.knockSrc; this.knockSrc = 0;
-    for (let i = 0; i < this.kHP.length; i++) x = this.kHP[i].run(x);
+    const rng = this.rng, M = this.eM, acc = this.eAcc;
+    // impactos agendados: cada um entra no banco pelo caminho da sua peça
+    let n = this.evN;
+    if (n > 0) {
+      const T = this.evT, Wt = this.evW, O = this.evO, A = this.evA;
+      for (let k = 0; k < n;) {
+        if (--T[k] > 0) { k++; continue; }
+        const tab = Wt[k] === 0 ? this.eWi : Wt[k] === 1 ? this.eWv : Wt[k] === 2 ? this.eWb : this.eWp, o = O[k], a = A[k];
+        for (let i = 0; i < M; i++) acc[i] += a * tab[o + i];
+        n--; T[k] = T[n]; Wt[k] = Wt[n]; O[k] = O[n]; A[k] = A[n];
+      }
+      this.evN = n;
+    }
+    // banco de modos: cada um é um ressonador de 2ª ordem (passa-faixa); a soma é o que o bloco irradia
     let s = 0;
-    for (let i = 0; i < this.kBank.length; i++) s += this.kBank[i].run(x) * this.kW8[i];
-    s = this.kLP.run(s);
-    this.kEnv += (Math.abs(s) - this.kEnv) * 0.01;
-    // 70% determinístico + 30% "chocalho" (ruído modulado pela mesma envoltória); as folgas do frio transmitem mais
-    let y = (this.kBatida * 0.7 * s + this.kChocalho * 0.3 * 1.4 * this.kEnv * rng.bi()) * (1 + 0.5 * coldN); // (0,3 do DIESEL.md dava +4,9 dB a −10 °C; o alvo é +8 ± 3)
-    const ay = Math.abs(y); if (ay > this.kPk) this.kPk = ay; else this.kPk *= 0.99995;
-    const ref = (this.refKnock || 0.5), kr = ref * K_MEC * this.gMec;
-    y *= K_MEC * this.gMec;
-    const ij = this.inj;
-    let m = 0;
-    // tiques de injeção: nível relativo ao pico do knock de lenta quente (2.7)
-    // (o tique sobe em ~0,3 ms, o tempo da agulha abrir e a estrutura responder, e cai com o τ do tipo; um degrau na
-    // envoltória era um estalo de um amostra só, curtose 30 na banda 1–4 kHz contra 6–9 nas gravações)
-    if (this.injIn > 1e-6) { const d = this.injIn * this.injSobe; this.injEnv += d; this.injIn -= d; }
-    if (this.injEnv > 1e-5) {
-      const nz = rng.bi() * this.injEnv;
-      m += (this.injF[0].run(nz) * this.injAmp[0] + 0.6 * this.injF[1].run(nz) * this.injAmp[1]) * kr * Math.pow(10, ij.nivel / 20) * 0.6;
-      this.injEnv *= this.injDec;
+    const b0 = this.eB0, a1 = this.eA1, a2 = this.eA2, z1 = this.eZ1, z2 = this.eZ2;
+    for (let i = 0; i < M; i++) {
+      const x = acc[i] + 1e-25, y = b0[i] * x + z1[i]; // (1e-25: sem números desnormalizados quando o motor para)
+      z1[i] = z2[i] - a1[i] * y; z2[i] = -b0[i] * x - a2[i] * y;
+      s += y; acc[i] = 0;
     }
-    if (this.pumpEnv > 1e-5) { m += this.pumpF.run(rng.bi() * this.pumpEnv) * this.pumpAmp * kr * 0.6; this.pumpEnv *= this.injDec; }
-    // trem de válvulas: cada abertura e fechamento bate (válvulas maiores, folga hidráulica ou mecânica)
-    if (this.vEnv > 1e-5) {
-      const nz = rng.bi() * this.vEnv;
-      m += (this.vF[0].run(nz) * this.vAmp[0] + 0.5 * this.vF[1].run(nz) * this.vAmp[1]) * kr * K_VALV * (1 + 1.6 * coldN);
-      this.vEnv *= this.vDec;
-    }
-    // fundo mecânico: engrenagens da distribuição, bomba, correias e o chocalho contínuo da combustão (entre as
-    // explosões o bloco não fica mudo: é o que dá o p90/p10 de 9–17 dB das gravações em vez de silêncio)
+    if (this.sonda) { const ay = Math.abs(s); if (ay > this.kPk) this.kPk = ay; else this.kPk *= 0.99995; }
+    const kr = (this.refKnock || 0.5) * K_MEC * this.gMec;
+    let m = s * K_MEC * this.gMec;
+    // fundo mecânico contínuo (engrenagens da distribuição, correias): o que sobrou dele (K_FUNDO)
     const fl = clamp(this.fuelCmd, 0, 1);
-    this.fundoM += (1 - this.fundoM) * 0.0002;
     m += (this.fundoF[0].run(rng.bi()) * this.fundoAmp[0] + 0.6 * this.fundoF[1].run(rng.bi()) * this.fundoAmp[1]) * kr * K_FUNDO * (0.5 + 0.8 * rf + 0.4 * fl) * (1 + 0.5 * coldN);
     const dt = this.dt, rpm = this.omega * 9.549296585513721;
-    if (this.injTipo === 'common-rail') {
-      // bomba de alta (CP3/HP4): 3 lóbulos a meia rotação → pulsos fracos a 1,5·rpm/60 Hz, −20 dB
-      this.phPump += 1.5 * rpm / 60 * dt;
-      if (this.phPump >= 1) { this.phPump -= 1; this.pumpEnv += 0.1; }
+    if (this.injTipo === 'common-rail' || this.injTipo === 'heui') {
+      // bomba de alta do common-rail (CP3/HP4): 3 lóbulos a meia rotação → pancadas fracas a 1,5·rpm/60 Hz, −20 dB.
+      // HEUI: a bomba de óleo de alta, de 7 pistões, bate a 7 por volta, mais forte com o combustível (era um chiado
+      // contínuo de 1–2 kHz; uma bomba de pistões pulsa, não chia)
+      const heui = this.injTipo === 'heui';
+      this.phPump += (heui ? 7 : 1.5) * rpm / 60 * dt;
+      if (this.phPump >= 1) { this.phPump -= 1; this.impacto(2, this.N, (heui ? 0.12 * clamp(this.fuelCmd, 0.05, 1) : 0.06) * (this.refKnock || 0.5) * this.kTiques); }
     } else if (this.injTipo === 'rotativa') {
       // anel de roletes da VP37: harmônicos k·N·rpm/120, k = 8–12, −26 dB
       this.phRot += (this.N * rpm / 120) * dt; if (this.phRot > 1e3) this.phRot -= 1e3;
       let w = 0; for (let k = 8; k <= 12; k++) w += Math.sin(TAU * k * this.phRot);
       m += w * 0.2 * kr * 0.05 * (0.3 + 0.7 * rf) * this.kRot;
-    } else if (this.injTipo === 'heui') {
-      // bomba de óleo de alta: chiado 1–2 kHz, −18 dB, ∝ combustível
-      m += this.oilF.run(rng.bi()) * this.oilAmp * kr * 0.125 * clamp(this.fuelCmd, 0.05, 1);
     }
-    // parede do bloco: quanto maior o cilindro, mais grossa a parede e mais pesado o bloco; o agudo da mecânica cai
-    // (passa-baixa de 2ª ordem em 7,5 kHz na picape de 92 mm, 5,4 kHz no caminhão de 137 mm, 3,6 kHz na locomotiva)
-    return this.mecLP.run(y + m);
+    m = this.mecLP.run(m);
+    // reflexões do cofre: o som direto mais o que volta do capô, do chão e da carroceria
+    const B0 = this.cfB, I = this.cfI, LP = this.cfLP, G = this.cfG, kk = this.cfK;
+    const o0 = B0[0][I[0]], o1 = B0[1][I[1]], o2 = B0[2][I[2]], o3 = B0[3][I[3]];
+    const h = 0.5 * (o0 + o1 + o2 + o3), x = m + 1e-25;
+    LP[0] += kk * ((o0 - h) * G[0] - LP[0]); LP[1] += kk * ((o1 - h) * G[1] - LP[1]); LP[2] += kk * ((o2 - h) * G[2] - LP[2]); LP[3] += kk * ((o3 - h) * G[3] - LP[3]);
+    B0[0][I[0]] = x + LP[0]; B0[1][I[1]] = x + LP[1]; B0[2][I[2]] = x + LP[2]; B0[3][I[3]] = x + LP[3];
+    if (++I[0] >= B0[0].length) I[0] = 0; if (++I[1] >= B0[1].length) I[1] = 0; if (++I[2] >= B0[2].length) I[2] = 0; if (++I[3] >= B0[3].length) I[3] = 0;
+    return m + this.gCofre * 0.5 * (o0 - o1 + o2 - o3);
   }
 
-  // apito e chiado do turbo, wastegate e a fresta da borboleta do freio de descarga (item 23, 5)
+  // Som do turbo (item 23, 5). O que se ouve de um turbo é o apito: a passagem das pás principais do compressor, um
+  // tom fino cuja nota segue a rotação do turbo (não a do motor nem o pedal) e cujo nível sobe com a rotação e com a
+  // pressão que ele faz; some na lenta e com pouca carga (Cat C15 na cabine: 36 dB abaixo da banda das ordens com pouca
+  // carga, 20 dB abaixo em carga, varrendo de 7 a 9,4 kHz com a rotação do motor parada). A banda larga (sopro do
+  // compressor, chiado da wastegate, esteira da turbina) existe, mas chega abafada pela caixa do filtro e pelo abafador:
+  // é um tempero. (Até a 3ª passada era o contrário: as pás contadas com as intermediárias punham o apito acima de
+  // 16 kHz, inaudível, e a banda larga era a fonte dominante em carga: "quando o turbo sobe, faz som de mar".)
   turboSom(pMan, pUp, P) {
     let tur = 0;
     const dt = this.dt, rng = this.rng;
     if (this.turbo && this.turboRpmMax) {
       const tn = this.nTurbo / this.turboRpmMax, f = this.turboPas * this.nTurbo / 60;
-      this.tjit += 0.003 * (rng.bi() * 1.7 - this.tjit);
-      this.phTT += TAU * f * (1 + 0.003 * this.tjit) * dt; if (this.phTT > TAU) this.phTT -= TAU;
-      let lvl = tn * tn * (0.2 + 0.8 * clamp(pMan / pUp, 0, 1)) * this.gApito;
+      const carga = clamp(this.boost / Math.max(0.2, this.maxBoost), 0, 1.2);
+      // a nota oscila um pouco (o rotor acelera a cada pulso do escape e a camada limite nas pás não é estável): um tom
+      // parado e puro soa como um apito eletrônico
+      this.tjit += 0.0004 * (rng.bi() * 40 - this.tjit);
+      this.phTT += TAU * f * (1 + 0.004 * this.tjit) * dt; if (this.phTT > TAU) this.phTT -= TAU;
+      let lvl = tn * tn * (0.25 + 0.75 * Math.min(1, carga)) * this.gApito;
+      // (geometria variável que segura o turbo girando na lenta com as palhetas fechadas, `turboLenta` do preset: o gás
+      // entra na turbina por frestas, rápido, e a passagem das pás fica mais forte; é o assobio de lenta do Cummins 6.7)
+      if (this.apitoLenta) lvl *= 1 + 1.5 * (1 - Math.min(1, 2 * carga));
       if (f > 16000) lvl *= (16000 / f) * (16000 / f);
       if (f > 0.45 * this.fs) lvl = 0;
-      const h2 = 2 * f < 0.45 * this.fs ? 0.25 * (2 * f > 16000 ? (16000 / (2 * f)) ** 2 : 1) : 0;
-      tur += (Math.sin(this.phTT) + h2 * Math.sin(2 * this.phTT + 0.7)) * 0.02 * lvl;
+      const h2 = 2 * f < 0.45 * this.fs ? 0.3 * (2 * f > 16000 ? (16000 / (2 * f)) ** 2 : 1) : 0;
+      // (o tom mais uma saia estreita de ruído em volta dele, a turbulência que passa pelas pás: o assobio fica macio)
+      // (a saia cresce com a vazão: na lenta sobra o tom limpo e fraco, sem véu de chiado)
+      const saia = this.apNorm > 0 ? this.apF2.run(this.apF.run(rng.bi())) * this.apNorm * Math.min(1, 2 * carga) : 0;
+      tur += ((Math.sin(this.phTT) + h2 * Math.sin(2 * this.phTT + 0.7)) * (1 + 0.5 * this.tjit) + 0.35 * saia) * 0.08 * lvl;
       // a turbina não recebe um fluxo contínuo: recebe o pulso de cada abertura do escape. O ruído de banda larga dela e o
       // sopro que se ouve de fora seguem a pressão instantânea na entrada da turbina (onda que chega + onda que volta),
-      // relativa à média (~40 ms): forte no pulso, quase nada entre as explosões. (Modulado só ±15%, pela média, era um
-      // chiado liso que subia com o giro e enchia o vão entre as explosões: o "mar" do REVISAO-DE-SOM.md)
+      // relativa à média (~40 ms): forte no pulso, quase nada entre as explosões
       let mx = 0; for (let c = 0; c < this.N; c++) mx += this.mEx[c] > 0 ? this.mEx[c] : 0;
       this.mExM += (mx - this.mExM) * 0.0005;
       const lt = this.linTurb, pt = lt ? Math.max(0, lt.in1 + lt.out1) : mx;
       this.pTM += (pt - this.pTM) * 0.0005;
       const am = clamp(1 + this.kModT * (pt / Math.max(this.pTM, 1e-9) - 1), 0, 4);
-      // whoosh: segue a vazão de ar comprimido (pressão de alimentação) e a rotação do turbo, que tem constante de tempo
-      // de segundos; sem carga (turbo girando à toa, coletor sem pressão) quase some
-      const carga = clamp(this.boost / Math.max(0.2, this.maxBoost), 0, 1.2);
-      tur += this.turboHiss.run(rng.bi()) * 0.02 * tn * tn * (0.08 + carga) * am * P.air * this.gChiado;
-      // banda larga do compressor e do escoamento do ar comprimido sob carga (potência ∝ vazão·U⁵: some em lenta), bem
-      // abaixo do escape: de fora ele chega pela caixa do filtro e pelo cofre
+      // sopro do compressor: segue a vazão de ar comprimido (pressão de alimentação) e a rotação do turbo; chega de fora
+      // pela caixa do filtro (K_SOPRO, K_CHIADO_TURBO)
+      tur += this.turboHiss.run(rng.bi()) * K_CHIADO_TURBO * tn * tn * (0.08 + carga) * am * P.air * this.gChiado;
       const w5 = tn * tn * tn * tn * tn;
       tur += this.whooshF[1].run(this.whooshF[0].run(rng.bi())) * K_SOPRO * w5 * (0.05 + carga) * am * P.air * this.gChiado;
       if (this.wgAmt > 0.01) tur += this.wgF.run(rng.bi()) * 0.002 * this.wgAmt * P.air;
@@ -816,6 +948,7 @@ export class DieselDSP extends EngineDSP {
     // parede do cilindro segue a água (2.3); a temperatura usada pelo laço é esta
     this.tParede = 430 + 0.9 * (this.coolant - 90);
     const cold = 1 - this.warm;
+    this.kFrio = 1 + 0.5 * cold; // (as folgas do frio transmitem mais a batida; 0,3 do DIESEL.md dava +4,9 dB a −10 °C, o alvo é +8 ± 3)
     // aquecimento: em lenta o diesel esquenta devagar (pouco combustível): o termo de carga usa o combustível (2.8)
     if (this.tempMode !== 'fixed' && run) {
       const lg = Math.sqrt(Math.max(0.2, (rpm * clamp(this.pMan / P0, 0.15, 2.5)) / 240));
@@ -1028,7 +1161,7 @@ export class DieselDSP extends EngineDSP {
     // Roots: pressão proporcional ao giro, sem atraso
     this.boostR = this.soprador ? this.soprador.pressao * Math.min(1, rf) * (this.state === 'off' ? 0 : 1) : 0;
     if (!this.turbo) { this.boost = this.sonda ? this.boostFixo : this.boostR; this.turboW = 0; this.tw = 0; this.nTurbo = 0; return; }
-    if (this.sonda) { this.nTurbo = this.tw * this.turboRpmMax; this.turboW = this.tw; this.boost = this.boostFixo; return; }
+    if (this.sonda) { this.nTurbo = this.tw * this.turboRpmMax; this.turboW = this.tw; this.boost = this.boostFixo; this.afinaApito(); return; }
     const fl = this.state === 'run' ? clamp(this.fuelM, 0, 1.2) : 0.02;
     let alvo = clamp(1.05 * Math.sqrt(rf * (0.08 + 0.92 * fl)), 0, 1);
     if (this.turboTipo === 'vgt') alvo = Math.max(alvo, this.state === 'run' ? this.turboLenta : 0);
@@ -1042,6 +1175,7 @@ export class DieselDSP extends EngineDSP {
     let n = this.tw;
     if (this.turboTipo === 'engrenado' && this.iEng) n = Math.max(n, (rpm * this.iEng) / this.turboRpmMax);
     this.turboW = n; this.nTurbo = n * this.turboRpmMax;
+    this.afinaApito();
     const turboMax = Math.max(0, this.maxBoost - (this.soprador ? this.soprador.pressao : 0));
     const ex = this.turboTipo === 'vgt' ? 1.3 : 1.6;
     let b = turboMax * Math.pow(clamp((n - 0.1) / 0.85, 0, 1.2), ex);
@@ -1053,6 +1187,18 @@ export class DieselDSP extends EngineDSP {
     // (estado próprio: o controle do Ronco também mexe em this.boost antes deste passo)
     this.boostD = (this.boostD || 0) + (b + this.boostR - (this.boostD || 0)) * (1 - Math.exp(-dtc / 0.08));
     this.boost = this.boostD;
+  }
+
+  // a saia de ruído do apito acompanha a nota: um passa-faixa estreito recentrado quando a rotação do turbo muda
+  afinaApito() {
+    const f = this.turboPas * this.nTurbo / 60;
+    if (!(f > 200) || f > 0.4 * this.fs) { this.apNorm = 0; return; }
+    if (Math.abs(f - this.apFreq) > 0.004 * f) {
+      // (dois passa-faixas em série: a saia cai 12 dB por oitava para os lados e não vira um véu de chiado em volta do tom)
+      for (const q of [this.apF, this.apF2]) { const z1 = q.z1, z2 = q.z2; q.bp(this.fs, f, 30); q.z1 = z1; q.z2 = z2; }
+      this.apFreq = f;
+      this.apNorm = 2.1 / enbw(this.fs, f, 30); // (ruído uniforme ±1 → valor eficaz ~1 depois dos dois filtros)
+    }
   }
 
   // freio-motor (3.4): ativo com a chave ligada, sem pedal e acima de 1,3× a lenta
@@ -1068,7 +1214,11 @@ export class DieselDSP extends EngineDSP {
     const fecha = t === 'descarga' || t === 'veb' ? 0.88 : t === 'vgt' ? 0.5 : 0;
     const kb = 1 - fecha * clamp(this.pBack / 2.5e5, 0, 1);
     for (let i = 0; i < this.rads.length; i++) this.rads[i].gain = this.g0Rad[i] * kb;
-    this.jetGain = 500 * kb * kb;
+    // jato livre da boca do escape (constantes.ts → K_JATO): o ganho segue a velocidade média do gás na boca
+    let jm = 0; for (let i = 0; i < this.jetEnv.length; i++) if (this.jetEnv[i] > jm) jm = this.jetEnv[i];
+    this.jatoM += (jm - this.jatoM) * (1 - Math.exp(-dtc / 0.03));
+    const v0 = this.jatoM / JATO_V0, v1 = this.jatoM / JATO_V1;
+    this.jetGain = 500 * kb * kb * K_JATO * this.gJato * Math.min(1, v0 * v0) / (1 + v1 * v1);
   }
 
   // ------------------------------------------------------------------ calibração e potência
@@ -1099,11 +1249,15 @@ export class DieselDSP extends EngineDSP {
     const kf = 1 / (Math.max(50, this.Tmax || 300) * 0.25);
     let acc2 = 0, cnt2 = 0, kmax = 0;
     const Tidle = 1.6 + (this.tempos === 2 ? 0.4 : 0);
+    // (a referência é o pico da batida, só da queima: os impactos ficam desligados até ela assentar e entram para a
+    // medida do nível da lenta)
+    ti.kEv = 0;
     for (let i = 0; i < Tidle * fs; i += B) {
       ti.process(L, R, B);
       ti.fuelCmd = clamp(ti.fuelCmd - kf * ti.tqMean * (B / fs), 0.01, 0.6); ti.fuelM = ti.fuelCmd;
-      if (ti.kPk > 0) ti.refKnock = ti.kPk;
-      if (i > (Tidle - 0.5) * fs) { for (let k = 0; k < B; k++) { acc2 += L[k] * L[k] + R[k] * R[k]; cnt2 += 2; } kmax = Math.max(kmax, ti.kPk); }
+      if (i <= (Tidle - 0.6) * fs) { kmax = Math.max(kmax * 0.98, ti.kPk); if (kmax > 0) ti.refKnock = kmax; }
+      else ti.kEv = 1;
+      if (i > (Tidle - 0.5) * fs) for (let k = 0; k < B; k++) { acc2 += L[k] * L[k] + R[k] * R[k]; cnt2 += 2; }
     }
     this.fuelLenta = ti.fuelCmd; this.refKnock = kmax;
     // plena carga a 55% da rotação máxima, turbo a 40% da pressão

@@ -4,7 +4,7 @@
 // docs/TECNICO.md → Diesel) e aparecem como "desvio", sem reprovar.
 //
 //   npx tsx tools/diesel-valida.ts [--j 12] [--so grupo1,grupo2]
-//   grupos: pressoes, bandas, real3, envoltoria, fumaca, jake, potencia, veiculo, cambio, nan, lenta, governador, troca
+//   grupos: pressoes, bandas, real3, envoltoria, ar, fumaca, jake, potencia, veiculo, cambio, nan, lenta, governador, troca
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { renderizar, preset, media, trecho, SR, type Cenario } from './diesel-comum';
 import { analisar, welch, bandaEEnvoltoria, envoltoriaBanda } from './diesel-bandas';
 import { PRESETS } from '../src/engines/diesel/presets';
+import { render as renderTravado } from './diesel-ouvido-render';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 type Linha = { grupo: string; nome: string; alvo: string; medido: string; ok: boolean; desvio?: boolean };
@@ -249,6 +250,57 @@ const GRUPOS: Record<string, () => Linha[]> = {
       for (let i = 0; i < x.length; i++) if (ea.env[i] < lim) { et += ea.y[i] * ea.y[i]; const df = ea.y[i] - yb[i]; ef += df * df; }
       const fr = 10 * Math.log10(ef / (et + 1e-30) + 1e-30);
       L.push({ grupo: 'envoltoria', nome: `envoltória · ${id} lenta: fundo mecânico liso no vão de 1–4 kHz`, alvo: '≤ −3 dB', medido: `${f1(fr)} dB`, ok: fr <= -3 });
+    }
+    return L;
+  },
+
+  // "Mais motor, menos ar" (viés do dono, docs/PLANO.md; 4ª passada do Diesel, TECNICO.md). Com o giro travado e a mesma
+  // semente do gerador de ruído, o motor inteiro e o motor sem uma fonte diferem só pela fonte:
+  //  · as fontes de ar contínuas (jato da boca, chiado da admissão, sopro do compressor, banda larga da turbina,
+  //    wastegate, fundo mecânico) juntas mudam o nível ponderado A em menos de 1,5 dB na lenta e em carga parcial;
+  //  · enquanto o turbo enche (degrau de carga com o giro travado; na locomotiva, da lenta ao notch 8), a banda larga do
+  //    turbo não sobe o total ponderado A em mais de 1 dB em nenhuma janela de 0,25 s;
+  //  · o apito do turbo é um componente estreito: em carga, o pico dele fica 10 dB ou mais acima do fundo em volta.
+  ar: () => {
+    const L: Linha[] = [];
+    const pondA = (x: Float32Array | Float64Array, n = 8192) => {
+      const [f, P] = welch(x, SR, n);
+      let s = 0;
+      for (let k = 1; k < f.length; k++) { const q = f[k] * f[k], ra = (12194 ** 2 * q * q) / ((q + 20.6 ** 2) * Math.sqrt((q + 107.7 ** 2) * (q + 737.9 ** 2)) * (q + 12194 ** 2)); s += P[k] * ra * ra * 1.585; }
+      return 10 * Math.log10(s + 1e-30);
+    };
+    const op = (o: any) => ({ dur: 6, ouvinte: 'ext', ambiente: false, campo: {}, sem: [] as string[], escala: [] as [string, number][], ...o });
+    const CONT = ['jato', 'chiadoAdm', 'sopro', 'turbina', 'wastegate', 'fundo'];
+    // [preset, rotação de carga parcial, combustível]
+    const C: [string, number, number][] = [['hilux28', 2200, 0.35], ['ram67', 1800, 0.35], ['om617', 2500, 0.4], ['catc15', 1400, 0.35], ['scaniav8', 1300, 0.35], ['onibusisl', 1500, 0.35], ['gen500', 1800, 0.4], ['emd710', 680, 0.5]];
+    for (const [id, rpm, comb] of C) {
+      const sp = preset(id);
+      for (const [nome, o] of [['lenta', { rpm: sp.idle }], [`${rpm} rpm com ${Math.round(comb * 100)}% de carga`, { rpm, comb }]] as [string, any][]) {
+        const a = renderTravado(id, op(o)), b = renderTravado(id, op({ ...o, comb: a.info.comb, sem: CONT }));
+        const d = pondA(a.m) - pondA(b.m);
+        L.push({ grupo: 'ar', nome: `ar · ${id} ${nome}: fontes de ar contínuas no nível ponderado A`, alvo: '< 1,5 dB', medido: `${f1(d)} dB`, ok: Math.abs(d) < 1.5 });
+      }
+    }
+    // enchimento do turbo
+    const T: [string, any][] = [['catc15 de fora', { id: 'catc15', rpm: 1400, degrau: [0.12, 1, 2], dur: 8 }], ['catc15 na cabine', { id: 'catc15', rpm: 1400, degrau: [0.12, 1, 2], dur: 8, ouvinte: 'int' }],
+      ['scaniav8', { id: 'scaniav8', rpm: 1300, degrau: [0.12, 1, 2], dur: 8 }], ['hilux28', { id: 'hilux28', rpm: 2400, degrau: [0.08, 1, 2], dur: 7 }], ['ram67', { id: 'ram67', rpm: 2000, degrau: [0.08, 1, 2], dur: 7 }],
+      ['gen500', { id: 'gen500', rpm: 1800, degrau: [0.1, 0.9, 2], dur: 8 }], ['emd710 da lenta ao notch 8', { id: 'emd710', cenario: 'n8', de: 0, ate: 24 }]];
+    for (const [nome, { id, ...o }] of T) {
+      const a = renderTravado(id, op(o)), b = renderTravado(id, op({ ...o, sem: ['turboLargo'] }));
+      const jan = Math.round(0.25 * SR), t0 = Math.round(((o.degrau ? o.degrau[2] : 3)) * SR);
+      let pior = -99;
+      for (let i = t0; i + jan <= a.m.length; i += jan >> 1) pior = Math.max(pior, pondA(a.m.subarray(i, i + jan), 4096) - pondA(b.m.subarray(i, i + jan), 4096));
+      L.push({ grupo: 'ar', nome: `ar · turbo enchendo (${nome}): a banda larga do turbo no total ponderado A`, alvo: '≤ 1 dB', medido: `${f1(pior)} dB`, ok: pior <= 1 });
+      // o apito no fim do transitório: pico entre 1,5 e 16 kHz sobre a mediana em volta
+      const fim = a.m.subarray(a.m.length - Math.round(1.5 * SR));
+      const [f, P] = welch(fim, SR, 8192), Ld = Array.from(P, (q) => 10 * Math.log10(q + 1e-30));
+      let best = -99, fb = 0;
+      for (let k = 0; k < f.length; k++) {
+        if (f[k] < 1500 || f[k] > 16000) continue;
+        const w: number[] = []; for (let j = k - 40; j <= k + 40; j++) if (j >= 0 && j < Ld.length) w.push(Ld[j]);
+        w.sort((x, y) => x - y); const pr = Ld[k] - w[w.length >> 1]; if (pr > best) { best = pr; fb = f[k]; }
+      }
+      L.push({ grupo: 'ar', nome: `ar · turbo cheio (${nome}): o apito é um tom fino`, alvo: '≥ 10 dB sobre o fundo em volta', medido: `+${best.toFixed(0)} dB em ${(fb / 1000).toFixed(1)} kHz`, ok: best >= 10 });
     }
     return L;
   },

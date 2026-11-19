@@ -45,7 +45,7 @@ import orcamento as orc  # noqa: E402
 AR = ['jato', 'valvula', 'chiadoAdm', 'sopro', 'turbina', 'wastegate', 'fundo']
 AR_CONTINUO = ['jato', 'chiadoAdm', 'sopro', 'turbina', 'wastegate', 'fundo']   # (o jato da válvula é rajada colada à abertura)
 NA_REDE = ['valvula', 'turbina', 'variacao', 'ar', 'arContinuo', 'turbo', 'turboLargo']
-FONTES = AR + ['apito', 'batida', 'chocalho', 'tiques', 'valvulas', 'cliques', 'admissao', 'vib', 'variacao']
+FONTES = AR + ['apito', 'batida', 'chocalho', 'saia', 'tiques', 'valvulas', 'cliques', 'admissao', 'vib', 'variacao']
 TURBO = ['sopro', 'turbina', 'wastegate', 'apito']
 ESTOCASTICAS = AR + ['chocalho', 'tiques', 'valvulas', 'cliques']
 
@@ -127,6 +127,9 @@ def transitorio(c, pasta, base, campo, pool, painel=True):
     med = ndimage.median_filter(Ld, size=81, mode='nearest')
     m = (f >= 1500) & (f <= 16000)
     j = int(np.argmax(np.where(m, Ld - med, -99)))
+    # nível do tom relativo à banda das ordens (150–400 Hz), como no índice do acervo: potência em ±2% do pico ÷ potência da banda
+    viz = (f >= 0.98 * f[j]) & (f <= 1.02 * f[j])
+    tom_rel = float(nu.db10(P[viz].sum() / max(P[(f >= 150) & (f < 400)].sum(), 1e-30)))
     r = {'id': c['id'], 'preset': c['preset'], 'titulo': c.get('titulo', c['id']), 't0': t0,
          'turbo_ini': float(np.interp(t0, tt, tw)), 'turbo_fim': float(tw[-1]), 'boost_fim_bar': float(bo[-1]), 'rpm_ini': float(rp[0]), 'rpm_fim': float(rp[-1]),
          'dA_turboLargo_max': float(dA_largo[dep].max()), 'dA_turboLargo_fim': float(np.mean(dA_largo[fim])),
@@ -134,7 +137,7 @@ def transitorio(c, pasta, base, campo, pool, painel=True):
          'd1k_turboLargo_max': float(dH_largo[dep].max()), 'd1k_turboLargo_fim': float(np.mean(dH_largo[fim])),
          'dA_ar_max': float(dA_ar[dep].max()), 'dA_ar_fim': float(np.mean(dA_ar[fim])),
          'sobe_A_com': sobe('tudo', 1), 'sobe_A_sem_turbo': sobe('sem-turbo', 1), 'sobe_1k_com': sobe('tudo', 2), 'sobe_1k_sem_turboLargo': sobe('sem-turboLargo', 2),
-         'apito_hz': float(f[j]), 'apito_proeminencia_db': float((Ld - med)[j])}
+         'apito_hz': float(f[j]), 'apito_proeminencia_db': float((Ld - med)[j]), 'apito_rel_150_400_db': tom_rel}
     with open(os.path.join(pasta, 'transitorio.json'), 'w') as fh:
         json.dump(r, fh, ensure_ascii=False, indent=1)
     if painel:
@@ -166,7 +169,7 @@ def transitorio(c, pasta, base, campo, pool, painel=True):
         for a in ax[:3]:
             a.axvline(t0, color=cinza, lw=0.8); a.grid(color='#dddcd6', lw=0.5); a.set_xlim(0, t[-1] + 0.125); a.set_facecolor(fundo)
         fig.suptitle(f"{r['titulo']}\nturbo {r['turbo_ini']:.2f} → {r['turbo_fim']:.2f} · a banda larga do turbo sobe o total ponderado A em até {r['dA_turboLargo_max']:.1f} dB "
-                     f"(no fim {r['dA_turboLargo_fim']:.1f}) e o que há acima de 1 kHz em até {r['d1k_turboLargo_max']:.1f} dB · apito {r['apito_hz']:.0f} Hz, {r['apito_proeminencia_db']:.0f} dB sobre o piso",
+                     f"(no fim {r['dA_turboLargo_fim']:.1f}) e o que há acima de 1 kHz em até {r['d1k_turboLargo_max']:.1f} dB · apito {r['apito_hz']:.0f} Hz, {r['apito_proeminencia_db']:.0f} dB sobre o piso, {r['apito_rel_150_400_db']:.0f} dB re 150–400 Hz",
                      fontsize=10, color=tinta, x=0.02, ha='left')
         fig.tight_layout(rect=(0, 0, 1, 0.96))
         fig.savefig(os.path.join(pasta, 'transitorio.png'), dpi=90, facecolor=fundo)
@@ -179,7 +182,10 @@ def caso(c, saida, refs, op, pool):
     os.makedirs(pasta, exist_ok=True)
     base = args_base(c, op['campo'])
     if c.get('degrau') or c.get('cenario'):
-        return {'id': c['id'], 'tipo': 'transitorio', 'transitorio': transitorio(c, pasta, base, op['campo'], pool, not op['sem_painel'])}
+        out = {'id': c['id'], 'tipo': 'transitorio', 'transitorio': transitorio(c, pasta, base, op['campo'], pool, not op['sem_painel'])}
+        with open(os.path.join(pasta, 'caso.json'), 'w') as fh:
+            json.dump(nu.limpar(out), fh, ensure_ascii=False, indent=1)
+        return out
     pref = c['id']
     arq = lambda s: os.path.join(pasta, f'{pref}_{s}.wav')
     extra = ['--comb', c['comb']] if c.get('comb') is not None else []
@@ -304,7 +310,7 @@ def tabela(res, rotulo):
               '| caso | turbo (fração) | a banda larga do turbo sobe o total A (máx. / fim) | sobe o que há acima de 1 kHz (máx. / fim) | o turbo todo (com o apito) sobe o total A | degrau acima de 1 kHz com / sem a banda larga | apito |', '|---|---|---|---|---|---|---|']
         for t in tr:
             L.append(f"| {t['titulo']} | {f(t['turbo_ini'], 2)} → {f(t['turbo_fim'], 2)} | {f(t['dA_turboLargo_max'], 2)} / {f(t['dA_turboLargo_fim'], 2)} dB | {f(t['d1k_turboLargo_max'], 1)} / {f(t['d1k_turboLargo_fim'], 1)} dB | "
-                     f"{f(t['dA_turbo_max'], 2)} / {f(t['dA_turbo_fim'], 2)} dB | {f(t['sobe_1k_com'], 1, True)} / {f(t['sobe_1k_sem_turboLargo'], 1, True)} dB | {t['apito_hz']:.0f} Hz, {f(t['apito_proeminencia_db'], 0)} dB sobre o piso |")
+                     f"{f(t['dA_turbo_max'], 2)} / {f(t['dA_turbo_fim'], 2)} dB | {f(t['sobe_1k_com'], 1, True)} / {f(t['sobe_1k_sem_turboLargo'], 1, True)} dB | {t['apito_hz']:.0f} Hz, {f(t['apito_proeminencia_db'], 0)} dB sobre o piso, {f(t.get('apito_rel_150_400_db'), 0)} dB re 150–400 Hz |")
     return '\n'.join(L) + '\n'
 
 
@@ -322,9 +328,10 @@ def main():
     os.makedirs(saida, exist_ok=True)
     with open(a.casos) as fh:
         casos = json.load(fh)['casos']
+    todos = casos
     if a.so:
         so = a.so.split(',')
-        casos = [c for c in casos if c['id'] in so or c['preset'] in so]
+        casos = [c for c in casos if c['id'] in so or c['preset'] in so or any(c['id'].endswith('-' + x) for x in so)]
     op = {'sem_orcamento': a.sem_orcamento, 'sem_painel': a.sem_painel, 'rotulo': a.rotulo, 'campo': json.loads(a.campo) if a.campo else None}
     res = []
     with ThreadPoolExecutor(a.j) as pool, ThreadPoolExecutor(max(1, min(len(casos), 12))) as externo:
@@ -338,11 +345,23 @@ def main():
                     print(f"{c['id']:24s} total {d['total']:.2f} · ar {e['ar']:.2f} · tom a menos {e['tom']:.2f} · pulso a menos {e['pulso']:.2f}", flush=True)
                 elif r['tipo'] == 'transitorio':
                     t = r['transitorio']
-                    print(f"{c['id']:24s} turbo largo sobe o total A em até {t['dA_turboLargo_max']:.2f} dB (fim {t['dA_turboLargo_fim']:.2f}); acima de 1 kHz {t['d1k_turboLargo_max']:.1f} dB", flush=True)
+                    print(f"{c['id']:24s} turbo largo sobe o total A em até {t['dA_turboLargo_max']:.2f} dB (fim {t['dA_turboLargo_fim']:.2f}); acima de 1 kHz {t['d1k_turboLargo_max']:.1f} dB; apito {t['apito_hz']:.0f} Hz, {t['apito_proeminencia_db']:.0f} dB sobre o piso, {t['apito_rel_150_400_db']:.0f} dB re 150–400", flush=True)
                 else:
                     print(f"{c['id']:24s} ok", flush=True)
             except Exception as ex:  # (um caso que falha não derruba os outros)
                 print(f"{c['id']:24s} FALHOU: {ex}", flush=True)
+    # os casos que não rodaram agora entram na tabela com o resultado que já está na pasta
+    feitos = {r['id']: r for r in res}
+    res = []
+    for c in todos:
+        if c['id'] in feitos:
+            res.append(feitos[c['id']])
+        else:
+            try:
+                with open(os.path.join(saida, c['id'], 'caso.json')) as fh:
+                    res.append(json.load(fh))
+            except (OSError, ValueError):
+                pass
     with open(os.path.join(saida, 'resumo.json'), 'w') as fh:
         json.dump(nu.limpar(res), fh, ensure_ascii=False, indent=1)
     md = tabela(res, a.rotulo)
