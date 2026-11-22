@@ -19,6 +19,7 @@ qualquer veículo, antigo ou novo.
 - [Caso: Rotativos: motor, não ar](#caso-rotativos-motor-não-ar)
 - [Caso: os pipocos do radial](#caso-os-pipocos-do-radial)
 - [Caso: Diesel: motor, não ar](#caso-diesel-motor-não-ar)
+- [Caso: Vapor: o chuff, não o sopro](#caso-vapor-o-chuff-não-o-sopro)
 - [Caso: os médios](#caso-os-médios)
 - [Caso: papel rasgando](#caso-papel-rasgando)
 - [Caso: Radial: o estalo por explosão, o chiado do anel e a página diferente da Passagem](#caso-radial-o-estalo-por-explosão-o-chiado-do-anel-e-a-página-diferente-da-passagem)
@@ -603,6 +604,34 @@ o chocalho das engrenagens é de 1 a 10% do som ponderado A, e 0% em carga.
   (`src/carriers/gerador.ts`, `locomotiva.ts`), mas só a Cena os monta; a página do Diesel roda o motor com a carga
   interna.
 - A 2ª ordem de queima do 6 em linha em carga (153 Hz a 1535 rpm) sai 10 dB abaixo da gravação de cabine do C15.
+
+## Caso: Vapor: o chuff, não o sopro
+
+**Queixa** (a regra de gosto do dono, que vale acima da gravação): "ele exagera um pouco no som da admissão e no ruído branco audível. No real é mais assim mesmo, mas pro simulador ele tem que soar mais motor e menos som de ar do motor". Numa locomotiva a vapor o motor é o chuff: cada descarga do cilindro na chaminé, com ataque, corpo e cauda. O dono tinha achado o Vapor bom no geral; a ordem era medir primeiro e mexer só no que estivesse fora.
+
+**Como se mediu.** O kit ouvido contra as gravações de `referencias/vapor/` (`tools/vapor-ouvido.py`), o orçamento de ruído por fonte com a mesma semente (`tools/vapor-fontes.ts --cada`) e a forma do chuff com as funções da validação (`tools/vapor-forma.ts`). Números, tabelas e mecanismos em `TECNICO.md` → Vapor → Rodada de som; painéis em [`docs/ouvido/vapor/`](ouvido/vapor/).
+
+**O que a medida mostrou:**
+
+- **O vale entre os chuffs era uma fonte só**: a tiragem, um ruído de 200–1500 Hz que seguia a quantidade de movimento média do jato alisada em 0,5 Hz. A 5,5 chuffs/s era 36% do som ponderado A e 93% do vale de 1–6 kHz, quase lisa (p90/p10 próprio de 5 dB). É o padrão das outras famílias: ruído largo contínuo no lugar do que é preso ao evento.
+- **Ela estava lá para tapar um buraco.** Sem a tiragem o vale ficava a 38 dB do pico: o chuff do modelo não tinha cauda (o ruído do jato cai com o cubo do Mach, mais depressa que o cilindro esvazia), e a tiragem lisa era o que dava o pico/vale das gravações.
+- **O começo do chuff era escuro** (o agudo do choque ficava no meio da rajada), e a medida que reprovava, "centroide do vale ÷ centroide do pico", olha justamente os primeiros 30 ms do chuff seguinte, que caem na janela do vale.
+- **Nas gravações de perto o vale é chiado** (purgadores, vazamentos, o gravador: leito de 21–52% de 400 Hz a 6 kHz). Encher o vale do simulado com o mesmo chiado bateria os números e contrariaria o dono.
+
+**O que mudou** (tabela completa no TECNICO): o coletor de escape entre os pórticos e o bico (corpo), o jato na fresta do pórtico ao abrir (ataque), a caixa de fumaça como cavidade que devolve o ruído do jato depois da descarga (cauda), e a tiragem presa à coluna de gás que cada chuff puxa. Mais três consertos medidos: as válvulas de fora da King por balancim, o atrito de escorregamento que cai com a velocidade de deslizamento na patinagem e o ejetor de vácuo da A4.
+
+**Resultado** (antes → depois; gravação entre parênteses): centroide vale ÷ pico 0,92 → 1,19 (1,34) a 5,5 chuffs/s e 0,75 → 1,15 no teste a 4/s; `ar` 0,65 → 0,03; desligar tiragem e vazamentos muda o nível ponderado A em 1,99 → 0,32 dB; pico/vale 13,0 → 14,5 dB (13,4), com o vale feito da cauda do chuff; decaimento a 1,4 chuff/s 55 → 74 ms (89); pico/vale do Big Boy a 21 batidas/s 12,4 → 9,6 dB (9,4).
+
+**Lições:**
+
+- **Um ruído contínuo quase sempre está tapando a falta de outra coisa.** Antes de atenuar a fonte que enche o vale, desligue-a e olhe o que sobra: aqui sobrava um chuff sem cauda. Tirar a tiragem sem dar a cauda ao chuff trocaria "sopro" por "seco".
+- **A medida do vale via o ataque.** A janela de ±12% do período em volta do mínimo pega o fim de um chuff e o começo do seguinte, e a média é em potência: quem manda é o começo do chuff seguinte. Antes de corrigir "o vale", dobre a envoltória por banda e por fonte no período do chuff (o `dobra` do orçamento) e veja em que instante está a energia que a medida soma.
+- **Uma linha da envoltória não conta batidas.** A "linha de 8/volta" da King é também o 2º harmônico de qualquer batida estreita: a K4s de 2 cilindros dá −10 dB na mesma conta. O que tirou 7 dB dela foi alargar a batida dupla (o coletor dos cilindros de fora), não juntar os escapes.
+- **Condição casada também no teste.** A King era medida a 2 voltas/s com corte 40% e comparada com uma gravação a 2,4 voltas/s em rampa; a patinagem, com o regulador todo aberto, quando as gravações (e o cenário da página) patinam com ele em parte: aí a caixa de válvulas despenca e o chuff enfraquece.
+- **Ruído sem linhas pede outro rastreador.** O pente harmônico do kit não acha o ciclo de um chuff. A taxa sai da envoltória, e a gravação, que acelera, é reamostrada na fase dela antes de entrar no kit.
+- **Um defeito escondido segurava outro número.** A rede perde 40% da vazão entre o pórtico e o bico (o amortecimento de onda das linhas agindo sobre a vazão média); o bico não engasga em cruzeiro, e era a tiragem lisa que mantinha o nível. Tirada a tiragem, o cruzeiro caiu 1,2 dB. Ficou escrito e pendente, com a conta do que muda.
+
+**Pendente:** conservar a vazão na rede e rever os bicos das fichas; o ataque em velocidade média; a patinagem com o regulador todo aberto; Aveling, Stanley, Corliss e Y6b (lista no TECNICO).
 
 ## Caso: os médios
 

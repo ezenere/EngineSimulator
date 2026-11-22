@@ -458,10 +458,14 @@ async function grupo(nome: string): Promise<Linha[]> {
     const lss = porSementes(() => fp(linhaEm(trecho(soma(renderVapor(X.dsp('shay', { reg: 1, corte: 0.4, omega: ws }), 6)), SR, 2, 6), 30, 0.06)));
     const lsf = m3(lss.map((l) => l[0]), 2);
     add('Shay a 20 km/h: chuffs/s', '30 ± 0,6', Number.isFinite(lsf.m) ? `${lsf.txt} (${f1(mediana(lss.map((l) => l[1])), 0)} dB)` : 'sem linha', Number.isFinite(lsf.m) && Math.abs(lsf.m - 30) <= 0.6, lsf.m, '/s');
-    // King: 4/volta com batidas duplas (linha de 8/volta < −20 dB da de 4/volta)
-    const kis = porSementes(() => { const xk = trecho(soma(renderVapor(X.dsp('king', { reg: 1, corte: 0.4, omega: TAU * 2 }), 7)), SR, 2, 7); const l4 = linhaEm(xk, 8), l8 = linhaEm(xk, 16); return { l4: fp(l4), d8: l8 && l4 ? l8.prom - l4.prom : -99 }; });
+    // King: 4/volta com batidas duplas (linha de 8/volta < −20 dB da de 4/volta). Na condição da gravação da 6024 na
+    // Lickey (Apêndice A): 2,4 voltas/s (9,5 batidas/s), regulador cheio, corte 55%. Era a 2 voltas/s com corte 40%, onde a
+    // batida é mais estreita e a linha de 8/volta, que é também o 2º harmônico de qualquer envoltória pulsada (a K4s de 2
+    // cilindros dá −10 dB na mesma conta), sai mais forte sem haver oito batidas
+    const VK = 2.4;
+    const kis = porSementes(() => { const xk = trecho(soma(renderVapor(X.dsp('king', { reg: 1, corte: 0.55, omega: TAU * VK }), 7)), SR, 2, 7); const l4 = linhaEm(xk, 4 * VK), l8 = linhaEm(xk, 8 * VK); return { l4: fp(l4), d8: l8 && l4 ? l8.prom - l4.prom : -99 }; });
     const k4 = mediana(kis.map((k) => k.l4[0])), d8 = m3(kis.map((k) => k.d8));
-    add('King 6024: 4 batidas duplas por volta', '4/volta', Number.isFinite(k4) ? `${f1(k4 / 2, 2)}/volta (${f1(mediana(kis.map((k) => k.l4[1])), 0)} dB)` : 'sem linha', Number.isFinite(k4) && Math.abs(k4 / 2 - 4) < 0.05, k4 / 2, '');
+    add('King 6024: 4 batidas duplas por volta', '4/volta', Number.isFinite(k4) ? `${f1(k4 / VK, 2)}/volta (${f1(mediana(kis.map((k) => k.l4[1])), 0)} dB)` : 'sem linha', Number.isFinite(k4) && Math.abs(k4 / VK - 4) < 0.05, k4 / VK, '');
     add('King: linha de 8/volta contra a de 4/volta', '< −20 dB', d8.m > -99 ? d8.txt + ' dB' : 'nenhuma (< limiar)', d8.m < -20, d8.m, 'dB');
     // Y6b: 4/volta em composição com p_rel da BP 2–4 bar; 8 na partida com a simplificação
     const ys = porSementes(() => {
@@ -500,7 +504,7 @@ async function grupo(nome: string): Promise<Linha[]> {
     const P = X.presetVapor('k4s')!, r = P.dRoda / 2;
     // a 1 volta/s (4 chuffs/s, 23 km/h) com 500 t, corte 80%; o regulador vai de 0,3 a 1 em t = 1 s no trilho molhado; o
     // "maquinista" fecha o regulador 1 s depois do início do surto (transientes: mediana de 3 sementes)
-    const arrancar = (areia: boolean) => {
+    const arrancar = (areia: boolean, regFinal = 1) => {
       const d = X.dsp('k4s', { fixa: false, reg: 0.3, corte: 0.8 });
       d.acoplar(new CargaTremVapor(500, r, 10));
       d.wTrem = TAU; for (let k = 0; k < d.nM; k++) d.wM[k] = TAU;
@@ -508,7 +512,7 @@ async function grupo(nome: string): Promise<Linha[]> {
       let surto = -1, fechou = -1, maxRaz = 0, volta = -1, t = 0;
       d.tap = (x) => {
         t++;
-        if (t === SR) x.fixar({ regulador: 1 });
+        if (t === SR) x.fixar({ regulador: regFinal });
         const raz = Math.abs(x.wM[0]) / Math.max(0.05, Math.abs(x.wTrem));
         if (x.patM[0] && surto < 0) surto = t;
         if (surto > 0 && t - surto < SR) maxRaz = Math.max(maxRaz, raz);
@@ -518,18 +522,21 @@ async function grupo(nome: string): Promise<Linha[]> {
       const rr = renderVapor(d, 6, [], ['chamine']);
       return { surto, maxRaz, volta: volta > 0 ? (volta - fechou) / SR : NaN, rr };
     };
+    // energia por chuff = potência média / chuffs por segundo, no fim do surto e no mesmo trecho da arrancada com areia
+    const eRel = (m: any, s: any) => {
+      if (!(m.surto > 0)) return NaN;
+      const t0 = m.surto / SR;
+      const ePorChuff = (rr: any) => { const x = trecho(rr.canais[rr.ids.indexOf('chamine')], SR, t0 + 0.5, t0 + 1.0); const tl2 = rr.tele.filter((q2: any) => q2.t > t0 + 0.5 && q2.t < t0 + 1.0); return X.nivelDb(x) - 10 * Math.log10(X.media(tl2.map((q2: any) => q2.chuffsPorS))); };
+      return ePorChuff(m.rr) - ePorChuff(s.rr);
+    };
+    const chuffsMax = (m: any) => { const tl = m.rr.tele.filter((q: any) => q.patinando); return tl.length ? Math.max(...tl.map((q: any) => q.chuffsPorS)) : 0; };
     const ps = porSementes(() => {
       const m = arrancar(false), s = arrancar(true);
-      const tl = m.rr.tele.filter((q: any) => q.patinando);
-      const chMax = tl.length ? Math.max(...tl.map((q: any) => q.chuffsPorS)) : 0;
-      let q = NaN;
-      if (m.surto > 0) {
-        // energia por chuff = potência média / chuffs por segundo, no fim do surto e no mesmo trecho da arrancada com areia
-        const t0 = m.surto / SR;
-        const ePorChuff = (rr: any) => { const x = trecho(rr.canais[rr.ids.indexOf('chamine')], SR, t0 + 0.5, t0 + 1.0); const tl2 = rr.tele.filter((q2: any) => q2.t > t0 + 0.5 && q2.t < t0 + 1.0); return X.nivelDb(x) - 10 * Math.log10(X.media(tl2.map((q2: any) => q2.chuffsPorS))); };
-        q = ePorChuff(m.rr) - ePorChuff(s.rr);
-      }
-      return { surto: m.surto, maxRaz: m.maxRaz, volta: m.volta, chMax, areia: s.surto, q };
+      // a arrancada como a página a faz e como nas gravações: o regulador para em 60% (a área é 25% da máxima), e quando a
+      // roda dispara a caixa de válvulas não acompanha: os chuffs aceleram e perdem carga
+      const m6 = arrancar(false, 0.6), s6 = arrancar(true, 0.6);
+      const tl6 = m6.rr.tele.filter((q2: any) => m6.surto > 0 && q2.t > m6.surto / SR + 0.5 && q2.t < m6.surto / SR + 1.0);
+      return { surto: m.surto, maxRaz: m.maxRaz, volta: m.volta, chMax: chuffsMax(m), areia: s.surto, q: eRel(m, s), surto6: m6.surto, ch6: chuffsMax(m6), q6: eRel(m6, s6), pc6: tl6.length ? X.media(tl6.map((q2: any) => q2.pChest)) : NaN };
     });
     const surto = mediana(ps.map((p) => p.surto)), raz = m3(ps.map((p) => p.maxRaz)), ch = m3(ps.map((p) => p.chMax)), vt = m3(ps.map((p) => p.volta), 2), q = m3(ps.map((p) => p.q));
     add('molhado (μ 0,12, 500 t, regulador 0,3 → 1 a 23 km/h): surto de patinagem', '≥ 1', surto > 0 ? `aos ${fmtSementes(ps.map((p) => p.surto / SR), 2)} s` : 'nenhum', surto > 0, surto / SR, 's');
@@ -538,6 +545,9 @@ async function grupo(nome: string): Promise<Linha[]> {
     add('patinagem: regulador fechado 1 s depois → a roda readere', '≤ 1,5 s', vt.txt + ' s', vt.m <= 1.5, vt.m, 's');
     add('com areia (μ 0,30): sem surto', 'nenhum', ps.some((p) => p.areia > 0) ? `surto aos ${fmtSementes(ps.map((p) => p.areia / SR), 2)} s` : 'nenhum', ps.every((p) => p.areia < 0), ps.filter((p) => p.areia > 0).length, '');
     if (surto > 0) add('patinagem: energia por chuff no fim do surto contra a arrancada com areia', '≤ −6 dB', q.txt + ' dB', q.m <= -6, q.m, 'dB');
+    const s6 = mediana(ps.map((p) => p.surto6)), ch6 = m3(ps.map((p) => p.ch6)), q6 = m3(ps.map((p) => p.q6)), pc6 = mediana(ps.map((p) => p.pc6));
+    add('patinagem na arrancada (regulador 0,3 → 0,6): os chuffs aceleram no surto', '≥ 2× (de 4/s)', s6 > 0 ? `${ch6.txt}/s, surto aos ${f1(s6 / SR, 2)} s, caixa de válvulas a ${f1(pc6, 1)} bar no fim` : 'não patinou', s6 > 0 && ch6.m >= 8, ch6.m, '/s');
+    if (s6 > 0) add('patinagem na arrancada (regulador 0,3 → 0,6): energia por chuff no fim do surto contra a mesma arrancada com areia', '≤ −6 dB', q6.txt + ' dB', q6.m <= -6, q6.m, 'dB');
     // drifting a 60 km/h: chuff −25 ± 3 dB contra o cruzeiro; o rolamento domina
     const w60 = (60 / 3.6) / r;
     const cr = X.dsp('k4s', { reg: 1, corte: 0.3, omega: w60 });

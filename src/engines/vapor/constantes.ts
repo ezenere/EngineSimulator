@@ -72,5 +72,7 @@ export const davis = (mT: number, vKmh: number, area: number) => mT * (6.4 + 0.1
 export const LW_VAPOR = {
   apito: 145, apitoNavio: 150, apitoEstacionaria: 135, seguranca: 140, torneiras: 123, sino: 113,
   bombaAr: 104, bielas: 103, injetor: 94, queimador: 95, engrenagens: 100, correias: 95, soprador: 100,
+  /** ejetor de vácuo pequeno, contínuo (o grande, ao soltar o freio, sopra +8 dB por ~2 s) */
+  ejetor: 98,
 } as const;
 export const REF_DIST_VAPOR = 7.5;

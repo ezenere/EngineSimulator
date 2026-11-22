@@ -31,6 +31,18 @@ const SIGMA_TURB = 0.8;
  */
 const K_REFL = 0.9;
 const EXP_M = (GAM - 1) / GAM;
+/**
+ * amortecimento das linhas do escape (passagens e tubo de descarga): as `Line` do acoustics perdem
+ * exp(−0,09·L·amortecimento) por passagem em todas as frequências. LIMITAÇÃO CONHECIDA: aqui a onda carrega também a
+ * vazão média (bar, não pascal), e com este 1,5 cerca de 40% do vapor de cada descarga some entre o pórtico e o bico
+ * (K4s a 4 chuffs/s, corte 70%: pico de 10 kg/s no pórtico e de 6 no bico). O cilindro esvazia como se o bico fosse
+ * 1,3× mais largo. Com 0 a vazão se conserva, mas com os bicos das fichas o chuff dobra de largura (135 ms contra 70 a
+ * 4/s); com o bico de catálogo da K4s (7", 0,178 m, contra os 0,15 da ficha) a forma volta à de hoje e as bandas no
+ * pico melhoram. Trocar pede rever o bico das 14 fichas uma a uma: fica para uma passada própria (`ferramentas` abaixo)
+ */
+export let AMORT_ESCAPE = 1.5;
+/** (ferramentas: medir com a vazão conservada, `definirAmortecimentoEscape(0)` antes de montar o DSP) */
+export const definirAmortecimentoEscape = (v: number) => { AMORT_ESCAPE = v; };
 
 /** vazão mássica (kg/s, com sinal de a para b) por uma área efetiva A, vapor de √(R·T) = `sRT` */
 export function vazaoV(A: number, pa: number, pb: number, sRT: number) {
@@ -98,10 +110,26 @@ const PR_CRIT = 1.853, N_MACH = 512;
 const TAB_MACH = new Float64Array(N_MACH + 1);
 for (let i = 0; i <= N_MACH; i++) { const pr = 1 + ((PR_CRIT - 1) * Math.min(i, N_MACH - 1)) / (N_MACH - 1); TAB_MACH[i] = Math.min(1, Math.sqrt((2 / (GAM - 1)) * (Math.pow(pr, EXP_M) - 1))); }
 
+/**
+ * Mach do jato já expandido até a pressão de jusante (não o da garganta, que para em 1): cresce com a razão de
+ * pressões (1,07 em 2:1; 1,6 em 4:1; 2,1 em 9:1). É ele que manda no ruído de um jato engasgado: a mistura cresce
+ * com a velocidade do jato expandido, não com a da garganta. Tabelado de 1 a 16.
+ */
+export function machExpandido(pr: number) {
+  if (pr <= 1) return 0;
+  const x = (Math.min(pr, PR_MAX) - 1) * ((N_MACH - 1) / (PR_MAX - 1)), i = x | 0;
+  return TAB_MEXP[i] + (TAB_MEXP[i + 1] - TAB_MEXP[i]) * (x - i);
+}
+const PR_MAX = 16;
+const TAB_MEXP = new Float64Array(N_MACH + 1);
+for (let i = 0; i <= N_MACH; i++) { const pr = 1 + ((PR_MAX - 1) * Math.min(i, N_MACH - 1)) / (N_MACH - 1); TAB_MEXP[i] = Math.sqrt((2 / (GAM - 1)) * (Math.pow(pr, EXP_M) - 1)); }
+
 export interface GeometriaRede {
   nPassagens: number;     // extremidades que escapam pela chaminé
   aPortico: number;       // m², pórtico de escape de uma extremidade (área geométrica)
   dBico: number; lDescarga: number; vCaixa: number; lChamine: number; dChamine: number; kNL: number;
+  /** m³: volume do coletor de escape, entre os pórticos e o tubo de descarga (0 = junção sem volume) */
+  vColetor?: number;
   condensador: boolean;   // o escape vai ao condensador: a rede só recebe o resto abafado
 }
 
@@ -119,6 +147,8 @@ export class RedeEscape {
   desc: Line; Zd: number; jun: Junction;
   cham: Line; Zc: number; rad: Radiator;
   aBico: number; kCaixa: number;
+  /** coletor de escape: volume na junção das passagens com o tubo de descarga (Pa manométrico, e c/(V·fs)) */
+  pColetor = 0; kColetor = 0; sumYJun = 0;
   linhas: Line[];
   /** estado do bico e da caixa (telemetria e jato) */
   pCaixa = 0;            // Pa manométrico na caixa de fumaça (o Helmholtz de 9–14 Hz, inteiro)
@@ -131,6 +161,8 @@ export class RedeEscape {
   rngT = new RNG(0x7b0e); kT: number; tb1 = 0; tb2 = 0; lpT = new Biquad();
   /** variação de chuff a chuff (água arrastada, turbulência): o DSP sorteia ±1,3 dB em cada abertura de escape */
   gAlvo = 1; gVar = 1; kVar: number;
+  /** desvio relativo da turbulência da mistura (as ferramentas o zeram para isolar o "hoot" do pulso) */
+  sigmaTurb = SIGMA_TURB;
   /** (ferramentas) impulso de pressão na base da chaminé e de vazão na caixa, numa amostra */
   impulso = 0; massaExtra = 0;
   // passa-alta de 4 polos em 20 Hz no canal (7.1: o Helmholtz só na telemetria; com 2 polos sobravam −29 dB dele)
@@ -143,15 +175,17 @@ export class RedeEscape {
     this.pass = [];
     for (let k = 0; k < g.nPassagens; k++) {
       // (comprimentos levemente diferentes por extremidade: as passagens de cada lado não são iguais)
-      const l = new Line(fs, esc(0.4 * (1 + 0.06 * ((k % 4) - 1.5)), C_V), aP, 8000, 1.5);
+      const l = new Line(fs, esc(0.4 * (1 + 0.06 * ((k % 4) - 1.5)), C_V), aP, 8000, AMORT_ESCAPE);
       this.pass.push(l);
     }
     this.aBico = (Math.PI / 4) * g.dBico * g.dBico;
     const aD = 1.7 * this.aBico;
     this.Zd = C_V / aD;
-    this.desc = new Line(fs, esc(g.lDescarga, C_V), aD * Math.max(1, g.nPassagens / 4), 6000, 1.5);
+    this.desc = new Line(fs, esc(g.lDescarga, C_V), aD * Math.max(1, g.nPassagens / 4), 6000, AMORT_ESCAPE);
     this.desc.kNL = g.kNL;
     this.jun = new Junction([...this.pass.map((l) => port(l, 1)), port(this.desc, 0)]);
+    this.sumYJun = this.jun.sumY;
+    this.definirColetor(g.vColetor ?? 0);
     const aC = (Math.PI / 4) * g.dChamine * g.dChamine;
     this.aCham = aC;
     this.kMix = onePole(fs, Math.min(400, 300 / Math.max(0.5, g.dChamine / 0.5)));
@@ -179,6 +213,14 @@ export class RedeEscape {
     this.linhas = [...this.pass, this.desc, this.cham];
     this.hp.hp(fs, 20, 0.7071); this.hp2.hp(fs, 20, 0.7071);
   }
+  /**
+   * Coletor de escape: as passagens dos cilindros não dão direto no tubo de descarga; juntam-se no bloco de escape da
+   * sela (e, nas articuladas, nos tubos compridos até a caixa de fumaça), um volume da ordem de meio cilindro. O bico é
+   * mais estreito que o pórtico aberto, então cada descarga primeiro enche esse volume e depois ele esvazia pelo bico:
+   * o chuff abre menos seco e ganha corpo (dp/dt = (c²/V)·Σ ṁ, integrado de forma implícita na junção; V = 0 dá a
+   * junção sem volume do acoustics).
+   */
+  definirColetor(v: number) { this.kColetor = v > 1e-6 ? C_V / (v * this.fs) : 0; }
   ler() { const L = this.linhas; for (let i = 0; i < L.length; i++) L[i].read(); }
   /** pórtico aberto: área efetiva A (m²), pressão do cilindro pc (Pa abs); devolve ṁ (kg/s, + = sai do cilindro) */
   injetar(e: number, pc: number, A: number, sRT: number) {
@@ -193,7 +235,15 @@ export class RedeEscape {
   /** pressão na ponta do cilindro de uma passagem (Pa abs), antes da injeção desta amostra */
   pPassagem(e: number) { return P0 + 2 * this.pass[e].in0; }
   passo(sRT: number) {
-    this.jun.step();
+    if (this.kColetor > 0) {
+      const ps = this.pass, d0 = this.desc, k = this.kColetor;
+      let acc = d0.Y * d0.in0;
+      for (let i = 0; i < ps.length; i++) acc += ps[i].Y * ps[i].in1;
+      const P = (this.pColetor + 2 * k * acc) / (1 + k * this.sumYJun);
+      this.pColetor = P;
+      for (let i = 0; i < ps.length; i++) ps[i].out1 = P - ps[i].in1;
+      d0.out0 = P - d0.in0;
+    } else this.jun.step();
     // bico: ponta do tubo de descarga → caixa (implícito)
     const d = this.desc, pDn = P0 + this.pCaixa;
     const m = orificioDeLinha(CD_BICO * this.aBico, P0 + 2 * d.in1, this.Zd, pDn, sRT);
@@ -216,7 +266,7 @@ export class RedeEscape {
     this.tb1 += this.kT * (t - this.tb1); this.tb2 += this.kT * (this.tb1 - this.tb2);
     const tb = this.lpT.run(this.tb2);
     this.gVar += this.kVar * (this.gAlvo - this.gVar);
-    const dP = this.mix2 * (1 + SIGMA_TURB * 3 * tb) * this.gVar + this.impulso;
+    const dP = this.mix2 * (1 + this.sigmaTurb * 3 * tb) * this.gVar + this.impulso;
     this.impulso = 0;
     this.dPJato = dP;
     // caixa (volume) ligada à base da chaminé, implícita: a vazão na chaminé é (p + ΔP − 2·in0)/Z;
@@ -279,5 +329,110 @@ export class JatoBico {
     // (os dois pelo mesmo corte: 2 polos em 7 kHz e um biquad em 9 kHz; a envoltória multiplica depois do filtro)
     this.lp += this.kLp * (s - this.lp); this.lp2 += this.kLp * (this.lp - this.lp2);
     return this.env * this.lpF.run(this.lp2);
+  }
+}
+
+/**
+ * A caixa de fumaça como cavidade (1.4). Para a vazão média e o grave ela é um volume (a capacitância da `RedeEscape`,
+ * o Helmholtz de 9–14 Hz); acima dos primeiros modos (c/L, 250–400 Hz) é um tambor de aço de 1,5–8 m³ com o bico
+ * dentro: parte do ruído do jato sobe direto pela chaminé e parte fica batendo entre o espelho dos tubos, a porta e o
+ * casco, e pelos tubos de fogo até a fornalha e de volta, e sai pela chaminé depois. É a cauda de cada chuff: o resto
+ * do próprio escape, que cai entre uma descarga e a seguinte, e não um sopro ligado o tempo todo.
+ *
+ * Quatro linhas de atraso realimentadas por uma matriz de Householder (sem perda própria), com os comprimentos tirados
+ * do tamanho da caixa (ida e volta 2·∛V/c e múltiplos não inteiros, até a ida e volta dos tubos), um polo de perda no
+ * agudo por passagem (12 kHz: aço nu, o agudo dura quase tanto quanto o médio) e o ganho por passagem que dá o tempo de
+ * queda `t60` (s, −60 dB).
+ * `nivel` (dB) é a potência do campo da cavidade relativa à do som direto para um ruído estacionário. Custo: 4 leituras,
+ * 4 polos e 4 escritas por amostra, sem alocação.
+ */
+export class CaixaRessonante {
+  fs: number; mask: number; w = 0;
+  buf: Float32Array[]; at: Int32Array; g = new Float64Array(4); s = new Float64Array(4); kLp: number;
+  hp = new Biquad(); ganho = 0; t60 = 0; nivel = 0;
+  constructor(fs: number, vCaixa: number, t60: number, nivelDb: number) {
+    this.fs = fs;
+    const L = Math.cbrt(Math.max(0.01, vCaixa));
+    // ida e volta na caixa (K4s: 7,6 ms) × 1 · 1,37 · 1,83 · 2,41 (o último ≈ a ida e volta dos tubos de fogo)
+    const T0 = (2 * L) / C_Q, razoes = [1, 1.37, 1.83, 2.41];
+    this.at = Int32Array.from(razoes, (r, i) => Math.max(8, Math.round(r * T0 * fs) | 1) + 2 * i);
+    let size = 64; while (size < this.at[3] + 4) size <<= 1;
+    this.mask = size - 1;
+    this.buf = [0, 1, 2, 3].map(() => new Float32Array(size));
+    this.kLp = onePole(fs, 12000);
+    // abaixo do primeiro modo (c/2L, 130 Hz na K4s) a caixa não é cavidade, é volume, e isso já está na rede
+    this.hp.hp(fs, Math.min(400, (1.2 * C_Q) / (2 * L)), 0.7071);
+    this.definir(t60, nivelDb);
+  }
+  /** tempo de queda (s) e nível do campo da cavidade (dB re o som direto); t60 ≤ 0 ou nível ≤ −60 desligam */
+  definir(t60: number, nivelDb: number) {
+    this.t60 = t60; this.nivel = nivelDb;
+    if (!(t60 > 0.01) || nivelDb <= -60) { this.ganho = 0; return; }
+    for (let i = 0; i < 4; i++) this.g[i] = Math.pow(10, (-3 * this.at[i]) / (t60 * this.fs));
+    // normalização: energia da resposta ao impulso (ruído branco na entrada dá essa razão de potência na saída)
+    this.zerar();
+    this.ganho = 1;
+    let e = 0;
+    const n = Math.min(4 * this.fs, Math.ceil(1.6 * t60 * this.fs));
+    for (let i = 0; i < n; i++) { const y = this.passo(i === 0 ? 1 : 0); e += y * y; }
+    this.zerar();
+    this.ganho = Math.pow(10, nivelDb / 20) / Math.sqrt(e + 1e-30);
+  }
+  zerar() { for (const b of this.buf) b.fill(0); this.s.fill(0); this.w = 0; }
+  private passo(x: number) {
+    const m = this.mask, w = this.w, b = this.buf, at = this.at, s = this.s, g = this.g, k = this.kLp;
+    s[0] += k * (b[0][(w - at[0]) & m] - s[0]); s[1] += k * (b[1][(w - at[1]) & m] - s[1]);
+    s[2] += k * (b[2][(w - at[2]) & m] - s[2]); s[3] += k * (b[3][(w - at[3]) & m] - s[3]);
+    const h = 0.5 * (s[0] + s[1] + s[2] + s[3]);
+    b[0][w] = g[0] * (s[0] - h) + x; b[1][w] = g[1] * (s[1] - h) + x; b[2][w] = g[2] * (s[2] - h) + x; b[3][w] = g[3] * (s[3] - h) + x;
+    this.w = (w + 1) & m;
+    return (s[0] - s[1] + s[2] - s[3]) * this.ganho;
+  }
+  /** uma amostra: `x` = o ruído do jato (som direto); devolve só a cauda da cavidade */
+  amostra(x: number) { return this.ganho === 0 ? 0 : this.passo(this.hp.run(x)); }
+}
+
+/**
+ * A tiragem que cada chuff induz (1.4): o jato do bico arrasta o gás da caixa de fumaça, e quem repõe esse gás é a
+ * coluna que vem da fornalha pelos tubos de fogo. Ela tem inércia (ρ·L/A dos tubos) e resistência quadrática (grelha,
+ * leito de fogo, tubos): τ·dq/dt = m − q², com `m` a quantidade de movimento do jato e `q` a vazão do gás, as duas
+ * relativas ao regime de referência, e τ ≈ 50 ms (12 m⁻¹ de tubos, 6 kg/s de gás, 1,5 kPa de depressão). Em regime
+ * q² = m: o sopro do escoamento (∝ U², ou seja, ∝ q²) acompanha a quantidade de movimento. Depois de cada descarga a
+ * coluna segue por inércia e cai como 1/(1 + q₀·t/τ)²: é o sopro que respira com o chuff e morre entre um e outro em
+ * baixa velocidade, e que se funde num rugido quando os chuffs vêm a menos de τ um do outro.
+ */
+export class ColunaDeGas {
+  q = 0; k: number;
+  constructor(fs: number, tau = 0.05) { this.k = 1 / (tau * fs); }
+  /** `m` = quantidade de movimento do jato relativa à de referência; devolve q² (a amplitude relativa do sopro) */
+  amostra(m: number) {
+    const q = this.q;
+    this.q = Math.max(0, q + this.k * ((m > 0 ? m : 0) - q * q));
+    return q * q;
+  }
+}
+
+/**
+ * O ataque do chuff: o jato na fresta do pórtico de escape. Quando a válvula descobre o pórtico o cilindro ainda tem
+ * 5–10 bar e a passagem está na atmosfera: o vapor passa pela fresta à velocidade do som (engasgado enquanto
+ * p_cil/p_passagem > 1,85) e chia dentro da passagem até as pressões se igualarem, o que leva a abertura do pórtico e
+ * mais uns 10 ms. É um ruído agudo (a fresta tem centímetros: Strouhal 0,2·c/h de 1,5 kHz para cima), curto, que vem
+ * ANTES do pico do jato do bico e some com ele: o "tch" do chuff. Nível ∝ ṁ_pórtico·M³, como o ruído de mistura, com o
+ * Mach do jato expandido (`machExpandido`): a 9:1 (corte longo, 8 bar no escape) o estalo é forte; a 2:1 (corte curto)
+ * quase não existe, e é por isso que a máquina em velocidade escurece.
+ */
+export class RuidoPortico {
+  rng: RNG; bp = new Biquad(); lp = new Biquad(); lp2 = new Biquad(); env = 0; kEnv: number;
+  constructor(fs: number, semente: number) {
+    this.rng = new RNG(semente); this.kEnv = onePole(fs, 2000);
+    // (4 polos em 7 kHz: a passagem, o tubo de descarga e a chaminé comem o agudo, e com 2 só a energia acima de 16 kHz
+    // passava de −60 dB do total a 21 chuffs/s, o teste de aliasing de 7.1)
+    this.bp.bp(fs, 3000, 0.6); this.lp.lp(fs, 7000, 0.7071); this.lp2.lp(fs, 7000, 0.7071);
+  }
+  /** `n` = Σ ṁ·M³ dos pórticos abertos (kg/s) */
+  amostra(n: number) {
+    this.env += this.kEnv * (n - this.env);
+    const x = this.rng.next() * 2 - 1;
+    return this.env * this.lp2.run(this.lp.run(this.bp.run(x)));
   }
 }

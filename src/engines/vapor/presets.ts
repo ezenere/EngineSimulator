@@ -11,7 +11,11 @@ export interface PresetVapor {
   tag: string;
   rodeiro?: string;                      // '4-6-2', '2-8-8-4'…
   /** cilindros simples (ou o conjunto inteiro de uma articulada: `motores` 2 duplica) */
-  cilindros: { n: number; diametro: number; curso: number; angulo?: number[] };   // m; ângulos das manivelas em graus
+  cilindros: {
+    n: number; diametro: number; curso: number; angulo?: number[];   // m; ângulos das manivelas em graus
+    /** graus de manivela: 4 cilindros em pares a 180° (King), quanto a válvula de fora (por balancim) atrasa da de dentro; padrão 2° */
+    desajuste?: number;
+  };
   motores?: 1 | 2;                       // articulada: 2
   derivaFase?: number;                   // articulada: diferença de rotação entre os motores (0,5–2%)
   compound?: { ap: { n: number; diametro: number }; bp: { n: number; diametro: number }; receptor: number /* m³ */ };
@@ -26,10 +30,22 @@ export interface PresetVapor {
   /** `eixos`: número de EIXOS do tênder (não de rodas): o portador põe metade em cada truque (K4s 4, UP 844 e Big Boy 7, King 3) */
   tender?: { massa: number; eixos: number; comprimento: number };
   vMax: number;                          // km/h (estacionária: rpm governado)
-  escape: { dBico: number; lDescarga: number; vCaixa: number; lChamine: number; dChamine: number; kNL?: number; destino?: 'chamine' | 'condensador' | 'abafador'; pCondensador?: number /* Pa abs */ };
+  escape: {
+    dBico: number; lDescarga: number; vCaixa: number; lChamine: number; dChamine: number; kNL?: number; destino?: 'chamine' | 'condensador' | 'abafador'; pCondensador?: number /* Pa abs */;
+    /** m³: coletor de escape entre os pórticos e o tubo de descarga (padrão: `vColetorPadrao`, 0,6 de um cilindro por par) */
+    vColetor?: number;
+    /** s: tempo de queda (−60 dB) da caixa de fumaça como cavidade, a cauda de cada chuff (padrão `T_CAUDA` do dsp.ts) */
+    tCauda?: number;
+    /** dB: nível do campo da cavidade relativo ao ruído direto do jato (padrão `NIVEL_CAUDA`; ≤ −60 desliga) */
+    nivelCauda?: number;
+    /** sopro da tiragem na chaminé, relativo ao padrão (1 = o padrão, no lado baixo; 0 desliga) */
+    tiragem?: number;
+  };
   apito: { tubos: number[]; nivelDb?: number; tipo?: 'chime' | 'simples' | 'navio' };
   sino?: { f: number; batidasPorS: number };
   bombaAr?: { n: 1 | 2; cursosPorMin: number };
+  /** freio a vácuo: em vez da bomba de ar, um ejetor de vapor que descarrega na chaminé (o comando `bombaAr` da página o liga e desliga) */
+  ejetor?: boolean;
   folga: number;
   geometria: { comprimento: number; largura: number; altura: number; xCilindros: number; yCilindros?: number; xChamine: number; xDomo: number; xCabine: number; zTopo: number };
   lwChuff: number;
@@ -81,8 +97,8 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
     // chaminé dupla Kylchap (2 bicos de 0,12, 2 chaminés 0,45 × 1,5): bico equivalente de 0,17 e uma chaminé
     escape: { dBico: 0.17, lDescarga: 0.7, vCaixa: 4.5, lChamine: 1.5, dChamine: 0.45 },
     // sem bomba de ar: a A4 freia a vácuo (só as 60007, 60009 e 60019 preservadas receberam freio a ar; a Mallard não).
-    // Parada, o que soaria é o ejetor de vácuo, que o VaporDSP não tem (AUDITORIA F-VAP-08)
-    apito: { tubos: [311, 370, 466], tipo: 'chime' }, folga: 0.2,
+    // Parada, o que soa é o ejetor de vácuo (AUDITORIA F-VAP-08)
+    apito: { tubos: [311, 370, 466], tipo: 'chime' }, ejetor: true, folga: 0.2,
     geometria: { comprimento: 12.65, largura: 2.8, altura: 4.0, xCilindros: 4.71, xChamine: 4.35, xDomo: 1.77, xCabine: -3.53, zTopo: 3.9 },
     lwChuff: 124, semente: 0xa4a4, portadores: ['locomotiva', 'nenhum'],
   },
@@ -174,7 +190,10 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
     // manivelas internas a 180° das externas: 4 batidas duplas por volta
     cilindros: { n: 4, diametro: pol(16.25), curso: pol(28), angulo: [0, 180, 90, 270] }, dRoda: pol(78), pNominal: psi(250), superaquecido: true, evaporacaoMax: 5.0,
     massa: 91, massaAderente: 69, tender: { massa: 47, eixos: 3, comprimento: 8 }, vMax: 145,
-    escape: { dBico: 0.14, lDescarga: 0.7, vCaixa: 4, lChamine: 1.5, dChamine: 0.45 },
+    // coletor: os cilindros de fora ficam atrás do truque e escapam por tubos de ~2 m até a sela, somados às passagens
+    // dos de dentro: ≈ 0,3 m³ (o padrão daria 0,11). Com ele a batida dupla sai com a largura da gravação da 6024 na
+    // Lickey (49 ms contra 46) e a linha de 8/volta da envoltória a −14 dB da de 4/volta, como nela
+    escape: { dBico: 0.14, lDescarga: 0.7, vCaixa: 4, lChamine: 1.5, dChamine: 0.45, vColetor: 0.3 },
     apito: { tubos: [600], tipo: 'simples' }, bombaAr: BOMBA1, folga: 0.3,
     geometria: { comprimento: 13, largura: 2.8, altura: 4.0, xCilindros: 5.0, xChamine: 4.6, xDomo: 1.5, xCabine: -4.6, zTopo: 3.9 },
     lwChuff: 124, semente: 0x6024, portadores: ['locomotiva', 'nenhum'],
@@ -227,6 +246,16 @@ export const FAMILIAS_VAPOR: readonly { id: FamiliaVapor; nome: string }[] = [
 ];
 
 export const presetVapor = (id: string) => PRESETS_VAPOR.find((p) => p.id === id);
+
+/**
+ * Volume padrão do coletor de escape (m³): as passagens do bloco de escape da sela e o pé do tubo de descarga somam
+ * ≈ 0,6 do volume varrido de um cilindro para cada par de cilindros que escapa pela chaminé (K4s: 0,16 m³).
+ */
+export function vColetorPadrao(p: PresetVapor) {
+  const d = p.compound ? p.compound.bp.diametro : p.cilindros.diametro;
+  const n = p.compound ? p.compound.bp.n : p.cilindros.n * (p.motores ?? 1);
+  return 0.6 * (Math.PI / 4) * d * d * p.cilindros.curso * Math.max(1, n / 2);
+}
 
 /** escapes por volta da roda (1.3): extremidades × motores × redução (compound: só as BP escapam pela chaminé) */
 export function escapesPorVolta(p: PresetVapor, simplificacao = false) {

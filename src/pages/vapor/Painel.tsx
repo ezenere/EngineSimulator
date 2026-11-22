@@ -1,9 +1,10 @@
 // Painel de controles do Vapor (VAPOR.md 6): máquina (regulador, reverser, apito, sino, areia, freio, torneiras),
 // caldeira e auxiliares (fogo, injetor, bomba de ar, soprador, simplificação), composição e via (vagões, massa, rampa,
-// trilho; marcha do trator; carga da estacionária), ouvinte e ambiente, mixagem. Só re-renderiza quando o estado muda.
+// trilho; marcha do trator; carga da estacionária), escape (os campos da ficha: coletor, cauda do chuff, tiragem,
+// desajuste das válvulas), ouvinte e ambiente, mixagem. Só re-renderiza quando o estado muda.
 import { useSyncExternalStore, type PointerEvent } from 'react';
 import { ChipGroup, Field, Section, Slider } from '../../ui';
-import { AMBIENTES_VAPOR, fmt, type ControleVapor, type EstadoVapor } from './controle';
+import { AMBIENTES_VAPOR, fmt, temChamine, temPares, type ControleVapor, type EstadoVapor } from './controle';
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 type P = { k: ControleVapor; e: EstadoVapor };
@@ -19,6 +20,7 @@ export function Painel({ k }: { k: ControleVapor }) {
       <Escuta k={k} e={e} />
       <Caldeira k={k} e={e} />
       <Composicao k={k} e={e} />
+      {temChamine(k.P) && <Escape k={k} e={e} />}
     </>
   );
 }
@@ -71,6 +73,7 @@ function Caldeira({ k, e }: P) {
       {!c.fogoAuto && <Slider id="fogo" rotulo="Taxa de fogo" min={0} max={1} passo={0.01} valor={c.fogo} formatar={pct} aoMudar={(v) => k.setCmd({ fogo: v })} />}
       <Field rotulo="Injetor de água"><ChipGroup id="injetor" opcoes={OP_AUTO('Ligado', 'Desligado')} atual={c.injetor} aoEscolher={(v) => k.setCmd({ injetor: v }, true)} /></Field>
       {k.P.bombaAr && <Field rotulo="Bomba de ar"><ChipGroup id="bombaAr" opcoes={OP_AUTO('Forçar', 'Desligada')} atual={c.bombaAr} aoEscolher={(v) => k.setCmd({ bombaAr: v }, true)} /></Field>}
+      {k.P.ejetor && <Field rotulo="Ejetor de vácuo (freio a vácuo)"><ChipGroup id="bombaAr" opcoes={OP_AUTO('Ligado', 'Desligado')} atual={c.bombaAr} aoEscolher={(v) => k.setCmd({ bombaAr: v }, true)} /></Field>}
       <Field rotulo="Soprador"><ChipGroup id="soprador" opcoes={OP_AUTO('Ligado', 'Desligado')} atual={c.soprador} aoEscolher={(v) => k.setCmd({ soprador: v }, true)} /></Field>
     </Section>
   );
@@ -98,6 +101,20 @@ function Composicao({ k, e }: P) {
         </Field>
       )}
       {t !== 'gerador' && t !== 'barco' && <Slider id="rampa" rotulo="Rampa" min={-3} max={3} passo={0.05} valor={e.rampa} formatar={(v) => `${fmt(v, 2)}%`} aoMudar={(v) => k.setRampa(v)} />}
+    </Section>
+  );
+}
+
+/** os campos do escape da ficha (aplicados ao soltar: o motor é remontado, como ao mudar os vagões) */
+function Escape({ k, e }: P) {
+  const x = e.escape;
+  return (
+    <Section titulo="Escape: o chuff">
+      <Slider id="vColetor" rotulo="Coletor de escape (volume entre os cilindros e o bico)" min={0} max={1} passo={0.01} valor={x.vColetor} formatar={(v) => `${Math.round(v * 1000)} L`} aoSoltar={(v) => k.setEscape({ vColetor: v })} />
+      <Slider id="tCauda" rotulo="Cauda do chuff: tempo de queda na caixa de fumaça" min={0.1} max={2} passo={0.05} valor={x.tCauda} formatar={(v) => `${fmt(v, 2)} s`} aoSoltar={(v) => k.setEscape({ tCauda: v })} />
+      <Slider id="nivelCauda" rotulo="Cauda do chuff: nível (−60 desliga)" min={-60} max={6} passo={0.5} valor={x.nivelCauda} formatar={(v) => `${fmt(v, 1)} dB`} aoSoltar={(v) => k.setEscape({ nivelCauda: v })} />
+      <Slider id="tiragem" rotulo="Tiragem (sopro do gás na chaminé)" min={0} max={8} passo={0.1} valor={x.tiragem} formatar={(v) => `${Math.round(v * 100)}%`} aoSoltar={(v) => k.setEscape({ tiragem: v })} />
+      {temPares(k.P) && <Slider id="desajuste" rotulo="Válvulas de fora: atraso em relação às de dentro" min={0} max={12} passo={0.5} valor={x.desajuste} formatar={(v) => `${fmt(v, 1)}°`} aoSoltar={(v) => k.setEscape({ desajuste: v })} />}
     </Section>
   );
 }

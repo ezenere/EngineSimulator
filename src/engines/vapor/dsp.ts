@@ -21,18 +21,27 @@
 import type { FonteSonora, EixoSaida, Carga, ComandoMotor, Vec3, Diretividade } from '../../scene/tipos';
 import type { Motor, EstadoMotor, TelemetriaMotor } from '../../carriers/tipos';
 import { RNG, Biquad, onePole } from '../../acoustics';
-import { RedeEscape, JatoBico, vazaoV } from './rede';
+import { RedeEscape, JatoBico, CaixaRessonante, ColunaDeGas, RuidoPortico, vazaoV, machExpandido } from './rede';
 import { Apito, Sino } from './apito';
-import { BombaAr, Injetor, Seguranca, Torneiras, Bielas, Soprador, Queimador, Engrenagens, Correias, Ruido } from './auxiliares';
-import { type PresetVapor, escapesPorVolta } from './presets';
+import { BombaAr, Injetor, Seguranca, Torneiras, Bielas, Soprador, Ejetor, Queimador, Engrenagens, Correias, Ruido } from './auxiliares';
+import { type PresetVapor, escapesPorVolta, vColetorPadrao } from './presets';
 import {
   P0, BAR, G, R_V, T_SUPER, T_SAT, K_T_ESCAPE, N_SUPER, N_SAT, PERDA_ADMISSAO, V_NOCIVO, HASTE, CD_PORTICO,
   ABERTURA_PORTICO, TAU_ADMISSAO, eventos, cortePorReverser, MU, REF_DIST_VAPOR, C_V,
 } from './constantes';
 
 const TAU = Math.PI * 2;
-/** sopro da tiragem na chaminé, na escala do ruído de mistura (kg/s·M³), na vazão média = E_max */
-const K_TIRAGEM = 28;
+/**
+ * sopro da tiragem na chaminé, na escala do ruído de mistura (kg/s·M³), com o jato engasgado na vazão E_max. O sopro
+ * segue a coluna de gás que cada chuff puxa (`ColunaDeGas`, rede.ts) e cai entre um chuff e o seguinte
+ */
+const K_TIRAGEM = 6;
+/** ruído do jato na fresta do pórtico de escape (o ataque de cada chuff), na escala do ruído de mistura */
+const K_PORTICO = 0.04;
+/** quanto do tom da chaminé (o "hoot", que nasce na base dela, do lado da caixa) entra na cavidade junto com o ruído do jato */
+const K_TOM_CAIXA = 0.5;
+/** cauda de cada chuff: tempo de queda da caixa de fumaça como cavidade (s, −60 dB) e nível do campo dela (dB re o jato) */
+export const T_CAUDA = 0.8, NIVEL_CAUDA = -4;
 /** chiado do vapor entrando no condensador, na escala do ruído de mistura, por kg/s */
 const K_CONDENSADOR = 0.8;
 /** inércia térmica da fornalha e da água (s) */
@@ -43,7 +52,7 @@ const GOV_KP = 0.2, GOV_KI = 0.012;
  * em meia carga ficava forte demais e o governador tinha de estrangular o regulador) */
 const GOV_CMIN = 0.05;
 /** ruído de mistura do bico, Pa (unidades da linha) por kg/s·M³, num bico de 0,0177 m² (escala com 1/A_bico) */
-const K_MISTURA = 1500;
+const K_MISTURA = 1200;
 const DEG = Math.PI / 180;
 
 /** extensão de ComandoMotor (campos opcionais; os outros motores os ignoram) */
@@ -74,8 +83,8 @@ export interface TelemetriaVapor extends TelemetriaMotor {
 }
 
 /** componentes calibrados pela sonda (motor.ts): um ganho por componente, Pa a 7,5 m por unidade interna */
-export type IdComponente = 'chuff' | 'soprador' | 'torneiras' | 'vazamentos' | 'bielas' | 'apito' | 'seguranca' | 'bomba' | 'injetor' | 'sino' | 'queimador' | 'engrenagens' | 'correias';
-export const COMPONENTES: readonly IdComponente[] = ['chuff', 'soprador', 'torneiras', 'vazamentos', 'bielas', 'apito', 'seguranca', 'bomba', 'injetor', 'sino', 'queimador', 'engrenagens', 'correias'];
+export type IdComponente = 'chuff' | 'soprador' | 'ejetor' | 'torneiras' | 'vazamentos' | 'bielas' | 'apito' | 'seguranca' | 'bomba' | 'injetor' | 'sino' | 'queimador' | 'engrenagens' | 'correias';
+export const COMPONENTES: readonly IdComponente[] = ['chuff', 'soprador', 'ejetor', 'torneiras', 'vazamentos', 'bielas', 'apito', 'seguranca', 'bomba', 'injetor', 'sino', 'queimador', 'engrenagens', 'correias'];
 
 /** um comando com qualquer destes campos é do vapor: o `acelerador` genérico do portador não vira regulador */
 const CHAVES_VAPOR = new Set(['cutoff', 'apito', 'sino', 'areia', 'torneiras', 'fogo', 'injetor', 'bombaAr', 'soprador', 'freio', 'simplificacao', 'trilho', 'mixAr', 'mixMec']);
@@ -111,16 +120,21 @@ export class VaporDSP implements Motor {
   ePhi!: Float64Array; eVs!: Float64Array; eVcl!: Float64Array; eAe!: Float64Array;
   eP!: Float64Array; eV!: Float64Array; eFase!: Int32Array; eMdot!: Float64Array; ePerda!: Float64Array;
   eAC = new Float64Array(0); eAR = new Float64Array(0); eAK = new Float64Array(0);
+  /** +1: a distribuição da própria extremidade; −1: a válvula é movida por balancim a partir da do cilindro par (4 cilindros) */
+  eConj = new Int8Array(0); desajuste = 0;
   /** por cilindro: força líquida (p_frente − p_trás)·A e o salto suavizado (bielas) */
   cF!: Float64Array; cDF!: Float64Array; cLado!: Int32Array; cA!: Float64Array; nC = 0;
   /** por motor: ângulo da manivela, ω da roda, J, adesão, patinando, deriva */
   thM!: Float64Array; wM!: Float64Array; JM!: Float64Array; wAd!: Float64Array; patM!: Uint8Array; epsM!: Float64Array; tqM!: Float64Array;
+  /** por motor: fração da aderência que sobra patinando (cai com a velocidade de deslizamento) */
+  kAtM = new Float64Array(2).fill(1);
+  trilhoDeAco = true;
   /** ω da roda se não patinasse (= v/r) */
   wTrem = 0;
   omegaImposto: number | null = null;
 
   // ---------------------------------------------------------------- rede e fontes
-  rede!: RedeEscape; jato!: JatoBico;
+  rede!: RedeEscape; jato!: JatoBico; caixa!: CaixaRessonante; gas!: ColunaDeGas; portico!: RuidoPortico; gPortico = 0;
   condensador = false; pCond = P0;
   apito!: Apito; sino: Sino | null = null; bombas: BombaAr[] = [];
   injetor!: Injetor; seg!: Seguranca; torn: Torneiras[] = []; biel: Bielas[] = []; soprador!: Soprador;
@@ -151,6 +165,7 @@ export class VaporDSP implements Motor {
   mixAr = 1; mixMec = 1;
   torneirasAbertas = false; voltasDesdeParado = 1e9; tParado = 0;
   sopradorLigado = 0;
+  ejetor: Ejetor | null = null; ejetorLigado = 0;
   /** governador de esferas (estacionária e trator parado): alvo, integrador */
   rpmAlvo = 0; govI = 0; govLigado = false;
   carga: Carga | null = null;
@@ -165,7 +180,9 @@ export class VaporDSP implements Motor {
   jMotorTotal = 0; jPreset = 0; kAtV = 0; kAtS = 0; cEventos = -1;
   tirR!: Ruido;
   sM = new Float64Array(2); cM = new Float64Array(2); sPhi = new Float64Array(0); cPhi = new Float64Array(0);
-  condEnv = 0; condEnv2 = 0; kCondEnv = 0; momS = 0; kMom = 0;
+  condEnv = 0; condEnv2 = 0; kCondEnv = 0;
+  /** ganho do sopro da tiragem e do chiado do condensador (unidades da linha; as ferramentas os zeram para isolar a fonte) */
+  gTiragem = 0; gCondensador = 0;
 
   constructor(fs: number) { this.fs = fs; this.rng = new RNG(1); }
 
@@ -188,6 +205,7 @@ export class VaporDSP implements Motor {
     this.condensador = P.escape.destino === 'condensador' || P.escape.destino === 'abafador';
     this.pCond = P.escape.pCondensador ?? P0;
     this.governadorProprio = P.familia === 'estacionaria';
+    this.trilhoDeAco = P.familia === 'locomotiva';
     this.rpmAlvo = P.rpmGovernado ?? 0;
     this.montarCilindros(P);
     this.montarFontes(P);
@@ -234,6 +252,15 @@ export class VaporDSP implements Motor {
     this.eVcl = new Float64Array(nE); this.eAe = new Float64Array(nE); this.eP = new Float64Array(nE).fill(P0); this.eV = new Float64Array(nE);
     this.eFase = new Int32Array(nE); this.eMdot = new Float64Array(nE); this.ePerda = new Float64Array(nE).fill(PERDA_ADMISSAO);
     this.eAC = new Float64Array(nE); this.eAR = new Float64Array(nE); this.eAK = new Float64Array(nE);
+    // 4 cilindros com as manivelas de dentro a 180° das de fora (GWR King, Castle): uma distribuição só por lado. A
+    // Walschaerts de dentro move a válvula de dentro, e a de fora vai por um balancim: faz o movimento espelhado, no
+    // mesmo ângulo de manivela. Os dois escapes de cada batida dupla abrem JUNTOS; não é cada cilindro com a sua
+    // distribuição ideal (isso os separava ~10° pela angularidade da biela, e a envoltória mostrava 8 batidas). O que
+    // sobra de 8 por volta é a regulagem: o balancim não compensa a angularidade inteira (`cilindros.desajuste`, graus)
+    this.eConj = new Int8Array(nE).fill(1);
+    const conj = !P.compound && P.cilindros.n === 4 && !!P.cilindros.angulo && Math.abs(P.cilindros.angulo[1] - P.cilindros.angulo[0]) === 180;
+    this.desajuste = conj ? (P.cilindros.desajuste ?? DESAJUSTE_PAR) * DEG : 0;
+    if (conj) for (let k = 1; k < cils.length; k += 2) { this.eConj[2 * k] = -1; this.eConj[2 * k + 1] = -1; }
     this.sPhi = new Float64Array(nE); this.cPhi = new Float64Array(nE);
     this.cF = new Float64Array(this.nC); this.cDF = new Float64Array(this.nC); this.cLado = new Int32Array(this.nC); this.cA = new Float64Array(this.nC);
     let np = 0;
@@ -286,13 +313,18 @@ export class VaporDSP implements Motor {
     this.rede = new RedeEscape(this.fs, {
       nPassagens: nE, aPortico: CD_PORTICO * this.eAe[0], dBico: P.escape.dBico, lDescarga: P.escape.lDescarga, vCaixa: P.escape.vCaixa,
       lChamine: P.escape.lChamine, dChamine: P.escape.dChamine, kNL: P.escape.kNL ?? 0.3, condensador: this.condensador,
+      vColetor: this.condensador ? 0 : P.escape.vColetor ?? vColetorPadrao(P),
     });
     this.jato = new JatoBico(this.fs, P.escape.dBico, P.semente ^ 0x1e7);
     // ganho do ruído de mistura relativo ao tom da chaminé (unidades da linha: Pa por kg/s·M³), acertado contra as
-    // bandas de perto (3.3); o choque fica 6 dB acima da mistura quando pleno (controle "Ar")
+    // bandas de perto (3.3); o choque fica 1,2× a mistura quando pleno (controle "Ar"): é o estalo claro do corte longo
     this.jato.gMistura = (K_MISTURA * 0.0177) / this.rede.aBico;
-    this.jato.gChoque = 0.9 * this.jato.gMistura;
-    this.lpCond.lp(this.fs, 300, 0.7071); this.lpCond2.lp(this.fs, 300, 0.7071); this.kCondEnv = onePole(this.fs, 5); this.kMom = onePole(this.fs, 0.5);
+    this.jato.gChoque = 1.2 * this.jato.gMistura;
+    this.portico = new RuidoPortico(this.fs, P.semente ^ 0x9071); this.gPortico = K_PORTICO * this.jato.gMistura;
+    this.gTiragem = this.jato.gMistura * K_TIRAGEM * (P.escape.tiragem ?? 1); this.gCondensador = K_CONDENSADOR * this.jato.gMistura;
+    this.caixa = new CaixaRessonante(this.fs, P.escape.vCaixa, P.escape.tCauda ?? T_CAUDA, P.escape.nivelCauda ?? NIVEL_CAUDA);
+    this.gas = new ColunaDeGas(this.fs);
+    this.lpCond.lp(this.fs, 300, 0.7071); this.lpCond2.lp(this.fs, 300, 0.7071); this.kCondEnv = onePole(this.fs, 5);
     // (tiragem: 200–1500 Hz; o 1.4 diz 300–1500)
     this.tirR = new Ruido(P.semente ^ 0x7123, [new Biquad().hp(this.fs, 200, 0.7071), new Biquad().lp(this.fs, 1500, 0.7071), new Biquad().lp(this.fs, 4000, 0.7071)]);
     // volumes iniciais pela posição das manivelas
@@ -336,6 +368,7 @@ export class VaporDSP implements Motor {
     this.torn = [new Torneiras(fs, sem ^ 0x70e), new Torneiras(fs, sem ^ 0x70d)];
     this.biel = [new Bielas(fs, sem ^ 0xb1e), new Bielas(fs, sem ^ 0xb1d)];
     this.soprador = new Soprador(fs, sem ^ 0x50f);
+    this.ejetor = P.ejetor ? new Ejetor(fs, sem ^ 0xe7e) : null;
     this.queimador = P.queimador ? new Queimador(fs, sem ^ 0x9e1) : null;
     this.engren = P.engrenagens ? new Engrenagens(fs, P.engrenagens.z, sem ^ 0xe9) : null;
     this.correias = P.correias ? new Correias(fs, sem ^ 0xc0e) : null;
@@ -398,8 +431,10 @@ export class VaporDSP implements Motor {
     if (c === this.cEventos) { this.dirMarcha = this.rev < -0.02 ? -1 : 1; return; }
     this.cEventos = c;
     for (let e = 0; e < this.nE; e++) {
-      const sg = (e & 1) === 0 ? 1 : -1, dc = (this.eLado[e] === 0 ? DC_LADO : -DC_LADO) + sg * 0.01;
-      this.eAC[e] = angPistao(c + dc, sg); this.eAR[e] = angPistao(ev.r, sg); this.eAK[e] = TAU - angPistao(1 - ev.k, sg);
+      // (sg: a ponta cuja distribuição vale; no cilindro movido por balancim é a ponta oposta do cilindro par)
+      const cj = this.eConj[e], sg = ((e & 1) === 0 ? 1 : -1) * cj, dc = (this.eLado[e] === 0 ? DC_LADO : -DC_LADO) + sg * 0.01;
+      const des = cj < 0 ? this.desajuste : 0;
+      this.eAC[e] = angPistao(c + dc, sg) + des; this.eAR[e] = angPistao(ev.r, sg) + des; this.eAK[e] = TAU - angPistao(1 - ev.k, sg) + des;
     }
     this.aC = this.eAC[0]; this.aR = this.eAR[0]; this.aK = this.eAK[0]; this.aL = ev.avanco * DEG;
     this.dirMarcha = this.rev < -0.02 ? -1 : 1;
@@ -441,6 +476,8 @@ export class VaporDSP implements Motor {
     // tiragem: o jato do escape puxa o fogo; parado só a natural (0,15) e o soprador
     const sopr = this.sopradorCmd === 'auto' ? (this.reg < 0.05 && parado && P.familia === 'locomotiva' ? 1 : 0) : this.sopradorCmd ? 1 : 0;
     this.sopradorLigado = sopr;
+    // ejetor de vácuo (freio a vácuo): o pequeno fica ligado com a máquina parada; o comando da bomba de ar o força ou desliga
+    this.ejetorLigado = this.ejetor ? (this.bombaCmd === 'auto' ? (parado ? 1 : 0) : this.bombaCmd ? 1 : 0) : 0;
     this.tiragem = clamp(0.15 + 0.3 * sopr + this.mCylS / (0.8 * P.evaporacaoMax), 0, 1);
     this.fogoAuto = this.fogoCmd === 'auto';
     if (this.fogoAuto) this.fogo = clamp(0.2 + (this.pNom - this.pCal) / 1, 0, 1);
@@ -454,7 +491,7 @@ export class VaporDSP implements Motor {
     const mApito = this.apito.ps * clamp(0.08 * P.evaporacaoMax, 0.02, 0.6) * (P.apito.tipo === 'navio' ? 2 : 1);
     let mBomba = 0; for (const b of this.bombas) mBomba += b.consumo * Math.min(1, P.evaporacaoMax / 3);
     const mVaz = 0.004 * P.evaporacaoMax * (1 + P.folga);
-    this.mTot = this.mCyl + mInj + mApito + mBomba + mVaz + (this.seg.aberta ? descarga : 0) + 0.05 * sopr * P.evaporacaoMax;
+    this.mTot = this.mCyl + mInj + mApito + mBomba + mVaz + (this.seg.aberta ? descarga : 0) + 0.05 * sopr * P.evaporacaoMax + 0.01 * this.ejetorLigado * P.evaporacaoMax;
     const kCal = P.kCaldeira ?? 1 / (10 * P.evaporacaoMax);
     this.pCal = Math.max(0, this.pCal + (this.evap - this.mTot) * kCal * dt);
     this.estado = this.pCal < 0.5 ? 'desligado' : 'funcionando';
@@ -465,6 +502,7 @@ export class VaporDSP implements Motor {
     if (parado) this.tParado += dt; else this.tParado = 0;
     if (this.tParado > 0 && this.tParado - dt <= 0) for (const b of this.bombas) b.carregar(60);
     if (this.freioAnt > 0.2 && this.freio <= 0.2) for (const b of this.bombas) b.carregar(30);
+    if (this.freioAnt > 0.2 && this.freio <= 0.2 && this.ejetor && this.ejetorLigado) this.ejetor.soltarFreio();
     this.freioAnt = this.freio;
     for (const b of this.bombas) b.controle(dt, this.bombaCmd === 'auto');
     // torneiras: no automático abertas nas primeiras 15 voltas depois de parado (≥ 5 s)
@@ -500,10 +538,11 @@ export class VaporDSP implements Motor {
     for (let i = 0; i < S.length; i++) S[i].fill(0, 0, n);
     const cond = this.condensador;
     const mixAr = this.mixAr, mixMec = this.mixMec;
+    const gEjet = g.ejetor * mk.ejetor * mixAr;
     const gChuff = g.chuff * mk.chuff, gSopr = g.soprador * mk.soprador, gTorn = g.torneiras * mk.torneiras * mixAr, gVaz = g.vazamentos * mk.vazamentos * mixAr;
     const gBiel = g.bielas * mk.bielas * mixMec, gApito = g.apito * mk.apito, gSeg = g.seguranca * mk.seguranca, gBomba = g.bomba * mk.bomba;
     const gInj = g.injetor * mk.injetor, gSino = g.sino * mk.sino, gQ = g.queimador * mk.queimador, gEng = g.engrenagens * mk.engrenagens * mixMec, gCor = g.correias * mk.correias * mixMec;
-    const pNomAbs = this.pNom * BARl + P0l;
+    const pNomAbs = this.pNom * BARl + P0l, evapMax = P.evaporacaoMax;
     let mCylBloco = 0;
     const sM = this.sM, cM = this.cM;
     for (let k = 0; k < n; k++) {
@@ -517,7 +556,7 @@ export class VaporDSP implements Motor {
       let mAdmChest = 0, mAdmRec = 0, mRecIn = 0, mCond = 0;
       for (let m = 0; m < nM; m++) { sM[m] = Math.sin(thM[m]); cM[m] = Math.cos(thM[m]); }
       rede.ler();
-      let tqTot = 0, tornE = 0, tornD = 0;
+      let tqTot = 0, tornE = 0, tornD = 0, nPort = 0;
       for (let e = 0; e < nE; e++) {
         const m = eMotor[e];
         const th0 = thM[m] + ePhi[e];
@@ -568,7 +607,13 @@ export class VaporDSP implements Motor {
             mE = vazaoV(A, p, this.pCond, sRTex);
             mCond += mE;
             rede.injetarFixo(pass, 0.15 * mE);
-          } else mE = rede.injetar(pass, p, A, sRTex);
+          } else {
+            const pL = rede.pPassagem(pass);
+            mE = rede.injetar(pass, p, A, sRTex);
+            // o jato na fresta do pórtico, enquanto ela é fresta: com o pórtico todo aberto (u = 1) não há mais lâmina de
+            // vapor, e o que passa é escoamento de tubo (o ruído dele é o do jato do bico)
+            if (mE > 0 && u < 1) { const M = machExpandido(p / (pL > 2000 ? pL : 2000)), f = 1 - u; nPort += mE * M * M * M * f * f; }
+          }
           p -= (nPol * RTex * mE * dt) / V;
           if (eFase[e] !== 2) { rede.gAlvo = Math.pow(10, (1.3 * this.rng.gauss() + (this.eLado[e] === 0 ? DB_LADO : -DB_LADO) + ((e & 1) === 0 ? DB_PONTA : -DB_PONTA)) / 20); this.pRelSoma += p; this.pRelN++; this.pRelUlt = p; this.nEscapes++; this.engasgado = p / rede.pPassagem(pass) > 1.83; }
         } else {
@@ -603,23 +648,27 @@ export class VaporDSP implements Motor {
       // ---- rede e jato
       const tom = rede.passo(sRTex);
       let jat = this.jato.amostra(rede.mJato * rede.gVar, rede.mach, rede.prBico);
+      if (!cond) jat += this.gPortico * this.portico.amostra(nPort * rede.gVar);
       if (this.tap) this.tap(this);
-      // tiragem: sopro contínuo de escoamento na chaminé ∝ U_ch² (a vazão média dos cilindros), 300–1500 Hz: enche o vale
-      // (U_ch vem da quantidade de movimento do jato que arrasta o gás: ∝ média de ṁ_j·M_j; no corte curto, com o jato
-      // subsônico, a tiragem sopra menos e o espectro escurece, 3.3)
-      this.momS += this.kMom * (rede.mJato * rede.mach - this.momS);
-      const mr = this.momS / P.evaporacaoMax;
-      if (!cond) jat += this.jato.gMistura * K_TIRAGEM * mr * mr * this.tirR.amostra();
+      if (!cond) {
+        // tiragem: o sopro do escoamento na chaminé ∝ U_ch², 200–1500 Hz. U_ch² é a vazão ao quadrado da coluna de gás
+        // que o jato arrasta (a quantidade de movimento ṁ_j·M_j com a inércia dos tubos de fogo): sobe com cada chuff e
+        // cai entre um e outro; no corte curto, com o jato subsônico, sopra menos e o espectro escurece (3.3)
+        const q2 = this.gas.amostra((rede.mJato * rede.mach) / evapMax);
+        jat += this.gTiragem * q2 * q2 * this.tirR.amostra();
+        // cauda: o ruído do jato que fica na caixa de fumaça e sai pela chaminé depois da descarga
+        jat += this.caixa.amostra(jat + K_TOM_CAIXA * tom);
+      }
       let chamine = tom + jat * mixAr;
       if (cond) {
         // condensador e abafador: a rede só recebe o pulso abafado (passa-baixa de 300 Hz) e o que se ouve é o chiado do
         // vapor entrando no condensador, com a envoltória alisada pelo volume dele (2 polos em 5 Hz): um ronronar de 2–4 dB
         this.condEnv += this.kCondEnv * (mCond - this.condEnv);
         this.condEnv2 += this.kCondEnv * (this.condEnv - this.condEnv2);
-        chamine = 0.03 * this.lpCond2.run(this.lpCond.run(chamine)) + K_CONDENSADOR * this.jato.gMistura * this.condEnv2 * this.tirR.amostra();
+        chamine = 0.03 * this.lpCond2.run(this.lpCond.run(chamine)) + this.gCondensador * this.condEnv2 * this.tirR.amostra();
       }
       const sopr = this.soprador.amostra(this.sopradorLigado * (1 - this.reg));
-      S[ch.chamine][k] = gChuff * chamine + gSopr * sopr;
+      S[ch.chamine][k] = gChuff * chamine + gSopr * sopr + (this.ejetor ? gEjet * this.ejetor.amostra(this.ejetorLigado) : 0);
       // ---- cilindros: torneiras e vazamentos
       const pRel = this.pCal / this.pNom;
       S[ch.cilE][k] = gTorn * this.torn[0].torneira(tornE) + gVaz * this.torn[0].vazamento(pRel);
@@ -686,7 +735,15 @@ export class VaporDSP implements Motor {
       }
       // patinando: só o rodeiro e as bielas; o trem recebe o atrito de escorregamento
       const s = Math.sign(wM[m] - this.wTrem * k) || Math.sign(tqM[m]) || 1;
-      const Fat = this.wAd[m] * 0.9 * s;
+      // o atrito de escorregamento cai com a velocidade de deslizamento (a curva de aderência de Polach: μ = μ₀·(A + (1 − A)·e^(−B·w)),
+      // A = 0,45 e B = 0,4 s/m): a 15 m/s de deslizamento sobram 45% da aderência. É por isso que a roda dispara: quanto
+      // mais patina, menos o trilho segura, a máquina pede mais vapor do que o regulador entrega, a caixa de válvulas cai
+      // e cada chuff sai mais fraco e mais curto
+      const wDes = Math.abs(wM[m] - this.wTrem * k) * r;
+      // (roda de aço em trilho; no trator de rodas de ferro com garras e no carro de pneus fica o 0,9 da aderência)
+      const kAt = this.trilhoDeAco ? ATRITO_A + (1 - ATRITO_A) * Math.exp(-ATRITO_B * wDes) : 0.9;
+      this.kAtM[m] = kAt;
+      const Fat = this.wAd[m] * kAt * s;
       wM[m] += ((T - Fat * r) / this.JM[m]) * dt;
       Tt += Fat * r * k;
       // readere quando a roda volta à velocidade do trem
@@ -702,7 +759,7 @@ export class VaporDSP implements Motor {
       else if (this.thM[m] < -1e4) this.thM[m] += TAU * Math.ceil(-this.thM[m] / TAU);
     }
     // esforço de tração médio (N)
-    let tq = 0; for (let m = 0; m < nM; m++) tq += this.patM[m] ? this.wAd[m] * 0.9 * r : tqM[m];
+    let tq = 0; for (let m = 0; m < nM; m++) tq += this.patM[m] ? this.wAd[m] * this.kAtM[m] * r : tqM[m];
     this.esforcoS += 0.0005 * (tq / r - this.esforcoS);
   }
 
@@ -718,7 +775,7 @@ export class VaporDSP implements Motor {
       rpm: (w * 60) / TAU, torque: this.tqS, potencia: this.tqS * w, estado: this.estado,
       pCaldeira: this.pCal, pChest: (this.pChest - P0) / BAR, pRelease: pr / BAR, corte: this.corte, chuffsPorS: this.chuffsPorS(),
       vapor: this.mTot, consumoCilindros: this.mCylS, evaporacao: this.evap, esforco: this.esforcoS, adesao, patinando: this.patinando,
-      seguranca: this.seg.aberta, injetor: this.injetor.ligado, bombaAr: this.bombas.some((b) => b.ligada), torneiras: this.torneirasAbertas,
+      seguranca: this.seg.aberta, injetor: this.injetor.ligado, bombaAr: this.bombas.some((b) => b.ligada) || this.ejetorLigado > 0, torneiras: this.torneirasAbertas,
       soprador: this.sopradorLigado > 0, fApito: this.apito.frequencias(), aquecimentoApito: this.apito.aq,
       regulador: this.reg, reverser: this.rev, fogo: this.fogo, nivelAgua: this.injetor.nivel, engasgado: this.engasgado,
       v: this.wTrem * this.rRoda, rodaRpm: (w * 60) / TAU, voltasPorS: w / TAU, pCaixa: this.rede.pCaixa, theta: Array.from(this.thM, (t) => t * this.reducao),
@@ -740,7 +797,11 @@ const DC_LADO = 0.025;
  * entra também como ganho por extremidade; com ±1,3 dB a linha de 2/volta fica 6–14 dB abaixo da de 4/volta (medido: 1225
  * −4, "enchanting" −10, 6024 −3 dB)
  */
-const DB_LADO = 1.3, DB_PONTA = 0.4;
+const DB_LADO = 1.0, DB_PONTA = 0.4;
+/** atrito de escorregamento roda–trilho: fração da aderência a deslizamento alto e a queda com a velocidade (s/m) */
+const ATRITO_A = 0.45, ATRITO_B = 0.4;
+/** desajuste padrão (graus de manivela) entre os escapes de dentro e de fora de cada par, nas máquinas de 4 cilindros */
+export const DESAJUSTE_PAR = 2;
 /** ângulo α ∈ [0, π] em que o pistão percorreu a fração x do curso, extremidade da tampa (sg +1) ou da manivela (−1) */
 function angPistao(x: number, sg: number) {
   x = clamp(x, 0, 1);

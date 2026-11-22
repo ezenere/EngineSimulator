@@ -5,6 +5,7 @@
 // 1 pW numa condição de referência, renderizando um VaporDSP com só aquele componente soando:
 //   chuff     regulador 1, corte 50%, p_cal nominal, 4 chuffs/s (ω imposto), sem o jato de choque    lwChuff do preset
 //   soprador  regulador 0, parado, soprador ligado                                                      100
+//   ejetor    parado, ejetor pequeno ligado (só nas máquinas de freio a vácuo)                           98
 //   torneiras abertas, 2 voltas/s, regulador 0,5, corte 57%                                            123
 //   vazamentos p_cal nominal                                                                            85 + 10·folga
 //   bielas    folga 0,5, regulador 1, corte 60%, 1 volta/s                                              103
@@ -43,6 +44,7 @@ function condicoes(P: PresetVapor): Partial<Record<IdComponente, Condicao>> {
     bomba: { canais: ['bomba.ar', 'bomba.ar.0'], lw: LW_VAPOR.bombaAr, dur: 6, ini: 0.5, montar: (d) => { d.comandar({ acelerador: 0, ignicao: true, partida: false, bombaAr: true } as any); } },
     injetor: { canais: ['injetor'], lw: LW_VAPOR.injetor, dur: 5, ini: 3.2, montar: (d) => { d.comandar({ acelerador: 0, ignicao: true, partida: false, injetor: true } as any); } },
   };
+  if (P.ejetor) c.ejetor = { canais: ['chamine'], lw: LW_VAPOR.ejetor, dur: 2.5, ini: 1, montar: (d) => { d.fixar({ regulador: 0 }); d.comandar({ acelerador: 0, ignicao: true, partida: false, bombaAr: true } as any); } };
   if (P.sino) c.sino = { canais: ['sino'], lw: LW_VAPOR.sino, dur: 4, ini: 1, montar: (d) => { d.comandar({ acelerador: 0, ignicao: true, partida: false, sino: true } as any); } };
   if (P.queimador) c.queimador = { canais: ['queimador'], lw: LW_VAPOR.queimador, dur: 1.5, ini: 0.5, montar: (d) => { d.comandar({ acelerador: 0, ignicao: true, partida: false, fogo: 1 } as any); } };
   if (P.engrenagens) c.engrenagens = { canais: ['engrenagens'], lw: LW_VAPOR.engrenagens, dur: 2.5, ini: 1, montar: (d) => { d.fixar({ regulador: 1, cutoff: 0.5 }); d.impor(omegaChuffs(4)); d.pChest = d.pCal * 1e5 + 101325; } };
