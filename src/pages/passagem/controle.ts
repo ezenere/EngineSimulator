@@ -21,23 +21,18 @@ import { Trem, TREM_PADRAO, maxVagoes, type ConfigTrem } from '../../carriers/tr
 import { Rotor, type CargaRotor } from '../../carriers/rotor';
 import { CarroLegado, configCarroLegado } from '../../carriers/carro';
 import { montarMotor, montarPortadorComMotor } from '../../scene/dsp-cena';
-import { prepararMotorRonco } from '../../engines/ronco/motor';
-import { prepararMotorDiesel, type UsoDiesel } from '../../engines/diesel/motor';
-import { prepararMotorRadial } from '../../engines/radial/motor';
-import { PRESETS_RADIAL, PADRAO_RADIAL } from '../../engines/radial/presets';
-import { prepararMotorRotativo } from '../../engines/rotativo/motor';
-import { PRESETS_ROTATIVO, PADRAO_ROTATIVO } from '../../engines/rotativo/presets';
+import { PRESETS_RADIAL } from '../../engines/radial/presets';
+import { PRESETS_ROTATIVO } from '../../engines/rotativo/presets';
 import { PRESETS_AVIACAO } from '../../engines/ronco/presets';
 import { configHelice, configRotor } from '../../engines/ronco/aviacao';
-import { PRESETS as PRESETS_RONCO, ACESSORIOS_PADRAO } from '../../engines/ronco/presets';
-import { PRESETS as PRESETS_DIESEL, PADRAO_DIESEL } from '../../engines/diesel/presets';
+import { PRESETS as PRESETS_RONCO } from '../../engines/ronco/presets';
+import { PRESETS as PRESETS_DIESEL } from '../../engines/diesel/presets';
 import { PRESETS_TURBINA } from '../../engines/turbina/presets';
 // Elétrico (etapa 6)
 import { PRESETS_ELETRICO } from '../../engines/eletrico/presets';
-import { prepararMotorEletrico } from '../../engines/eletrico/motor';
 // (vapor, etapa 5)
-import { prepararMotorVapor } from '../../engines/vapor/motor';
 import { presetVapor } from '../../engines/vapor/presets';
+import { calibrarMotor, calibracaoInstantanea, type PedidoCalibracao } from './calibracao';
 export { configPortadorVapor };
 import type { ComandoVapor } from '../../engines/vapor/dsp';
 import { configPortadorVapor } from '../../carriers/portadores-vapor';
@@ -94,9 +89,20 @@ export class ControlePassagem {
   freio = 0; partida = false;
   /** (vapor) comando da máquina e vagões da composição */
   vapor: Partial<ComandoVapor> & { vagoes?: number } = { regulador: 1, cutoff: 0.3, vagoes: 8 };
-  /** mensagem do motor para o worklet: o cfg calibrado aqui (Ronco e Diesel: ~1 s de sonda, guardado por preset) */
+  /** mensagem do motor para o worklet: o cfg calibrado (1–9 s de sonda, guardado por preset, portador e taxa) */
   private motorMsg: { familia: FamiliaMotor; cfg: Record<string, any> } | null = null;
   private cacheMotor = new Map<string, Record<string, any>>();
+  /**
+   * (AUDITORIA.md P-07) Calibração fora da thread principal: a página põe aqui o Web Worker (calibracao.worker.ts).
+   * Com ele, um motor ainda não calibrado é pedido ao worker e o portador só é montado (aqui e no worklet) quando o cfg
+   * chega; enquanto isso fica o de antes e `calibrando` é verdadeiro. Sem ele (Node: os testes), calibra na hora.
+   */
+  calibrador: ((p: PedidoCalibracao) => Promise<Record<string, any>>) | null = null;
+  /** o motor pedido ainda está calibrando no worker (o portador montado é o anterior) */
+  calibrando = false;
+  private pedidos = new Set<string>();
+  /** o ajuste dos padrões ao motor (C-03) espera o cfg chegar */
+  private ajustarPendente = false;
   ambiente: IdAmbientePagina = 'tunel';
   solo: Solo['tipo'] | null = null;              // null = o do ambiente
   tunel = { area: 64, comprimento: 2000, xEntrada: -500 };
@@ -163,15 +169,22 @@ export class ControlePassagem {
   /** monta o portador na thread principal: geometria, lista de fontes e calibrações (aloca; ~30 ms no trem) */
   private sondar(fs = this.audio?.ctx.sampleRate ?? 48000) {
     let p: Portador;
+    this.calibrando = false;
+    // o motor (e o cfg calibrado dele) primeiro: se ainda calibra no worker, fica tudo como estava (o portador de antes)
+    const trem = this.portador === 'trem', semMotor = (this.portador === 'rotor' && this.motor === 'nenhum') || (trem && this.motor !== 'eletrico');
+    let cfg: Record<string, any> | null = null;
+    if (!semMotor) {
+      const fam = this.motor, id = trem ? (this.motorPreset ?? MOTOR_PADRAO.eletrico?.trem ?? 'n700') : (this.motorPreset ?? MOTOR_PADRAO[fam]?.[this.portador] ?? presetsDoMotor(this.portador, fam)[0]?.id ?? null);
+      this.motorPreset = id;
+      if (id) { cfg = this.cfgMotor(fam, id, fs); if (!cfg) return; }
+    }
     this.rotorCfg = null;
     this.motorMsg = null;
     this.cambio = null; this.rotorCarga = null; this.motorPotencia = null;
     if (this.portador === 'rotor' && this.motor === 'nenhum') { const r = new Rotor(fs); p = r; this.rotorCfg = { R: r.cfg.R, Rc: r.cfg.Rc, B: r.cfg.B, posRotor: r.cfg.posRotor, posCauda: r.cfg.posCauda }; }
     else if (this.portador !== 'trem') {
-      // portador com motor: o mesmo que o worklet monta (geometria e fontes), com o motor calibrado aqui
-      const fam = this.motor, id = this.motorPreset ?? MOTOR_PADRAO[fam]?.[this.portador] ?? presetsDoMotor(this.portador, fam)[0]?.id;
-      this.motorPreset = id ?? null;
-      this.motorMsg = id ? { familia: fam, cfg: this.cfgMotor(fam, id, fs) } : null;
+      // portador com motor: o mesmo que o worklet monta (geometria e fontes), com o motor calibrado
+      this.motorMsg = cfg ? { familia: this.motor, cfg } : null;
       p = montarPortadorComMotor(this.portador, this.configPortador(), montarMotor(this.motorMsg ?? undefined, fs), fs)!;
       if (p instanceof Rotor) this.rotorCfg = { R: p.cfg.R, Rc: p.cfg.Rc, B: p.cfg.B, posRotor: p.cfg.posRotor, posCauda: p.cfg.posCauda };
       // (C-03) câmbio do carro e carga do rotor, para ajustar os padrões ao motor (ajustarAoMotor)
@@ -182,9 +195,7 @@ export class ControlePassagem {
     } else if (this.motor === 'eletrico') {
       // trem com o motor elétrico (etapa 6): o mesmo que o worklet monta (montarPortadorComMotor), com as calibrações dele
       this.trem.N = Math.min(this.trem.N, this.maxVagoes());
-      const id = this.motorPreset ?? MOTOR_PADRAO.eletrico?.trem ?? 'n700';
-      this.motorPreset = id;
-      this.motorMsg = { familia: 'eletrico', cfg: this.cfgMotor('eletrico', id, fs) };
+      this.motorMsg = { familia: 'eletrico', cfg: cfg! };
       const t = montarPortadorComMotor('trem', this.configTrem(), montarMotor(this.motorMsg, fs), fs) as Trem;
       this.calibracao = t.calibracoes();
       p = t;
@@ -203,27 +214,47 @@ export class ControlePassagem {
 
   private mandarPortador() {
     const a = this.audio; if (!a) return;
-    if (this.fsSonda !== a.ctx.sampleRate) this.sondar(a.ctx.sampleRate);
+    if (this.fsSonda !== a.ctx.sampleRate || this.calibrando) this.sondar(a.ctx.sampleRate);
+    if (this.calibrando) return;   // o worker ainda não devolveu o cfg: manda quando chegar (calibrou)
     if (this.portador === 'rotor' && this.motor === 'nenhum') a.send({ type: 'portador', tipo: 'rotor' });
     else if (this.portador === 'trem') a.send({ type: 'portador', tipo: 'trem', config: { ...this.configTrem(), calibracao: this.calibracao }, ...(this.motorMsg ? { motor: this.motorMsg, comando: this.comandoMotor() } : {}) });
     else a.send({ type: 'portador', tipo: this.portador, config: this.configPortador(), motor: this.motorMsg, comando: this.comandoMotor() });
   }
 
-  /** cfg do motor pronto para o worklet: geometria, calibração e nível absoluto (caro: guardado por preset e taxa) */
-  private cfgMotor(fam: FamiliaMotor, id: string, fs: number) {
+  /**
+   * cfg do motor pronto para o worklet: geometria, calibração e nível absoluto (caro: guardado por preset, portador e
+   * taxa). Com o worker: devolve null e pede; quando chega, `calibrou()` monta de novo.
+   */
+  private cfgMotor(fam: FamiliaMotor, id: string, fs: number): Record<string, any> | null {
+    const pedido: PedidoCalibracao = { fam, id, portador: this.portador, fs };
     const chave = `${fam}|${id}|${this.portador}|${fs}`;
-    let cfg = this.cacheMotor.get(chave);
-    if (!cfg) {
-      if (fam === 'pistao') cfg = prepararMotorRonco({ ...ACESSORIOS_PADRAO, ...[...PRESETS_RONCO, ...PRESETS_AVIACAO].find((x) => x.id === id)! }, fs);
-      else if (fam === 'radial') cfg = prepararMotorRadial({ ...PADRAO_RADIAL, ...PRESETS_RADIAL.find((x) => x.id === id)! }, fs);
-      else if (fam === 'rotativo') cfg = prepararMotorRotativo({ ...PADRAO_ROTATIVO, ...PRESETS_ROTATIVO.find((x) => x.id === id)! }, fs);
-      else if (fam === 'diesel') cfg = prepararMotorDiesel({ ...PADRAO_DIESEL, ...PRESETS_DIESEL.find((x) => x.id === id)! }, fs, this.portador as UsoDiesel);
-      else if (fam === 'eletrico') cfg = prepararMotorEletrico(PRESETS_ELETRICO.find((x) => x.id === id)!, fs);
-      else if (fam === 'vapor') cfg = prepararMotorVapor(presetVapor(id)!, fs) as unknown as Record<string, any>;
-      else cfg = { ...PRESETS_TURBINA.find((x) => x.id === id)! };
-      this.cacheMotor.set(chave, cfg);
+    const cfg = this.cacheMotor.get(chave);
+    if (cfg) return cfg;
+    if (!this.calibrador || calibracaoInstantanea(fam)) { const c = calibrarMotor(pedido); this.cacheMotor.set(chave, c); return c; }
+    this.calibrando = true;
+    if (!this.pedidos.has(chave)) {
+      this.pedidos.add(chave);
+      this.calibrador(pedido).then(
+        (c) => { this.cacheMotor.set(chave, c); this.pedidos.delete(chave); this.calibrou(); },
+        // (o worker falhou: calibra aqui, como antes; trava, mas toca)
+        () => { this.pedidos.delete(chave); this.calibrador = null; this.calibrou(); },
+      );
     }
-    return cfg;
+    return null;
+  }
+  /** o cfg chegou do worker: monta o portador com ele, se ainda é o motor pedido (senão o sondar pede o novo) */
+  private calibrou() {
+    this.sondar();
+    if (this.calibrando) { this.avisar('estado'); return; }
+    if (this.ajustarPendente) { this.ajustarAoMotor(); this.ajustarPendente = false; }
+    this.mandarPortador();
+    this.mandarComando();
+    this.avisar('presets', 'painel', 'ouvinte', 'estado');
+  }
+  /** (C-03) ajusta os padrões ao motor agora, ou quando o cfg chegar */
+  private ajustarSePronto() {
+    if (this.calibrando) this.ajustarPendente = true;
+    else { this.ajustarAoMotor(); this.ajustarPendente = false; }
   }
   /** configuração do portador que vem do preset do motor (hélice do turboélice, alternador, tabela de notches) */
   configPortador(): Record<string, any> {
@@ -262,14 +293,14 @@ export class ControlePassagem {
     if (f === this.motor || !motoresProntos(this.portador).includes(f)) return;
     this.motor = f; this.motorPreset = MOTOR_PADRAO[f]?.[this.portador] ?? presetsDoMotor(this.portador, f)[0]?.id ?? null;
     this.presetId = null;
-    this.sondar(); this.ajustarAoMotor(); this.mandarPortador(); this.mandarComando();
-    this.avisar('presets', 'painel');
+    this.sondar(); this.ajustarSePronto(); this.mandarPortador(); this.mandarComando();
+    this.avisar('presets', 'painel', 'estado');
   }
   setMotorPreset(id: string) {
     if (id === this.motorPreset) return;
     this.motorPreset = id; this.presetId = null;
-    this.sondar(); this.ajustarAoMotor(); this.mandarPortador(); this.mandarComando();
-    this.avisar('presets', 'painel');
+    this.sondar(); this.ajustarSePronto(); this.mandarPortador(); this.mandarComando();
+    this.avisar('presets', 'painel', 'estado');
   }
 
   /**
@@ -342,11 +373,11 @@ export class ControlePassagem {
     this.ouv.gimbal.alvo = 'corpo';
     this.presetId = null;
     this.sondar();
-    this.ajustarAoMotor();
+    this.ajustarSePronto();
     this.mandarPortador();
     this.mandarCena(true);
     this.mandarComando();
-    this.avisar('presets', 'painel', 'ouvinte');
+    this.avisar('presets', 'painel', 'ouvinte', 'estado');
   }
 
   // ------------------------------------------------------ ambiente
@@ -554,6 +585,7 @@ export class ControlePassagem {
     if (p.coletivo != null) this.coletivo = p.coletivo;
     this.ouv = clonarOuvinte(OUVINTE_PADRAO);
     this.presetId = p.id;
+    this.ajustarPendente = false;   // (o preset traz os valores dele)
     this.sondar();
     this.mandarPortador();
     this.mandarCena(true);
@@ -573,6 +605,7 @@ export class ControlePassagem {
     this.coletivo = 0.75;
     this.ouv = clonarOuvinte(OUVINTE_PADRAO);
     this.presetId = this.portador === 'trem' ? 'trembala-tunel' : null;
+    this.ajustarPendente = false;
     this.sondar();
     this.audio?.send({ type: 'ar', ...this.ar });
     this.mandarPortador();

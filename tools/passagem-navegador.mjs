@@ -273,7 +273,7 @@ confere((await ev(`window.__passagem.cena.current?.modo`)) === 'livre', 'câmera
 await clicar('.camera [data-cam="ouvinte"]');
 // helicóptero
 await chip('portador', 'Helicóptero');
-await espera(800);
+await ate(`!${P}.calibrando`, 20000); await espera(300);   // (a calibração do motor roda num worker: P-07)
 const port3 = (await ultimos('portador')).at(-1);
 confereMsg(port3?.tipo === 'rotor' && port3.motor?.familia === 'pistao' && port3.motor.cfg.id === 'r44', 'helicóptero montado com o IO-540 do R44 (família aviação do Ronco)', port3 && { tipo: port3.tipo, motor: port3.motor?.familia, id: port3.motor?.cfg.id });
 confere((await ev(`${P}.traj.altitude`)) === 150, 'padrão do helicóptero: altitude 150 m');
@@ -281,7 +281,7 @@ confere((await ev(`${P}.traj.altitude`)) === 150, 'padrão do helicóptero: alti
 await clicar('#ignicao');
 if (await ev(`${P}.andando`)) await clicar('#ignicao');
 await clicar('.preset[data-id="carro-rua"]');
-await espera(600);
+await ate(`!${P}.calibrando`, 20000); await espera(300);
 const portC = (await ultimos('portador')).at(-1);
 confereMsg(portC?.tipo === 'carro' && portC.motor?.familia === 'pistao' && portC.motor.cfg.id === 'muscle' && portC.motor.cfg.kAbs > 0, 'carro montado com o motor do Ronco calibrado na página (kAbs)', portC && { tipo: portC.tipo, motor: portC.motor?.familia, id: portC.motor?.cfg.id, kAbs: portC.motor?.cfg.kAbs });
 const secC = await ev(`[...document.querySelectorAll('#controls h2')].map((h) => h.textContent)`);
@@ -300,7 +300,7 @@ await clicar('#ignicao');
 if (await ev(`${P}.andando`)) await clicar('#ignicao');
 // ---- RX-7 FD na rua (rotativo adaptado, etapa 4): 3ª, pé no fundo, 100 km/h
 await clicar('.preset[data-id="rx7-rua"]');
-await espera(800);
+await ate(`!${P}.calibrando`, 20000); await espera(300);
 const portR = (await ultimos('portador')).at(-1);
 confereMsg(portR?.tipo === 'carro' && portR.motor?.familia === 'rotativo' && portR.motor.cfg.id === 'rx7fd' && portR.motor.cfg.kAbs > 0, 'carro montado com o Wankel do RX-7 calibrado na página (kAbs)', portR && { tipo: portR.tipo, motor: portR.motor?.familia, id: portR.motor?.cfg.id, kAbs: portR.motor?.cfg.kAbs });
 await clicar('#ignicao');
@@ -317,7 +317,7 @@ await clicar('#ignicao');
 if (await ev(`${P}.andando`)) await clicar('#ignicao');
 // ---- locomotiva EMD em N8 (diesel adaptado, governador do motor, carga do portador)
 await clicar('.preset[data-id="locomotiva-patio"]');
-await espera(600);
+await ate(`!${P}.calibrando`, 20000); await espera(300);
 const portL = (await ultimos('portador')).at(-1);
 confereMsg(portL?.tipo === 'locomotiva' && portL.motor?.familia === 'diesel' && portL.motor.cfg.uso === 'locomotiva' && portL.comando?.notch === 8, 'locomotiva montada com o EMD 710 (uso locomotiva) e notch 8', portL && { tipo: portL.tipo, motor: portL.motor?.familia, uso: portL.motor?.cfg.uso, notch: portL.comando?.notch });
 await clicar('#ignicao');
