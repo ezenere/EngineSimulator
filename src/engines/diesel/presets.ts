@@ -214,7 +214,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
   },
   {
     id: 'catc15', family: 'pesado', name: 'Cat C15', tag: 'C15 6NZ · I6 MEUI · Jake brake · 2003',
-    ...I6, ...CARRO, classe: 'pesado', tempos: 4, displacement: 15.2, diametro: 137, curso: 171, cr: 17.0,
+    ...I6, ...CARRO, classe: 'pesado', tempos: 4, displacement: 14.6, diametro: 137, curso: 165.1, cr: 17.0,
     idle: 600, redline: 2100, rpmMax: 2100, rpmPotencia: 2100, power: 410, torque: 2510, inertia: 1, J: 3.8,
     injecao: 'unitaria', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.7, turboTipo: 'wastegate', turboRpmMax: 95000, turboPas: 7, turboApito: -13, turboTau: [1.5, 2.5],

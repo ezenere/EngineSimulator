@@ -43,6 +43,9 @@ function estrutura(fs: number, N: number, B: number, injBp: [number, number][], 
   if (pronto) return pronto;
   const M = EST.modos, r = new RNG(0xb10c0 + N * 7919 + Math.round(B * 1e4));
   const g = () => clamp(r.gauss(), -2.5, 2.5), dB = (x: number) => Math.pow(10, x / 20);
+  // (as engrenagens da distribuição têm um sorteio à parte: um caminho novo não pode mudar a voz dos que já existem,
+  // que é a que os níveis de `mecanica` dos presets acertam)
+  const rE = new RNG(0xe46e0 + N * 7919 + Math.round(B * 1e4));
   const sLo = Math.sqrt(0.1 / B), sHi = Math.pow(0.1 / B, 0.25);
   const e: Estrutura = { M, b0: new Float64Array(M), a1: new Float64Array(M), a2: new Float64Array(M), f: new Float64Array(M),
     Wc: new Float64Array((N + 1) * M), Wi: new Float64Array((N + 1) * M), Wv: new Float64Array((N + 1) * M), Wb: new Float64Array((N + 1) * M), Wp: new Float64Array((N + 1) * M), We: new Float64Array((N + 1) * M), rug: new Float32Array(N * 256), eng: new Float32Array(16) };
@@ -69,7 +72,7 @@ function estrutura(fs: number, N: number, B: number, injBp: [number, number][], 
       e.Wv[o] = gc * sn() * gan[i] * perfil(EST_VALV, f);
       e.Wb[o] = sn() * gan[i] * sino([[1300, 1], [2600, 0.4]], f);
       e.Wp[o] = gc * sn() * gan[i] * perfil(EST_SAIA, f);
-      e.We[o] = sn() * gan[i] * perfil(EST_ENG, f);
+      e.We[o] = (rE.next() < 0.5 ? -1 : 1) * dB(EST.modo * clamp(rE.gauss(), -2.5, 2.5)) * gan[i] * perfil(EST_ENG, f);
     }
   }
   // os impactos são normalizados pelo pico da resposta a um impulso unitário (média quadrática entre os caminhos):
@@ -89,7 +92,7 @@ function estrutura(fs: number, N: number, B: number, injBp: [number, number][], 
     return Math.sqrt(soma / (N + 1));
   };
   // padrão fixo dos instantes em que as engrenagens batem dentro de um intervalo de ignição
-  for (let i = 0; i < e.eng.length; i++) e.eng[i] = r.bi();
+  for (let i = 0; i < e.eng.length; i++) e.eng[i] = rE.bi();
   for (const W of [e.Wi, e.Wv, e.Wb, e.Wp, e.We]) { const k = 1 / Math.max(pico(W), 1e-12); for (let i = 0; i < W.length; i++) W[i] *= k; }
   cacheEst.set(ch, e);
   return e;

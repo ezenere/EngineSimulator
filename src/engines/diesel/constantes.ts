@@ -83,7 +83,7 @@ export const SAIA = { nivel: 0.3, p0: 55, angulo: 8, frio: 1.5 };
 // pelo caminho da tampa da distribuição, num padrão fixo por motor com o instante variando; somem com a carga, que
 // mantém os dentes encostados. `nivel`: pico relativo ao da batida de lenta; `porCiclo`: pancadas por ciclo do motor
 // (repartidas pelas explosões, no mínimo 2 por explosão); `carga`: quanto a carga as apaga (1/(1 + carga·combustível))
-export const ENGRENAGENS = { nivel: 0.22, porCiclo: 24, carga: 4, frio: 0.5 };
+export const ENGRENAGENS = { nivel: 0.25, porCiclo: 24, carga: 4, frio: 0.5 };
 export const EST_ENG: [number, number][] = [[400, 0.15], [800, 0.55], [1500, 1.0], [3000, 1.0], [6000, 0.5]];
 // a força nos injetores, nos balancins e na bomba cresce com a pressão de injeção (injetor-bomba e bomba em linha:
 // ∝ rotação²; common-rail: a pressão do trilho, que a central sobe com a carga): expoente do tique sobre a razão
