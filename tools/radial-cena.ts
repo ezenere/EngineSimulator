@@ -11,6 +11,7 @@ import { configHelice, configRotor } from '../src/engines/ronco/aviacao';
 import { PA_FS } from '../src/scene/constantes';
 import { preset } from './radial-comum';
 import type { Portador } from '../src/carriers/tipos';
+import { semear } from './desvios';
 
 const cacheCfg = new Map<string, any>();
 export function motorRadial(id: string, extra: Record<string, any> = {}) {
@@ -18,7 +19,7 @@ export function motorRadial(id: string, extra: Record<string, any> = {}) {
   if (!cacheCfg.has(k)) cacheCfg.set(k, prepararMotorRadial({ ...preset(id), ...extra }, SR));
   const m = new MotorRadial(SR);
   m.configurar({ ...cacheCfg.get(k) }, SR);
-  return m;
+  return semear(m);
 }
 
 /** portador do preset com o motor acoplado */
@@ -30,7 +31,8 @@ export function portadorRadial(id: string, extra: Record<string, any> = {}) {
   else if (spec.portadores.includes('rotor')) p = new Rotor(SR, configRotor(spec));
   else p = new CarroLegado();
   p.acoplar(m);
-  return { p, m, spec };
+  // (os RNG do portador e do motor com a semente atual de tools/desvios.ts; 0 = a de fábrica)
+  return { p: semear(p), m, spec };
 }
 
 export type OpOuvir = { d: number; pedal?: number; rpm?: number; dur?: number; t0?: number; rpmAlvo?: number; altura?: number; solo?: any; aoBloco?: (t: number, p: Portador, m: MotorRadial) => void; v?: number; s0?: number; extra?: Record<string, any> };
