@@ -9,7 +9,7 @@
 //   --kmh V            velocidade imposta (padrão 0: parado); --livre solta a velocidade (arrancada: o portador integra)
 //   --pedal x          acelerador ou tração, 0 a 1 (padrão 0)          --freio x   freio elétrico, 0 a 1
 //   --carga x          bancada: fração do degrau de carga
-//   --ouvinte o        fora (o da página: preso ao meio do corpo, a 7,5 m da lateral), cabine, cofre (os da página),
+//   --ouvinte o        fora (o da página: preso ao corpo, a 7,5 m da lateral; no trem, ao lado do 1º truque motor), cabine, cofre (os da página),
 //                      motor (preso ao corpo, ao lado da 1ª fonte de motor, a --dist m da lateral, ouvido a 1,6 m) ou
 //                      fixo (parado na via, a --dist m da lateral: o corpo passa por ele; --s0 = posição inicial)
 //   --dist m           distância da lateral (padrão 7,5)               --alvo id   fonte ao lado da qual fica o ouvinte `motor`
@@ -165,7 +165,7 @@ export function render(id: string, op: Op) {
   if (op.ouvinte === 'fixo') ouv = { ...base, modo: 'fixo', gimbal: { az: 90, el: 0, r: 5, alvo: 'corpo' }, local: 'fora' };
   else if (op.ouvinte === 'cabine') ouv = { ...base, gimbal: { az: 0, el: 0, r: Math.max(0.3, L / 2 - Math.min(8, L / 4)), alvo: 'corpo' }, local: 'cabine' };
   else if (op.ouvinte === 'cofre') ouv = { ...base, gimbal: { az: 90, el: 0, r: 0.5, alvo: fMotor?.id ?? 'corpo' }, local: 'cofre' };
-  else if (op.ouvinte === 'motor') {
+  else if (op.ouvinte === 'motor' || (op.ouvinte === 'fora' && tipo === 'trem' && fMotor)) {
     // preso ao corpo, ao lado da fonte do motor: x da fonte, a `dist` da lateral, ouvido a 1,6 m do chão
     const x = fMotor ? fMotor.pos[0] : 0, y = larg / 2 + op.dist, z = 1.6 - alt / 2, r = Math.hypot(x, y, z);
     ouv = { ...base, gimbal: { az: (Math.atan2(y, x) * 180) / Math.PI, el: (Math.asin(z / r) * 180) / Math.PI, r, alvo: 'corpo' }, local: 'fora' };

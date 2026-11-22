@@ -135,9 +135,9 @@ class Unidade {
     const prof = p.ressonancia ?? RELEVO_PADRAO;
     this.relevo = prof > 0 ? new Relevo(sem ^ 0x7e1e0, prof) : null;
     this.forcas = new ForcasMotor(p, this.relevo);
-    // o tremor de amplitude cresce com o passeio da rotação: ±0,65 dB no padrão (0,05%), ±2 dB numa ferramenta de mão (0,5%)
+    // o tremor de amplitude cresce com o passeio da rotação: ±0,6 dB no padrão (0,05%), ±1,25 dB numa ferramenta de mão (0,5%)
     const jt = p.jitter ?? 5e-4;
-    this.jit = new JitterEixo(fs, sem ^ 0x31, jt, 0.5 + 300 * jt, jt > 2e-3 ? 2 : 0.3);
+    this.jit = new JitterEixo(fs, sem ^ 0x31, jt, 0.5 + 150 * jt, jt > 2e-3 ? 2 : 0.3);
     this.bMotor = new BancoDeLinhas(fs, LMAX.motor, sem + 1);
     this.inv = p.inversor ? new Inversor(p, fs, sem + 2, this.relevo) : null;
     this.bInv = p.inversor ? new BancoDeLinhas(fs, LMAX.inversor, sem + 3) : null;

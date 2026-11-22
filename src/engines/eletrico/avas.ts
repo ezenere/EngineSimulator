@@ -15,6 +15,13 @@ import { TAU, MEC, chave, DIR_AVAS, REF_DIST_ELETRICO } from './constantes';
 import type { ListaLinhas } from './linhas';
 
 export type ModoAvas = 'ue' | 'eua' | null;
+/**
+ * Leis do nível e do ruído com a velocidade. Os 55 / 61 / 67 dB(A) a 2 m (0, 10 e 20 km/h) são medidos no asfalto (R138,
+ * pista ISO 10844), onde o chão reforça o ruído de 1 kHz e cancela parte do tom de 250 Hz: com L_W = 74 + 0,6·v e o ruído
+ * subindo 3 dB por 10 km/h (acertados em campo livre) davam 54,8 / 62,9 / 70,4. O ruído passa a subir 1,5 dB por 10 km/h
+ * (a 20 km/h o AVAS era 80% ruído: agora 40%, o tom continua mandando) e o nível 0,5 dB por km/h.
+ */
+const INCL_NIVEL = 0.5, INCL_RUIDO = 0.15;
 const dB = (x: number) => Math.pow(10, x / 20);
 const PARC = [[1, 0], [1.62, -4], [2.41, -8]] as const;
 
@@ -58,10 +65,10 @@ export class Avas {
     const kl = Math.min(kmh, this.limite());
     const f1 = (re ? 200 : 250 * (1 + 0.012 * kl)) * vib;
     this.f1 = f1;
-    // nível no eixo: L_W = 74 + 0,6·v dB(A), dividido entre o tom e o ruído; o ruído sobe 3 dB por 10 km/h dentro desse
-    // total (parado: −7 dB, o tom −1 dB; a 20 km/h, −1 e −7) (≈)
-    const paA = paDeLw(74 + 0.6 * kl, REF_DIST_ELETRICO) * this.fp * this.env;
-    const fr = Math.min(0.85, 0.2 * Math.pow(10, (0.3 * kl) / 10));
+    // nível no eixo: L_W = 74 + 0,5·v dB(A), dividido entre o tom e o ruído; o ruído sobe 1,5 dB por 10 km/h dentro desse
+    // total (parado: −7 dB, o tom −1 dB; a 20 km/h, −4 e −2,2) (≈)
+    const paA = paDeLw(74 + INCL_NIVEL * kl, REF_DIST_ELETRICO) * this.fp * this.env;
+    const fr = Math.min(0.85, 0.2 * Math.pow(10, (INCL_RUIDO * kl) / 10));
     let eA = 0;
     for (let i = 0; i < PARC.length; i++) { const a = dB(PARC[i][1]) * Math.max(0.00316, ganhoA(PARC[i][0] * f1)); eA += a * a; }
     // em ré o tom vira um "bip" a 1,5 Hz (porta de meio período com bordas de 30 ms)

@@ -124,7 +124,8 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     inversor: { tipo: 'igbt', fc: 1000, modo: 'auto', sincrona: IGBT_TREM },
     reducao: { estagios: [{ Zp: 27, Zc: 100 }], eta: 0.97 }, ventilacao: { forcada: true, B: 9, rpm: 2950 }, carcaca: 'trem',
     auxiliares: { compressor: 62, transformador: 44, fTracao: 16.7 },
-    niveis: { motor: 100, inversor: 92, reducao: 96, ventilador: 95 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 2, detune: 0.003,
+    // sopradores em 91 dB(A) (4.2 dava 95): com 95 a locomotiva parada soava quase tanto quanto arrancando
+    niveis: { motor: 100, inversor: 92, reducao: 96, ventilador: 91 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 2, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 200,
     aprox: ['Zs', 'Zr', 'reducao (3,7)', 'fc', 'lista síncrona'],
     portador: {
@@ -142,12 +143,12 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     inversor: { tipo: 'chopper', fc: 350, modo: 'chopper' },
     reducao: { estagios: [{ Zp: 15, Zc: 93 }], eta: 0.96 }, ventilacao: { forcada: false, B: 12 }, escovas: { Zc: 139, desgaste: 0.3 }, carcaca: 'trem',
     // parado na plataforma: compressor e os motores dos auxiliares (como as gravações da Frota J e da Frota L)
-    auxiliares: { compressor: 69, ventilacao: 76 },
+    auxiliares: { compressor: 72, ventilacao: 76 },
     niveis: { motor: 95, inversor: 94, reducao: 96, ventilador: 92, escovas: 90 }, Tregen: 0.8, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 90,
     aprox: ['Zs', 'Zc', 'reducao (6,2)', 'f_ch (sem gravação)', 'Tn (esforço de partida ≈)', 'vMaxKmh (a fonte dá 100)'],
     portador: {
-      tipo: 'trem', carrosMotores: [1, 2, 3, 4, 5, 6], motoresPorTruque: 2, rw: 0.43, massaTotal: 240000, carroAux: 2,
+      tipo: 'trem', carrosMotores: [1, 2, 3, 4, 5, 6], motoresPorTruque: 2, rw: 0.43, massaTotal: 240000, carroAux: 1,
       davis: { A: 7000, B: 120, C: 12 },
       config: { N: 6, Lc: 21.5, vao: 0.8, lNariz: 1.5, lCauda: 1.5, cpNariz: 0.3, largura: 3.1, altura: 3.7, zPiso: 0.5, pantografos: [], carenagem: false },
     },
@@ -161,12 +162,13 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     // engrenamento Z_p 16 (família 1) e ranhuras Z_s 36 (família 2): 36/16 = 2,25, medido 2,24 (3.2); barras não aparecem
     reducao: { estagios: [{ Zp: 16, Zc: 101 }], eta: 0.96 }, ventilacao: null, carcaca: 'trem',
     auxLinhas: [[542, 0], [656, -12]], auxRuido: 6,
-    auxiliares: { compressor: 69, ventilacao: 76 },
+    // (a ventilação mais baixa que nos outros metrôs: o largo dos dutos desta já está em `auxRuido`)
+    auxiliares: { compressor: 72, ventilacao: 72 },
     niveis: { motor: 98, inversor: 92, reducao: 98, ventilador: 0, aux: 85 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 90,
     aprox: ['reducao (6,3)', 'fc', 'Tn'],
     portador: {
-      tipo: 'trem', carrosMotores: [2, 3, 6, 7], motoresPorTruque: 2, rw: 0.43, massaTotal: 360000, carroAux: 1,
+      tipo: 'trem', carrosMotores: [2, 3, 6, 7], motoresPorTruque: 2, rw: 0.43, massaTotal: 360000, carroAux: 2,
       davis: { A: 10000, B: 150, C: 14 },
       config: { N: 8, Lc: 20, vao: 0.8, lNariz: 1.5, lCauda: 1.5, cpNariz: 0.3, largura: 3.0, altura: 3.9, zPiso: 0.5, pantografos: [2, 6], carenagem: false },
     },
@@ -181,7 +183,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     // medida e sem explicação física
     reducao: { estagios: [{ Zp: 18, Zc: 117 }], eta: 0.96 }, ventilacao: null, carcaca: 'trem',
     linhasExtras: [[25.92, -3]],
-    auxiliares: { compressor: 69, ventilacao: 76 },
+    auxiliares: { compressor: 72, ventilacao: 76 },
     niveis: { motor: 98, inversor: 92, reducao: 98, ventilador: 0 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 90,
     aprox: ['Zp 18 e Zs 44 (das razões medidas)', 'reducao (6,5)', 'fc'],
@@ -200,7 +202,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     maquina: 'inducao', p: 2, Zs: 48, Tn: 740, Pmax: 180000, rpmBase: 2323, rpmMax: 4000, J: 3, escorregamentoNominal: 0.02,
     inversor: { tipo: 'igbt', fc: 1250, modo: 'auto', sincrona: [15, 9, 5, 3, 1] },
     reducao: { estagios: [{ Zp: 15, Zc: 102 }], eta: 0.96 }, ventilacao: null, carcaca: 'trem',
-    auxiliares: { compressor: 69, ventilacao: 76 },
+    auxiliares: { compressor: 72, ventilacao: 76 },
     niveis: { motor: 98, inversor: 92, reducao: 96, ventilador: 0 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 90,
     aprox: ['Zs', 'reducao (6,8)', 'fc', 'lista síncrona', 'Tn (esforço de partida ≈)'],
@@ -216,8 +218,8 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     inversor: { tipo: 'igbt', fc: 1200, modo: 'auto', sincrona: IGBT_TREM },
     reducao: { estagios: [{ Zp: 29, Zc: 81 }], eta: 0.97 }, ventilacao: { forcada: true, B: 9, rpm: 3550 }, carcaca: 'trem',
     // 25 kV, 60 Hz (Tokaido): transformador em 120 Hz
-    auxiliares: { compressor: 69, ventilacao: 76, transformador: 66, fTracao: 60 },
-    niveis: { motor: 100, inversor: 92, reducao: 96, ventilador: 95 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
+    auxiliares: { compressor: 72, ventilacao: 76, transformador: 62, fTracao: 60 },
+    niveis: { motor: 100, inversor: 92, reducao: 96, ventilador: 90 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 300,
     aprox: ['Zs', 'fc', 'lista síncrona'],
     // o trem-bala da Passagem (10 vagões de 25 m, 8 motores): 715 t × 10/16
@@ -234,8 +236,8 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     inversor: { tipo: 'csi', fc: 0, modo: 'sincrona', fcEntrada: 300 },
     reducao: { estagios: [{ Zp: 30, Zc: 69 }], eta: 0.97 }, ventilacao: { forcada: true, B: 9, rpm: 2950 }, carcaca: 'trem',
     // 25 kV, 50 Hz: transformador em 100 Hz
-    auxiliares: { compressor: 66, transformador: 64, fTracao: 50 },
-    niveis: { motor: 100, inversor: 94, reducao: 96, ventilador: 95 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 2, detune: 0.003,
+    auxiliares: { compressor: 66, transformador: 60, fTracao: 50 },
+    niveis: { motor: 100, inversor: 94, reducao: 96, ventilador: 90 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 2, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 320,
     aprox: ['p', 'Zs', 'reducao (2,3)', 'fcEntrada'],
     portador: {
@@ -268,7 +270,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     maquina: 'cc-serie', p: 2, Zs: 38, Zc: 100, Tn: 1345, Pmax: 150000, rpmBase: 1065, rpmMax: 3500, J: 2,
     inversor: { tipo: 'chopper', fc: 500, modo: 'chopper' },
     reducao: { estagios: [{ Zp: 8, Zc: 76 }], eta: 0.95 }, ventilacao: { forcada: true, B: 9, rpm: 3550 }, escovas: { Zc: 100, desgaste: 0.3 }, carcaca: 'trem',
-    niveis: { motor: 95, inversor: 94, reducao: 93, ventilador: 96, escovas: 92 }, Tregen: 0.6, avas: null,
+    niveis: { motor: 95, inversor: 94, reducao: 93, ventilador: 88, escovas: 92 }, Tregen: 0.6, avas: null,
     // o compressor dos freios e das portas, sob o piso atrás do eixo dianteiro: o som do trólebus parado no ponto
     auxiliares: { compressor: 70 },
     fontes: { motor: dentro([-3.5, 0, 0.6]), inversor: dentro([-3.0, 0, 2.9]), reducao: dentro([-4.0, 0, 0.5]), ventilador: fora([-3.2, 0.9, 1.0]), escovas: dentro([-3.5, 0.1, 0.6]), aux: fora([1.5, -0.9, 0.5]) },

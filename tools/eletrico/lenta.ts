@@ -37,6 +37,8 @@ for (const pr of lista) {
   if (tipo === 'carro' || tipo === 'trem') {
     const r0 = rodar(p, 2, { ignicao: true, velocidadeFixa: 0 });
     ver('parado', r0);
+    // um trem parado e energizado não fica em silêncio digital: compressor, ventilação, conversor (auxiliares.ts)
+    if (tipo === 'trem' || pr.id === 'trolebus') confere(r0.pk > PA_FS * Math.pow(10, -75 / 20), 'parado: auxiliares soando (pico > −75 dBFS)');
     const r1 = rodar(p, tipo === 'trem' ? 12 : 5, { pedal: 1, velocidadeFixa: null });
     ver('arrancada', r1); confere(r1.v > 2, `arrancada: v ${f1(r1.v * 3.6)} km/h`);
     const vc = Math.min((pr.vMaxKmh ?? 100) * 0.6, tipo === 'trem' ? 80 : 80) / 3.6;

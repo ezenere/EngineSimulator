@@ -9,7 +9,7 @@
 // semente do ruído (T-ELE-03) são a mediana de 3 sementes. CPU e coletas de lixo: `npm run cpu:eletrico`.
 //
 //   npx tsx tools/eletrico/valida.ts [grupos...] [--semente N] [--atualizar[=nome exato]]
-//   grupos: linhas maquina magneticas inversor modos mecanica avas niveis portadores alvos-3.7 cena passagem
+//   grupos: linhas maquina magneticas inversor modos mecanica avas niveis auxiliares portadores alvos-3.7 cena passagem
 // Sai ≠ 0 se houver falha (os desvios do retrato aparecem como "desv", com o teto).
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -461,8 +461,11 @@ function gNiveis() {
         const m = motor(p);
         m.comandar({ acelerador: 1, ignicao: true, partida: false, omegaImposta: wDe(p.rpmBase) * frac, torqueFixo: p.Tn, v: 20 } as never);
         for (const U of m.uni) if (U.ven && p.ventilacao?.forcada) U.ven.wv = U.ven.fRef();
+        // (compressor, ventilação e transformador têm calibração própria: fora da sonda, como em motor.ts)
+        if (m.auxi) m.auxi.mudo = true;
         let uRef = 0; m.uni.forEach((U, i) => { if (Math.abs(U.det - 1) < Math.abs(m.uni[uRef].det - 1)) uRef = i; });
-        const r = renderMotor(m, 0.5);
+        // (3 s de medida: as linhas têm vida, e o nível de um instante sobe e desce com ela)
+        const r = renderMotor(m, 3.25);
         m.canais.forEach((ch, i) => {
           if ((ch.u !== uRef && ch.u !== -1) || ch.base === 'avas') return;
           if (chopper && ((frac === 1) === (ch.base === 'inversor'))) return;
@@ -491,6 +494,42 @@ function gNiveis() {
   }
   caso('sonda: cada fonte no L_W do preset (todos os presets)', '±1 dB', `pior ${sg(pior, 2)} dB (${quem})`, Math.abs(pior) <= 1, pior, 'dB');
   caso('todos os presets, 4 estados × 2 s: sem NaN, abaixo de −1 dBFS a 7,5 m', 'nenhum', nanOuAlto.length ? nanOuAlto.join('; ') : 'nenhum', nanOuAlto.length === 0, nanOuAlto.length, '');
+}
+
+// =============================================================================================== 8b. auxiliares do trem parado
+function gAuxiliares() {
+  // o compressor liga e desliga (pressostato): 90 s do metrô parado; o estado sai do próprio modelo e o nível, do canal `aux`
+  {
+    const m = motor('cptm9500');
+    m.comandar({ acelerador: 0, ignicao: true, partida: false, v: 0 } as never);
+    const est: { t: number; on: boolean }[] = [];
+    const r = renderMotor(m, 90, [], (t) => est.push({ t, on: m.auxi!.ligadoComp }));
+    const x = canal(r, 'aux');
+    const trocas: number[] = []; for (let i = 1; i < est.length; i++) if (est[i].on !== est[i - 1].on) trocas.push(est[i].t);
+    const liga = trocas.length >= 1 ? trocas[0] : NaN, para = trocas.length >= 2 ? trocas[1] - trocas[0] : NaN;
+    caso('compressor do metrô parado: liga e desliga em 90 s', '≥ 3 trocas; 13–19 s ligado, 27–41 s parado', `${trocas.length} trocas (aos ${trocas.map((t) => f1(t, 0)).join(', ')} s): ${f1(liga, 1)} s ligado, ${f1(para, 1)} s parado`, trocas.length >= 3 && dentro(liga, 13, 19) && dentro(para, 27, 41), [trocas.length, liga, para], '');
+    // nível de 20–150 Hz (onde moram as ordens do compressor) ligado contra parado
+    const nv = (t0: number, t1: number) => { const [fw, P] = welch(x, Math.round(t0 * SR), Math.round(t1 * SR), 16384); return 10 * Math.log10(potFaixa(fw, P, 20, 150) / 4e-10 + 1e-30); };
+    const on = nv(2, liga - 1), off = nv(liga + 2, liga + para - 1);
+    caso('compressor: 20–150 Hz do canal auxiliar, ligado contra parado', '≥ +4 dB', `${sg(on - off)} dB (${f1(on)} e ${f1(off)} dB SPL a 7,5 m)`, on - off >= 4, on - off, 'dB');
+  }
+  // parado contra partindo, na plataforma (3 m da lateral, ao lado do 1º truque motor, estação sem o murmúrio): nas
+  // gravações de plataforma (Frota J, Frota L, CPTM 9500) o trem parado fica 4 a 11 dB abaixo dele mesmo partindo ou
+  // chegando; o simulado tem de ficar nesse nível ou abaixo, e não em silêncio
+  for (const id of ['cptm9500', 'metropolis', 'frotaa']) {
+    const nivel = (parte: boolean) => {
+      const t = portador(id, {}, { faces: 'uma', ladoOuvinte: 1 }) as Trem;
+      t.comandar(parte ? { pedal: 1, ignicao: true, velocidadeFixa: null } : { pedal: 0, ignicao: true, velocidadeFixa: 0 });
+      const f = t.fontes().find((q) => /^(motor|tracao)/.test(q.id))!, larg = t.corpo.segmentos[0].largura, alt = t.corpo.segmentos[0].altura;
+      const y = larg / 2 + 3, z = 1.6 - alt / 2, rr = Math.hypot(f.pos[0], y, z);
+      const { L, R } = renderCena(t, { amb: { ...ambientePassagem('estacao'), fundo: { vento: 0, ventilacao: 0, murmurio: 0 } }, traj: { tipo: 'volta', comprimento: 20000, raioCurva: 3000, lateral: 3 },
+        ouv: { modo: 'gimbal', gimbal: { az: (Math.atan2(y, f.pos[0]) * 180) / Math.PI, el: (Math.asin(z / rr) * 180) / Math.PI, r: rr, alvo: 'corpo' }, local: 'fora', binaural: false }, dur: parte ? 8 : 14 });
+      const x = mono(L, R), [fw, P] = welch(x, Math.round((parte ? 3 : 6) * SR), Math.round((parte ? 8 : 14) * SR), 8192);
+      return 10 * Math.log10(potFaixa(fw, P, 20, 12000) / 4e-10);
+    };
+    const par = nivel(false), arr = nivel(true);
+    caso(`${id} na plataforma: parado contra partindo`, '−4 a −20 dB (gravações −4 a −11)', `${sg(par - arr)} dB (${f1(par)} e ${f1(arr)} dB SPL a 3 m)`, dentro(par - arr, -20, -4), par - arr, 'dB');
+  }
 }
 
 // =============================================================================================== 9. portadores
@@ -810,7 +849,7 @@ function gPassagem() {
 // (CPU e coletas de lixo: tools/eletrico/cpu.ts, `npm run cpu:eletrico`)
 
 // ---------------------------------------------------------------------------------------------- execução
-const GRUPOS: Record<string, () => void> = { linhas: gLinhas, maquina: gMaquina, magneticas: gMagneticas, inversor: gInversor, modos: gModos, mecanica: gMecanica, avas: gAvas, niveis: gNiveis, portadores: gPortadores, 'alvos-3.7': gAlvos37, cena: gCena, passagem: gPassagem };
+const GRUPOS: Record<string, () => void> = { linhas: gLinhas, maquina: gMaquina, magneticas: gMagneticas, inversor: gInversor, modos: gModos, mecanica: gMecanica, avas: gAvas, niveis: gNiveis, auxiliares: gAuxiliares, portadores: gPortadores, 'alvos-3.7': gAlvos37, cena: gCena, passagem: gPassagem };
 const op = lerOpcoes(process.argv.slice(2));
 iniciarSementes(op.semente);
 const rodar = op.resto.length ? op.resto : Object.keys(GRUPOS);

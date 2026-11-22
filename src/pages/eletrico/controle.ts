@@ -19,6 +19,7 @@ import { montarPortadorEletrico } from '../../engines/eletrico/portador';
 import { Inversor, type ModoModulacao } from '../../engines/eletrico/inversor';
 import type { PresetEletrico } from '../../engines/eletrico/dsp';
 import { ambienteEletrico, type IdAmbienteEletrico } from './ambientes';
+import { PNEUS_DB_PADRAO, VENTO_DB_PADRAO } from '../../carriers/carro-eletrico';
 
 export const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
 export const fmt = (x: number, d = 0) => (Number.isFinite(x) ? x.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—');
@@ -29,7 +30,12 @@ export type IdCarga = 'plano' | 'sub3' | 'sub6' | 'lotacao';
 export type ModoAvasPagina = 'desligado' | 'ue' | 'eua';
 
 /** edições do painel avançado (sobre uma cópia do preset) */
-export interface Avancado { fc?: number; delta?: number; Zs?: number; Zp?: number; excentricidade?: number; desgaste?: number; detune?: number }
+export interface Avancado {
+  fc?: number; delta?: number; Zs?: number; Zp?: number; excentricidade?: number; desgaste?: number; detune?: number;
+  // etapa de som: relevo da carcaça, folga da redução, faiscamento, nível do ventilador e os auxiliares do trem
+  ressonancia?: number; folga?: number; faiscamento?: number; ventilador?: number;
+  compressor?: number; arCondicionado?: number; transformador?: number; fTracao?: number;
+}
 
 /** telemetria do portador com a do motor (rpm, f_e, f_c, N, modo, nota, linhas…) */
 export type TeleMotor = TelemetriaPortador & {
@@ -62,6 +68,9 @@ export class ControleEletrico {
   vKmh = 0;
   impor = false;
   pneusAero = true;
+  /** pneus e vento do carro, dB sobre os níveis do CENA 4.1 (os padrões ficam do lado baixo) */
+  pneusDb = PNEUS_DB_PADRAO;
+  ventoDb = VENTO_DB_PADRAO;
   re = false;
   ouvinte: IdOuvinte = 'fora';
   gimbal = { az: 90, el: 10, r: 10 };
@@ -105,6 +114,17 @@ export class ControleEletrico {
     if (a.Zp !== undefined && b.reducao.estagios.length) p.reducao = { ...b.reducao, estagios: [{ ...b.reducao.estagios[0], Zp: a.Zp }, ...b.reducao.estagios.slice(1)] };
     if (a.excentricidade !== undefined) p.excentricidade = a.excentricidade;
     if (a.desgaste !== undefined && b.escovas) p.escovas = { ...b.escovas, desgaste: a.desgaste };
+    if (a.ressonancia !== undefined) p.ressonancia = a.ressonancia;
+    if (a.folga !== undefined && b.reducao.estagios.length) p.reducao = { ...p.reducao, folga: a.folga };
+    if (a.faiscamento !== undefined && b.escovas) p.faiscamento = a.faiscamento;
+    if (a.ventilador !== undefined && b.ventilacao) p.niveis = { ...b.niveis, ventilador: a.ventilador };
+    if (a.compressor !== undefined || a.arCondicionado !== undefined || a.transformador !== undefined || a.fTracao !== undefined) {
+      p.auxiliares = { ...(b.auxiliares ?? {}) };
+      if (a.compressor !== undefined) p.auxiliares.compressor = a.compressor;
+      if (a.arCondicionado !== undefined) p.auxiliares.ventilacao = a.arCondicionado;
+      if (a.transformador !== undefined) p.auxiliares.transformador = a.transformador;
+      if (a.fTracao !== undefined) p.auxiliares.fTracao = a.fTracao;
+    }
     if (a.detune !== undefined) {
       if (b.helice) p.helice = { ...b.helice, detune: b.helice.detune.map((d) => d * a.detune!) };
       else p.detune = a.detune;
@@ -131,7 +151,7 @@ export class ControleEletrico {
     const cfg = this.cfg(fs);
     this.cfgAtual = cfg;
     let base: Partial<ConfigTrem> = { faces: 'duas', ladoOuvinte: 1 };
-    const p = montarPortadorEletrico(cfg, fs, base, undefined, { pneusAero: this.pneusAero });
+    const p = montarPortadorEletrico(cfg, fs, base, undefined, { pneusAero: this.pneusAero, pneusDb: this.pneusDb, ventoDb: this.ventoDb });
     if (p instanceof Trem) {
       base = { ...base, calibracao: p.calibracoes() };
       this.tremCfg = base;
@@ -143,7 +163,7 @@ export class ControleEletrico {
     const a = this.audio; if (!a) return;
     const fs = a.ctx.sampleRate;
     if (this.fsSonda !== fs || !this.cfgAtual || this.cfgAtual !== this.cfg(fs)) this.sondar(fs);
-    this.send({ type: 'preset', cfg: this.cfgAtual, trem: this.tremCfg ?? undefined, pneusAero: this.pneusAero });
+    this.send({ type: 'preset', cfg: this.cfgAtual, trem: this.tremCfg ?? undefined, pneusAero: this.pneusAero, pneusDb: this.pneusDb, ventoDb: this.ventoDb });
   }
 
   carregarPreset(p: PresetEletrico) {
@@ -152,6 +172,7 @@ export class ControleEletrico {
     this.avas = p.avas === undefined ? 'desligado' : p.avas ?? 'desligado';
     this.carga = 'plano'; this.cargaBancada = 0;
     this.re = false; this.impor = false; this.vKmh = 0; this.freio = 0;
+    this.pneusDb = PNEUS_DB_PADRAO; this.ventoDb = VENTO_DB_PADRAO;
     if (p.portador.tipo === 'drone') this.acel = 0.5;
     else this.acel = 0;
     if ((this.ouvinte === 'cabine') && !this.temCabine()) this.ouvinte = 'fora';
@@ -200,6 +221,12 @@ export class ControleEletrico {
     if (this.tipoPortador === 'carro') { this.sondar(this.audio?.ctx.sampleRate ?? 48000); this.mandarPreset(); this.mandarEletrico(); this.mandarCena(false); }
     this.avisar('painel');
   }
+  /** nível dos pneus e do vento (dB): muda no portador que está tocando, sem remontar */
+  setAr(ar: { pneusDb?: number; ventoDb?: number }) {
+    if (ar.pneusDb !== undefined) this.pneusDb = ar.pneusDb;
+    if (ar.ventoDb !== undefined) this.ventoDb = ar.ventoDb;
+    this.send({ type: 'eletrico', pneusDb: this.pneusDb, ventoDb: this.ventoDb });
+  }
   setMaster(m: number) { this.master = m; this.send({ type: 'params', master: m }); }
 
   private mandarInput() { this.send({ type: 'input', acelerador: this.acel, freio: this.freio, ignicao: this.ign }); }
@@ -226,6 +253,12 @@ export class ControleEletrico {
     if (this.ouvinte === 'cabine' && this.temCabine()) return { ...base, gimbal: { az: 0, el: 0, r: Math.max(0.3, L / 2 - Math.min(8, L / 4)), alvo: 'corpo' }, local: 'cabine' };
     if (this.ouvinte === 'cofre') return { ...base, gimbal: { az: 90, el: 0, r: 0.5, alvo: this.fonteMotor() }, local: 'cofre' };
     if (this.ouvinte === 'gimbal') return { ...base, gimbal: { az: this.gimbal.az, el: this.gimbal.el, r: this.gimbal.r, alvo: 'corpo' }, local: 'fora' };
+    // trem: "fora" é ao lado do 1º truque motor, com o ouvido a 1,6 m do chão. Com o alvo no meio do corpo, o ouvinte de
+    // uma composição de 200 m ficava a 60–90 m da locomotiva (o Taurus chegava 8,5 dB mais baixo que a 7,5 m dele)
+    if (this.tipoPortador === 'trem') {
+      const f = this.fontes.find((x) => /^(motor|tracao)/.test(x.id));
+      if (f) { const d = 7.5 + larg / 2, h = 1.6 - f.pos[2]; return { ...base, gimbal: { az: 90, el: (Math.atan2(h, d) * 180) / Math.PI, r: Math.hypot(d, h), alvo: f.id }, local: 'fora' }; }
+    }
     return { ...base, gimbal: { az: 90, el: 0, r: 7.5 + larg / 2, alvo: 'corpo' }, local: 'fora' };
   }
   trajCena(): Trajetoria { return { ...TRAJ_PAGINA, altitude: this.tipoPortador === 'drone' ? 10 : 0 }; }

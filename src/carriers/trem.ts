@@ -403,6 +403,20 @@ export class TracaoTrem {
         this.fontes.push(fonte(`tracao.${cs[0]}`, 'eletrica', x, 0.5)); this.mapa.push(somar(gs, TUDO));
       }
     }
+    // De dentro do carro o motor, a redução e o inversor chegam pela estrutura (truque → caixa → piso), não pelo ar: só
+    // pela lei da massa da casca, a 15–30 m do truque, o metrô acelerando de dentro ficava sem tração nenhuma (motor e
+    // redução 20 dB abaixo do rolamento; a gravação de dentro da CPTM 9500 tem a ordem do engrenamento no nível do
+    // rolamento). As fontes do 1º truque motor (o carro em que se está) ganham a via da estrutura para a cabine; para o
+    // ouvinte "sob o assoalho", que fica a 0,5 m da 1ª delas, a via repete o que a propagação dava (0,55·7,5/distância).
+    const G_ESTRUTURA = 0.16, alvo = this.fontes[0];
+    if (alvo) {
+      const b0 = bog[0];
+      for (const f of this.fontes) {
+        if (this.grupo === 'truque' ? f.id !== `motor.${b0}` && f.id !== `inversor.${b0}` : f !== alvo) continue;
+        const d = Math.hypot(f.pos[0] - alvo.pos[0], 0.5, f.pos[2] - alvo.pos[2]);
+        f.vias = { cabine: { ganho: G_ESTRUTURA, fc: 1200 }, cofre: { ganho: (0.55 * REF_DIST_PORTADOR) / d, fc: 1300 } };
+      }
+    }
     if (temAux) {
       const v = Math.min(N, Math.max(1, pt?.carroAux ?? carros[0] ?? 1));
       // o conversor e a ventilação do carro: de dentro do carro se ouvem pela estrutura e pelos dutos (vias), não pelo piso
