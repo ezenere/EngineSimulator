@@ -18,6 +18,7 @@ qualquer veículo, antigo ou novo.
 - [Caso: o som de ar dos Rotativos](#caso-o-som-de-ar-dos-rotativos)
 - [Caso: Rotativos: motor, não ar](#caso-rotativos-motor-não-ar)
 - [Caso: os pipocos do radial](#caso-os-pipocos-do-radial)
+- [Caso: Radial: o estalo por explosão, o chiado do anel e a página diferente da Passagem](#caso-radial-o-estalo-por-explosão-o-chiado-do-anel-e-a-página-diferente-da-passagem)
 - [Caso: os médios](#caso-os-médios)
 - [Caso: papel rasgando](#caso-papel-rasgando)
 - [Ferramentas](#ferramentas)
@@ -620,6 +621,39 @@ a ponteira de 1,25" tira 3 a 7 dB em plena carga e comprime o pulso.
 
 **Pendente:** o vazamento do Fusca nos diâmetros mínimos em plena carga (acima); e a contrapressão quase não tira
 torque no modelo (a rede de tubos devolve ao motor pouco do que reflete depois do abafador).
+
+## Caso: Radial: o estalo por explosão, o chiado do anel e a página diferente da Passagem
+
+**Queixa:** "tem muito pipoco nos motores radiais" (a passada anterior, o caso acima, baixou os da partida e deixou os da lenta dos motores pequenos); e a regra de gosto: mais motor, menos som de ar. Os testes, que tinham acabado de ganhar teto, mediam três coisas: estalos na lenta quente (Rotec R2800 19 picos por segundo, curtose 90), a página 4 a 11 dB mais escura que a Passagem acima de 400 Hz e o limitador de saída saturando em decolagem em 10 dos 17 presets.
+
+**Como se mediu:** a régua do kit ouvido para o Radial (`tools/radial-regua.py`: cada preset na condição da gravação casada, pela página e pela Cena) e o orçamento de ruído por fonte com a mesma semente (`tools/radial-fontes.ts`). Números, tabela antes × depois e mecanismos em `TECNICO.md` → Radial → Rodada de som; painéis em [`docs/ouvido/radial/`](ouvido/radial/).
+
+**O que a medida mostrou:**
+
+- **O estalo dos estaques era uma fonte só:** o chiado de jato do Ronco, 87 a 100 % do som do Rotec acima de 400 Hz. A lei divide a velocidade pela área da ponteira relativa a um tubo de 2,5": num estaque de 38 mm, que é o próprio primário, são +18 dB de um bocal que não existe. E o ruído ia com v²: uma agulha de 2 ms no pico do estouro, com silêncio em volta.
+- **Tirar o jato deixava o Rotec abafado** (nada acima de 1 kHz). O que as gravações têm nessa faixa é ruído preso ao sopro de cada cilindro, com corpo: p90/p10 de 6 a 11 dB, não 22.
+- **Nos motores de anel coletor o agudo era um chiado quase liso** (a rajada do coletor, 72 a 97 % de 1–6 kHz), e era ele que fazia a Cena "bater" com as gravações nas bandas. A gravação do T-6G tem outra coisa: uma rajada de 60–100 ms por ciclo.
+- **A página e a Cena tocavam motores diferentes** por três razões que se somavam: pesos de ouvinte de carro na página (coletor a 0,3 contra 0,7), o solo da Cena (a banda de referência cai no vale da interferência) e a medida em mono (os dois ouvidos somados formam um pente).
+
+**O que mudou** (tudo em `src/engines/radial/`, sem tocar no `dsp.ts` do Ronco):
+
+| Mudança | Controle | Por quê |
+|---|---|---|
+| A boca do escape irradia o pulso mais a turbulência da própria vazão (5 % nos estaques, menos nos coletores e depois da turbina), que nasce em ~4 diâmetros e se desfaz em ~20 | "Sopro das bocas (turbulência do escape)", "Ar" | O ruído segue o sopro inteiro de cada cilindro e vai com a vazão, não com v² ÷ área²: pulso com corpo, sem agulha, e a explosão forte do galope não vira estalo |
+| As juntas do anel vazam desigual; a rajada dura 35 ms e quase nada vaza entre elas | "Vedação do coletor", "Vazamento das juntas (rajada do coletor)" | O agudo do anel fica preso ao ciclo (um sopro por volta do comando) em vez de ser um leito |
+| O ouvinte de fora da página usa os pesos do adaptador da Cena; a hélice da página, a lei de carga | — | O mesmo motor nos dois caminhos (±1,5 dB por banda a 5 m, com a Cena sem solo) |
+| A calibração deixa margem para a decolagem (motor com o escape próprio mais a hélice abaixo do limitador) | — | O limitador é proteção, não timbre |
+
+**Resultado** (antes → depois): Rotec na lenta, 35,8 → 5,8 picos por segundo e curtose 57 → 7,5 com o giro travado (a gravação, 7,1 e 5,1), total 4,03 → 1,37; pelo teste, com a lenta livre, 19,0 → 3,0. Sherman 15 → 3,5; M-14P 7,3 → 1,8. T-6G: p90/p10 de 6,1 para 9,7 dB (gravação 15,5) com as bandas a 1–4 dB abaixo das dela. Decolagem: de 10 presets saturando para nenhum.
+
+**Lições:**
+
+- **Uma lei afinada num carro carrega as hipóteses do carro.** O chiado de jato supõe um tubo de 2,5" com as ondas já divididas no coletor e uma ponteira que estreita. No estaque nada disso vale, e a lei virou a fonte dominante sem ninguém a ter ligado.
+- **"Bater nas bandas" com chiado liso foi o que fez a Cena parecer certa.** O T-6G batia a ±3 dB com um leito contínuo; a gravação tem rajadas. Só o p90/p10 e o painel mostram a diferença.
+- **A rotação de novo.** O T-6G do RADIAL.md estava a 916 rpm porque a linha mais forte (70 Hz) foi tomada pela ignição; a dobra do `f0.py` dá 525 rpm e uma rajada por ciclo. Com a rotação errada o painel mostrava um agudo sem ritmo, e a conclusão seria "chiado".
+- **Dois critérios podem puxar para lados opostos na mesma gravação.** O T-6G real tem 11,5 picos por segundo e p90/p10 de 15,5 dB; "até 6 picos" e "pulso a menos ≤ 1,3" não cabem juntos. Ficou do lado de menos picos (5,5; pulso a menos 1,6).
+- **Medir a página num ouvido só.** A soma em mono dos dois ouvidos tirava 2 a 4 dB de 1–2,5 kHz e fazia parte do "a página é mais escura".
+- **Encher o vão com tique não resolve.** A batida periódica do motor-base, a 0 dB, levava o Verner 3V de 12 para 20 picos por segundo: mais eventos isolados, não menos.
 
 ## Ferramentas
 
