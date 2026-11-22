@@ -99,6 +99,8 @@ const tele = () => ev(`(() => { const k = window.__ronco; return { ...k.tele, mo
 const rms = () => ev(`(() => { const an = window.__ronco.audio?.analyser; if (!an) return -999; const x = new Float32Array(an.fftSize); an.getFloatTimeDomainData(x); let s = 0; for (const v of x) s += v * v; return 10 * Math.log10(s / x.length + 1e-20); })()`);
 // valor de slider (evento input e change, como o usuário arrastando e soltando)
 const deslizar = (id, v) => ev(`(() => { const r = document.getElementById(${JSON.stringify(id)}); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(r, String(${v})); r.dispatchEvent(new Event('input', { bubbles: true })); r.dispatchEvent(new Event('change', { bubbles: true })); return r.closest('.field').querySelector('output').textContent; })()`);
+// espera a condição até o limite (devolve o último valor: falso se não aconteceu)
+const esperaAte = async (f, ms = 8000) => { const t0 = Date.now(); let v; while (Date.now() - t0 < ms) { v = await f(); if (v) return v; await espera(200); } return v; };
 const pressionado = (sel) => ev(`[...document.querySelectorAll(${JSON.stringify(sel + ' [aria-pressed=true]')})].map((x) => x.textContent).join('|')`);
 
 try {
@@ -153,6 +155,12 @@ try {
   await tecla('KeyQ');
   await espera(500);
   confere((await texto('#gearRead')) === 'N', 'Q volta ao neutro', await texto('#gearRead'));
+  // S segurado e a janela perde o foco (o keyup não chega): o freio solta e o botão da tela apaga
+  await tecla('KeyS');
+  const acendeu = await esperaAte(() => ev(`document.getElementById('brakeBtn').classList.contains('on')`), 2000);
+  await ev(`window.dispatchEvent(new Event('blur'))`);
+  const apagou = await esperaAte(() => ev(`!document.getElementById('brakeBtn').classList.contains('on')`), 2000);
+  confere(acendeu && apagou && (await ev(`window.__ronco.input.brake`)) === 0, 'S segurado e a janela perde o foco: o freio solta e o botão apaga');
 
   // pedal na tela com o ponteiro: aperta no meio do curso, solta
   const r = await ev(`(() => { const r = document.getElementById('pedal').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
@@ -244,7 +252,6 @@ try {
   t = await tele();
   confere(t.state === 'off' && (await texto('.bar .ignition')).includes('Ligar motor'), 'I desliga o motor', t.state);
 
-  const esperaAte = async (f, ms = 8000) => { const t0 = Date.now(); let v; while (Date.now() - t0 < ms) { v = await f(); if (v) return v; await espera(250); } return v; };
   // família aviação (RADIAL.md 7.2): Cessna 172 com magnetos e mistura no lugar do corte de giro, sem transmissão, com
   // partida e hélice; o botão vira "Magnetos + partida" e o motor pega e gira a hélice
   await clicar('.fam:nth-child(10)');

@@ -160,6 +160,12 @@ try {
   await tecla('KeyW', 'keyup');
   await tecla('KeyQ');
   await espera(300);
+  // S segurado e a janela perde o foco (o keyup não chega): o freio solta e o botão da tela apaga
+  await tecla('KeyS');
+  const acendeu = await esperaAte(() => ev(`document.getElementById('brakeBtn').classList.contains('on')`), 2000);
+  await ev(`window.dispatchEvent(new Event('blur'))`);
+  const apagou = await esperaAte(() => ev(`!document.getElementById('brakeBtn').classList.contains('on')`), 2000);
+  confere(acendeu && apagou && (await ev(`window.__diesel.input.brake`)) === 0, 'S segurado e a janela perde o foco: o freio solta e o botão apaga');
 
   // ambiente e microfone
   await clicar('#env .chip:nth-child(3)');

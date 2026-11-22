@@ -155,6 +155,16 @@ try {
   t = await esperaAte(async () => { const x = await tele(); return x.corrente < -0.05 ? x : null; }, 4000);
   confere(!!t, 'regeneração: corrente negativa', t ? `${(t.corrente * 100).toFixed(0)}% · ${await texto('#ro-potencia')}` : String((await tele()).corrente));
   await deslizar('freio', 0);
+  // R segurado e a janela perde o foco: a regeneração solta (o keyup não chega); o freio do controle deslizante fica
+  await tecla('KeyR');
+  const rSeg = await ev(`${K}.freio`);
+  await ev(`window.dispatchEvent(new Event('blur'))`);
+  const rBlur = await ev(`${K}.freio`);
+  await deslizar('freio', 0.5);
+  await ev(`window.dispatchEvent(new Event('blur'))`);
+  const rSlider = await ev(`${K}.freio`);
+  await deslizar('freio', 0);
+  confere(rSeg === 1 && rBlur === 0 && rSlider === 0.5, 'R segurado solta ao perder o foco; o freio do controle fica', `R ${rSeg} → ${rBlur} no blur · controle ${rSlider}`);
   // modo de modulação
   await chip('#modulacao', 'Assíncrona');
   t = await esperaAte(async () => { const x = await tele(); return x.modo === 'assincrona' ? x : null; }, 3000);
