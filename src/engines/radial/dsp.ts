@@ -31,8 +31,10 @@ export const ESCAPE_REF: EscapeRadial = { tipo: 'anel', Danel: 1.1, Oanel: 80, L
  *  junções dos outros cilindros e sai somado numa saída larga, quase sem pulsar) e chega à boca como escoamento de tubo
  *  comum; no estaque ele chega fresco, a 10–16 diâmetros da válvula. Depois de metros de tubo e de uma turbina, menos ainda */
 export const SOPRO = { kT: 0.05, coletor: -8, turbina: -6 };
-/** juntas do anel coletor e dos estaques (o `breakout`): cada uma vaza diferente. Desvio do log do vazamento por junta
- *  (0 = todas iguais) e o que sobra vazando entre as rajadas, relativo à média (o Ronco usa 0,5) */
+/** juntas do anel coletor e dos estaques (o `breakout`): cada uma vaza diferente. `old` e `leaky`: desvio do log do
+ *  vazamento por junta (0 = todas iguais; com 1,5 na chapa fina o T-6 passava de 6 picos por segundo na lenta);
+ *  `piso`: o que sobra vazando entre as rajadas, relativo à média (o Ronco usa 0,5); `queda` (s) e `corte` (Hz): quanto
+ *  dura a rajada depois da abertura e o polo do espectro dela (10 ms e 2,5 kHz no coletor de carro do Ronco) */
 export const JUNTAS = { old: 0.7, leaky: 1.25, piso: 0.15, queda: 0.035, corte: 1600 };
 
 /** argumento do `tanh` de saída em que fica o percentil 99,5 da decolagem com o volume padrão (tanh(0,8) = 0,66: no
