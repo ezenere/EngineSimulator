@@ -1,5 +1,5 @@
 // Fontes auxiliares do vapor (docs/VAPOR.md 1.6, 1.7, 2.1–2.3): bomba de ar Westinghouse, injetor, válvula de
-// segurança, torneiras dos cilindros e vazamentos, bielas (folga e rolar), soprador, queimador (Stanley),
+// segurança, torneiras dos cilindros e vazamentos, bielas (folga e rolar), soprador, ejetor de vácuo, queimador (Stanley),
 // engrenagens (Shay, trator) e correias com os cliques dos dashpots (Corliss).
 //
 // Cada gerador devolve um sinal "unitário" (escala interna); o `VaporDSP` multiplica pelo ganho que a sonda de nível
@@ -221,6 +221,25 @@ export class Soprador {
   r: Ruido; env = 0; k: number;
   constructor(fs: number, semente: number) { this.r = new Ruido(semente, [hp(fs, 300), lp(fs, 2000)]); this.k = onePole(fs, 3); }
   amostra(ligado: number) { this.env += this.k * (ligado - this.env); return this.env < 1e-5 ? 0 : this.env * this.r.amostra(); }
+}
+
+/**
+ * Ejetor de vácuo (as inglesas freiam a vácuo e não têm bomba de ar): um jato de vapor num venturi que aspira o
+ * encanamento do freio e descarrega na chaminé. O pequeno fica ligado com a máquina em serviço e parada, um chiado
+ * contínuo e fino (500–3500 Hz); o grande entra ao soltar o freio e sopra forte por uns 2 s (+8 dB).
+ */
+export class Ejetor {
+  r: Ruido; env = 0; k: number; grande = 0; kG: number;
+  constructor(fs: number, semente: number) { this.r = new Ruido(semente, [hp(fs, 500), lp(fs, 3500)]); this.k = onePole(fs, 3); this.kG = Math.exp(-1 / (1.2 * fs)); }
+  /** soltou o freio: o ejetor grande recria o vácuo */
+  soltarFreio() { this.grande = 1; }
+  amostra(ligado: number) {
+    this.env += this.k * (ligado - this.env);
+    if (this.env < 1e-5) return 0;
+    const g = 1 + 1.5 * this.grande;
+    this.grande *= this.kG;
+    return this.env * g * this.r.amostra();
+  }
 }
 
 /** queimador do Stanley: maçarico de querosene, ruído 100–600 Hz com corcova em 200 Hz, mais o assobio do vaporizador */

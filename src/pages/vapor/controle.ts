@@ -12,9 +12,9 @@
 import type { CadeiaDeAudio } from '../../ui';
 import type { Ambiente, Ouvinte, Trajetoria, Solo } from '../../scene/tipos';
 import { ambientePassagem } from '../../scene/ambientes';
-import { PRESETS_VAPOR, presetVapor, escapesPorVolta, type PresetVapor, type FamiliaVapor, type PortadorVapor } from '../../engines/vapor/presets';
+import { PRESETS_VAPOR, presetVapor, escapesPorVolta, vColetorPadrao, type PresetVapor, type FamiliaVapor, type PortadorVapor } from '../../engines/vapor/presets';
 import { prepararMotorVapor } from '../../engines/vapor/motor';
-import type { ConfigVapor, ComandoVapor, TelemetriaVapor } from '../../engines/vapor/dsp';
+import { T_CAUDA, NIVEL_CAUDA, DESAJUSTE_PAR, type ConfigVapor, type ComandoVapor, type TelemetriaVapor } from '../../engines/vapor/dsp';
 import { configLocoVapor } from '../../carriers/locomotiva-vapor';
 import { configTrator } from '../../carriers/trator';
 import { configBarco } from '../../carriers/barco';
@@ -49,9 +49,25 @@ export type ComandoPagina = {
   trilho: 'seco' | 'molhado'; mixAr: number; mixMec: number;
 };
 
+/**
+ * campos do escape do preset que o painel muda (docs/REVISAO-DE-SOM.md: todo campo de preset tem controle): o volume do
+ * coletor (m³), a cauda de cada chuff (tempo de queda da caixa de fumaça, s, e nível, dB), a tiragem (× o padrão) e, nas
+ * de 4 cilindros, o desajuste das válvulas de fora (graus). Ficam fora da sonda de nível: mudam o som, não a calibração
+ */
+export type EscapePagina = { vColetor: number; tCauda: number; nivelCauda: number; tiragem: number; desajuste: number };
+export const escapeDoPreset = (P: PresetVapor): EscapePagina => ({
+  vColetor: P.escape.vColetor ?? vColetorPadrao(P), tCauda: P.escape.tCauda ?? T_CAUDA, nivelCauda: P.escape.nivelCauda ?? NIVEL_CAUDA,
+  tiragem: P.escape.tiragem ?? 1, desajuste: P.cilindros.desajuste ?? DESAJUSTE_PAR,
+});
+/** o escape vai para a chaminé (as de condensador e abafador não têm coletor, cauda nem tiragem) */
+export const temChamine = (P: PresetVapor) => !P.escape.destino || P.escape.destino === 'chamine';
+/** 4 cilindros em pares a 180° (King): a válvula de fora vai por balancim */
+export const temPares = (P: PresetVapor) => !P.compound && P.cilindros.n === 4 && !!P.cilindros.angulo && Math.abs(P.cilindros.angulo[1] - P.cilindros.angulo[0]) === 180;
+
 export type EstadoVapor = {
   presetId: string; familia: FamiliaVapor;
   cmd: ComandoPagina;
+  escape: EscapePagina;
   vagoes: number; massaVagao: number; rampa: number;   // rampa em %
   marcha: number; carga: number;
   ambiente: IdAmbienteVapor; distancia: number; master: number;
@@ -95,7 +111,7 @@ export class ControleVapor {
   constructor() {
     const P = PRESETS_VAPOR[0];
     this.estado = {
-      presetId: P.id, familia: P.familia, cmd: { ...CMD_PADRAO }, vagoes: 8, massaVagao: P.vagao?.massa ?? 40, rampa: 0, marcha: 1, carga: 0.5,
+      presetId: P.id, familia: P.familia, cmd: { ...CMD_PADRAO }, escape: escapeDoPreset(P), vagoes: 8, massaVagao: P.vagao?.massa ?? 40, rampa: 0, marcha: 1, carga: 0.5,
       ambiente: 'ceu', distancia: 10, master: 0.8, cenario: null, calibrando: false, erro: null, apitando: false, freando: false,
     };
   }
@@ -152,6 +168,9 @@ export class ControleVapor {
     }
     let cfg: ConfigVapor;
     try { cfg = this.cfgMotor(fs); } catch (e: any) { this.mudar({ calibrando: false, erro: String(e?.message || e) }); return; }
+    // (os campos do escape que o painel muda entram no preset depois da sonda: os ganhos são os da ficha)
+    const P = cfg.preset, x = this.estado.escape;
+    cfg = { ...cfg, preset: { ...P, escape: { ...P.escape, vColetor: x.vColetor, tCauda: x.tCauda, nivelCauda: x.nivelCauda, tiragem: x.tiragem }, cilindros: { ...P.cilindros, desajuste: x.desajuste } } };
     a.send({ type: 'portador', tipo: this.portador, config: this.configPortador(), motor: { familia: 'vapor', cfg }, comando: this.comando() });
     // o CenaDSP herda a velocidade do portador anterior como velocidade fixa: o vapor parado anda solto
     a.send({ type: 'comando', ...this.comando(), velocidadeFixa: this.vFixa });
@@ -203,11 +222,13 @@ export class ControleVapor {
     const P = presetVapor(id); if (!P) return;
     this.pararCenario();
     this.vFixa = null; this.fixo = false;
-    this.mudar({ presetId: id, familia: P.familia, massaVagao: P.vagao?.massa ?? 40, cmd: { ...CMD_PADRAO, reverser: P.familia === 'estacionaria' ? revDeCorte(0.3) : CMD_PADRAO.reverser } });
+    this.mudar({ presetId: id, familia: P.familia, massaVagao: P.vagao?.massa ?? 40, escape: escapeDoPreset(P), cmd: { ...CMD_PADRAO, reverser: P.familia === 'estacionaria' ? revDeCorte(0.3) : CMD_PADRAO.reverser } });
     if (this.audio) { this.mandarCena(); void this.mandarPortador(); }
   }
   setCmd(p: Partial<ComandoPagina>, agora = false) { this.mudar({ cmd: { ...this.estado.cmd, ...p } }); this.mandarComando(agora); }
   setVagoes(n: number) { this.mudar({ vagoes: n }); this.remontar(); }
+  /** campos do escape (coletor, cauda, tiragem, desajuste): remonta o motor com o preset mudado */
+  setEscape(p: Partial<EscapePagina>) { this.mudar({ escape: { ...this.estado.escape, ...p } }); this.remontar(); }
   setMassaVagao(t: number) { this.mudar({ massaVagao: t }); this.remontar(); }
   private remontarT: ReturnType<typeof setTimeout> | undefined;
   private remontar() { clearTimeout(this.remontarT); this.remontarT = setTimeout(() => void this.mandarPortador(), 150); }

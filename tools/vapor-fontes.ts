@@ -9,8 +9,8 @@
 // Condição (uma delas):
 //   --chuffs N         velocidade imposta que dá N chuffs/s (padrão 4)        --kmh V   ou a velocidade em km/h
 //   --parada           parada, com os auxiliares no automático (bomba de ar carregando, injetor, soprador)
-//   --patinagem        a arrancada do teste: 500 t no trilho molhado a 4 chuffs/s, regulador 0,3 → 1 em 1 s, e o
-//                      maquinista fecha 1 s depois do início do surto (grava desde 0 s; --areia: a mesma com areia)
+//   --patinagem        a arrancada do teste: 500 t no trilho molhado a 4 chuffs/s, regulador 0,3 → `--reg` (padrão 1) em
+//                      1 s, e o maquinista fecha 1 s depois do início do surto (grava desde 0 s; --areia: a mesma com areia)
 //   --lenta            o portador de uso real em lenta: trator com a embreagem solta, estacionária no governador
 //   --corte c          corte da admissão, fração do curso (padrão 0,5)        --reg r   regulador 0..1 (padrão 1)
 //   --aux              deixa bomba de ar, injetor, torneiras e soprador no automático (padrão: desligados, como nos testes)
@@ -34,11 +34,13 @@
 //   variacao    sorteio de chuff para chuff (água arrastada, pressão na caixa de válvulas)        ENTRA NA REDE
 //   mistura     ruído de mistura do jato do bico (Strouhal), preso a cada descarga               soma na saída
 //   choque      ruído de choque do jato engasgado                                                soma na saída
-//   tiragem     sopro do escoamento na chaminé                                                   soma na saída
+//   portico     jato na fresta do pórtico de escape ao abrir: o ataque de cada chuff               soma na saída
+//   tiragem     sopro do escoamento na chaminé, preso à coluna de gás que cada chuff puxa        soma na saída
+//   cauda       o ruído do jato que fica na caixa de fumaça (cavidade) e sai depois da descarga   soma na saída
 //   vazamentos  gaxetas e juntas (canais dos cilindros)                                          soma na saída
 //   torneiras   torneiras de purga dos cilindros                                                 soma na saída
 //   bielas      folga das bielas e rolar                                                         soma na saída
-//   bomba, injetor, soprador, seguranca, apito, sino, engrenagens, correias, queimador            somam na saída
+//   bomba, ejetor, injetor, soprador, seguranca, apito, sino, engrenagens, correias, queimador    somam na saída
 //   rolamento   (só com --cena/--passagem) rodas da locomotiva, do tênder e dos vagões            soma na saída
 //   ar          tudo o que o controle "Ar" da página multiplica (mixAr = 0)                       (grupo)
 // O que sobra com todas desligadas é o pulso: a vazão de cada descarga pela rede bico → caixa de fumaça → chaminé.
@@ -59,9 +61,9 @@ import { gravarWav } from './wav';
 const SR = 48000, B = 128, TAU = Math.PI * 2;
 /** Pa de 0 dBFS (124 dB SPL): a escala absoluta da Cena */
 const PA_FS = 2e-5 * Math.pow(10, 124 / 20);
-export const FONTES = ['hoot', 'variacao', 'mistura', 'choque', 'tiragem', 'vazamentos', 'torneiras', 'bielas', 'bomba', 'injetor', 'soprador', 'seguranca', 'apito', 'sino', 'engrenagens', 'correias', 'queimador', 'rolamento'] as const;
+export const FONTES = ['hoot', 'variacao', 'mistura', 'choque', 'portico', 'tiragem', 'cauda', 'vazamentos', 'torneiras', 'bielas', 'bomba', 'injetor', 'soprador', 'seguranca', 'apito', 'sino', 'engrenagens', 'correias', 'queimador', 'rolamento'] as const;
 export const NA_REDE = ['hoot', 'variacao'];
-const MASCARA = ['vazamentos', 'torneiras', 'bielas', 'bomba', 'injetor', 'soprador', 'seguranca', 'apito', 'sino', 'engrenagens', 'correias', 'queimador'];
+const MASCARA = ['vazamentos', 'torneiras', 'bielas', 'bomba', 'injetor', 'soprador', 'ejetor', 'seguranca', 'apito', 'sino', 'engrenagens', 'correias', 'queimador'];
 
 /** multiplica o ganho de uma fonte (0 = desliga) depois da sonda de nível */
 export function escalar(d: any, f: string, g: number, portador?: any) {
@@ -72,6 +74,8 @@ export function escalar(d: any, f: string, g: number, portador?: any) {
     case 'mistura': d.jato.gMistura *= g; break;
     case 'choque': d.jato.gChoque *= g; break;
     case 'tiragem': d.gTiragem *= g; break;
+    case 'cauda': d.caixa.ganho *= g; break;
+    case 'portico': d.gPortico *= g; break;
     case 'ar': d.mixAr *= g; break;
     case 'rolamento': if (portador) for (const r of [...(portador.rodas?.length != null ? portador.rodas : portador.rodas ? [portador.rodas] : []), ...(portador.vaos || [])]) { const p = r.preencher.bind(r); r.preencher = (o: Float32Array, n: number) => { p(o, n); for (let i = 0; i < n; i++) o[i] *= g; }; } break;
     default: throw new Error(`fonte desconhecida: ${f} (${[...FONTES, 'ar'].join(', ')})`);
@@ -147,7 +151,7 @@ export function render(id: string, op: Op) {
     const linha: any[] = [];
     d.tap = (x) => {
       t++;
-      if (t === SR) x.fixar({ regulador: 1 });
+      if (t === SR) x.fixar({ regulador: op.reg });
       if (x.patM[0] && surto < 0) surto = t;
       if (surto > 0 && fechou < 0 && t - surto >= SR) { fechou = t; x.fixar({ regulador: 0 }); }
       if (fechou > 0 && volta < 0 && !x.patM[0]) volta = t;
@@ -220,9 +224,9 @@ function salvar(arq: string, r: ReturnType<typeof render>) {
 function fontesDaCondicao(P: PresetVapor, op: Op) {
   const andando = op.modo !== 'parada';
   const f: string[] = [];
-  if (andando) f.push('hoot', 'variacao', 'mistura', 'choque', 'tiragem', 'bielas');
+  if (andando) f.push('hoot', 'variacao', 'mistura', 'choque', 'portico', 'tiragem', 'cauda', 'bielas');
   f.push('vazamentos');
-  if (op.aux || op.modo === 'parada') { if (P.bombaAr) f.push('bomba'); f.push('injetor', 'soprador', 'torneiras'); }
+  if (op.aux || op.modo === 'parada') { if (P.bombaAr) f.push('bomba'); if (P.ejetor) f.push('ejetor'); f.push('injetor', 'soprador', 'torneiras'); }
   if (P.engrenagens && andando) f.push('engrenagens');
   if (P.correias && andando) f.push('correias');
   if (P.queimador) f.push('queimador');
