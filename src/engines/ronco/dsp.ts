@@ -348,7 +348,7 @@ export class EngineDSP implements DSPDeAudio {
     this.limHold = clamp(cfg.limiterHold ?? 0.07, 0, 0.5);
     // ---- médios e jato da ponteira (docs/TECNICO.md → Ronco). Sem o campo no preset vale o legado, bit a bit:
     // carcaça do escape e batida periódica da mecânica, em dB sobre o nível de referência; no piso do controle, desligadas
-    // (a parede que irradia é sobretudo a do abafador: o direto não tem caixa, só tubo; o original tem parede dupla; a caixa de
+    // (a parede que irradia é sobretudo a do abafador: o direto não tem caixa, só tubo; o esportivo e o original irradiam igual; a caixa de
     // lata do antigo é a mais fina)
     this.carcK = cfg.carcaca != null && cfg.carcaca > CARCACA.piso ? CARCACA.ref * Math.pow(10, cfg.carcaca / 20) * (CARCACA.abafador[cfg.muffler] ?? 1) : 0;
     this.batK = cfg.batida != null && cfg.batida > BATIDA.piso ? BATIDA.ref * Math.pow(10, cfg.batida / 20) : 0;

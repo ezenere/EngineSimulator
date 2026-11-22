@@ -23,7 +23,7 @@ export const ENV_LOOP = { open: 800, street: 400, tunnel: 500, garage: 160, trac
 // seu amortecimento (Q), o corte da massa da parede acima dela, a frequência abaixo da qual a caixa irradia mal (fonte
 // pequena), o ganho de referência (0 dB no controle `carcaca`, com o abafador esportivo), o quanto cada abafador irradia
 // e o piso do controle (desligada)
-export const CARCACA = { f0: 950, q: 2.2, fMassa: 2600, fGrave: 600, ref: 0.28, piso: -30, abafador: { straight: 0.3, sport: 1, stock: 0.6, classic: 1.25 } };
+export const CARCACA = { f0: 950, q: 2.2, fMassa: 2600, fGrave: 600, ref: 0.28, piso: -30, abafador: { straight: 0.3, sport: 1, stock: 1, classic: 1.25 } };
 // Batida periódica da mecânica: modos do bloco excitados pelo pistão (f1, f2) e do cabeçote pelas válvulas (fV), o peso
 // de cada um, o corte acima deles (a estrutura não irradia o agudo do impacto), o ganho de referência (0 dB no controle
 // `batida`) e o piso do controle
