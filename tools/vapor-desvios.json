@@ -1,0 +1,264 @@
+{
+  "apito aberto 20 s derruba a caldeira": {
+    "grupo": "caldeira",
+    "medido": 0.1062,
+    "unidade": "bar",
+    "folga": "±5 %",
+    "motivo": "O próprio VAPOR.md não fecha: o apito consome 0,3–0,6 kg/s (1.8) e k_cal = 1 bar/(10·E_max kg) (1.1) dá 1/60 bar/kg na K4s: 20 s × 0,48 kg/s = 9,6 kg = 0,16 bar. Os 0,6 bar pediriam 1,8 kg/s."
+  },
+  "arrancada (300 t, corte 80%, regulador 0,6): queda em 30 s": {
+    "grupo": "caldeira",
+    "medido": 0.8279,
+    "unidade": "bar",
+    "folga": "±5 %",
+    "motivo": "Com o regulador em 0,6 a área é 25% da máxima (a lei de A_reg de 1.1) e o consumo fica em ~1·E_max; a tiragem sobe com o consumo e a evaporação segue com 60 s de inércia: 0,8 bar em 30 s (o alvo de 1–2 bar pede ≥ 1,5·E_max por 30 s)."
+  },
+  "locomotiva trabalhando a 15 m (K4s, 40 km/h, corte 40%): L_Aeq": {
+    "grupo": "composicao",
+    "medido": 85.78,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "A conta de 4.6 não fecha: L_W 124 dá 124 − 20·log 15 − 11 = 89,5 dB(A) em campo livre na condição de referência (a 4.6 escreve \"128 → 100 a 15 m\", e 128 − 23,5 − 11 = 93,5). A Cena mede a média das potências dos dois ouvidos (−3 dB da panorâmica de um ouvinte de lado) e a brita reflete pouco acima de 800 Hz."
+  },
+  "locomotiva trabalhando a 15 m (UP 844, lwChuff 128, 4/s, corte 50%)": {
+    "grupo": "niveis",
+    "medido": 89.1,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "Ver a K4s a 15 m: 128 − 23,5 − 11 = 93,5 dB(A) em campo livre, menos os ~3 dB da média dos ouvidos (convenção dos testes da Cena) e a brita: 89 dB(A), a 1 dB da faixa."
+  },
+  "apito a 30 m (lateral, solo de brita)": {
+    "grupo": "niveis",
+    "medido": 100.5,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "O apito aponta para a frente (eixo [1,0,0], −6 dB a 90° na tabela de 4.3) e a potência é normalizada pelo índice de diretividade: de lado, a 30 m, 145 − 29,5 − 11 − 6 + 4 = 102,5, menos a média dos ouvidos. Na frente, no eixo, daria ~106."
+  },
+  "segurança a 10 m": {
+    "grupo": "niveis",
+    "medido": 104.4,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "A 10 m da lateral a válvula (no meio da caldeira, 4,7 m de altura) fica a 11,9 m: 140 − 21,5 − 11 = 107,5 dB(A) em campo livre, menos os ~3 dB da média dos ouvidos (o splDbA da Cena dá o mesmo, 104,4)."
+  },
+  "composição a 100 km/h, 12 vagões, 15 m: vagões contra a locomotiva": {
+    "grupo": "composicao",
+    "medido": -9.634,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "A conta de 3.5 (+14 dB de rolamento contra +4 do chuff) não conta o rolamento da própria locomotiva: 6 eixos (3 motrizes a 103 dB(A), 1.7) e os 4 eixos do tênder (F-VAP-01: a ficha contava 8, as rodas) em 34,5 m de locomotiva com tênder, contra 4 eixos em 20 m num vagão; a 100 km/h a janela da locomotiva fica 9–10 dB acima da dos vagões só pelo rolamento."
+  },
+  "nível por chuff em cruzeiro (corte 25%, 15/s) contra a referência": {
+    "grupo": "niveis",
+    "medido": -7.635,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "O release a corte 25% (3,3 bar abs) deixa o bico quase subsônico, e o ruído de mistura ∝ ṁ·M³ cai mais que o −4 de 4.6; a média por segundo fica −2 dB da referência (+5,7 da taxa)."
+  },
+  "King: linha de 8/volta contra a de 4/volta": {
+    "grupo": "geometrias",
+    "medido": -5.199,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "Cada batida dupla junta a ponta da tampa de um cilindro com a do lado da manivela do outro, e a angularidade da biela (r/l = 1/8,5) as afasta ~10° (14 ms a 2 voltas/s): a envoltória mostra as duas. A própria gravação da 6024 (Apêndice A) tem a linha de 19,04 Hz a −14 dB da de 9,56 Hz; o alvo de −20 dB é mais estrito que ela."
+  },
+  "Big Boy a 52 km/h: linha de 8/volta (21.3 Hz) ao longo de 60 s": {
+    "grupo": "geometrias",
+    "medido": 7.556,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "Com ε = 1% a fase entre os motores gira em 37 s, mas o bico e a chaminé comuns alisam os pares e a linha de 8/volta varia 7–8 dB (o alvo pede 10)."
+  },
+  "Corliss: degrau de 50% de carga (50 → 100%)": {
+    "grupo": "estacionarios",
+    "medido": -6.154,
+    "unidade": "%",
+    "folga": "±10 %",
+    "motivo": "A queda (−5,3%) não muda com o ganho do governador: é a caixa de válvulas reabastecendo pelo regulador (dimensionado para 1,5·E_max a 85% da caldeira, 1.1) que limita o torque no primeiro segundo.",
+    "nota_folga": "folga alargada: a mediana de 3 sementes muda mais que ±1 dB / ±5 % entre as bases 0, 1000 e 2000"
+  },
+  "Corliss: volta a ±1% depois do degrau": {
+    "grupo": "estacionarios",
+    "medido": 30,
+    "unidade": "s",
+    "folga": "±21",
+    "motivo": "4,8 s, 0,2 s abaixo da faixa de 2.1 (5–10 s), com o PI de 0,2/0,012. [A2 (AUDITORIA T-VAP-01): com a mediana de 3 sementes, em duas de três bases o Corliss não volta a ±1 % em 30 s depois do degrau (o governador caça em volta da rotação; a medida conta 30 s), e na outra volta em 9,7 s, dentro do alvo: a medida é instável e fica declarada à beira, com o teto largo.]",
+    "beira": true,
+    "nota_folga": "folga alargada: 9,7 a 30 s entre as bases 0, 1000 e 2000"
+  },
+  "Aveling em lenta: escapes por segundo": {
+    "grupo": "estacionarios",
+    "medido": 3.375,
+    "unidade": "/s",
+    "folga": "±10 %",
+    "motivo": "Com o governador fechando o regulador, a compressão das extremidades devolve vapor à caixa e a máquina (volante leve, sem carga) desce devagar até a lenta: aos 20 s ainda está a ~100 rpm.",
+    "nota_folga": "folga alargada: a mediana de 3 sementes muda mais que ±1 dB / ±5 % entre as bases 0, 1000 e 2000"
+  },
+  "Aveling em lenta: banda 400–1k": {
+    "grupo": "estacionarios",
+    "medido": -0.7974,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "Na lenta, com a embreagem solta, não há engrenamento; o chuff pequeno tem o mesmo espectro da chaminé e do jato das locomotivas. A gravação (vídeo privado, dia aberto) tem +8 dB em 400–1k que o modelo não tem; falta o ruído de mecanismo da máquina parada."
+  },
+  "Stanley: pico/vale do escape": {
+    "grupo": "estacionarios",
+    "medido": 6.563,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "6,7 dB contra ≤ 4: o condensador alisa a envoltória em 5 Hz (2 polos) e sobra o pulso abafado da rede; falta o volume do abafador."
+  },
+  "patinagem: chuffs/s no surto (de 4/s)": {
+    "grupo": "patinagem",
+    "medido": 13.76,
+    "unidade": "/s",
+    "folga": "±5 %",
+    "motivo": "A roda sobe 3,3× em 1 s (dentro dos 3–5× de 1.7); 13,8 chuffs/s contra 15–20: o J das motrizes (20 kg·m² por t aderente, 1 840 kg·m² na K4s) e o torque que cai com a caixa."
+  },
+  "patinagem: energia por chuff no fim do surto contra a arrancada com areia": {
+    "grupo": "patinagem",
+    "medido": 5.647,
+    "unidade": "dB",
+    "folga": "±1.5 dB",
+    "motivo": "Com o regulador cheio a caixa de válvulas fica em ~75% da caldeira durante o surto, e a abertura mais rápida do pórtico (o mesmo 20° em 1/3 do tempo) sobe o ruído de jato ∝ M³: cada chuff sai mais forte, não mais fraco. O 1.7 supõe a caixa caindo 30–50%.",
+    "nota_folga": "folga alargada: a mediana de 3 sementes muda mais que ±1 dB / ±5 % entre as bases 0, 1000 e 2000"
+  },
+  "linha de 2/volta relativa à de 4/volta, 10/s": {
+    "grupo": "taxa",
+    "medido": -3.245,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "A 10/s os chuffs se sobrepõem, a linha de 4/volta perde proeminência e a diferença sistemática entre os lados fica: −3,9 dB (a 3–7/s: −11 a −6)."
+  },
+  "decaimento a −10 dB, 9/s": {
+    "grupo": "forma",
+    "medido": 67.69,
+    "unidade": "ms",
+    "folga": "±6 %",
+    "motivo": "70 ms contra 52 ± 30%: a tiragem (∝ (ṁ·M)² médio) enche o vale e alonga a cauda. [A2 (AUDITORIA T-VAP-01): passa por menos de 5 % da tolerância e cai fora com outras sementes (68 / 67 / 70 ms, alvo 52 ± 30 % (≤ 67,6)); fica declarada à beira, com teto.]",
+    "beira": true
+  },
+  "pico/vale, 21.3/s de perto": {
+    "grupo": "forma",
+    "medido": 12,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "13 dB contra 9 ± 3 no Big Boy a 52 km/h: o vale ainda fica vazio entre as batidas dos dois motores. [A2 (AUDITORIA T-VAP-01): passa por menos de 5 % da tolerância e cai fora com outras sementes (12,0 / 12,0 / 12,8 dB, alvo 9 ± 3); fica declarada à beira, com teto.]",
+    "beira": true
+  },
+  "decaimento a −10 dB a 1,4 chuff/s (844; esvaziamento, não a cinemática)": {
+    "grupo": "forma",
+    "medido": 54.82,
+    "unidade": "ms",
+    "folga": "±12 %",
+    "motivo": "O ruído de mistura ∝ ṁ·M³ cai mais depressa que o esvaziamento (τ_bd 30 ms dá 2,5·τ_bd = 75 ms em ṁ, mas M³ some antes): 45 ms.",
+    "nota_folga": "folga alargada: a mediana de 3 sementes muda mais que ±1 dB / ±5 % entre as bases 0, 1000 e 2000"
+  },
+  "banda 1–2,5k no pico, de perto (K4s 4/s corte 70%)": {
+    "grupo": "bandas",
+    "medido": 1.724,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "0,7 dB acima da tolerância, com o ruído de mistura (Strouhal 0,2·U/D ≈ 640 Hz) e o choque acertados para o centroide e as bandas de 2,5–12 kHz."
+  },
+  "centroide vale/pico, de perto": {
+    "grupo": "bandas",
+    "medido": 0.7531,
+    "unidade": "",
+    "folga": "±5 %",
+    "motivo": "O vale é a tiragem (200–1 500 Hz, 1.4) e fica mais escuro que o pico (0,77); nas gravações de perto o vale é mais claro (vazamentos e o jato residual), o que a tiragem larga dava mas estragava a forma e o escurecimento do corte curto."
+  },
+  "banda 400–1k no pico a 25 m (844 a 36 km/h, pela Cena)": {
+    "grupo": "bandas",
+    "medido": 6.163,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "O alvo é a média de 3.3 (844, Big Boy, 6024). A 25 m, com a chaminé a 4,8 m e o ouvido a 1,6 m, o nulo do solo (Δr = 0,61 m) cai em 280 Hz, na banda de referência, e sobe as relativas; a gravação do próprio 844 nesse trecho (Apêndice A) dá +4,0 em 400–1k e +4,9 em 1–2,5k."
+  },
+  "banda 1–2,5k no pico a 25 m (844 a 36 km/h, pela Cena)": {
+    "grupo": "bandas",
+    "medido": 3.337,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "Ver 400–1k a 25 m: a gravação do 844 dá +4,9."
+  },
+  "pico/vale a 25 m, 6,3/s": {
+    "grupo": "bandas",
+    "medido": 13.28,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "A passagem é renderizada sem a reverberação nem o fundo (o vale das gravações a 20–30 m tem o campo reverberante e o vento): 13 dB contra 7–8."
+  },
+  "ataque 10–90%, 9/s corte 40% (k4s)": {
+    "grupo": "forma",
+    "medido": 24,
+    "unidade": "ms",
+    "folga": "±10 %",
+    "motivo": "AUDITORIA T-VAP-01: o ataque a 9/s só passava com a semente do preset (26 ms; 22–24 com as outras); com a mediana de 3 sementes dá 24 ms contra 37 ± 30 %. O chuff abre seco demais em velocidade média (o mesmo do ataque a 4/s, à beira, e do decaimento a 1,4/s): item 2 da lista de som do Vapor.",
+    "nota_folga": "folga alargada: a mediana de 3 sementes muda mais que ±5 % entre as bases 0, 1000 e 2000"
+  },
+  "Stanley a 40 km/h: \"pants\" por segundo": {
+    "grupo": "estacionarios",
+    "medido": 23.44,
+    "unidade": "/s",
+    "folga": "±7 %",
+    "motivo": "A2 (AUDITORIA T-VAP-01): passa por menos de 5 % da tolerância e cai fora com outras sementes (23,4 / 23,3 / 24,7 /s nas bases 0, 1000 e 2000, alvo 23 ± 0,5: com algumas sementes o detector pega outra linha da envoltória); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "nível por chuff na arrancada (corte 80%, 1,5/s) contra a referência": {
+    "grupo": "niveis",
+    "medido": 3.4,
+    "unidade": "dB",
+    "folga": "±1.5 dB",
+    "motivo": "A2 (AUDITORIA T-VAP-01): passa por menos de 5 % da tolerância e cai fora com outras sementes (+3,4 / +3,5 / +2,5 dB, alvo +6 ± 3); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "massa por chuff K4s, corte 50%": {
+    "grupo": "cilindro",
+    "medido": 0.623,
+    "unidade": "kg",
+    "folga": "±5 %",
+    "motivo": "A2 (AUDITORIA T-VAP-01): passa por menos de 5 % da tolerância e cai fora com outras sementes (0,623 / 0,596 / 0,617 kg, alvo 0,65 ± 0,05); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "linha de 2/volta relativa à de 4/volta, 7/s": {
+    "grupo": "taxa",
+    "medido": -5.3,
+    "unidade": "dB",
+    "folga": "±1.5 dB",
+    "motivo": "A2 (AUDITORIA T-VAP-01): passa por menos de 5 % da tolerância e cai fora com outras sementes (−5,3 / −6,2 / −6,1 dB, alvo −5 … −15); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "ataque 10–90%, 4/s corte 70% (k4s)": {
+    "grupo": "forma",
+    "medido": 33,
+    "unidade": "ms",
+    "folga": "±5 %",
+    "motivo": "A2 (AUDITORIA T-VAP-01): passa por menos de 5 % da tolerância e cai fora com outras sementes (33 ms nas três bases, alvo 47 ± 30 % (≥ 32,9): o chuff a 4/s também abre seco); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "decaimento a −10 dB, 21.3/s": {
+    "grupo": "forma",
+    "medido": 22,
+    "unidade": "ms",
+    "folga": "±15 %",
+    "motivo": "A2 (AUDITORIA T-VAP-01): passa por menos de 5 % da tolerância e cai fora com outras sementes (22 / 19 / 20 ms, alvo 17 ± 30 % (≤ 22,1)); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "p/v(150–400) − p/v(1,5–6k), 4/s de perto": {
+    "grupo": "forma",
+    "medido": 2.8,
+    "unidade": "dB",
+    "folga": "±2 dB",
+    "motivo": "A2 (AUDITORIA T-VAP-01): passa por menos de 5 % da tolerância e cai fora com outras sementes (+2,8 / +1,7 / +1,3 dB, alvo 1–9 (3–7 ± 2)); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "L_W chaminé (chuff) na referência (k4s)": {
+    "grupo": "niveis",
+    "medido": 123.1,
+    "unidade": "dB",
+    "folga": "±1.5 dB",
+    "beira": true,
+    "motivo": "A2 (AUDITORIA T-VAP-01): o L_W do chuff na referência é o que a sonda acerta com a semente de fábrica; com a mediana de 3 sementes ele fica em 123,1 / 122,5 / 123,4 dB(A) nas bases 0, 1000 e 2000, contra 124 ± 1: à beira. A fase do ruído das admissões (±1–2 dB por chuff) muda o nível médio da chaminé em ~1 dB."
+  }
+}
