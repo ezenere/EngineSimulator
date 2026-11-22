@@ -9,4 +9,5 @@ export { Barra, BotaoIgnicao } from './Barra';
 export { Manete, segurarManete, VELOCIDADE_MANETE, type ManeteProps, type MarcaManete } from './Manete';
 export { PAGINAS, paginaAtual, type Pagina } from './paginas';
 export { dec, num, grau, resumoGraus, listaGraus } from './formato';
+export { OndaEEspectro, type MarcaEspectro, type OpcoesOnda } from './onda';
 export * from './audio';

@@ -146,6 +146,9 @@ try {
   confere(!!t, 'regulador aberto: anda e solta chuffs', t ? `${r1(t.v)} km/h, ${r1(t.chuffs)} chuffs/s` : JSON.stringify(await tele()));
   const nivelSom = await rms();
   confere(nivelSom > -80, 'som na saída', `${r1(nivelSom)} dBFS`);
+  // onda e espectro (o instrumento comum, src/ui/onda.ts): o canvas desenha a janela do analisador
+  const onda = await lerAte(() => ev(`document.getElementById('scope')?.dataset.rms ?? null`), (v) => v != null && +v > -90, 4000);
+  confere(onda != null && +onda > -90, 'onda e espectro desenhando', `${onda} dBFS na janela da onda`);
 
   // apito segurável (H)
   await tecla('KeyH');
