@@ -162,7 +162,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     injecao: 'em-linha', piloto: false, idi: true, eletronico: false, governador: 'todas-as-rotacoes', droop: 0.08, limiteFumaca: 1.0,
     aspiration: 'na', boost: 0, turboTipo: 'nenhum', turboRpmMax: 0, turboPas: 0, turboApito: 0, turboTau: [1, 1],
     freioMotor: 'nenhum', escape: { turbina: false, dpf: false, abafador: 'stock', comprimento: 3.8, diametro: 2, chamine: null, tempGas: 470 }, muffler: 'stock', pipeLen: 3.8, pipeD: 2,
-    glow: true, mecanica: 5, glowK: 2.2,
+    glow: true, mecanica: 8, glowK: 2.2,
     gears: 4, transmission: 'auto', shiftTime: 0.7, ratios: [3.68, 2.41, 1.44, 1.0], finalDrive: 3.46, wheelR: 0.31, mass: 1700, drag: 0.5,
     portadores: ['carro', 'nenhum'],
   },

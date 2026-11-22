@@ -4,7 +4,7 @@ na condição da gravação casada, compara (painel, HNR, leito, modulação, de
 com a mesma semente e, nos casos de transitório, mede quanto o turbo sobe o nível enquanto enche.
 
     python3 -I tools/diesel-ouvido.py [--casos tools/diesel-ouvido.json] [--saida PASTA] [--so id,id] [--j 16]
-                                      [--sem-orcamento] [--sem-painel] [--rotulo "ANTES"] [--campo JSON]
+                                      [--sem-orcamento] [--sem-painel] [--rotulo "ANTES"] [--campo JSON] [--ruido-extra a,b]
 
 Sai em PASTA/<id>/: os WAVs (`<id>_tudo.wav`, `_so-<fonte>.wav`, `_sem-<fonte>.wav`, `_semente2.wav`), `cmp/painel.png`,
 `cmp/resumo.txt`, `cmp/medidas.json`, `<id>_orcamento.{txt,json,png}`, `transitorio.{png,json}`; e em PASTA:
@@ -47,7 +47,8 @@ AR_CONTINUO = ['jato', 'chiadoAdm', 'sopro', 'turbina', 'wastegate', 'fundo']   
 NA_REDE = ['valvula', 'turbina', 'variacao', 'ar', 'arContinuo', 'turbo', 'turboLargo']
 FONTES = AR + ['apito', 'batida', 'chocalho', 'saia', 'tiques', 'valvulas', 'cliques', 'admissao', 'vib', 'variacao']
 TURBO = ['sopro', 'turbina', 'wastegate', 'apito']
-ESTOCASTICAS = AR + ['chocalho', 'tiques', 'valvulas', 'cliques']
+ESTOCASTICAS = AR + ['chocalho', 'cliques']   # (os impactos, tiques, valvulas e saia, são formas de onda que se repetem, com o instante variando)
+IMPACTOS = ['tiques', 'valvulas', 'saia']
 
 
 def principal():
@@ -294,12 +295,12 @@ def tabela(res, rotulo):
     if orcs:
         L += ['', '## Orçamento de ruído (mesma semente, uma fonte desligada por vez)', '',
               'Fração da potência ponderada A de cada fonte de ar (%), o que desligar todas muda no nível ponderado A, a fração estocástica (duas sementes) e a fonte que mais pesa em cada banda '
-              '(**negrito** = fonte de ar; *itálico* = rajada de ruído colada ao evento).', '',
+              '(**negrito** = fonte de ar; *itálico* = ruído colado ao evento; sem marca = determinística: a batida, os impactos de injetor, válvula e pistão, o apito, a admissão).', '',
               '| caso | jato | válvula | chiado adm. | sopro | turbina | wastegate | fundo | desligar o ar (dB A) | só o ar contínuo | estocástico (A) | 150–400 | 400–1k | 1–2,5k | 2,5–6k |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|']
         for r in orcs:
             o = r['orcamento']; a = o['A_frac']
             pc = lambda k: '·' if a.get(k, 0) < 0.005 else f'{100 * a[k]:.0f}'
-            dm = lambda d: (f"**{d['fonte']}**" if d['ar'] else f"*{d['fonte']}*" if d['estocastica'] else d['fonte']) + f" {100 * d['frac']:.0f}%"
+            dm = lambda d: (f"**{d['fonte']}**" if d['fonte'] in AR else f"*{d['fonte']}*" if d['fonte'] in ESTOCASTICAS else d['fonte']) + f" {100 * d['frac']:.0f}%"
             est = '—' if o['estocastico_A'] is None else f"{100 * o['estocastico_A']:.0f}%"
             L.append(f"| {r['titulo']} | " + ' | '.join(pc(k) for k in AR) + f" | {f(-o['queda_ar_dBA'], 2)} | {f(-o['queda_arContinuo_dBA'], 2)} | {est} | "
                      + ' | '.join(dm(o['dominante'][i]) for i in (2, 3, 4, 5)) + ' |')
@@ -321,6 +322,7 @@ def main():
     ap.add_argument('--so'); ap.add_argument('--j', type=int, default=max(2, (os.cpu_count() or 4) - 4))
     ap.add_argument('--sem-orcamento', action='store_true'); ap.add_argument('--sem-painel', action='store_true')
     ap.add_argument('--rotulo', default='atual'); ap.add_argument('--campo', help='JSON com campos de preset a mudar em todos os casos')
+    ap.add_argument('--ruido-extra', default='', help='fontes a marcar como ruído na tabela (até a 3ª passada, tiques e valvulas eram rajadas de ruído)')
     a = ap.parse_args()
     raiz = principal()
     refs = a.referencias or os.path.join(raiz, 'referencias', 'diesel')
@@ -364,6 +366,7 @@ def main():
                 pass
     with open(os.path.join(saida, 'resumo.json'), 'w') as fh:
         json.dump(nu.limpar(res), fh, ensure_ascii=False, indent=1)
+    ESTOCASTICAS.extend(x for x in a.ruido_extra.split(',') if x)
     md = tabela(res, a.rotulo)
     with open(os.path.join(saida, 'resumo.md'), 'w') as fh:
         fh.write(md)

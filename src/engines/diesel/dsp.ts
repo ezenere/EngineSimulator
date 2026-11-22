@@ -114,7 +114,7 @@ export class DieselDSP extends EngineDSP {
   declare gChiado: any; declare lamInst: any; declare subidaTq: any; declare gMec: any; declare g0Rad: any; declare govBancada: any; declare boostD: any; declare aquec: any; declare estadoAnt: any; declare lentaFixa: any; declare vF: any; declare vAmp: any; declare vDec: any; declare vEnv: any; declare fundoF: any; declare fundoAmp: any; declare fundoM: any; declare pumpAmp: any; declare oilAmp: any;
   declare wBuf: any; declare gwI: any; declare wSoma: any; declare wK: any; declare wSomaK: any; declare boostFixo: any; declare queimasBoas: any; declare cicloEv: any; declare lentaBaixa: any; declare kIdi: any; declare kPre: any; declare egtN: any; declare egtD: any; declare egtNs: any; declare egtDs: any; declare soiM: any; declare thInjM: any; declare thMix: any; declare eD: any; declare pInjMax: any; declare injK: any; declare tauK: any; declare injA: any; declare jTurb: any; declare turbNzF: any; declare linTurb: any; declare pTM: any; declare kModT: any; declare zTurb: any; declare uPonta: any; declare whooshF: any; declare turboLenta: any; declare mecLP: any; declare trocaT: any; declare trocaDir: any;
   declare kBatida: any; declare kChocalho: any; declare kRot: any; declare kVar: any; declare kTiques: any; declare kValvulas: any; declare kEv: any; declare kFrio: any;
-  declare eM: any; declare eB0: any; declare eA1: any; declare eA2: any; declare eZ1: any; declare eZ2: any; declare eAcc: any; declare eWc: any; declare eWi: any; declare eWv: any; declare eWb: any; declare eWp: any; declare pInj0: any; declare kSaia: any; declare eRug: any; declare nQ: any; declare rgF: any; declare rgS: any; declare kRug: any; declare apitoLenta: any;
+  declare eM: any; declare eB0: any; declare eA1: any; declare eA2: any; declare eZ1: any; declare eZ2: any; declare eAcc: any; declare eWc: any; declare eWi: any; declare eWv: any; declare eWb: any; declare eWp: any; declare pInj0: any; declare kSaia: any; declare eRug: any; declare nQ: any; declare rgF: any; declare rgS: any; declare kRug: any; declare kAsp: any; declare apitoLenta: any;
   declare evN: any; declare evT: any; declare evW: any; declare evO: any; declare evA: any; declare nivInj: any; declare gRess: any; declare gDesig: any; declare gJato: any; declare jatoM: any;
   declare apF: any; declare apF2: any; declare apFreq: any; declare apNorm: any; declare apAm: any; declare cfB: any; declare cfN: any; declare cfI: any; declare cfG: any; declare cfLP: any; declare cfK: any; declare cfA: any; declare gCofre: any;
 
@@ -425,6 +425,8 @@ export class DieselDSP extends EngineDSP {
     const est = estrutura(fs, this.N, B, ij.bp, this.gRess || 1, this.gDesig ?? 1);
     this.eM = est.M; this.eB0 = est.b0; this.eA1 = est.a1; this.eA2 = est.a2; this.eWc = est.Wc; this.eWi = est.Wi; this.eWv = est.Wv; this.eWb = est.Wb; this.eWp = est.Wp; this.eRug = est.rug; this.nQ = new Int32Array(this.N); this.rgF = new Float64Array(this.N); this.rgS = new Float64Array(this.N);
     this.kRug = 1 - Math.exp((-TAU * F_ASPEREZA * (0.1 / B)) / fs);
+    // (pré-câmara: a chama áspera fica dentro dela e o cilindro recebe um jato já alisado pelo canal)
+    this.kAsp = K_ASPEREZA * (this.idi ? 0.6 : 1);
     this.eZ1 = new Float64Array(est.M); this.eZ2 = new Float64Array(est.M); this.eAcc = new Float64Array(est.M); this.evN = 0;
     // parede do bloco: quanto maior o cilindro, mais grossa a parede e mais pesado o bloco; o agudo da mecânica cai
     // (passa-baixa de 2ª ordem em 7,5 kHz na picape de 92 mm, 5,4 kHz no caminhão de 137 mm, 3,6 kHz na locomotiva)
@@ -707,7 +709,7 @@ export class DieselDSP extends EngineDSP {
         // (aspereza passada por um polo: constantes.ts → F_ASPEREZA)
         this.rgF[c] += kr * ((k < 256 ? RUG_FIXA * this.eRug[c * 256 + k] : 0) - this.rgF[c]);
         this.rgS[c] += kr * ((k < 256 ? RUG_SOLTA : 1) * this.rng.bi() - this.rgS[c]);
-        const x = (((GAM - 1) * dQ) / (V * this.dt)) * 1e-8 * this.cylK[c] * this.kFrio * (this.kBatida * (1 + K_ASPEREZA * this.rgF[c]) + this.kChocalho * K_ASPEREZA * this.rgS[c]);
+        const x = (((GAM - 1) * dQ) / (V * this.dt)) * 1e-8 * this.cylK[c] * this.kFrio * (this.kBatida * (1 + this.kAsp * this.rgF[c]) + this.kChocalho * this.kAsp * this.rgS[c]);
         const W = this.eWc, M = this.eM, o = c * M, acc = this.eAcc;
         for (let i = 0; i < M; i++) acc[i] += x * W[o + i];
       }
