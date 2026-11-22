@@ -63,7 +63,9 @@ export const HELICES_PISTAO: Record<string, Partial<ConfigHelice> & { nome: stri
   mtv9: { nome: 'MTV-9 (Su-31)', B: 3, D: 2.5, nHelice: 1940, i: 1.52, J_hel: 5 },
   hamilton12d40: { nome: 'Hamilton 12D40 (T-6)', B: 2, D: 2.74, nHelice: 2250, i: 1, J_hel: 16, nMin: 1800 },
   hamilton2: { nome: 'Hamilton 2 pás (Trimotor)', B: 2, D: 2.6, nHelice: 2300, i: 1, J_hel: 12, passoFixo: true },
-  madeira: { nome: 'Madeira/compósito (Rotec)', B: 2, D: 1.75, nHelice: 3600, i: 1, J_hel: 1.5, passoFixo: true },
+  // (Rotec R2800: redutor planetário 3:2, hélice fixa de 76 pol a 2 400 rpm, ponta a Mach 0,71; com 1,75 m a 3 600 rpm
+  // direto a ponta ficava a 0,97: AUDITORIA.md F-RAD-01; rotecaerosport.com/r2800)
+  madeira: { nome: 'Madeira/compósito (Rotec R2800)', B: 2, D: 1.93, nHelice: 2400, i: 1.5, J_hel: 1.5, passoFixo: true },
 };
 
 export const HELICE_PADRAO: ConfigHelice = {

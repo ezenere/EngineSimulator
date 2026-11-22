@@ -7,9 +7,10 @@
 // Abaixo de Mach 1 há uma raiz; acima, nenhuma antes do cone (silêncio), duas iguais na cáustica (o
 // estrondo) e duas depois (a do som "indo" e a do som "chegando", que toca de trás para frente).
 //
-// TODO (integração): o Propagador usa o ponto fixo (M < 0,9). Para a Turbina supersônica, a Cena tem de
-// trocar, por fonte, para estas raízes (até duas leituras por caminho) quando M ≥ 0,9; isso depende das
-// fontes do JetDSP separadas (migração da Turbina). Os testes conferem o instante do cone contra o legado.
+// O Propagador usa o ponto fixo abaixo de M 0,9 e, numa reta com M ≥ 0,9, estas raízes por fonte e por caminho
+// (até duas leituras, `trechoSuper` em src/scene/propagador.ts). Os testes conferem o instante do cone contra o
+// legado. (O comentário de antes era um TODO dessa integração, já feita: AUDITORIA.md K-19. O "ω_c 3,7 rad/s
+// contra 2,7 no código" do K-08 é do governador do gerador em src/engines/diesel/dsp.ts:925, não deste arquivo.)
 import { clamp } from '../acoustics/util';
 
 /** C0 da Turbina legada (340 m/s), mantido para o resolvedor copiado */

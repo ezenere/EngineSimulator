@@ -27,7 +27,9 @@ export const NOTCH_RPM = {
 } as const;
 /** fração da potência por notch: a do DieselDSP (uma tabela só) */
 export const NOTCH_POTENCIA: readonly number[] = NOTCH_POT;
-export const BUZINA_K5LA = [311, 370, 440, 494, 622] as const;
+/** Nathan K5LA: si maior com sexta, ré♯4, fá♯4, sol♯4, si4, ré♯5 (o 3º sino é o sol♯ de 415 Hz; com o lá de 440 o
+ *  acorde virava si com sétima: AUDITORIA.md F-DSL-12; train-horn.com/glossary/k5la) */
+export const BUZINA_K5LA = [311, 370, 415, 494, 622] as const;
 
 export interface ConfigLocomotiva {
   motor: keyof typeof NOTCH_RPM;
@@ -122,7 +124,7 @@ export class Locomotiva extends PortadorComMotor {
       this.propria({ id: `rolamento.${k}`, tipo: 'rolamento', pos: [x, 0, 0.3], hCorpo: 0.3, dir: { tabela: [0, -1.2, -6, -20, -6, -1.2, 0], eixo: [0, 1, 0], expConv: 2 }, refDist: R, dentro: false }, roda);
     }
     if (c.buzina) {
-      // K5LA: 5 notas (311, 370, 440, 494, 622 Hz), L_W 130 dB(A): parciais 1–3 de cada nota
+      // K5LA: 5 notas (311, 370, 415, 494, 622 Hz), L_W 130 dB(A): parciais 1–3 de cada nota
       // TODO: sopro e o peak Q 40 por nota; aqui só os parciais
       this.propria({ id: 'buzina', tipo: 'pa', pos: [10, 0, 4.8], dir: { tabela: [0, -2, -6, -10, -14, -18, -22], eixo: [1, 0, 0], expConv: 2 }, refDist: R, dentro: false }, new Soma(BUZINA_K5LA.map((f) => { const n = new SerieHarmonica(fs, 3); n.f0 = f; calibrarSerieA(n, [1, 0.5, 0.25], paDeLw(130 - 7, R)); return n; })));
     }
