@@ -23,6 +23,7 @@ export interface PresetVapor {
   evaporacaoMax: number;                 // kg/s
   kCaldeira?: number;                    // bar/kg (padrão 1/(10·evaporacaoMax))
   massa: number; massaAderente: number;  // t
+  /** `eixos`: número de EIXOS do tênder (não de rodas): o portador põe metade em cada truque (K4s 4, UP 844 e Big Boy 7, King 3) */
   tender?: { massa: number; eixos: number; comprimento: number };
   vMax: number;                          // km/h (estacionária: rpm governado)
   escape: { dBico: number; lDescarga: number; vCaixa: number; lChamine: number; dChamine: number; kNL?: number; destino?: 'chamine' | 'condensador' | 'abafador'; pCondensador?: number /* Pa abs */ };
@@ -60,7 +61,7 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
   {
     id: 'k4s', nome: 'PRR K4s', familia: 'locomotiva', tag: 'Pacific 4-6-2 · 1914–28', rodeiro: '4-6-2',
     cilindros: { n: 2, diametro: pol(27), curso: pol(28) }, dRoda: pol(80), pNominal: psi(205), superaquecido: true, evaporacaoMax: 6.0,
-    massa: 141, massaAderente: 92, tender: { massa: 95, eixos: 8, comprimento: 16 }, vMax: 150,
+    massa: 141, massaAderente: 92, tender: { massa: 95, eixos: 4, comprimento: 16 }, vMax: 150,
     escape: { dBico: 0.15, lDescarga: 0.8, vCaixa: 5, lChamine: 1.6, dChamine: 0.5 },
     apito: { tubos: [520], tipo: 'simples' }, sino: { f: 650, batidasPorS: 2.0 }, bombaAr: BOMBA1, folga: 0.3,
     geometria: { comprimento: 18.5, largura: 3.1, altura: 4.7, xCilindros: 6.9, xChamine: 6.4, xDomo: 2.2, xCabine: -6.6, zTopo: 4.5 },
@@ -69,7 +70,7 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
   {
     id: 'a4', nome: 'LNER A4 Mallard', familia: 'locomotiva', tag: 'Pacific 3 cil. · 1938', rodeiro: '4-6-2',
     cilindros: { n: 3, diametro: pol(18.5), curso: pol(26), angulo: [0, 120, 240] }, dRoda: pol(80), pNominal: psi(250), superaquecido: true, evaporacaoMax: 5.5,
-    massa: 103, massaAderente: 67, tender: { massa: 64, eixos: 8, comprimento: 9 }, vMax: 160,
+    massa: 103, massaAderente: 67, tender: { massa: 64, eixos: 4, comprimento: 9 }, vMax: 160,
     // chaminé dupla Kylchap (2 bicos de 0,12, 2 chaminés 0,45 × 1,5): bico equivalente de 0,17 e uma chaminé
     escape: { dBico: 0.17, lDescarga: 0.7, vCaixa: 4.5, lChamine: 1.5, dChamine: 0.45 },
     apito: { tubos: [311, 370, 466], tipo: 'chime' }, bombaAr: BOMBA1, folga: 0.2,
@@ -79,7 +80,7 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
   {
     id: 'd51', nome: 'JNR D51 498', familia: 'locomotiva', tag: 'Mikado 2-8-2 · Japão', rodeiro: '2-8-2',
     cilindros: { n: 2, diametro: mm(550), curso: mm(660) }, dRoda: mm(1400), pNominal: 13.7, superaquecido: true, evaporacaoMax: 4.0,
-    massa: 78, massaAderente: 59, tender: { massa: 47, eixos: 6, comprimento: 8.3 }, vMax: 85,
+    massa: 78, massaAderente: 59, tender: { massa: 47, eixos: 4, comprimento: 8.3 }, vMax: 85,
     escape: { dBico: 0.13, lDescarga: 0.7, vCaixa: 3.5, lChamine: 1.3, dChamine: 0.4 },
     apito: { tubos: [360, 465, 548], tipo: 'chime' }, bombaAr: BOMBA1, folga: 0.3,
     geometria: { comprimento: 11.5, largura: 2.9, altura: 3.9, xCilindros: 4.4, xChamine: 4.0, xDomo: 1.2, xCabine: -4.2, zTopo: 3.8 },
@@ -88,7 +89,7 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
   {
     id: 'up844', nome: 'UP 844', familia: 'locomotiva', tag: 'Northern 4-8-4 · 1944', rodeiro: '4-8-4',
     cilindros: { n: 2, diametro: pol(25), curso: pol(32) }, dRoda: pol(80), pNominal: psi(300), superaquecido: true, evaporacaoMax: 7.0,
-    massa: 220, massaAderente: 120, tender: { massa: 196, eixos: 14, comprimento: 20 }, vMax: 130,
+    massa: 220, massaAderente: 120, tender: { massa: 196, eixos: 7, comprimento: 20 }, vMax: 130,
     escape: { dBico: 0.16, lDescarga: 0.9, vCaixa: 6, lChamine: 1.7, dChamine: 0.55 },
     // medido em Kosse: 281 · 344 · 408/420 (os dois tubos quase iguais batem a 13 Hz), e o 3º par ≈ 494
     apito: { tubos: [281, 344, 407, 420, 494], tipo: 'chime' }, sino: { f: 600, batidasPorS: 1.0 }, bombaAr: BOMBA2, folga: 0.3,
@@ -98,7 +99,7 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
   {
     id: 'bigboy', nome: 'UP 4014 Big Boy', familia: 'locomotiva', tag: 'articulada 4-8-8-4 · 1941', rodeiro: '4-8-8-4',
     cilindros: { n: 2, diametro: pol(23.75), curso: pol(32) }, motores: 2, derivaFase: 0.01, dRoda: pol(68), pNominal: psi(300), superaquecido: true, evaporacaoMax: 12.0,
-    massa: 350, massaAderente: 245, tender: { massa: 198, eixos: 14, comprimento: 21 }, vMax: 110,
+    massa: 350, massaAderente: 245, tender: { massa: 198, eixos: 7, comprimento: 21 }, vMax: 110,
     escape: { dBico: 0.18, lDescarga: 1.0, vCaixa: 8, lChamine: 1.8, dChamine: 0.6 },
     apito: { tubos: [294, 349, 392, 440, 523, 587], tipo: 'chime' }, sino: { f: 606, batidasPorS: 2.24 }, bombaAr: BOMBA2, folga: 0.3,
     geometria: { comprimento: 26.5, largura: 3.3, altura: 4.95, xCilindros: 10.5, xChamine: 9.6, xDomo: 3, xCabine: -10, zTopo: 4.8 },
@@ -110,7 +111,9 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
     cilindros: { n: 2, diametro: pol(39), curso: pol(32) }, motores: 2, derivaFase: 0.008,
     compound: { ap: { n: 2, diametro: pol(25) }, bp: { n: 2, diametro: pol(39) }, receptor: 1.2 },
     dRoda: pol(58), pNominal: psi(300), superaquecido: true, evaporacaoMax: 9.0,
-    massa: 275, massaAderente: 275, tender: { massa: 160, eixos: 12, comprimento: 16 }, vMax: 80,
+    // 611 520 lb (277 t) em ordem de marcha, 548 500 lb (249 t) sobre as motrizes (o resto nos eixos guia e de arrasto);
+    // tênder de 22 000 galões: 378 600 lb (172 t)
+    massa: 277, massaAderente: 249, tender: { massa: 172, eixos: 6, comprimento: 16 }, vMax: 80,
     escape: { dBico: 0.17, lDescarga: 0.9, vCaixa: 7, lChamine: 1.6, dChamine: 0.55 },
     apito: { tubos: [196, 233, 294], tipo: 'chime' }, sino: { f: 640, batidasPorS: 2.0 }, bombaAr: BOMBA2, folga: 0.3,
     geometria: { comprimento: 25, largura: 3.3, altura: 4.9, xCilindros: 10, xChamine: 9, xDomo: 2.5, xCabine: -9.5, zTopo: 4.75 },
@@ -150,7 +153,7 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
     id: 'king', nome: 'GWR King 6024', familia: 'locomotiva', tag: '4-6-0 de 4 cilindros · Lickey', rodeiro: '4-6-0',
     // manivelas internas a 180° das externas: 4 batidas duplas por volta
     cilindros: { n: 4, diametro: pol(16.25), curso: pol(28), angulo: [0, 180, 90, 270] }, dRoda: pol(78), pNominal: psi(250), superaquecido: true, evaporacaoMax: 5.0,
-    massa: 91, massaAderente: 69, tender: { massa: 47, eixos: 6, comprimento: 8 }, vMax: 145,
+    massa: 91, massaAderente: 69, tender: { massa: 47, eixos: 3, comprimento: 8 }, vMax: 145,
     escape: { dBico: 0.14, lDescarga: 0.7, vCaixa: 4, lChamine: 1.5, dChamine: 0.45 },
     apito: { tubos: [600], tipo: 'simples' }, bombaAr: BOMBA1, folga: 0.3,
     geometria: { comprimento: 13, largura: 2.8, altura: 4.0, xCilindros: 5.0, xChamine: 4.6, xDomo: 1.5, xCabine: -4.6, zTopo: 3.9 },
@@ -178,7 +181,8 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
   {
     id: 'stanley', nome: 'Stanley Steamer 735', familia: 'carro', tag: '20 hp · 1920 · condensador',
     cilindros: { n: 2, diametro: pol(4), curso: pol(5) }, reducao: 1.5, dRoda: 0.91, pNominal: psi(600), superaquecido: true, evaporacaoMax: 0.12,
-    massa: 1.2, massaAderente: 0.7, vMax: 100, J: 4,
+    // 735 de turismo: 3 650–3 900 lb em ordem de marcha (Stanley Register 1919; Auburn Heights, 735 de 1918: 3 850 lb)
+    massa: 1.75, massaAderente: 1.0, vMax: 100, J: 4,
     escape: { dBico: 0.03, lDescarga: 0.8, vCaixa: 0.02, lChamine: 0.6, dChamine: 0.05, destino: 'condensador', pCondensador: 1.0e5 },
     apito: { tubos: [800], tipo: 'simples', nivelDb: 120 }, folga: 0.3,
     geometria: { comprimento: 4.2, largura: 1.7, altura: 1.8, xCilindros: -1.3, yCilindros: 0.25, xChamine: -1.6, xDomo: 1.4, xCabine: -0.3, zTopo: 0.9 },

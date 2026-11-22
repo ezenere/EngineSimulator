@@ -7,6 +7,7 @@
 // do filtfilt; a diferença é só nas bordas).
 //
 //   npx tsx tools/diesel-bandas.ts <arquivo.wav> <t0> <t1> [N tempos rpm]   (imprime a linha da tabela)
+import { lerWavMono } from './wav';
 import fs from 'node:fs';
 
 export const BANDAS: [number, number][] = [[60, 150], [150, 400], [400, 1000], [1000, 2500], [2500, 6000], [6000, 12000], [30, 60]];
@@ -208,28 +209,8 @@ export function envoltoriaBanda(x: Float64Array | Float32Array, sr: number, lo: 
   return { p9010: 20 * Math.log10(p90 / (p10 + 1e-30)), m1, p10ref: 20 * Math.log10(p10 + 1e-30) - lref, rel: 10 * Math.log10(eb / y.length + 1e-30) - lref };
 }
 
-// leitura de WAV (PCM 16/24/32 ou float 32), mono pela média dos canais
-export function lerWavMono(arq: string): { x: Float64Array; sr: number } {
-  const buf = fs.readFileSync(arq);
-  let p = 12, sr = 48000, ch = 1, bits = 16, fmt = 1, dados: Buffer | null = null;
-  while (p + 8 <= buf.length) {
-    const id = buf.toString('ascii', p, p + 4), sz = buf.readUInt32LE(p + 4);
-    if (id === 'fmt ') { fmt = buf.readUInt16LE(p + 8); ch = buf.readUInt16LE(p + 10); sr = buf.readUInt32LE(p + 12); bits = buf.readUInt16LE(p + 22); }
-    else if (id === 'data') { dados = buf.subarray(p + 8, p + 8 + sz); break; }
-    p += 8 + sz + (sz & 1);
-  }
-  if (!dados) throw new Error(`${arq}: sem dados`);
-  const bps = bits / 8, n = Math.floor(dados.length / (bps * ch)), x = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    let s = 0;
-    for (let c = 0; c < ch; c++) {
-      const o = (i * ch + c) * bps;
-      s += fmt === 3 ? dados.readFloatLE(o) : bits === 16 ? dados.readInt16LE(o) / 32768 : bits === 24 ? dados.readIntLE(o, 3) / 8388608 : dados.readInt32LE(o) / 2147483648;
-    }
-    x[i] = s / ch;
-  }
-  return { x, sr };
-}
+// leitura de WAV mono (média dos canais): a de tools/wav.ts, a única que lê todos os formatos direito
+export { lerWavMono };
 
 const fmt = (v: number, c = 1) => v.toFixed(c).padStart(6);
 export const linha = (r: ReturnType<typeof analisar>) =>

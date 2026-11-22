@@ -7,7 +7,9 @@
 // length/shape: comprimento da aeronave (m) e fator de forma do estrondo sônico (mais fino = menor).
 // Onde a ficha técnica não é pública (número de palhetas, pás da turbina) vai um valor típico.
 //
-// Migrado de src/jet-presets.js sem mudar nenhum valor (a paridade confere objeto a objeto).
+// Migrado de src/jet-presets.js sem mudar nenhum valor (a paridade confere objeto a objeto). As correções de ficha
+// feitas depois (rótulos do 777 e do 707-320B, empuxo por motor do Phenom 300) estão declaradas, com a fonte, em
+// CORRECOES_TURBINA de tools/legado.ts: quem mudar um valor aqui tem de declarar lá, ou a paridade falha.
 
 // mesmo formato de Familia em src/ui (sem importar de lá: este arquivo também roda no Node)
 export type Familia = { id: string; name: string };
@@ -77,7 +79,7 @@ const PRESETS: PresetTurbina[] = [
     fanB: 18, vanes: 42, fanD: 1.85, n1Max: 3600, bpr: 12, hpcB: 46, n2Max: 22000, lptB: 60, jetV: 330, nozD: 0.75, thrust: 100 }),
 
   // ---- Widebodies e jumbos
-  plane('wide', 'wide', 'Boeing 777-300ER', '2× GE90-115B · o maior fan', FAN, {
+  plane('wide', 'wide', 'Boeing 777-300ER', '2× GE90-115B · fan de 3,25 m, 22 pás', FAN, {
     engines: 2, span: 9.7, cockpitX: 28, length: 73.9, shape: 0.12, n1Idle: 0.2, n2Idle: 0.58, spoolTime: 8,
     fanB: 22, vanes: 52, fanD: 3.25, n1Max: 2355, bpr: 9, hpcB: 38, n2Max: 9330, lptB: 80, jetV: 410, nozD: 1.35, thrust: 513 }),
   plane('b787', 'wide', 'Boeing 787-9', '2× GEnx-1B · chevrons', FAN, {
@@ -100,7 +102,7 @@ const PRESETS: PresetTurbina[] = [
   plane('turbojet', 'classic', 'Boeing 707-120', '4× JT3C turbojato · anos 50', JET, {
     engines: 4, span: 17, cockpitX: 22, length: 44, shape: 0.11,
     fanB: 30, vanes: 40, fanD: 0.95, n1Max: 6500, hpcB: 44, n2Max: 9600, lptB: 60, jetV: 570, nozD: 0.62, thrust: 60 }),
-  plane('b707b', 'classic', 'Boeing 707-320B', '4× JT3D · primeiro turbofan', FAN, {
+  plane('b707b', 'classic', 'Boeing 707-320B', '4× JT3D · um dos primeiros turbofans', FAN, {
     engines: 4, span: 17, cockpitX: 22, length: 46.6, shape: 0.11, n1Idle: 0.3, spoolTime: 8, liners: false,
     fanB: 35, vanes: 44, fanD: 1.35, n1Max: 6800, bpr: 1.4, hpcB: 40, n2Max: 9800, lptB: 60, jetV: 560, nozD: 0.7, thrust: 80 }),
   plane('b727', 'classic', 'Boeing 727', '3× JT8D na cauda · bypass 1', FAN, {
@@ -153,7 +155,7 @@ const PRESETS: PresetTurbina[] = [
   // ---- Executivos
   plane('bizjet', 'biz', 'Embraer Phenom 300', '2× PW535 na cauda', FAN, {
     engines: 2, mount: 'rear', span: 1.7, cockpitX: 11, length: 15.9, shape: 0.1, n1Idle: 0.25, n2Idle: 0.55, spoolTime: 4,
-    fanB: 22, vanes: 52, fanD: 0.8, n1Max: 10600, bpr: 4.2, hpcB: 30, n2Max: 29000, lptB: 64, jetV: 380, nozD: 0.45, thrust: 30 }),
+    fanB: 22, vanes: 52, fanD: 0.8, n1Max: 10600, bpr: 4.2, hpcB: 30, n2Max: 29000, lptB: 64, jetV: 380, nozD: 0.45, thrust: 15 }),
   plane('learjet', 'biz', 'Learjet 35', '2× TFE731 com redutor · o "apito"', GTF, {
     engines: 2, mount: 'rear', span: 1.6, cockpitX: 10, length: 14.8, shape: 0.1, n1Idle: 0.25, n2Idle: 0.55, spoolTime: 4, gear: 1.8, liners: false,
     fanB: 30, vanes: 52, fanD: 0.72, n1Max: 10500, bpr: 2.7, hpcB: 32, n2Max: 30000, lptB: 64, jetV: 420, nozD: 0.45, thrust: 16 }),

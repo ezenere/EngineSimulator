@@ -116,7 +116,10 @@ export function medirPortadores(): Linha[] {
     tMin -= 2; tRec -= 2;
     out.push(L('5 #10', 'R44: droop ao puxar o coletivo (0,75 → 1,0 em 0,2 s)', '2–3% em ~1 s', `${f1(droop, 2)}% (mínimo ${f1(tMin - 3, 2)} s depois; volta a 99,5% em ${f1(tRec - 3, 2)} s)`, droop >= 2 && droop <= 3 && tMin - 3 < 1.5));
     out.push(L('4.3', 'tabela de helicópteros: BPF B·Nr/60 e cauda', 'R44 13,6/93; R22 17,7/111; AS350 19,5/69,5; 206 13,1/85; UH-60 17,2/79,3; Mi-8 16,0/56,2',
-      Object.entries(HELICOPTEROS).map(([id, h]) => `${id} ${f1((h.B * h.Nr) / 60, 1)}/${f1((h.Bc * h.rpmCauda) / 60, 1)}`).join('; '), true));
+      Object.entries(HELICOPTEROS).map(([id, h]) => `${id} ${f1((h.B * h.Nr) / 60, 1)}/${f1((h.Bc * h.rpmCauda) / 60, 1)}`).join('; '),
+      // (a linha tinha `ok` fixo em true; agora confere a tabela contra os valores do CENA.md 4.3: ±0,1 Hz no principal, ±0,5 Hz na cauda)
+      Object.entries(HELICOPTEROS).every(([id, h]) => { const a = ({ r44: [13.6, 93], r22: [17.7, 111], as350: [19.5, 69.5], b206: [13.1, 85], uh60: [17.2, 79.3], mi8: [16.0, 56.2] } as Record<string, number[]>)[id];
+        return !!a && Math.abs((h.B * h.Nr) / 60 - a[0]) <= 0.1 && Math.abs((h.Bc * h.rpmCauda) / 60 - a[1]) <= 0.5; })));
   }
   // ---------------------------------------------------------- gerador: degrau de 50%
   {
