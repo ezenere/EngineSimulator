@@ -231,14 +231,14 @@ A rodada completa de depois deu 823 capturas (809 antes; entraram o estrondo sô
 Coisas vistas na auditoria que não são de aparência. Nada disto foi mexido.
 
 1. **Rotativos: pressão 100 vezes maior.** "Pico na câmara" e o traço p–α mostram 804 bar na lenta do RX-7 e 3.838 bar no X-Engine em carga. `src/engines/rotativo/dsp.ts` (linhas 556–557) divide Pa por 1000 e chama de bar (seria kPa: 8 bar e 38 bar).
-2. **Rotativos: "Óleo: fumaça azul 77–91%"** em lenta, com o motor quente e parado. Parece alto demais para ser leitura.
+2. **Rotativos: "Óleo: fumaça azul 77–91%"** em lenta. O número é a baforada da partida, que cai a zero em 20 s (`src/engines/rotativo/dsp.ts`, linha 323: `max(0, 1 − runT/20) × (0,5 + 0,5 × (1 − warm))`); a página (`src/pages/rotativo/mostradores.ts`, linha 167) mostra como porcentagem, e lê como medida de óleo queimado.
 3. **Diesel: pedal sem função no gerador e na locomotiva.** O governador é isócrono (`alvoIsocrono()` ignora `thr` nesses portadores). A interface agora esconde o pedal ali; se o pedal devia agir (por exemplo como carga), é no DSP.
 4. **Diesel: "Observador: Parado na via" fora do veículo.** O controle some no gerador, na locomotiva e na bancada, mas a tecla `V` ainda troca o observador; o DSP não tem via para esses portadores.
 5. **Vapor: estacionárias sem leituras.** O portador gerador não repassa a telemetria do motor: no Corliss ficam vazias Corte, Escapes, No escape, Tração, Auxiliares, Caldeira e Apito, e o manômetro não se mexe.
 6. **Radial: "Temperatura" fixa.** O slider da temperatura fixa nasce sempre em 90 °C (`valor={90}` em `src/pages/radial/Painel.tsx`): não acompanha o valor escolhido quando o painel é montado de novo, e a página não guarda esse valor no estado.
 7. **Elétrico: os nomes das linhas vêm prontos do motor** (`NOME_MEC` em `src/engines/eletrico/constantes.ts`: "2f_e", "Z_s·f_rot", "engren."). A página traduz para "2× elétrica", "ranhuras", "engrenagem" numa tabela própria; um tipo novo de linha aparece com o nome cru até entrar nessa tabela.
 8. **Passagem: ouvinte fora do túnel.** No preset "Trem-bala no túnel" o ouvinte fica a 3 m da lateral, e a parede do túnel de 64 m² fica a 4 m do eixo: o ouvinte está 0,7 m para fora da parede desenhada. É geometria da Cena, não da página.
-9. **Passagem: o trem do preset do túnel aparece como "Sem motor"** nos chips, embora o preset diga N700 (elétrico) no nome.
+9. **Passagem: o mesmo trem com e sem motor.** "Trem-bala no túnel" usa o motor elétrico do N700; "Trem-bala a céu aberto" e "Trem-bala no viaduto" (`src/pages/passagem/presets.ts`, linhas 139–140) são `motor: 'nenhum'`, e o chip mostra "Sem motor" para o mesmo trem.
 10. **`.gitignore`**: a terceira linha é `.claudereferencias/` (faltou a quebra de linha): nem `.claude` nem `referencias/` estão ignorados por ele.
 11. **`npm run navegador:ronco` e `navegador:turbina`** saem com "uso: …" porque os dois scripts exigem a URL (os outros seis servem o `dist/` sozinhos).
 12. **Testes de navegador com espera fixa.** Ronco (3 s até a lenta), Radial (1,5 s até girar), Diesel (10 s na troca de portador) e Passagem (200 ms por mensagem, janelas de nível) falham com a máquina carregada; no Ronco e na Passagem isso foi medido também no build de antes (ver Portões). Trocar a espera fixa por esperar a condição até um limite, como os outros trechos dos mesmos testes já fazem, tira a dependência da carga sem afrouxar o que é conferido.
@@ -251,15 +251,14 @@ No `dist/` do último commit desta rodada, Chromium headless, áudio pelo AudioW
 |---|---|
 | `npm run typecheck` | passa |
 | `npm run build` | passa |
-| `navegador:turbina`, `:rotativo`, `:vapor`, `:eletrico` | TUDO OK na primeira rodada |
-| `navegador:ronco`, `:radial`, `:diesel`, `:passagem` | TUDO OK repetindo (Ronco e Passagem na segunda tentativa, Radial e Diesel na primeira da repetição) |
+| `navegador:ronco`, `:turbina`, `:diesel`, `:radial`, `:rotativo`, `:vapor`, `:eletrico`, `:passagem` | os oito TUDO OK numa rodada só, sem repetir (rodada final, carga de 4 a 60) |
 | `paridade:ronco` | PARIDADE OK: tudo idêntico ao legado |
 | `paridade:turbina` | TUDO IDÊNTICO (34 aviões, 3 cenários do `render.ts` + 7 extras) |
 | `paridade:acoustics` | 23 verificações: tudo idêntico bit a bit |
 
 As três paridades foram rodadas no último commit (`dc54275`). Nenhum arquivo de `src/engines/`, `src/scene/`, `src/carriers/`, `src/acoustics/` ou `src/worklet/` foi tocado (o `git diff` dessas pastas contra `1a2a73c` é vazio).
 
-**Sobre as repetições.** A máquina estava com carga de 12 a 105 (32 núcleos, outros trabalhos de som em paralelo). Os quatro testes que precisaram repetir têm esperas fixas: 3 s para o Ronco pegar e chegar à lenta, 1,5 s para o Radial estar girando, 200 ms para a mensagem de um slider da Passagem chegar ao worklet, janelas de tempo para o pico de nível. Com a máquina carregada eles falham também no build de antes desta rodada (`1a2a73c`), medido aqui: o do Ronco falhou na mesma verificação, e o da Passagem passou 1 vez em 3 (falhando em "slider de elevação", "slider da lateral" e "nível no ouvido na passagem do carro", as mesmas que falharam no build novo). O tempo do clique até a primeira telemetria no Radial deu 3,2 a 4,7 s no build novo e 3,3 a 4,9 s no de antes, com carga 105.
+**Sobre a rodada anterior.** Na rodada de antes desta, com a máquina com carga de 12 a 105 (32 núcleos, outros trabalhos de som em paralelo), Turbina, Rotativos, Vapor e Elétrico passaram de primeira e Ronco, Radial, Diesel e Passagem só repetindo (até a segunda tentativa). Esses quatro têm esperas fixas: 3 s para o Ronco pegar e chegar à lenta, 1,5 s para o Radial estar girando, 200 ms para a mensagem de um slider da Passagem chegar ao worklet, janelas de tempo para o pico de nível. Com a máquina carregada eles falham também no build de antes desta rodada (`1a2a73c`), medido aqui: o do Ronco falhou na mesma verificação, e o da Passagem passou 1 vez em 3 (falhando em "slider de elevação", "slider da lateral" e "nível no ouvido na passagem do carro", as mesmas que falharam no build novo). O tempo do clique até a primeira telemetria no Radial deu 3,2 a 4,7 s no build novo e 3,3 a 4,9 s no de antes, com carga 105.
 
 **Testes atualizados de propósito** (a verificação continua a mesma, com o texto ou a ordem novos): Ronco (placa com vírgula), Diesel (placa com vírgula; a leitura do gerador agora é "210 kW · 60,0 Hz" com o nome "Alternador"), Rotativos (placa com os nomes das janelas), Turbina (ordem das seções, dos sliders e dos chips, com "Escuta e ambiente" primeiro), Elétrico (placa por extenso, seção "Escuta e ambiente", chip "Livre" no lugar de "Gimbal"), Passagem (seção "Volume"). Radial e Vapor não mudaram.
 
@@ -274,3 +273,35 @@ As três paridades foram rodadas no último commit (`dc54275`). Nenhum arquivo d
 - **Casca da migração.** `src/pages/comum/Casca.tsx`, `ProvaDoWorklet.tsx` e `casca.css` ("Migração em andamento") não são usados por nenhuma página; ficaram no lugar para a auditoria de código decidir.
 - **Atalhos nos rótulos da aviação.** "Magnetos (tecla M)" e "Mistura (teclas [ e ])" em `src/pages/comum/Aviacao.tsx` ainda trazem a tecla no rótulo (no Vapor ela saiu); o teste do Radial lê esses controles pelo id, então é só texto.
 - **`docs/TECNICO.md`.** "Estrutura do projeto" ainda não lista o que entrou em `src/ui/` (`Faixa`, `paginas.ts`, `formato.ts`), `tools/capturas.mjs`, `docs/ui/` nem este documento; o arquivo não estava entre os que esta tarefa podia editar.
+
+## Pendências, prontas para executar
+
+O que sobrou das duas listas acima, com o arquivo e o que fazer. A primeira tabela é de interface (não muda o som); a segunda é de quem cuida do DSP, dos dados e dos testes. Depois de qualquer uma: `npm run typecheck`, `npm run build`, o `navegador:*` da página e `node tools/capturas.mjs --so-parado --paginas <página>` para olhar o resultado.
+
+### Interface
+
+| # | O quê | Onde | O que fazer |
+|---|---|---|---|
+| I1 | Tecla `V` do Diesel troca o observador mesmo com o controle escondido (gerador, locomotiva, bancada) | `src/pages/diesel/teclado.ts`, linha 30 | Só chamar `setObserver` na mesma condição que mostra o controle (`veiculo`, em `src/pages/diesel/Painel.tsx`, linha 52) |
+| I2 | "Óleo: fumaça azul 77%" lê como medida | `src/pages/rotativo/mostradores.ts`, linha 167 | Mostrar "fumaça azul na partida" sem a porcentagem (o número é uma rampa de 20 s, ver Funcional 2); `tools/rotativo-navegador.mjs` não lê esse campo |
+| I3 | Slider "Temperatura" do Radial nasce sempre em 90 °C | `src/pages/radial/Painel.tsx`, linha 120 | Fazer como "Água do motor" do Ronco (`src/pages/ronco/Painel.tsx`, linha 283): valor inicial tirado da telemetria em vez do `valor={90}` |
+| I4 | Tecla dentro do rótulo: "Magnetos (tecla M)", "Mistura (teclas [ e ])" | `src/pages/comum/Aviacao.tsx`, linhas 22 e 26 | Tirar a tecla do rótulo e pôr nas dicas de teclado da página (`.hints`), como no Vapor; o teste do Radial lê os controles pelo id |
+| I5 | Casca da migração sem uso | `src/pages/comum/Casca.tsx`, `ProvaDoWorklet.tsx`, `casca.css` | Apagar os três (nenhuma página importa; conferir com `grep -rn "comum/Casca\|ProvaDoWorklet" src`) |
+| I6 | Mostradores do Diesel são cópia dos do Ronco | `src/pages/ronco/mostradores.ts`, `src/pages/diesel/mostradores.ts` | Levar o que é igual (conta-giros, anel do ciclo, onda) para um arquivo comum em `src/pages/comum/` e deixar no Diesel só o p–θ e as leituras dele; comparar as capturas de antes e depois das duas páginas |
+| I7 | Túnel desenhado mais estreito que a posição do ouvinte | `src/pages/passagem/cena3d.ts`, linhas 219–221 | O tubo é um quadrado de lado √área centrado na via (parede a 4 m do eixo) e o ouvinte dos presets fica a 4,7 m do eixo. Decidir com quem cuida da Cena (`Tunel` em `src/scene/tipos.ts`) a largura e a posição da via no túnel, e desenhar com isso; não mexer na `lateral` dos presets, que muda o som |
+| I8 | Locomotiva a vapor, trator e barco sem silhueta própria | `src/pages/passagem/cena3d.ts` | Desenhar como já foi feito para avião e carro (caixas com medidas tiradas do comprimento do corpo) |
+| I9 | Vapor sem onda nem espectro (V6) | `src/pages/vapor/PaginaVapor.tsx`, `src/pages/vapor/mostradores.ts` | Instrumento novo: precisa do aval do dono. Se entrar, usar o `.scope-wrap` e o desenho de onda das outras páginas |
+| I10 | `docs/TECNICO.md` desatualizado | `docs/TECNICO.md`, "Estrutura do projeto" (linha 25) | Listar `src/ui/paginas.ts`, `src/ui/formato.ts`, `Faixa` em `src/ui/PresetNav.tsx`, `public/favicon.svg`, `tools/capturas.mjs`, `docs/ui/` e este documento |
+
+### DSP, dados e testes
+
+| # | O quê | Onde | O que fazer |
+|---|---|---|---|
+| F1 | Pressão dos Rotativos 100 vezes maior | `src/engines/rotativo/dsp.ts`, linhas 556–557 | `Math.round(x / 100) / 10` dá kPa e o comentário diz bar; para bar é `Math.round(x / 1e4) / 10`. Conferir depois o eixo do p–α e "Pico na câmara" em `src/pages/rotativo/mostradores.ts` |
+| F2 | Pedal do Diesel sem função no gerador e na locomotiva | `src/engines/diesel/dsp.ts`, `alvoIsocrono()` (linha 959) | Decidir se o pedal age (como carga, por exemplo) ou fica escondido como está agora |
+| F3 | Estacionárias a vapor sem telemetria do motor | `src/carriers/gerador.ts` | Repassar a telemetria do motor como os outros portadores; a página já preenche as leituras quando ela chega |
+| F4 | Nome das linhas do Elétrico vem pronto do motor | `src/engines/eletrico/constantes.ts` (`NOME_MEC`), `src/pages/eletrico/mostradores.ts` (`NOME_LINHA`, linha 25) | Deixar o nome por extenso num lugar só: ou o motor manda o nome final, ou manda só o id e a tabela da página é a única |
+| F5 | Trem-bala com motor num preset e sem motor em dois | `src/pages/passagem/presets.ts`, linhas 139–140 | Decidir se "a céu aberto" e "no viaduto" ganham `motor: 'eletrico', motorPreset: 'n700'` (muda o som) |
+| F6 | `.gitignore` com duas entradas coladas | `.gitignore`, linha 3 | Trocar `.claudereferencias/` por duas linhas: `.claude/` e `referencias/` |
+| F7 | `navegador:ronco` e `navegador:turbina` saem com "uso: …" | `package.json`, linhas 16–17; `tools/ronco-navegador.mjs`, `tools/turbina-testa-navegador.mjs` | Servirem o `dist/` sozinhos quando não vier URL, como os outros seis |
+| F8 | Testes de navegador com espera fixa falham com a máquina carregada | `tools/ronco-navegador.mjs`, `tools/radial-navegador.mjs`, `tools/diesel-navegador.mjs`, `tools/passagem-navegador.mjs` | Trocar cada espera fixa por esperar a condição até um limite (o que os outros trechos dos mesmos arquivos já fazem); a verificação fica a mesma |
