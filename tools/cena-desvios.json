@@ -133,6 +133,16 @@
     "motivo": "Os harmônicos 10 a 30 da BPF do R44 com o coletivo em 1,0 ficam dentro de 14,8 dB (o teto é 15): passa por 0,2 dB, sem depender da semente (o tapa do rotor é determinístico). À beira (AUDITORIA T-CEN-08).",
     "beira": true
   },
+  "carro a 6 m: curva nível × x (relativa ao pico) contra o legado sem o som de fundo": {
+    "grupo": "motores",
+    "medido": 0.96,
+    "unidade": "dB",
+    "folga": "±0.2",
+    "alvo": "±1 dB (rms)",
+    "motivo": "A curva de nível da passagem do Camaro a 6 m fica a 0,94–0,98 dB (rms) da do road() do legado conforme a semente, contra o teto de 1 dB: a Cena soma a amplificação convectiva |1 − M·cosθ|^−2 (2.1), que o road() não tem, e ela sozinha dá +0,8 dB chegando e −0,75 indo (a medida mostra +1,4 chegando e −0,2 indo). À beira (passa por menos de 5% da tolerância).",
+    "beira": true,
+    "nota_folga": "folga absoluta: as sementes vão de 0,94 a 0,98 dB; com a ordem de ignição do LT1 no legado e na Cena (F-RON-19) a curva passou de 0,94 para 0,96"
+  },
   "alocação no laço (--trace-gc, 10 s; mediana de 3 processos): MB coletados por segundo": {
     "grupo": "cpu",
     "medido": 5.86,

@@ -83,8 +83,10 @@ export type Correcoes = Record<string, Record<string, unknown>>;
 export const CORRECOES_RONCO: Correcoes = {
   // (docs/AUDITORIA.md, F-RON-01…15: nenhum destes campos muda o timbre; só o nome, o rótulo e como o carro anda)
   // potência (455 hp), relações e diferencial 3,73 são do Camaro SS de 6ª geração, que usa o LT1; o LS3 (426 hp) é o da 5ª,
-  // com 3,01/2,07/1,43/1,00/0,84/0,57 e 3,45 (gmauthority.com, especificações do Camaro 2016; Wikipedia, Tremec TR-6060)
-  muscle: { tag: '6.2 V8 LT1 · cross-plane' },
+  // com 3,01/2,07/1,43/1,00/0,84/0,57 e 3,45 (gmauthority.com, especificações do Camaro 2016; Wikipedia, Tremec TR-6060).
+  // A ordem de ignição (MUDA o timbre) é a do LT1 Gen V, 1-8-7-2-6-5-4-3 (gmauthority.com, ficha do LT1); a do legado era a
+  // do small-block antigo (F-RON-19). É o preset das referências de tools/cena/referencias/legado.json, que aplicam esta tabela
+  muscle: { tag: '6.2 V8 LT1 · cross-plane', order: '1-8-7-2-6-5-4-3' },
   // 10R80: a 4ª é 1,769 (Wikipedia, Ford–GM 10-speed automatic transmission)
   mustang: { ratios: [4.70, 2.99, 2.15, 1.77, 1.52, 1.28, 1.00, 0.85, 0.69, 0.64] },
   // Tremec TR-9070 DCT do GT500 2020: 3,14/2,05/1,43/1,10/0,86/0,68/0,56 (suplemento do manual da Ford, março de 2020)

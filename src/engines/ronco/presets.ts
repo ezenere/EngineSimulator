@@ -111,7 +111,8 @@ const car = (id: string, family: string, name: string, tag: string, base, o): Pr
 
 export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assign([
   // ---- Muscle americano
-  car('muscle', 'muscle', 'Chevrolet Camaro SS', '6.2 V8 LT1 · cross-plane', V8X, {
+  // (a ordem de ignição do LS/LT, 1-8-7-2-6-5-4-3; a do V8X é a do small-block antigo: AUDITORIA F-RON-19)
+  car('muscle', 'muscle', 'Chevrolet Camaro SS', '6.2 V8 LT1 · cross-plane', { ...V8X, order: '1-8-7-2-6-5-4-3' }, {
     displacement: 6.2, redline: 6600, idle: 780, cam: 0.5, inertia: 1.2,
     header: 'unequal', routing: 'dual', muffler: 'sport', pipeLen: 3.0, ...NA, intake: 'sport', overrun: 'cut', cat: true, ...CUT('ign'), gears: 6, transmission: 'manual',
     ...veh(339, 1690, [2.66, 1.78, 1.30, 1.00, 0.74, 0.50], 3.73, 0.35, 0.5) }),
