@@ -126,7 +126,7 @@ const LEITURAS_CAMARA: [string, string, string][] = [
   ['roEst', 'Estouros', 'Estouros por segundo no escape'],
   ['roSeq', 'Turbo', 'Pressão do turbo e, no sequencial, quanto o turbo secundário já entrou'],
   ['roApv', 'Janelas', 'Janelas secundária e auxiliar da admissão (abrem com o giro)'],
-  ['roFumaca', 'Óleo', 'Fumaça azul do óleo de lubrificação das vedações'],
+  ['roFumaca', 'Óleo', 'Fumaça azul do óleo das vedações, nos primeiros 20 s depois da partida (mais forte com o motor frio)'],
 ];
 
 function Leitura({ e }: { e: EstadoRot }) {
