@@ -1,6 +1,10 @@
 // Portador rotor de helicóptero (CENA.md 4.3). Nr fixo pelo governador; o pedal é o coletivo c ∈ [0, 1].
 //   T = T_pairado·(0,25 + 1,0·c), T_pairado = m·g (c ≈ 0,75 paira)
-//   P = T^(3/2)/√(2ρA)/FM + ρAσc_d0(ΩR)³/8 + P_cauda + P_acess, A = πR², FM 0,72, P_cauda = 0,1·P_principal, P_acess 5 kW
+//   P = κ·T^(3/2)/√(2ρA) + ρAσc_d0(ΩR)³/8 + P_cauda + P_acess, A = πR², κ 1,15, P_cauda = 0,1·P_principal, P_acess 5 kW
+//   (o CENA dava T^(3/2)/√(2ρA)/FM com FM 0,72 MAIS o perfil: a figura de mérito já é a razão entre a potência ideal e a
+//   total, perfil incluso, e o perfil contava duas vezes. O fator de potência induzida κ ≈ 1,15 é o da teoria do momento
+//   modificada, Leishman, Principles of Helicopter Aerodynamics, cap. 2; com ele o R44 no peso máximo pede 156 kW no
+//   pairado, abaixo dos 153–183 kW do IO-540 do Raven II, e a figura de mérito resultante fica em 0,61)
 //   carga no motor Q/i_cx, inércia J_rot/i_cx²; governador PI sobre o combustível (K_p 0,8 por %, K_i 0,4/s)
 // Sem motor (`nenhum`): Nr é imposto e só as fontes do rotor soam.
 //
@@ -29,11 +33,12 @@ export interface ConfigRotor {
   corpo: { comprimento: number; largura: number; altura: number };
 }
 
-/** R44 (padrão) e a tabela de 4.3: B, D, Nr, BPF, ponta, cauda (B_c, rpm → BPF) */
+/** R44 (padrão) e a tabela de 4.3: B, D, Nr, BPF, ponta, cauda (B_c, rpm → BPF). Massa: o peso máximo de decolagem do
+ *  R44 Raven II, 2 500 lb = 1 134 kg (POH da Robinson; o CENA dava 1 090, AUDITORIA.md F-AVI-05) */
 export const ROTOR_R44: ConfigRotor = {
   B: 2, R: 5.03, Nr: 408, sigma: 0.033, cd0: 0.0102, J_rot: 700,
   Bc: 2, Rc: 0.74, ic: 2800 / 408, posCauda: [-5.8, 0, 1.8],
-  icx: 6.66, engrenagens: [{ z: 57, rpm: 2718 }, { z: 9, rpm: 408 * 9.6 }], massa: 1090,
+  icx: 6.66, engrenagens: [{ z: 57, rpm: 2718 }, { z: 9, rpm: 408 * 9.6 }], massa: 1134,
   posRotor: [0.2, 0, 3.3], posCaixa: [0, 0, 2.4], posMotor: [-0.5, 0, 1.2],
   corpo: { comprimento: 11.7, largura: 1.3, altura: 3.3 },
 };
@@ -47,17 +52,46 @@ export const HELICOPTEROS: Record<string, { nome: string; B: number; D: number; 
   mi8: { nome: 'Mi-8', B: 5, D: 21.29, Nr: 192, Bc: 3, rpmCauda: 1124 },
 };
 
+/**
+ * Governador do rotor com um motor de verdade, qualquer família com DSP (pistão de aviação, radial, rotativo): por % de
+ * erro do Nr, saída = acelerador 0..1. São os ganhos que o R44 já usava aqui (0,12 dos de bancada: a borboleta do motor
+ * responde na hora). O Camcopter (rotativo) ficava com os de bancada, 0,8 e 0,4, que caçavam (AUDITORIA.md K-06).
+ * A carga de bancada da página do Ronco (`CargaBancadaAv`, src/engines/ronco/aviacao.ts:94) usa 0,04 e 0,02 para o mesmo
+ * R44; com esses, no protocolo do teste:radial (coletivo 0,5 → 0,75 em 1 s), o Nr nem assenta em 8 s (413,6 rpm) e não
+ * volta a 99,5% em 7 s depois do puxão (o alvo é ≤ 1,5 s; com estes, 0,73 s). Fica a duplicação: aviacao.ts deveria
+ * importar estes (é do agente da base).
+ */
+export const GOV_ROTOR_MOTOR = { kp: 0.8 * 0.12, ki: 0.4 * 0.72 };
+
+/** fator de potência induzida da teoria do momento modificada (perdas de ponta e não uniformidade da esteira) */
+export const KAPPA_INDUZIDA = 1.15;
+
 /** peso do tapa (BVI) contra a carga: com 2,5 os harmônicos 10–30 ficam a 15 dB com o coletivo cheio (5.10) */
 export const K_BVI = 2.5;
 
 export class CargaRotor implements Carga {
   cfg: ConfigRotor; c = 0.75; inercia: number;
-  constructor(cfg: ConfigRotor) { this.cfg = cfg; this.inercia = cfg.J_rot / (cfg.icx * cfg.icx); }
-  tracao() { return this.cfg.massa * 9.81 * (0.25 + 1.0 * this.c); }
+  /**
+   * Tração que cai com o quadrado do Nr (T = C_T·ρ·A·(ΩR)², o C_T dado pelo coletivo): com o rotor abaixo do nominal a
+   * tração e a potência induzida caem (∝ Ω³) e o Nr acha um equilíbrio com o que o motor entrega (o "droop" de quem puxa
+   * coletivo demais). Sem isso a tração ficava a do coletivo em qualquer Nr, o torque pedido P/Ω crescia sem limite com o
+   * rotor perdendo giro e o motor apagava: quatro dos seis helicópteros paravam o rotor (AUDITORIA.md C-04). O portador
+   * Rotor da Cena liga; a carga de bancada da página do Ronco (src/engines/ronco/aviacao.ts) fica com a de antes.
+   */
+  tracaoComRotacao = false;
+  private Om0: number;
+  constructor(cfg: ConfigRotor) { this.cfg = cfg; this.inercia = cfg.J_rot / (cfg.icx * cfg.icx); this.Om0 = (cfg.Nr * 2 * Math.PI) / 60; }
+  /** tração (N); com `Omega` (rad/s do rotor) e `tracaoComRotacao`, escalada por (Ω/Ω_nominal)² */
+  tracao(Omega?: number) {
+    const T = this.cfg.massa * 9.81 * (0.25 + 1.0 * this.c);
+    if (!this.tracaoComRotacao || Omega === undefined) return T;
+    const r = Omega / this.Om0;
+    return T * r * r;
+  }
   /** potências (W) na rotação Ω do rotor */
   potencias(Omega: number) {
-    const k = this.cfg, A = Math.PI * k.R * k.R, T = this.tracao();
-    const ind = Math.pow(T, 1.5) / Math.sqrt(2 * RHO * A) / 0.72;
+    const k = this.cfg, A = Math.PI * k.R * k.R, T = this.tracao(Omega);
+    const ind = (KAPPA_INDUZIDA * Math.pow(T, 1.5)) / Math.sqrt(2 * RHO * A);
     const perfil = (RHO * A * k.sigma * k.cd0 * Math.pow(Omega * k.R, 3)) / 8;
     const princ = ind + perfil, cauda = 0.1 * princ, acess = 5000;
     return { ind, perfil, cauda, acess, total: princ + cauda + acess };
@@ -106,6 +140,7 @@ export class Rotor extends PortadorComMotor {
     super(fs, 'rotor', corpo, { posMotor: c.posMotor, rotMotor: 'frente' });
     this.cfg = c;
     this.cargaR = new CargaRotor(c);
+    this.cargaR.tracaoComRotacao = true;
     this.OmegaLivre = (c.Nr * 2 * Math.PI) / 60;
     const R = REF_DIST_PORTADOR;
     this.principal = new SerieHarmonica(fs, 40);
@@ -133,8 +168,10 @@ export class Rotor extends PortadorComMotor {
    *  responde na hora e, com os ganhos do motor de bancada (0,8 por %), o Nr nem se mexia ao puxar o coletivo; com 1/10
    *  deles o droop fica em 2–3% e volta em ~1 s, como no helicóptero real. Sem motor ou com outro motor, os de sempre */
   acoplar(motor: import('./tipos').Motor | null) {
-    const k = motor && (motor.familia === 'pistao' || motor.familia === 'radial') && 'dsp' in (motor as object) ? 0.12 : 1; // (o MotorTeste de bancada, com o atraso de torque do correlacionador, fica com os de sempre)
-    this.gov.kp = 0.8 * k; this.gov.ki = 0.4 * Math.min(1, 6 * k);
+    // motor de verdade (um DSP: pistão de aviação, radial, rotativo): os ganhos do governador de bancada da página do Ronco
+    // (GOV_ROTOR_MOTOR); o MotorTeste de bancada, com o atraso de torque do correlacionador, fica com os de sempre
+    const real = !!motor && 'dsp' in (motor as object);
+    this.gov.kp = real ? GOV_ROTOR_MOTOR.kp : 0.8; this.gov.ki = real ? GOV_ROTOR_MOTOR.ki : 0.4;
     super.acoplar(motor);
   }
 
@@ -148,7 +185,7 @@ export class Rotor extends PortadorComMotor {
     }
     const Om = w / c.icx, nr = (Om * 60) / (2 * Math.PI);
     const R = REF_DIST_PORTADOR, cc = this.cargaR.c;
-    const T = this.cargaR.tracao(), Tp = c.massa * 9.81;
+    const T = this.cargaR.tracao(Om), Tp = c.massa * 9.81;
     const pot = this.cargaR.potencias(Om);
     // rotor principal
     const bpf = (c.B * nr) / 60, Mt = (Om * c.R) / C_SOM;
@@ -177,6 +214,6 @@ export class Rotor extends PortadorComMotor {
   telemetria(): TelemetriaPortador {
     const c = this.cfg, w = this.motor ? this.motor.eixo.omega : this.OmegaLivre * c.icx, Om = w / c.icx;
     const p = this.cargaR.potencias(Om);
-    return { v: this.cinematica.v, s: this.cinematica.s, rpmEixo: (w * 60) / (2 * Math.PI), torqueCarga: this.cargaR.torque(w), Nr: (Om * 60) / (2 * Math.PI), bpf: (c.B * Om) / (2 * Math.PI), bpfCauda: (c.Bc * c.ic * Om) / (2 * Math.PI), potencia: p.total, tracao: this.cargaR.tracao(), coletivo: this.cargaR.c };
+    return { v: this.cinematica.v, s: this.cinematica.s, rpmEixo: (w * 60) / (2 * Math.PI), torqueCarga: this.cargaR.torque(w), Nr: (Om * 60) / (2 * Math.PI), bpf: (c.B * Om) / (2 * Math.PI), bpfCauda: (c.Bc * c.ic * Om) / (2 * Math.PI), potencia: p.total, tracao: this.cargaR.tracao(Om), coletivo: this.cargaR.c };
   }
 }

@@ -12,6 +12,12 @@
 > - **Alvos de 2.9 e 2.11 trocados nos testes.** Balanço 60–150 Hz: +4 → −3 ± 4 dB. Profundidade da modulação dos vãos: ≥ 6 → ≥ 3 dB. Os pulsos de vão em 50–200 Hz, o L_AFmax (5 dB acima do L_Aeq) e o σ de 51 ms do nariz não saem do modelo e ficam como desvios (seção "Validação" de [Cena e portadores](TECNICO.md#cena-e-portadores)).
 > - **Túnel (2.10).** O envio para a reverberação no túnel cai com `1/r^0,8` (o texto dá `1/√r` para todos os ambientes) e o `wet` é 4: só assim os dois alvos do túnel de 2.10 saem juntos.
 > - **Página Passagem (3).** Tem 10 portadores e 29 presets, com motor em quase todos ([Página Passagem](TECNICO.md#página-passagem-e-modo-de-testes)); a seção 4 daqui descreve só os da etapa 1.
+> - **Depois da auditoria (22/11/2026, portadores e Passagem).**
+>   - *Hélice (4.2).* Com motor a pistão, radial ou rotativo (e o turboélice quando toca na Cena) o nível do tom é o de carga de Gutin com o torque absorvido, não a lei 9·(M/0,75)⁴ do JetDSP ([Portadores](TECNICO.md#portadores)).
+>   - *Rotor (4.3).* `P = κ·T^(3/2)/√(2ρA) + perfil + cauda + acessórios` com κ 1,15: a fórmula daqui, com a figura de mérito 0,72 E o perfil, contava o perfil duas vezes. A tração cai com Nr² (o C_T é o do coletivo). R44 no peso máximo do Raven II (1 134 kg): 156 kW no pairado, não 170.
+>   - *Locomotiva (4.5).* Com o diesel acoplado, a tabela de rotação e a potência de notch 8 são as da ficha do motor; a potência é a do eixo (o texto dava `P/(η·ω)` sobre a nominal, que pedia mais que o motor tem), e há regulador de carga pelo combustível do governador.
+>   - *Carro (4.1).* Pneus e vento ligados pela ficha na Passagem (`configCarroLegado`); sem configuração, só o motor.
+>   - *Túnel (2.10).* A seção desenhada sai de `secaoTunel()` (via dupla, 9,5 × 6,8 m com 64 m², o trem na via do lado oposto ao ouvinte); a acústica continua só com a área.
 
 Documento de projeto da etapa 1 (ver `PLANO.md`). Define as interfaces entre Motor, Portador e Cena, a Passagem universal, o modo de testes com ouvinte em gimbal e cena 3D, os portadores da etapa 1 e o plano de implementação com testes. A implementação segue este texto à letra; o que estiver marcado **decisão** não se renegocia dentro da etapa sem anotar no relatório. Unidades: metros, segundos, rad/s, N·m, pascal, kg. Referencial do corpo: `x` para a frente, `y` para a esquerda, `z` para cima, origem no centro do corpo ao nível do solo. Som: 48 kHz, blocos de 128 amostras no worklet, controle a cada 64 amostras.
 

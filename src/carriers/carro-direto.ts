@@ -6,20 +6,17 @@
 import type { Carga, Diretividade } from '../scene/tipos';
 import type { TelemetriaPortador, Corpo, ComandoPortador } from './tipos';
 import { PortadorComMotor } from './base';
-import { FonteRuido, Ramo } from './ruido';
+import { FontePneu } from './ruido';
 import { REF_DIST_PORTADOR } from './trem';
-import { Bq } from '../scene/filtros';
 import type { VaporDSP, ComandoVapor } from '../engines/vapor/dsp';
 import type { PresetVapor } from '../engines/vapor/presets';
 
 export interface ConfigCarroDireto { massa: number; dRoda: number; cd: number; area: number; crr: number; rampa: number }
 export const configCarroDireto = (P: PresetVapor): ConfigCarroDireto => ({ massa: P.massa, dRoda: P.dRoda, cd: 0.6, area: 2.4, crr: 0.015, rampa: 0 });
 
-/** pneu na estrada: passa-banda largo, sobe com √v */
-export class FontePneu extends FonteRuido {
-  constructor(fs: number, semente: number) { super(fs, { lw: 92, n: 3.5, vRef: 80 / 3.6, refDist: REF_DIST_PORTADOR }, semente); this.ramos = [new Ramo(semente, [new Bq()], 3000)]; }
-  montar(v: number) { const k = Math.sqrt(Math.max(0.05, v / this.esp.vRef)); this.ramos[0].bq[0].bp(this.fs, 800 * k, 0.6); this.definirLp(this.ramos[0], 3000 * k); }
-}
+/** pneu do Stanley na estrada (a FontePneu de ruido.ts com a forma dele): passa-banda largo em 800 Hz que sobe com √v,
+ *  passa-baixa em 3 kHz·√k, L_W 92 dB(A) a 80 km/h, sem modulação lenta */
+const PNEU_STANLEY = { lw: 92, centro: 800, q: 0.6, subirComV: true, lp: 3000, modLenta: 0, refDist: REF_DIST_PORTADOR };
 
 export class CargaCarro implements Carga {
   inercia: number; c: ConfigCarroDireto; r: number; rampa = 0; freio = 0;
@@ -40,7 +37,7 @@ export class CarroDireto extends PortadorComMotor {
     super(fs, 'carro', corpo, { posMotor: [0, 0, 0], rotMotor: 'frente' });
     this.cfg = cfg; this.cargaC = new CargaCarro(cfg); this.cargaC.rampa = cfg.rampa;
     [[1.3, 0.75], [1.3, -0.75], [-1.3, 0.75], [-1.3, -0.75]].forEach(([x, y], k) => {
-      const p = new FontePneu(fs, 0x9e0 + k);
+      const p = new FontePneu(fs, 0x9e0 + k, PNEU_STANLEY);
       this.pneus.push(p);
       this.propria({ id: `pneu.${k}`, tipo: 'rolamento', pos: [x, y, 0.2], hCorpo: 0.2, dir: DIP, refDist: REF_DIST_PORTADOR, dentro: false }, p);
     });

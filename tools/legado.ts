@@ -83,8 +83,9 @@ export const CORRECOES_RONCO: Correcoes = {
 
 /** Turbina: id do preset → campos corrigidos (valor novo) */
 export const CORRECOES_TURBINA: Correcoes = {
-  // Nenhum destes campos entra no som: `tag` é o rótulo do preset e `thrust` só vai para o mostrador de empuxo
-  // (thrust100 em src/engines/turbina/dsp.ts, usado só na telemetria).
+  // `tag` é o rótulo do preset e `thrust` só vai para o mostrador de empuxo (thrust100 em src/engines/turbina/dsp.ts, usado
+  // só na telemetria); `propKW` só a Cena lê. Entram no som da página Turbina: as rotações do C-130J e do HondaJet e o
+  // comprimento do Phenom (a paridade aplica a correção dos dois lados, então continua idêntica).
   // GE90-115B: deixou de ser "o maior fan" com o GE9X do 777X (134 pol = 3,40 m, certificado em 25/9/2020;
   // https://en.wikipedia.org/wiki/General_Electric_GE9X). O fan de 128 pol (3,25 m) e as 22 pás estão na ficha.
   wide: { tag: '2× GE90-115B · fan de 3,25 m, 22 pás' },
@@ -94,7 +95,24 @@ export const CORRECOES_TURBINA: Correcoes = {
   // Phenom 300: o PW535E dá 3 360 lbf = 14,95 kN POR MOTOR (PW535E1 do 300E: 3 478 lbf = 15,47 kN;
   // https://en.wikipedia.org/wiki/Embraer_Phenom_300 e relatório TAR 13/21B/3 da CAA da Nova Zelândia). A ficha tinha
   // 30 kN, que é a soma dos dois motores, num campo que é "kN por motor" (os outros três executivos estão por motor).
-  bizjet: { thrust: 15 },
+  // Phenom 300: 15,64 m de comprimento; 15,9 era a envergadura (15,91 m; https://en.wikipedia.org/wiki/Embraer_Phenom_300).
+  // Este campo entra no som: é o `l` da onda em N do estrondo (só acima de Mach 1, que o Phenom não passa) e a geometria
+  // da passagem (AUDITORIA.md F-TUR-06).
+  bizjet: { thrust: 15, length: 15.64 },
+  // C-130J: AE 2100D3, gerador de gás de eixo único (compressor axial de 14 estágios) a 15 404 rpm em regime (TCDS EASA
+  // IM.E.040, AE 2100A/D2/D2A; o material de treino do C-130J dá 15 265 rpm a 100%). A ficha herdava 27 000 e 31 000 rpm,
+  // os genéricos dos turboélices (os do PW127 do ATR), e o apito do compressor saía ~uma oitava acima. No turboélice o
+  // "fan" e o "compressor" do JetDSP descrevem o gerador de gás: o mesmo eixo, a mesma rotação (F-TUR-04). Muda o som.
+  // HondaJet: HF120, N1 19 055 rpm e N2 48 777 rpm a 100% (TCDS EASA IM.E.054); a ficha tinha 17 000 e 40 000: o tom do
+  // fan sobe 12% e o do compressor 22% (F-TUR-05). Muda o som.
+  hondajet: { n1Max: 19055, n2Max: 48777 },
+  // `propKW` (campo novo, kW por motor): a potência de decolagem no eixo da hélice dos turboélices. Não entra no som da
+  // página Turbina (o JetDSP só a lê com `leiCarga`, que só o adaptador da Cena liga): é o torque do tom de carga de
+  // Gutin na Passagem (src/carriers/leis-helice.ts; AUDITORIA.md P-03 e T-CEN-10). Potência de decolagem das fichas dos
+  // fabricantes (Pratt & Whitney Canada, Rolls-Royce), shp × 0,7457: PW127M 2 750 shp, PW150A 5 071, AE 2100D3 4 637,
+  // PT6A-60A 1 050, PT6A-114 600, PT6A-67P 1 200, PT6A-68C 1 600.
+  regional: { propKW: 2051 }, q400: { propKW: 3781 }, c130: { propKW: 3458, n1Max: 15404, n2Max: 15404 }, kingair: { propKW: 783 },
+  single: { propKW: 447 }, pc12: { propKW: 895 }, stucano: { propKW: 1193 },
 };
 
 /** O arquivo de presets legado (CommonJS, `module.exports = PRESETS`) com as correções aplicadas no fim. */

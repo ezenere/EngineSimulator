@@ -32,6 +32,8 @@ export type PresetTurbina = {
   mount: 'wing' | 'rear' | 'fuselage' | 'nose'; span: number; cockpitX: number; length: number; shape: number;
   // hélice (turboélice)
   propB?: number; propD?: number; propRpm?: number;
+  /** potência de decolagem no eixo da hélice, kW por motor: só a Cena a usa (o nível da hélice pela carga, src/carriers/leis-helice.ts) */
+  propKW?: number;
   // acessórios
   ab: boolean; nozzle: 'conv' | 'cd'; suppressor: 'none' | 'chevrons' | 'hushkit'; liners: boolean; sync: boolean;
   gain?: number; // ganho calibrado (preenchido pela página antes de mandar a config)
@@ -140,21 +142,21 @@ const PRESETS: PresetTurbina[] = [
 
   // ---- Turboélices
   plane('regional', 'prop', 'ATR 72-600', '2× PW127 · hélice de 6 pás', TP, {
-    engines: 2, span: 4.1, cockpitX: 9, length: 27.2, thrust: 28, propB: 6, propD: 3.93, propRpm: 1200 }),
+    engines: 2, span: 4.1, cockpitX: 9, length: 27.2, thrust: 28, propB: 6, propD: 3.93, propRpm: 1200, propKW: 2051 }),
   plane('q400', 'prop', 'Dash 8 Q400', '2× PW150 · 6 pás a 1020 rpm', TP, {
-    engines: 2, span: 4.2, cockpitX: 11, length: 32.8, thrust: 37, propB: 6, propD: 4.11, propRpm: 1020 }),
+    engines: 2, span: 4.2, cockpitX: 11, length: 32.8, thrust: 37, propB: 6, propD: 4.11, propRpm: 1020, propKW: 3781 }),
   plane('c130', 'prop', 'Lockheed C-130J', '4× AE2100 · cimitarras de 6 pás', TP, {
-    engines: 4, span: 10.2, cockpitX: 9, length: 29.8, thrust: 34, propB: 6, propD: 4.11, propRpm: 1020 }),
+    engines: 4, span: 10.2, cockpitX: 9, length: 29.8, thrust: 34, propB: 6, propD: 4.11, propRpm: 1020, propKW: 3458, n1Max: 15404, n2Max: 15404 }),
   plane('kingair', 'prop', 'Beechcraft King Air 350', '2× PT6A-60 · 4 pás', TP, {
     engines: 2, span: 2.6, cockpitX: 4, length: 14.2, thrust: 8, propB: 4, propD: 2.67, propRpm: 1700,
-    fanB: 14, vanes: 22, fanD: 0.35, n1Max: 37500, hpcB: 14, n2Max: 37500, lptB: 40, jetV: 110, nozD: 0.3, n1Idle: 0.55, n2Idle: 0.55, spoolTime: 3 }),
-  plane('single', 'prop', 'Cessna Caravan', '1× PT6A-114 · 3 pás', PT6, { length: 11.5, thrust: 7, propB: 3, propD: 2.69, propRpm: 1900 }),
-  plane('pc12', 'prop', 'Pilatus PC-12', '1× PT6A-67 · 4 pás', PT6, { length: 14.4, thrust: 9, propB: 4, propD: 2.67, propRpm: 1700 }),
-  plane('stucano', 'prop', 'Embraer Super Tucano', '1× PT6A-68 · 5 pás a 2000 rpm', PT6, { length: 11.4, thrust: 11, propB: 5, propD: 2.38, propRpm: 2000 }),
+    fanB: 14, vanes: 22, fanD: 0.35, n1Max: 37500, hpcB: 14, n2Max: 37500, lptB: 40, jetV: 110, nozD: 0.3, n1Idle: 0.55, n2Idle: 0.55, spoolTime: 3, propKW: 783 }),
+  plane('single', 'prop', 'Cessna Caravan', '1× PT6A-114 · 3 pás', PT6, { length: 11.5, thrust: 7, propB: 3, propD: 2.69, propRpm: 1900, propKW: 447 }),
+  plane('pc12', 'prop', 'Pilatus PC-12', '1× PT6A-67 · 4 pás', PT6, { length: 14.4, thrust: 9, propB: 4, propD: 2.67, propRpm: 1700, propKW: 895 }),
+  plane('stucano', 'prop', 'Embraer Super Tucano', '1× PT6A-68 · 5 pás a 2000 rpm', PT6, { length: 11.4, thrust: 11, propB: 5, propD: 2.38, propRpm: 2000, propKW: 1193 }),
 
   // ---- Executivos
   plane('bizjet', 'biz', 'Embraer Phenom 300', '2× PW535 na cauda', FAN, {
-    engines: 2, mount: 'rear', span: 1.7, cockpitX: 11, length: 15.9, shape: 0.1, n1Idle: 0.25, n2Idle: 0.55, spoolTime: 4,
+    engines: 2, mount: 'rear', span: 1.7, cockpitX: 11, length: 15.64, shape: 0.1, n1Idle: 0.25, n2Idle: 0.55, spoolTime: 4,
     fanB: 22, vanes: 52, fanD: 0.8, n1Max: 10600, bpr: 4.2, hpcB: 30, n2Max: 29000, lptB: 64, jetV: 380, nozD: 0.45, thrust: 15 }),
   plane('learjet', 'biz', 'Learjet 35', '2× TFE731 com redutor · o "apito"', GTF, {
     engines: 2, mount: 'rear', span: 1.6, cockpitX: 10, length: 14.8, shape: 0.1, n1Idle: 0.25, n2Idle: 0.55, spoolTime: 4, gear: 1.8, liners: false,
@@ -164,7 +166,7 @@ const PRESETS: PresetTurbina[] = [
     fanB: 24, vanes: 54, fanD: 1.27, n1Max: 7500, bpr: 4.4, hpcB: 32, n2Max: 16000, lptB: 64, jetV: 380, nozD: 0.6, thrust: 75 }),
   plane('hondajet', 'biz', 'HondaJet', '2× HF120 sobre a asa', FAN, {
     engines: 2, mount: 'wing', span: 2.3, cockpitX: 6, length: 13, shape: 0.1, n1Idle: 0.25, n2Idle: 0.55, spoolTime: 4,
-    fanB: 20, vanes: 46, fanD: 0.54, n1Max: 17000, bpr: 2.9, hpcB: 28, n2Max: 40000, lptB: 60, jetV: 400, nozD: 0.35, thrust: 9 }),
+    fanB: 20, vanes: 46, fanD: 0.54, n1Max: 19055, bpr: 2.9, hpcB: 28, n2Max: 48777, lptB: 60, jetV: 400, nozD: 0.35, thrust: 9 }),
 ];
 
 // lista com as famílias penduradas, como no legado (PRESETS.families)
