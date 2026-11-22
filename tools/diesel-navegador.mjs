@@ -202,6 +202,10 @@ try {
   confere(t.portador === 'gerador' && Math.abs(t.rpm - 1800) < 60 && t.cargaKW > 150, 'gerador a 1800 rpm com 50% de carga (tecla 2)', `${Math.round(t.rpm)} rpm, ${Math.round(t.cargaKW)} kW, ${t.hz?.toFixed(1)} Hz`);
   confere(/^[\d.]+ kW · \d+,\d Hz$/.test(await texto('#dCarga')) && (await ev(`document.getElementById('dCarga').closest('.ro-row').querySelector('.k').textContent`)) === 'Alternador', 'leitura kW/Hz do alternador do gerador', await texto('#dCarga'));
   await tecla('Digit0');
+  // fora do veículo não há via: o campo "Observador" some e a tecla V não muda nada
+  await tecla('KeyV');
+  await espera(300);
+  confere((await ev(`window.__diesel.estado.observer`)) === 'car' && !(await ev(`!!document.getElementById('observer')`)), 'gerador: V não leva o observador para a via (sem o campo no painel)', await ev(`window.__diesel.estado.observer`));
 
   // locomotiva EMD (2 tempos): notches pelo teclado
   await clicar('.fam:nth-child(4)');
