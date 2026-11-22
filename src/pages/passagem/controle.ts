@@ -18,7 +18,8 @@ import type { Corpo, Portador, TelemetriaPortador, FamiliaMotor } from '../../ca
 import { ambientePassagem } from '../../scene/ambientes';
 import { Via, PontoVia } from '../../scene/trajetoria';
 import { Trem, TREM_PADRAO, maxVagoes, type ConfigTrem } from '../../carriers/trem';
-import { Rotor } from '../../carriers/rotor';
+import { Rotor, type CargaRotor } from '../../carriers/rotor';
+import { CarroLegado, configCarroLegado } from '../../carriers/carro';
 import { montarMotor, montarPortadorComMotor } from '../../scene/dsp-cena';
 import { prepararMotorRonco } from '../../engines/ronco/motor';
 import { prepararMotorDiesel, type UsoDiesel } from '../../engines/diesel/motor';
@@ -115,6 +116,10 @@ export class ControlePassagem {
   corpo!: Corpo;
   fontes: readonly FonteSonora[] = [];
   private calibracao: number[] = [];
+  /** (C-03) câmbio do carro com motor de câmbio, carga do rotor e potência do motor (W) do helicóptero */
+  private cambio: { ratios: number[]; final: number; rw: number; redline: number } | null = null;
+  private rotorCarga: CargaRotor | null = null;
+  private motorPotencia: number | null = null;
   /** geometria do rotor (helicóptero) para a cena 3D */
   rotorCfg: { R: number; Rc: number; B: number; posRotor: Vec3; posCauda: Vec3 } | null = null;
   private fsSonda = 0;
@@ -160,6 +165,7 @@ export class ControlePassagem {
     let p: Portador;
     this.rotorCfg = null;
     this.motorMsg = null;
+    this.cambio = null; this.rotorCarga = null; this.motorPotencia = null;
     if (this.portador === 'rotor' && this.motor === 'nenhum') { const r = new Rotor(fs); p = r; this.rotorCfg = { R: r.cfg.R, Rc: r.cfg.Rc, B: r.cfg.B, posRotor: r.cfg.posRotor, posCauda: r.cfg.posCauda }; }
     else if (this.portador !== 'trem') {
       // portador com motor: o mesmo que o worklet monta (geometria e fontes), com o motor calibrado aqui
@@ -168,6 +174,11 @@ export class ControlePassagem {
       this.motorMsg = id ? { familia: fam, cfg: this.cfgMotor(fam, id, fs) } : null;
       p = montarPortadorComMotor(this.portador, this.configPortador(), montarMotor(this.motorMsg ?? undefined, fs), fs)!;
       if (p instanceof Rotor) this.rotorCfg = { R: p.cfg.R, Rc: p.cfg.Rc, B: p.cfg.B, posRotor: p.cfg.posRotor, posCauda: p.cfg.posCauda };
+      // (C-03) câmbio do carro e carga do rotor, para ajustar os padrões ao motor (ajustarAoMotor)
+      const d = p instanceof CarroLegado ? (p.motor?.dsp as unknown as { ratios: number[]; final: number; rw: number; redline: number } | undefined) : undefined;
+      this.cambio = d && d.ratios?.length > 1 ? { ratios: [...d.ratios], final: d.final, rw: d.rw, redline: d.redline } : null;
+      this.rotorCarga = p instanceof Rotor ? p.cargaR : null;
+      this.motorPotencia = p instanceof Rotor && Number.isFinite(this.motorMsg?.cfg.power) ? this.motorMsg!.cfg.power * 1000 : null;
     } else if (this.motor === 'eletrico') {
       // trem com o motor elétrico (etapa 6): o mesmo que o worklet monta (montarPortadorComMotor), com as calibrações dele
       this.trem.N = Math.min(this.trem.N, this.maxVagoes());
@@ -225,7 +236,14 @@ export class ControlePassagem {
     if (this.portador === 'helice') { const t = PRESETS_TURBINA.find((x) => x.id === id); return t ? { B: t.propB, D: t.propD, nHelice: t.propRpm } : {}; }
     if (this.portador === 'gerador' && this.motor === 'rotativo') { const g = (PRESETS_ROTATIVO.find((x) => x.id === id) as any)?.gerador; return g ? { polos: g.polos, fRede: g.fRede, potenciaNominal: g.kWe, eta: g.eta, J_alt: g.J, ventilador: { B: 8, D: 0.15 }, ranhuras: 24, posMotor: [0, 0, 0.6] } : {}; }
     if (this.portador === 'gerador') { const g = (PRESETS_DIESEL.find((x) => x.id === id) as any)?.gerador; return g ? { polos: g.polos, fRede: g.fRede, potenciaNominal: g.kWe, eta: g.eta } : {}; }
-    if (this.portador === 'locomotiva') { const l = (PRESETS_DIESEL.find((x) => x.id === id) as any)?.locomotiva; return { motor: id === 'ge7fdl' ? 'ge7fdl' : 'emd710', ...(l ? { potenciaNominal: l.kW, etaGer: l.eta } : {}) }; }
+    // (locomotiva: a tabela por notch e a potência são as da ficha do motor, que o portador lê do MotorDiesel; aqui só o
+    // rendimento do gerador de tração, e o nome da tabela para o caso sem motor)
+    if (this.portador === 'locomotiva') { const l = (PRESETS_DIESEL.find((x) => x.id === id) as any)?.locomotiva; return { motor: id === 'ge7fdl' ? 'ge7fdl' : 'emd710', ...(l ? { etaGer: l.eta } : {}) }; }
+    // carro com motor de câmbio: pneus e vento pela ficha (AUDITORIA.md C-06/K-12; src/carriers/carro.ts)
+    if (this.portador === 'carro' && (this.motor === 'pistao' || this.motor === 'diesel' || this.motor === 'radial' || this.motor === 'rotativo')) {
+      const L: readonly any[] = this.motor === 'pistao' ? PRESETS_RONCO : this.motor === 'diesel' ? PRESETS_DIESEL : this.motor === 'radial' ? PRESETS_RADIAL : PRESETS_ROTATIVO;
+      return configCarroLegado(L.find((x) => x.id === id));
+    }
     return {};
   }
   /** comando do motor pelo portador (CENA 1.6): o carro parado fica em ponto morto e em lenta */
@@ -244,14 +262,57 @@ export class ControlePassagem {
     if (f === this.motor || !motoresProntos(this.portador).includes(f)) return;
     this.motor = f; this.motorPreset = MOTOR_PADRAO[f]?.[this.portador] ?? presetsDoMotor(this.portador, f)[0]?.id ?? null;
     this.presetId = null;
-    this.sondar(); this.mandarPortador(); this.mandarComando();
+    this.sondar(); this.ajustarAoMotor(); this.mandarPortador(); this.mandarComando();
     this.avisar('presets', 'painel');
   }
   setMotorPreset(id: string) {
     if (id === this.motorPreset) return;
     this.motorPreset = id; this.presetId = null;
-    this.sondar(); this.mandarPortador(); this.mandarComando();
+    this.sondar(); this.ajustarAoMotor(); this.mandarPortador(); this.mandarComando();
     this.avisar('presets', 'painel');
+  }
+
+  /**
+   * (AUDITORIA.md C-03) Os padrões do portador (PADROES) ajustados ao motor escolhido, no modo de testes: sem isso o carro
+   * passava a 108 km/h em 3ª com qualquer motor preso às rodas (um Scania a 11 773 rpm, o Fusca acima do corte) e o trem a
+   * 350 km/h com o metrô de 90. A partir da velocidade padrão do portador:
+   *  - carro com câmbio (Ronco, Diesel, radial, rotativo): a marcha mais curta que deixe o motor, pé no fundo, abaixo de
+   *    70% do corte (o Camaro do preset fica em 61%); se nem a última deixa, a velocidade baixa até a última dar os 70%;
+   *  - veículo com velocidade máxima na ficha (elétricos `vMaxKmh`, vapor `vMax`): a velocidade fica abaixo dela;
+   *  - helicóptero: o coletivo de pairado (0,75) se o motor tem potência para ele; senão, o que pede 90% da potência.
+   * Os presets de passagem trazem os valores deles e não passam por aqui.
+   */
+  private ajustarAoMotor() {
+    const p = this.portador, cb = this.cambio;
+    let v = PADROES[p].vKmh;
+    const vMax = this.vMaxMotor();
+    if (vMax && v > vMax) v = vMax;
+    if (p === 'carro' && cb) {
+      const rpm = (kmh: number, g: number) => (kmh / 3.6 / cb.rw) * cb.ratios[g] * cb.final * 9.549;
+      const teto = 0.7 * cb.redline, nG = cb.ratios.length - 1;
+      let g = 1;
+      while (g < nG && rpm(v, g) > teto) g++;
+      if (rpm(v, g) > teto) v = Math.floor(teto / rpm(1, g));
+      this.marcha = g;
+    }
+    this.vKmh = Math.max(1, Math.round(v));
+    if (p === 'rotor') this.coletivo = 0.75;
+    if (p === 'rotor' && this.motorPotencia && this.rotorCarga) {
+      // potência pedida pelo rotor no coletivo c (a conta da CargaRotor), contra a do motor
+      const r = this.rotorCarga!, alvo = 0.9 * this.motorPotencia;
+      let c = 0.75;
+      r.c = c;
+      while (c > 0.3 && r.potencias((r.cfg.Nr * 2 * Math.PI) / 60).total > alvo) { c -= 0.01; r.c = c; }
+      this.coletivo = Math.round(c * 100) / 100;
+    }
+  }
+  /** velocidade máxima do veículo na ficha do motor (km/h), quando há */
+  private vMaxMotor(): number | null {
+    const id = this.motorPreset;
+    if (!id) return null;
+    if (this.motor === 'eletrico') return (PRESETS_ELETRICO.find((x) => x.id === id) as { vMaxKmh?: number } | undefined)?.vMaxKmh ?? null;
+    if (this.motor === 'vapor') { const P = presetVapor(id); return P && P.familia !== 'estacionaria' ? (P.vMax ?? null) : null; }
+    return null;
   }
   setPedal(v: number) { this.pedal = v; this.mandarComando(); }
   setMarcha(n: number) { this.marcha = n; this.mandarComando(); }
@@ -281,6 +342,7 @@ export class ControlePassagem {
     this.ouv.gimbal.alvo = 'corpo';
     this.presetId = null;
     this.sondar();
+    this.ajustarAoMotor();
     this.mandarPortador();
     this.mandarCena(true);
     this.mandarComando();
