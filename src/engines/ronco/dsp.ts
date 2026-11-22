@@ -1239,7 +1239,7 @@ export class EngineDSP implements DSPDeAudio {
         // Na lenta quase não se ouve; com o motor girando leve é ela que enche os médios; em plena carga o escape a cobre
         if (batK) {
           const bf = this.batF, br = rf * Math.sqrt(rf), bc = this.batC * br; // (impacto ∝ rotação, e mais forte quanto mais rápido: rf^1,5)
-          mech += bf[3].run(bf[0].run(bc) + BATIDA.peso2 * bf[1].run(bc) + BATIDA.pesoV * bf[2].run(this.batV * br)) * batK * (1 + 0.8 * coldN); // (frio: pistão e tuchos com mais folga)
+          mech += bf[3].run(bf[0].run(bc) + BATIDA.peso2 * bf[1].run(bc) + BATIDA.pesoV * bf[2].run(this.batV * br)) * batK; // (sem reforço a frio: na lenta fria de um V8 a batida passava a ser o que se ouvia em 1–6 kHz, onde a gravação é um leito liso)
           this.batC = 0; this.batV = 0;
         }
         this.phW += omega * dt; if (this.phW > 1e4) this.phW -= TAU * 1000;
