@@ -27,13 +27,6 @@
     "folga": "±1 dB",
     "motivo": "AUDITORIA T-ELE-04: idem a 20 km/h: 70,4 dB(A) no asfalto (68,3 em campo livre), 1,9 dB acima da faixa de 67 ± 1,5; com o ruído de 1 kHz subindo 3 dB por 10 km/h, a reflexão do chão pesa mais na velocidade. Para a etapa de som."
   },
-  "AVAS de parado direto a 108 km/h: L_AFmax do canal no desligamento contra o de 20 km/h": {
-    "grupo": "avas",
-    "medido": 50.3,
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "motivo": "AUDITORIA P-02 (defeito, B6): saindo de parado para acima do limite de uma vez, o AVAS segue a lei L_W = 74 + 0,6·v com v = 108 km/h durante os 2 s da rampa de desligar: 50 dB acima do nível no limite (na Passagem, 101,6 dB(A) com o carro a 60 m). Correção em src/engines/eletrico/avas.ts: as leis de nível, de tom e da fração de ruído com min(v, limite)."
-  },
   "Taurus no patamar (A, estação, 4 m): bandas 20–60 / 60–150 / 400–1k / 1–2,5k / 2,5–6k": {
     "grupo": "alvos-3.7",
     "medido": [
@@ -134,11 +127,19 @@
     "motivo": "A2 (AUDITORIA T-ELE-03): passa por menos de 5 % da tolerância e cai fora com outras sementes (−41,4 dB contra ≥ 40 abaixo do grave); fica declarada à beira, com teto.",
     "beira": true
   },
-  "metrô de 6 carros (Metropolis, 240 t): 0–80 km/h": {
-    "grupo": "maquina",
-    "medido": 38.0,
-    "unidade": "s",
-    "folga": "±5 %",
-    "motivo": "AUDITORIA F-ELE-03 e T-ELE-07: o alvo é a conta do plano (\"1,0 m/s² até o limite de potência, depois potência constante\"), refeita aqui com a ficha de hoje (16 motores de 150 kW, a potência que foi baixada para o 0–80 caber nos 36 s antigos): 30,5 s; o modelo dá 38,0 s, porque a conta não tem a resistência ao avanço nem a massa girante. A ficha real (24 motores de 180 kW) entra no item D3."
+  "Leaf a 85 km/h: 96·f_rot": {
+    "grupo": "alvos-3.7",
+    "medido": 9357,
+    "unidade": "Hz",
+    "folga": "±0.5 %",
+    "motivo": "AUDITORIA F-ELE-09: com os dentes reais da redução (17:32 e 17:74 = 8,19; eram 16:44 e 17:51 = 8,25) o motor gira 0,7 % mais devagar a 85 km/h e a ordem de ranhura 96·f_rot fica em 9 357 Hz, 1,5 % abaixo dos 9,5 kHz da gravação. A gravação dá 9,5 kHz \"a ≈ 85 km/h\", velocidade estimada pelo 0–100 em 11,5 s (ELETRICO.md 3.3): a diferença cabe no erro da estimativa; a linha está em 96·f_rot (critério de frequência relativa satisfeito). A busca é a ±1 % de 96·f_rot, a tolerância do alvo: a ±1,5 % o detector pegava a lateral f_c − 2f_e do inversor (9 220 Hz)."
+  },
+  "Leaf: razão das duas famílias agudas": {
+    "grupo": "alvos-3.7",
+    "medido": 1.412,
+    "unidade": "",
+    "folga": "±2 %",
+    "beira": true,
+    "motivo": "AUDITORIA F-ELE-09 e A2: a linha mais forte de 5,5–7,5 kHz é o 4º harmônico do engrenamento do 1º estágio, 4 × 17 = 68·f_rot, e a razão 96/68 = 1,412 fica na borda de baixo do alvo (1,46 ± 0,05). Com os dentes errados de antes (16) era 96/64 = 1,500, na borda de cima: o teste passava por coincidência. A família a 1/1,46 da gravação (65,8·f_rot) não é nenhuma linha do modelo: para a etapa de som, identificar o que ela é."
   }
 }

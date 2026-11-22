@@ -579,8 +579,9 @@ function gAlvos37() {
       const rr = renderMotor(m, 1.5), r = somaCanais(rr, ['motor', 'reducao', 'inversor']);
       const fr = (m.telemetria() as any).fRot;
       // a família que sobe, fora da portadora fixa (9,8–10,2 kHz, que a gravação também tem, fraca): a linha mais forte a
-      // ±1,5% de 96·f_rot (a janela de 8–11 kHz de antes deixava o detector pular para uma lateral)
-      const top = linha(r, 0.4, 1.5, 96 * fr * 0.985, Math.min(9800, 96 * fr * 1.015)), seg = linha(r, 0.4, 1.5, 5500, 7500);
+      // ±1% de 96·f_rot, a tolerância do alvo (a janela de 8–11 kHz de antes deixava o detector pular para a lateral
+      // f_c − 2f_e do inversor, a −1,4%)
+      const top = linha(r, 0.4, 1.5, 96 * fr * 0.99, Math.min(9800, 96 * fr * 1.01)), seg = linha(r, 0.4, 1.5, 5500, 7500);
       return { f: top.f, fr, raz: top.f / seg.f };
     });
     const fTop = m3(ls.map((l) => l.f), 0), fr = mediana(ls.map((l) => l.fr)), raz = m3(ls.map((l) => l.raz), 3);
