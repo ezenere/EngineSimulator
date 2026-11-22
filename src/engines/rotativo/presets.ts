@@ -109,7 +109,7 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     janelas: { admissao: 'lateral4', escape: 'periferico', apv: [3750] }, velas: 2, idle: 750, rpmMax: 8000, power: 206, torque: 314, J: 0.25,
     aspiration: 'turbo', boost: 0.7, turbo: { sequencial: true, boost: 0.7, trocaRpm: 4500 },
     escape: { tipo: 'serie', Lp: 0.3, Dp: 55, presilencioso: true, cat: true, downpipe: { L: 1.0, D: 76 }, saidas: [{ L: 3.4, D: 76, phi: 30 }] },
-    muffler: 'sport', pipeD: pol(76), gears: 5, ratios: [3.483, 2.015, 1.391, 1.0, 0.761], finalDrive: 4.1, mass: 1300, wheelR: 0.316, drag: 0.37,
+    muffler: 'sport', pipeD: pol(76), gears: 5, ratios: [3.483, 2.015, 1.391, 1.0, 0.762], finalDrive: 4.3, mass: 1300, wheelR: 0.316, drag: 0.37,
     overrun: 'burble', cat: true, limiter: 'fuel', limiterBand: 70, limiterHold: 0.07, portadores: carro },
   { id: 'rx7fc', family: 'mazda', name: 'Mazda RX-7 FC 13B-T', tag: 'S5 1989–91 · 2 rotores · turbo HT-18 · 200 hp',
     tipo: 'wankel', rotores: 2, geo: G['13B'], cilindradaCamara: 654, displacement: 1.308, cr: 9.0,
@@ -153,10 +153,14 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
   // ---- Europeus e clássicos (8–10): Ro80, Norton e o Cosmo 110S (Mazda de 1967, o clássico do grupo)
   { id: 'ro80', family: 'europeus', name: 'NSU Ro80 KKM 612', tag: '1967–77 · 2 rotores · uma vela · semiautomático',
     tipo: 'wankel', rotores: 2, geo: G.KKM612, cilindradaCamara: 497.5, displacement: 0.995, cr: 9.0,
+    // (a admissão do KKM 612 é periférica, e a ficha usa a lateral: com uma periférica de rua de eventos estimados, o modelo
+    // de diluição põe a lenta a queimar em 51% das explosões, um "brap" de bridge port que o carro não tem; falta ao modelo o
+    // estrangulamento entre as duas janelas pela cintura da carcaça, e os tempos reais da janela: TECNICO.md, Pendente)
     janelas: { admissao: 'lateral4', escape: 'periferico' }, velas: 1, idle: 900, rpmMax: 6500, power: 85, torque: 162, J: 0.2, fuel: 'carb',
     escape: { tipo: 'duplo', Lp: 0.3, Dp: 45, presilencioso: false, cat: false, downpipe: { L: 1.5, D: 50 }, saidas: [{ L: 1.5, D: 50, phi: 30 }] },
     muffler: 'stock', pipeD: pol(50), gears: 3, transmission: 'auto', shiftTime: 0.6, ratios: [2.056, 1.208, 0.788], finalDrive: 4.857, mass: 1280, wheelR: 0.31,
-    overrun: 'lean', cat: false, limiter: 'fuel', limiterBand: 120, portadores: carro, aproximacao: 'corte de giro (carburado, sem central)' },
+    overrun: 'lean', cat: false, limiter: 'fuel', limiterBand: 120, portadores: carro,
+    aproximacao: 'corte de giro (carburado, sem central); admissão lateral no lugar da periférica do KKM 612' },
   { id: 'norton', family: 'europeus', name: 'Norton F1 / Commander', tag: 'moto 1988–92 · 2 rotores refrigerados pela carga · 95 hp',
     tipo: 'wankel', rotores: 2, geo: G.sachs294, cilindradaCamara: 294, displacement: 0.588, cr: 9.0,
     janelas: { admissao: 'sachs', escape: 'sachs' }, velas: 1, idle: 1200, rpmMax: 10000, power: 70, torque: 76, J: 0.04, fuel: 'carb', variacao: 1.5,

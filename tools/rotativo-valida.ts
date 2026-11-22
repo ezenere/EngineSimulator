@@ -77,6 +77,12 @@ async function grupo(nome: string): Promise<Linha[]> {
     return { p, d, r, tl, rpm, m };
   };
   /** giro sustentado em ponto morto (o motor solto segurando a rotação), 6 s, medido nos últimos 4 */
+  /** 8 s na rotação da lenta com o eixo travado e o torque médio zerado (para as linhas finas da medida de meia-ordem) */
+  const meiaLenta = (id: string, extra: Record<string, any> = {}, ouvinte = 'ext') => {
+    const p = preset(id, extra), d = novoDSP(p, { quente: true, ouvinte, rpm: p.idle });
+    const r = renderizar(d, 10, [], sustentar(d, p.idle, 0.02));
+    return mono(r.L, r.R, 2, 10);
+  };
   const sustentado = (id: string, rpm: number, extra: Record<string, any> = {}) => {
     const p = preset(id, extra);
     const d = novoDSP(p, { quente: true, rpm });
@@ -127,10 +133,10 @@ async function grupo(nome: string): Promise<Linha[]> {
       const r = renderizar(d, 14, []);
       const t = trecho(r.tele, 2, 14), t2 = trecho(r.tele, 12, 14);
       const pEO = media(t.map((q) => q.pAbertura)) / 1e5;
-      add(`${rotulo} plena carga: pressão na abertura`, '≈ 4 bar (aspirado); turbo mais', `${f1(pEO, 2)} bar · boost ${f1(media(t.map((q) => q.boost)), 2)} bar`, id === 'rx8hp' && fr < 0.6 ? dentro(pEO, 3, 5.5) : pEO > 3);
+      add(`${rotulo} plena carga: pressão na abertura`, 'aspirado a 55%: 3–5,5 bar (≈ 4 no projeto); nos outros > 3 bar', `${f1(pEO, 2)} bar · boost ${f1(media(t.map((q) => q.boost)), 2)} bar`, id === 'rx8hp' && fr < 0.6 ? dentro(pEO, 3, 5.5) : pEO > 3);
       add(`${rotulo} plena carga: Mach do jato no 1º terço da rampa`, 'Mach 1', f1(media(t.map((q) => q.machAbertura)), 2), media(t.map((q) => q.machAbertura)) > 0.97);
-      add(`${rotulo} plena carga: 10–90% da queima`, '50–60°e (plena carga a 55%: 48°e pela fórmula)', `${f1(media(t.map((q) => q.queima1090)), 0)}°e`, dentro(media(t.map((q) => q.queima1090)), 46, 62));
-      if (rotulo !== 'rx8hp (aspirado)') add(`${rotulo} plena carga: parede do coletor (tEscape) depois de 12 s`, '900–1 000 °C', `${f1(media(t2.map((q) => q.tEscape)), 0)} °C`, dentro(media(t2.map((q) => q.tEscape)), 880, 1050));
+      add(`${rotulo} plena carga: 10–90% da queima`, '46–62°e (o projeto dá 50–60; a 55% a fórmula dá 48)', `${f1(media(t.map((q) => q.queima1090)), 0)}°e`, dentro(media(t.map((q) => q.queima1090)), 46, 62));
+      if (rotulo !== 'rx8hp (aspirado)') add(`${rotulo} plena carga: parede do coletor (tEscape) depois de 12 s`, '880–1 050 °C (o projeto dá 900–1 000)', `${f1(media(t2.map((q) => q.tEscape)), 0)} °C`, dentro(media(t2.map((q) => q.tEscape)), 880, 1050));
       add(`${rotulo} plena carga: gás na abertura e o fator de densidade`, 'fator < teto 1,8 (o 1,3 do Ronco achataria)', `${f1(media(t.map((q) => q.tAbertura)), 0)} K · máx. ${f1(t[t.length - 1].densMax, 2)}`, t[t.length - 1].densMax < 1.8);
     }
     add('rx7fd lenta: parede do coletor (tEscape)', '400–500 °C', `${f1(media(tl.map((q) => q.tEscape)), 0)} °C`, dentro(media(tl.map((q) => q.tEscape)), 400, 500));
@@ -239,8 +245,14 @@ async function grupo(nome: string): Promise<Linha[]> {
     const l = lenta('rx7fd');
     const h = [l.m.ign, l.m.ign2, l.m.ign3];
     add('rx7fd lenta: harmônicos 1–3 da ignição', 'dentro de 6 dB (gravação +19 / +17 / +24)', h.map((x) => sg(x)).join(' / '), Math.max(...h) - Math.min(...h) <= 6);
-    const meia = l.m.linha(l.rpm / 120, 0.03);
-    add('rx7fd lenta: linha de meia-ordem (rpm/120)', '≤ +3 dB (o Wankel não tem)', `${sg(meia)} dB`, meia <= 3);
+    // meia-ordem (o ciclo de 720° do pistão): banda lateral a ±rpm/120 em volta de 2·ign e 3·ign, sobre o piso; e o controle,
+    // o mesmo trecho com 30% de modulação a rpm/120, para a medida provar que enxerga a linha quando ela existe. Com o eixo
+    // travado na rotação da lenta e o torque médio zerado: na lenta solta a rotação passeia e borra as linhas (a portadora
+    // fica a 4 dB do piso e nem o controle aparece)
+    const segL = meiaLenta('rx7fd'), mo = B.meiaOrdem(segL, SR, preset('rx7fd').idle, 2);
+    add('rx7fd na rotação da lenta, eixo travado: banda lateral de meia-ordem (±rpm/120 em volta de 2·ign e 3·ign)', '≤ +3 dB sobre o piso, com a portadora ≥ 15 dB acima dele (o Wankel não tem o ciclo de 720°)', `${sg(mo.db)} dB (portadora ${sg(mo.portadora)} dB, ${f1(mo.rpm, 0)} rpm)`, mo.db <= 3 && mo.portadora >= 15);
+    const wm = (2 * Math.PI * mo.rpm) / 120 / SR, ctl = B.meiaOrdem(Float64Array.from(segL, (v, i) => v * (1 + 0.3 * Math.cos(wm * i))), SR, preset('rx7fd').idle, 2);
+    add('rx7fd na rotação da lenta: a mesma medida no trecho modulado em 720° (controle: 30% a rpm/120)', '≥ +8 dB (a medida enxerga a meia-ordem quando ela existe)', `${sg(ctl.db)} dB`, ctl.db >= 8);
     const r8 = sustentado('rx8hp', 5000);
     add('rx8hp 5 000 rpm: ignição sobre a mediana', '+27 ± 4 dB', `${sg(r8.m.ign)} dB`, Math.abs(r8.m.ign - 27) <= 4);
     add('rx8hp 5 000 rpm: ordem 1 contra a ignição', '−15 ± 5 dB', `${sg(r8.m.o1 - r8.m.ign)} dB`, Math.abs(r8.m.o1 - r8.m.ign + 15) <= 5);
@@ -272,11 +284,10 @@ async function grupo(nome: string): Promise<Linha[]> {
     (d as any).sondaEv = (_c: number, q: boolean) => { if (tSeq > 20) seq.push(q ? 1 : 0); };
     const r = renderizar(d, 44, [], (_x, t) => { tSeq = t; });
     const t = trecho(r.tele, 20, 44), rpms = t.map((q) => q.rpm);
-    const fi = (1900 * 4) / 60;
     const m = B.medirRot(mono(r.L, r.R, 26, 38), SR, { rotores: 4, fmin: (1300 * 4) / 60, fmax: (2600 * 4) / 60 });
     const jan: number[] = []; for (let s = 20; s < 44; s++) jan.push(media(trecho(r.tele, s, s + 1).map((q) => q.rpm)));
     const vt = (100 * Math.sqrt(media(jan.map((x) => (x - media(jan)) ** 2)))) / media(jan);
-    add('lenta periférica (r26b): faixa da caça', '1 600–2 200 rpm, sem apagar', `${f1(Math.min(...rpms), 0)}–${f1(Math.max(...rpms), 0)} rpm`, Math.min(...rpms) >= 1450 && Math.max(...rpms) <= 2350 && t.every((q) => q.state === 'run'));
+    add('lenta periférica (r26b): faixa da caça', '1 450–2 350 rpm, sem apagar (a gravação caça de 1 600 a 2 200)', `${f1(Math.min(...rpms), 0)}–${f1(Math.max(...rpms), 0)} rpm`, Math.min(...rpms) >= 1450 && Math.max(...rpms) <= 2350 && t.every((q) => q.state === 'run'));
     add('lenta periférica (r26b): vagar em 12 s (o método das gravações)', '≥ 20%', `${f1(m.vagar)}% (pela telemetria, janelas de 1 s: ${f1(vt)}%)`, m.vagar >= 20);
     add('lenta periférica (r26b): CVciclo', '≥ 0,40', f1(m.cvCiclo, 2), m.cvCiclo >= 0.4);
     add('lenta periférica (r26b): estalos/s', '5–16 (as rajadas do "brap" a ~5 Hz, com um a três picos cada)', `${f1(m.pops)} (estouros soltos criados: ${f1(media(t.map((q) => q.estouros)))}/s)`, dentro(m.pops, 5, 16));
@@ -285,8 +296,6 @@ async function grupo(nome: string): Promise<Linha[]> {
     const ac = (voltas: number) => { const k = voltas * 4; let a = 0; for (let i = 0; i + k < seq.length; i++) a += (seq[i] - mu) * (seq[i + k] - mu); return a / Math.max(vr * (seq.length - k), 1e-12); };
     add('lenta periférica (r26b): fração das explosões que queimam', '35–70% (rajadas, não falhas soltas)', `${f1(100 * mu, 0)}%`, dentro(mu, 0.35, 0.7));
     add('lenta periférica (r26b): ritmo do "brap" (autocorrelação da sequência queimou/falhou a 3 e a 6 voltas do eixo)', '≤ −0,5 a 3 voltas e ≥ +0,4 a 6 (rpm/360: 5,2 Hz na gravação)', `${sg(ac(3), 2)} / ${sg(ac(6), 2)}`, ac(3) <= -0.5 && ac(6) >= 0.4);
-    add('lenta periférica (r26b): a caça vem da sobreposição', 'sem sobreposição a lenta para', '(ver lenta de street port)', true);
-    void fi;
     const st = lenta('rx7fd', { janelas: { admissao: 'street', escape: 'periferico' } }, { dur: 20, med: 12 });
     add('street port (rx7fd, sobreposição 28°e): lenta estável', 'vagar ≤ 3%', `${f1(st.m.vagar)}% · ${f1(st.rpm, 0)} rpm`, st.m.vagar <= 3);
     // bridge port (sobreposição ~100°e): a lenta em rajadas, sem apagar
@@ -339,9 +348,9 @@ async function grupo(nome: string): Promise<Linha[]> {
     const bAntes = Math.max(...antes.map((q) => q.boost)), bMin = Math.min(...depois.map((q) => q.boost));
     const fundo = depois.filter((q) => q.boost < bAntes - 0.05);
     const durac = fundo.length ? fundo[fundo.length - 1].t - fundo[0].t : 0;
-    add('rx7fd sweep: queda do boost na troca do turbo (4 500 ± 100 rpm)', '0,1–0,2 bar por 0,2–0,4 s', `${f1(bAntes - bMin, 2)} bar · ${f1(durac, 2)} s (em ${f1(troca?.rpm ?? NaN, 0)} rpm)`, dentro(bAntes - bMin, 0.1, 0.2) && dentro(durac, 0.15, 0.4));
+    add('rx7fd sweep: queda do boost na troca do turbo (4 500 ± 100 rpm)', '0,1–0,2 bar por 0,15–0,4 s', `${f1(bAntes - bMin, 2)} bar · ${f1(durac, 2)} s (em ${f1(troca?.rpm ?? NaN, 0)} rpm)`, dentro(bAntes - bMin, 0.1, 0.2) && dentro(durac, 0.15, 0.4));
     const faixa = serie.filter((q) => q.rpm > 3000 && q.rpm < 7800 && !(troca && q.t > troca.t - 0.05 && q.t < troca.t + 0.45));
-    add('rx7fd sweep: boost de 3 000 a 8 000 rpm (fora do soluço)', '0,65–0,75 bar', `${f1(Math.min(...faixa.map((q) => q.boost)), 2)}–${f1(Math.max(...faixa.map((q) => q.boost)), 2)} bar`, faixa.length > 5 && Math.min(...faixa.map((q) => q.boost)) >= 0.6 && Math.max(...faixa.map((q) => q.boost)) <= 0.78);
+    add('rx7fd sweep: boost de 3 000 a 8 000 rpm (fora do soluço)', '0,60–0,78 bar (a ficha dá 0,7)', `${f1(Math.min(...faixa.map((q) => q.boost)), 2)}–${f1(Math.max(...faixa.map((q) => q.boost)), 2)} bar`, faixa.length > 5 && Math.min(...faixa.map((q) => q.boost)) >= 0.6 && Math.max(...faixa.map((q) => q.boost)) <= 0.78);
     // RX-8: degraus de AinMax nas janelas secundária e auxiliar
     const q8 = preset('rx8hp'), d8 = novoDSP(q8, { quente: true, rpm: 3000 });
     const pts: { rpm: number; ain: number; tq: number }[] = [];
@@ -382,8 +391,8 @@ async function grupo(nome: string): Promise<Linha[]> {
     const s = Float64Array.from(env).sort();
     const p9010 = 20 * Math.log10(s[Math.round(0.9 * (s.length - 1))] / (s[Math.round(0.1 * (s.length - 1))] + 1e-12));
     add('tiques das vedações em lenta (rx8hp no cofre, sem pós-queima): p90/p10 de 2–6 kHz', '≤ 12 dB (fundidos, sem cliques contáveis)', `${f1(p9010)} dB`, p9010 <= 12);
-    const meia = l.m.linha(l.rpm / 120, 0.03);
-    add('rx8hp no cofre: meia-ordem (rpm/120)', '≤ +3 dB', `${sg(meia)} dB`, meia <= 3);
+    const mo = B.meiaOrdem(meiaLenta('rx8hp', { kHC: 0 }, 'bay'), SR, preset('rx8hp').idle, 2);
+    add('rx8hp no cofre, eixo travado na rotação da lenta: banda lateral de meia-ordem (±rpm/120 em volta de 2·ign e 3·ign)', '≤ +3 dB sobre o piso, com a portadora ≥ 15 dB acima dele', `${sg(mo.db)} dB (portadora ${sg(mo.portadora)} dB)`, mo.db <= 3 && mo.portadora >= 15);
   }
 
   if (nome === 'portadores') {
@@ -502,7 +511,7 @@ async function grupo(nome: string): Promise<Linha[]> {
   if (nome === 'veiculo') {
     const kmhRpm = (id: string, marcha: number, kmh: number) => { const s = preset(id); return ((kmh / 3.6 / (2 * Math.PI * (s.wheelR || 0.33))) * 60 * s.ratios![marcha - 1] * (s.finalDrive || 4)); };
     const r1 = kmhRpm('rx7fd', 5, 100), r2 = kmhRpm('rx8hp', 6, 100);
-    add('rx7fd a 100 km/h em 5ª (relações da ficha)', '2 600 ± 100 rpm', `${f1(r1, 0)} rpm`, Math.abs(r1 - 2600) <= 100);
+    add('rx7fd a 100 km/h em 5ª (caixa do Type RS: 5ª 0,762, diferencial 4,3)', '2 750 ± 100 rpm', `${f1(r1, 0)} rpm`, Math.abs(r1 - 2750) <= 100);
     add('rx8hp a 100 km/h em 6ª (relações da ficha)', '2 750 ± 100 rpm', `${f1(r2, 0)} rpm`, Math.abs(r2 - 2750) <= 100);
     const s = preset('r26b'), v = (8500 / 60 / (s.ratios![4] * s.finalDrive!)) * 2 * Math.PI * s.wheelR! * 3.6;
     add('r26b em 5ª a 8 500 rpm', '340 ± 10 km/h', `${f1(v, 0)} km/h`, Math.abs(v - 340) <= 10);
