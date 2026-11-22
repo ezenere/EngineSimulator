@@ -137,12 +137,20 @@ export class Gerador extends PortadorComMotor {
       const alvoW = this.omegaNom * (1 - c.droop * this.cargaG.fracao);
       const erro = (100 * (alvoW - w)) / this.omegaNom;
       // ganhos acertados com o motor de bancada de tools/cena/portadores.ts (4500 N·m, 60 + 20 kg·m²), escalados pela planta
-      if (this.gRel === 0) { this.gRel = ganhoRelativo(m, 4500, 80, this.cargaG.inercia); this.gov.kp = GOV_GERADOR.kp * this.gRel; this.gov.ki = GOV_GERADOR.ki * this.gRel; }
+      // (AUDITORIA.md C-05) a máquina a vapor sem governador próprio (o trator de estrada na polia, Aveling): o PI manda
+      // no regulador de vapor, que já tem 0,4 s de atraso no VaporDSP e não tem bomba injetora; com os ganhos e o atraso
+      // de 0,3 s da bomba do grupo diesel, a rotação oscilava de 67 a 112 rpm, a carga ligava e desligava e a chaminé dava
+      // estouros. Vale o governador de esferas da ficha da máquina (`governador`: K_p e K_i por % de erro), sem a bomba
+      const vapor = m.familia === 'vapor' ? (m as unknown as { P?: { governador?: { kp: number; ki: number } } }).P?.governador : undefined;
+      if (this.gRel === 0) {
+        this.gRel = vapor ? 1 : ganhoRelativo(m, 4500, 80, this.cargaG.inercia);
+        this.gov.kp = (vapor?.kp ?? GOV_GERADOR.kp) * this.gRel; this.gov.ki = (vapor?.ki ?? GOV_GERADOR.ki) * this.gRel;
+      }
       const u = this.gov.passo(erro, tb);
-      // atraso da bomba
+      // atraso da bomba (diesel)
       const k = this.filaI % this.fila.length;
       const atrasado = this.fila[k]; this.fila[k] = u; this.filaI++;
-      m.comandar({ acelerador: 0, ignicao: this.cmd.ignicao !== false, partida: false, combustivel: this.filaI > this.fila.length ? atrasado : u });
+      m.comandar({ acelerador: 0, ignicao: this.cmd.ignicao !== false, partida: false, combustivel: vapor || this.filaI <= this.fila.length ? u : atrasado });
       this.atualizarFontes(w);
     } else this.atualizarFontes(this.omegaLivre);
   }

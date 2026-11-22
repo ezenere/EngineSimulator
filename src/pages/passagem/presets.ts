@@ -33,20 +33,20 @@ export const NOME_MOTOR: Record<FamiliaMotor, string> = {
   nenhum: 'Sem motor', pistao: 'Pistão (Ronco)', turbina: 'Turbina', turboelice: 'Turboélice', turboeixo: 'Turboeixo',
   radial: 'Radial', rotativo: 'Rotativo', diesel: 'Diesel', vapor: 'Vapor', eletrico: 'Elétrico',
 };
-/** de onde vem o adaptador de cada família (para o motivo de um portador desabilitado) */
+/** de onde vem o adaptador de cada família (para o motivo de um portador desabilitado; hoje todos estão habilitados) */
 export const ESPERA_MOTOR: Partial<Record<FamiliaMotor, string>> = {
-  pistao: 'adaptador do Ronco', turbina: 'adaptador da Turbina', turboelice: 'adaptador da Turbina', turboeixo: 'adaptador da Turbina',
-  diesel: 'etapa 2 (diesel)', radial: 'adaptador do radial', rotativo: 'adaptador do rotativo', vapor: 'etapa 5 (vapor)', eletrico: 'etapa 6 (elétrico)',
+  pistao: 'adaptador do Ronco', turbina: 'adaptador da Turbina', turboelice: 'adaptador da Turbina', turboeixo: 'adaptador do turboeixo',
+  diesel: 'adaptador do Diesel', radial: 'adaptador do radial', rotativo: 'adaptador do rotativo', vapor: 'adaptador do vapor', eletrico: 'adaptador do elétrico',
 };
 
 export interface InfoPortador { id: IdPortadorPagina; nome: string; descricao: string }
 export const PORTADORES: readonly InfoPortador[] = [
   { id: 'trem', nome: 'Trem', descricao: 'N vagões: rolamento por truque, camada limite, vãos, pantógrafos, nariz e cauda' },
-  { id: 'rotor', nome: 'Helicóptero', descricao: 'Rotor principal e de cauda, caixa e downwash (R44); com o pistão de aviação ou o radial do S-55 o governador segura o Nr; sem motor, o Nr é imposto' },
+  { id: 'rotor', nome: 'Helicóptero', descricao: 'Rotor principal e de cauda, caixa e downwash; com motor (R22, R44, Bell 47, Schweizer 300, o radial do S-55 ou o Wankel do Camcopter) o governador segura o Nr; sem motor, o Nr é imposto' },
   { id: 'carro', nome: 'Carro', descricao: 'Motor, câmbio e estrada' },
   { id: 'helice', nome: 'Avião de hélice', descricao: 'Hélice com redutor e governador (turboélice, radial ou motor plano)' },
   { id: 'gerador', nome: 'Gerador', descricao: 'Rotação fixa, degraus de carga' },
-  { id: 'locomotiva', nome: 'Locomotiva', descricao: 'Diesel-elétrica de 8 notches' },
+  { id: 'locomotiva', nome: 'Locomotiva', descricao: 'Diesel-elétrica de 8 notches ou a vapor, com a composição' },
   { id: 'aviao', nome: 'Avião a jato', descricao: 'Fuselagem com os motores da Turbina; acima de Mach 0,9 o resolvedor fechado e o estrondo' },
   // (vapor, etapa 5)
   { id: 'trator', nome: 'Trator', descricao: 'Trator a vapor de estrada: rodas de ferro, 2 marchas por engrenagens' },
@@ -134,28 +134,32 @@ export interface PresetPassagem {
 }
 
 export const PRESETS_PASSAGEM: readonly PresetPassagem[] = [
-  // (o trem-bala ganha o motor do N700 na etapa 6: a 350 km/h ele fica 15–20 dB abaixo do aero e do rolamento)
-  { id: 'trembala-tunel', nome: 'Trem-bala no túnel', sub: '10 vagões · N700 · 350 km/h · 3 m', portador: 'trem', motor: 'eletrico', motorPreset: 'n700', pedal: 0.3, ambiente: 'tunel', vKmh: 350, lateral: 3 },
+  // (os três trem-bala são as passagens de referência do CENA 2.10/2.11, sem motor: a 300–350 km/h a tração fica 15–20 dB
+  // abaixo do aero e do rolamento, e nenhum trem elétrico da ficha anda a 350 (o N700 vai a 300); a tração se ouve no
+  // "Trem-bala N700 no túnel", a 150 km/h. É também o estado em que a página abre: PADROES.trem)
+  { id: 'trembala-tunel', nome: 'Trem-bala no túnel', sub: '10 vagões · 350 km/h · 3 m', portador: 'trem', motor: 'nenhum', ambiente: 'tunel', vKmh: 350, lateral: 3 },
   { id: 'trembala-ceu', nome: 'Trem-bala a céu aberto', sub: '10 vagões · 300 km/h · 7,5 m', portador: 'trem', motor: 'nenhum', ambiente: 'ceu', vKmh: 300, lateral: 7.5 },
   { id: 'trembala-ponte', nome: 'Trem-bala no viaduto', sub: '8 vagões · 320 km/h · 5 m', portador: 'trem', motor: 'nenhum', ambiente: 'ponte', vKmh: 320, lateral: 5, trem: { N: 8, pantografos: [2, 6] } },
   { id: 'convencional-estacao', nome: 'Trem convencional na estação', sub: '8 vagões · 120 km/h · 2 m', portador: 'trem', motor: 'nenhum', ambiente: 'estacao', vKmh: 120, lateral: 2,
     trem: { N: 8, Lc: 26.4, vao: 0.8, lNariz: 3, cpNariz: 0.3, largura: 2.9, altura: 3.9, zPiso: 0.5, pantografos: [4], carenagem: false } },
   { id: 'regional-corte', nome: 'Regional no corte', sub: '4 vagões · 160 km/h · 4 m', portador: 'trem', motor: 'nenhum', ambiente: 'corte', vKmh: 160, lateral: 4,
     trem: { N: 4, Lc: 26, vao: 0.7, lNariz: 6, cpNariz: 0.22, largura: 2.9, altura: 3.8, pantografos: [2], carenagem: false } },
-  // R44 com o Lycoming O-540 (família aviação do Ronco): o governador do rotor mexe na borboleta
-  { id: 'heli-rasante', nome: 'Helicóptero R44 sobrevoando', sub: 'Lycoming O-540 + rotor · 150 km/h · 40 m', portador: 'rotor', motor: 'pistao', motorPreset: 'r44', ambiente: 'ceu', vKmh: 150, lateral: 0, altitude: 40, solo: 'grama', coletivo: 0.75 },
-  // com motor (adaptadores de src/engines/*/motor.ts)
-  { id: 'carro-rua', nome: 'Carro na rua a 6 m', sub: 'Camaro SS · V8 · 3ª, pé no fundo · 108 km/h', portador: 'carro', motor: 'pistao', motorPreset: 'muscle', ambiente: 'ceu', vKmh: 108, lateral: 5.1, solo: 'asfalto', marcha: 3, pedal: 1, x0: 150 },
+  // R44 Raven II com o Lycoming IO-540 (família aviação do Ronco): o governador do rotor mexe na borboleta
+  { id: 'heli-rasante', nome: 'Helicóptero R44 sobrevoando', sub: 'Lycoming IO-540 + rotor · 150 km/h · 40 m', portador: 'rotor', motor: 'pistao', motorPreset: 'r44', ambiente: 'ceu', vKmh: 150, lateral: 0, altitude: 40, solo: 'grama', coletivo: 0.75 },
+  // com motor (adaptadores de src/engines/*/motor.ts). A distância das legendas é a da lateral do corpo (o controle
+  // "lateral"); nos carros da rua, 5,1 m da lateral são os 6 m do eixo do CENA 2.11
+  { id: 'carro-rua', nome: 'Carro na rua', sub: 'Camaro SS · V8 · 3ª, pé no fundo · 108 km/h · 5,1 m (6 m do eixo)', portador: 'carro', motor: 'pistao', motorPreset: 'muscle', ambiente: 'ceu', vKmh: 108, lateral: 5.1, solo: 'asfalto', marcha: 3, pedal: 1, x0: 150 },
   { id: 'picape-diesel', nome: 'Picape diesel passando', sub: 'Hilux 2.8 · 4ª · 80 km/h · 5 m', portador: 'carro', motor: 'diesel', motorPreset: 'hilux28', ambiente: 'ceu', vKmh: 80, lateral: 5, solo: 'asfalto', marcha: 4, pedal: 0.8, x0: 150 },
   // radiais (etapa 3) e aviação a pistão
   { id: 'corsair-rasante', nome: 'Corsair rasante', sub: 'F4U-4 · R-2800 · 30 m · 500 km/h', portador: 'helice', motor: 'radial', motorPreset: 'r2800', ambiente: 'ceu', vKmh: 500, lateral: 0, altitude: 30, solo: 'grama', pedal: 1, x0: 900 },
   { id: 'yak52-passagem', nome: 'Yak-52 passando', sub: 'M-14P · 9 cilindros · 120 m · 280 km/h', portador: 'helice', motor: 'radial', motorPreset: 'm14p', ambiente: 'ceu', vKmh: 280, lateral: 0, altitude: 120, solo: 'grama', pedal: 0.8, x0: 700 },
-  { id: 'p47-passagem', nome: 'P-47 Thunderbolt passando', sub: 'R-2800 com turbina · 80 m · 450 km/h', portador: 'helice', motor: 'radial', motorPreset: 'r2800turbo', ambiente: 'ceu', vKmh: 450, lateral: 0, altitude: 80, solo: 'grama', pedal: 0.9, x0: 900 },
-  { id: 'sherman', nome: 'Sherman passando', sub: 'M4A1 · Continental R-975 · 2ª · 15 km/h · 8 m', portador: 'carro', motor: 'radial', motorPreset: 'r975', ambiente: 'ceu', vKmh: 15, lateral: 8, solo: 'asfalto', marcha: 2, pedal: 0.7, x0: 60 },
+  { id: 'p47-passagem', nome: 'P-47 Thunderbolt passando', sub: 'R-2800 com turbocompressor · 80 m · 450 km/h', portador: 'helice', motor: 'radial', motorPreset: 'r2800turbo', ambiente: 'ceu', vKmh: 450, lateral: 0, altitude: 80, solo: 'grama', pedal: 0.9, x0: 900 },
+  // (3ª: com o diferencial de 3,53:1 na ficha, finalDrive 10,03, a 15 km/h o R-975 fica em 2 220 rpm; AUDITORIA.md P-14)
+  { id: 'sherman', nome: 'Sherman passando', sub: 'M4A1 · Continental R-975 · 3ª · 15 km/h · 8 m', portador: 'carro', motor: 'radial', motorPreset: 'r975', ambiente: 'ceu', vKmh: 15, lateral: 8, solo: 'asfalto', marcha: 3, pedal: 0.7, x0: 60 },
   // rotativos (etapa 4): o RX-7 na rua e o 787B na reta Hunaudières (passagem medida: razão Doppler 1,555 a ≈ 340 km/h)
-  { id: 'rx7-rua', nome: 'RX-7 FD na rua a 6 m', sub: '13B-REW · 3ª, pé no fundo · 100 km/h', portador: 'carro', motor: 'rotativo', motorPreset: 'rx7fd', ambiente: 'ceu', vKmh: 100, lateral: 5.1, solo: 'asfalto', marcha: 3, pedal: 1, x0: 150 },
+  { id: 'rx7-rua', nome: 'RX-7 FD na rua', sub: '13B-REW · 3ª, pé no fundo · 100 km/h · 5,1 m (6 m do eixo)', portador: 'carro', motor: 'rotativo', motorPreset: 'rx7fd', ambiente: 'ceu', vKmh: 100, lateral: 5.1, solo: 'asfalto', marcha: 3, pedal: 1, x0: 150 },
   { id: '787b-hunaudieres', nome: '787B em Hunaudières', sub: 'R26B 4 rotores · 5ª · 340 km/h · 15 m', portador: 'carro', motor: 'rotativo', motorPreset: 'r26b', ambiente: 'ceu', vKmh: 340, lateral: 15, solo: 'asfalto', marcha: 5, pedal: 1, x0: 400 },
-  { id: 'shadow-passagem', nome: 'RQ-7 Shadow passando', sub: 'UEL AR741 monorrotor · hélice impulsora · 150 m · 160 km/h', portador: 'helice', motor: 'rotativo', motorPreset: 'ar741', ambiente: 'ceu', vKmh: 160, lateral: 0, altitude: 150, solo: 'grama', pedal: 0.9, x0: 700 },
+  { id: 'shadow-passagem', nome: 'RQ-7 Shadow passando', sub: 'UEL AR741 monorrotor · 150 m · 160 km/h', portador: 'helice', motor: 'rotativo', motorPreset: 'ar741', ambiente: 'ceu', vKmh: 160, lateral: 0, altitude: 150, solo: 'grama', pedal: 0.9, x0: 700 },
   { id: 'cessna-passagem', nome: 'Cessna 172 passando', sub: 'Lycoming O-320 · 100 m · 200 km/h', portador: 'helice', motor: 'pistao', motorPreset: 'c172', ambiente: 'ceu', vKmh: 200, lateral: 0, altitude: 100, solo: 'grama', pedal: 0.8, x0: 600 },
   { id: 'aviao-rasante', nome: 'Turboélice rasante', sub: 'ATR 72 · decolagem · 100 m · 250 km/h', portador: 'helice', motor: 'turboelice', motorPreset: 'regional', ambiente: 'ceu', vKmh: 250, lateral: 0, altitude: 100, solo: 'grama', pedal: 1, x0: 900 },
   { id: 'locomotiva-patio', nome: 'Locomotiva EMD em N8 passando', sub: 'SD70ACe · notch 8 · 40 km/h · 15 m', portador: 'locomotiva', motor: 'diesel', motorPreset: 'emd710', ambiente: 'ceu', vKmh: 40, lateral: 15, solo: 'brita', notch: 8, x0: 110 },
@@ -165,11 +169,13 @@ export const PRESETS_PASSAGEM: readonly PresetPassagem[] = [
   { id: 'pacific-100', nome: 'Pacific passando a 100 km/h', sub: 'PRR K4s · corte 25% · 10 vagões · 15 m', portador: 'locomotiva', motor: 'vapor', motorPreset: 'k4s', ambiente: 'ceu', vKmh: 100, lateral: 15, solo: 'brita', x0: 300, vapor: { regulador: 1, cutoff: (0.25 - 0.15) / 0.7, vagoes: 10 } },
   { id: 'bigboy-arrancando', nome: 'Big Boy arrancando', sub: 'UP 4014 · corte 75% · 20 km/h · 12 vagões · 10 m', portador: 'locomotiva', motor: 'vapor', motorPreset: 'bigboy', ambiente: 'ceu', vKmh: 20, lateral: 10, solo: 'brita', x0: 120, vapor: { regulador: 1, cutoff: (0.75 - 0.15) / 0.7, vagoes: 12, torneiras: true } },
   { id: 'maria-estacao', nome: 'Maria Fumaça na estação', sub: 'Baldwin 2-8-0 métrica · sino · 15 km/h · 4 m', portador: 'locomotiva', motor: 'vapor', motorPreset: 'maria_fumaca', ambiente: 'estacao', vKmh: 15, lateral: 4, solo: 'brita', x0: 80, vapor: { regulador: 0.6, cutoff: (0.55 - 0.15) / 0.7, vagoes: 4, sino: true } },
-  { id: 'caca-supersonico', nome: 'Caça supersônico a 200 m', sub: 'F-16 · Mach 1,5 · estrondo', portador: 'aviao', motor: 'turbina', motorPreset: 'fighter', ambiente: 'ceu', vKmh: 1836, lateral: 0, altitude: 200, solo: 'grama', pedal: 1, x0: 1500 },
+  // (Mach 1,5 a 200 m é a passagem de referência do estrondo do legado; o F-16 de verdade fica perto de Mach 1,2 ao nível
+  // do mar. O pedal 1 é a pós-combustão toda)
+  { id: 'caca-supersonico', nome: 'Caça supersônico a 200 m', sub: 'F-16 em pós-combustão · Mach 1,5 · estrondo', portador: 'aviao', motor: 'turbina', motorPreset: 'fighter', ambiente: 'ceu', vKmh: 1836, lateral: 0, altitude: 200, solo: 'grama', pedal: 1, x0: 1500 },
   // Elétrico (etapa 6)
-  { id: 'tesla-rua', nome: 'Tesla na rua', sub: 'Model 3 AWD · 30 km/h · 6 m · pneus e AVAS', portador: 'carro', motor: 'eletrico', motorPreset: 'model3', ambiente: 'ceu', vKmh: 30, lateral: 5.1, solo: 'asfalto', pedal: 0.15, x0: 60 },
-  { id: 'taurus-doremi', nome: 'Taurus partindo do-re-mi', sub: 'ES64U2 · GTO em escada · arranca parado a 7,5 m', portador: 'trem', motor: 'eletrico', motorPreset: 'taurus', ambiente: 'estacao', vKmh: 0, lateral: 6, pedal: 0.63, partida: true, x0: -12 },
-  { id: 'metro-estacao', nome: 'Metrô chegando na estação', sub: 'Metropolis · freio elétrico · 35 km/h · 2 m', portador: 'trem', motor: 'eletrico', motorPreset: 'metropolis', ambiente: 'estacao', vKmh: 35, lateral: 2, pedal: 0, freio: 0.6, x0: 120 },
+  { id: 'tesla-rua', nome: 'Tesla na rua', sub: 'Model 3 AWD · 30 km/h · 5,1 m · pneus e AVAS', portador: 'carro', motor: 'eletrico', motorPreset: 'model3', ambiente: 'ceu', vKmh: 30, lateral: 5.1, solo: 'asfalto', pedal: 0.15, x0: 60 },
+  { id: 'taurus-doremi', nome: 'Taurus partindo do-re-mi', sub: 'ES64U2 · GTO em escada · arranca parado · 6 m (7,5 do eixo)', portador: 'trem', motor: 'eletrico', motorPreset: 'taurus', ambiente: 'estacao', vKmh: 0, lateral: 6, pedal: 0.63, partida: true, x0: -12 },
+  { id: 'metro-estacao', nome: 'Metrô passando na estação', sub: 'Metropolis · com o freio elétrico · 35 km/h · 2 m', portador: 'trem', motor: 'eletrico', motorPreset: 'metropolis', ambiente: 'estacao', vKmh: 35, lateral: 2, pedal: 0, freio: 0.6, x0: 120 },
   { id: 'n700-tunel', nome: 'Trem-bala N700 no túnel', sub: '10 vagões · tração a 150 km/h · 3 m', portador: 'trem', motor: 'eletrico', motorPreset: 'n700', ambiente: 'tunel', vKmh: 150, lateral: 3, pedal: 0.8 },
   { id: 'drone-pairando', nome: 'Drone pairando', sub: 'Mavic Pro · 4 hélices · 10 m · 5 km/h', portador: 'drone', motor: 'eletrico', motorPreset: 'mavic', ambiente: 'ceu', vKmh: 5, lateral: 0, altitude: 10, solo: 'grama', pedal: 0.5, x0: 15 },
 ];

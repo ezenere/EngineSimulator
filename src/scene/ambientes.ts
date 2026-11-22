@@ -121,3 +121,17 @@ export function ambientePassagem(id: IdAmbiente): Ambiente {
   if (!a) throw new Error(`ambiente da Passagem desconhecido: ${id}`);
   return { ...a, solo: { ...a.solo }, reverb: { ...a.reverb }, tunel: a.tunel ? { ...a.tunel } : undefined, fundo: { ...a.fundo } };
 }
+
+/**
+ * Seção do túnel (AUDITORIA-UI.md I7): o modelo acústico só usa a área (β = área frontal/área na onda de compressão de
+ * 2.10) e o comprimento; a seção que a página desenha sai daqui, para as duas contarem o mesmo túnel. É a de via dupla
+ * de alta velocidade (Shinkansen, 63–64 m²): largura/altura ≈ 1,4, vias a 4,3 m entre eixos, o trem na via do lado
+ * oposto ao ouvinte (o eixo dele a 2,15 m do centro do túnel). Com 64 m²: 9,5 × 6,8 m, as paredes a −6,9 e +2,6 m do
+ * eixo do trem (o lado do ouvinte é o negativo), e o ouvinte dos presets (3 m da lateral, 4,7 m do eixo) fica dentro,
+ * sobre a outra via.
+ */
+export function secaoTunel(area: number) {
+  const largura = Math.sqrt(1.4 * area), altura = area / largura, entreVias = 4.3;
+  const centro = -entreVias / 2;
+  return { largura, altura, entreVias, paredeOuvinte: centro - largura / 2, paredeOposta: centro + largura / 2 };
+}

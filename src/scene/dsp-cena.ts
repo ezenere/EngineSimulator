@@ -59,7 +59,7 @@ export function montarPortadorComMotor(tipo: string, config: Record<string, any>
   if (motor instanceof MotorEletrico) return montarPortadorEletrico(motor.cfg, fs, c, motor);
   if (motor?.familia === 'vapor') return montarPortadorVapor(tipo, c, motor, fs);
   let p: Portador | null = null;
-  if (tipo === 'carro') p = new CarroLegado();
+  if (tipo === 'carro') p = new CarroLegado(fs, c);
   else if (tipo === 'helice') p = new Helice(fs, c);
   else if (tipo === 'gerador') p = new Gerador(fs, c);
   else if (tipo === 'locomotiva') p = new Locomotiva(fs, c);

@@ -25,6 +25,12 @@ export interface Motor {
   telemetria(): TelemetriaMotor;
   /** (extensão) o motor traz o governador de rotação (o diesel): o portador manda `rpmAlvo` em vez de `combustivel` */
   readonly governadorProprio?: boolean;
+  /** (extensão) locomotiva: rotação por notch (rpm, 0–8) e potência no eixo em notch 8 (W) da ficha do motor (o diesel
+   *  de locomotiva). O portador usa estas e não uma cópia (AUDITORIA.md F-DSL-14) */
+  readonly notchRpm?: readonly number[];
+  readonly potenciaEixo?: number;
+  /** (extensão) comando de combustível do governador próprio (0..1), para o regulador de carga do portador */
+  readonly combustivelGovernador?: number;
 }
 
 /** Adaptador do DSP atual: expõe as fontes já separadas, e o estéreo legado quando a cena está em modo legado. */
