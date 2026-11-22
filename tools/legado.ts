@@ -114,6 +114,12 @@ export const CORRECOES_RONCO: Correcoes = {
   golgti: { name: 'VW Gol GTi' },
   // a 450 SX-F é de motocross; a de trilha (enduro) da KTM é a EXC-F
   single: { tag: 'monocilíndrico de motocross' },
+  // (docs/AUDITORIA.md, F-RON-16…23, bloco C: estes MUDAM o timbre; a paridade aplica a mesma ficha dos dois lados e
+  // continua amostra a amostra)
+  // Ferrari Tipo 053 (F2004): V10 a 90° (https://en.wikipedia.org/wiki/Ferrari_F2004). O virabrequim fica o que era,
+  // 'even72' (moente comum): nenhuma fonte diz se o 053 tem moente comum ou defasado. Com moente comum, um V10 a 90°
+  // dispara a 54°/90° (é o que o 'even72' dá com o V a 90°) (F-RON-18)
+  v10f1: { bankAngle: 90 },
 };
 
 /** Turbina: id do preset → campos corrigidos (valor novo) */

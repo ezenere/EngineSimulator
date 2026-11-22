@@ -276,7 +276,9 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     ...veh(180, 1400, [3.40, 2.09, 1.40, 1.05, 0.82, 0.68, 0.57], 4.17, 0.32) }),
 
   // ---- Pista
-  car('v10f1', 'race', 'Ferrari F2004 (F1)', '3.0 V10 · 19.000 rpm', V10, {
+  // (o Tipo 053 é um V10 a 90°: AUDITORIA F-RON-18; o virabrequim continua o de antes, porque nenhuma fonte diz se o
+  // moente é comum ou defasado)
+  car('v10f1', 'race', 'Ferrari F2004 (F1)', '3.0 V10 · 19.000 rpm', { ...V10, bankAngle: 90 }, {
     engine: 'mid', displacement: 3.0, redline: 19000, idle: 4200, cam: 0.5, inertia: 0.25,
     header: 'equal', routing: 'dual', muffler: 'straight', pipeLen: 1.4, ...NA, intake: 'itb', overrun: 'cut', cat: false, ...SOFT(80), gears: 7, transmission: 'manual', shiftTime: 0.05,
     ...veh(640, 605, [3.60, 2.85, 2.30, 1.85, 1.50, 1.22, 1.00], 6.57, 0.33, 0.78) }),
