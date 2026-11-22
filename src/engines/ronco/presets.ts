@@ -362,8 +362,8 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     displacement: 1.0, redline: 14000, idle: 1300, cam: 0.4, inertia: 0.4,
     header: 'equal', routing: 'single', muffler: 'straight', pipeLen: 1.2, ...NA, intake: 'itb', overrun: 'lean', cat: true, ...MOTO('ign'), gears: 6, transmission: 'manual', shiftTime: 0.07,
     ...moto(147, 275, [2.60, 2.18, 1.84, 1.58, 1.38, 1.25], 4.19) }),
-  car('cbr', 'moto', 'Honda CBR1000RR', '1.0 4 em linha plano · 14.500 rpm', I4, {
-    displacement: 1.0, redline: 14500, idle: 1300, cam: 0.45, inertia: 0.35,
+  car('cbr', 'moto', 'Honda CBR1000RR', '1.0 4 em linha plano · 13.000 rpm', I4, {
+    displacement: 1.0, redline: 13000, idle: 1300, cam: 0.45, inertia: 0.35,
     header: 'equal', routing: 'single', muffler: 'sport', pipeLen: 1.2, ...NA, intake: 'itb', overrun: 'lean', cat: true, ...MOTO('fuel'), gears: 6, transmission: 'manual', shiftTime: 0.07,
     ...moto(141, 270, [2.29, 1.78, 1.50, 1.33, 1.21, 1.14], 4.50) }),
   car('zx10r', 'moto', 'Kawasaki Ninja ZX-10R', '1.0 4 em linha · 14.000 rpm · ordem 1-2-4-3', { layout: 'inline', cylinders: 4, crank: 'flat', order: '1-2-4-3' }, {
@@ -378,8 +378,9 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     displacement: 1.34, redline: 11000, idle: 1100, cam: 0.35, inertia: 0.45,
     header: 'equal', routing: 'single', muffler: 'sport', pipeLen: 1.3, ...NA, intake: 'itb', overrun: 'lean', cat: true, ...CUT('fuel', 70, 0.06), gears: 6, transmission: 'manual', shiftTime: 0.08,
     ...moto(140, 339, [2.62, 1.94, 1.53, 1.29, 1.14, 1.04], 3.72, 0.32, 0.27) }),
-  car('panigale', 'moto', 'Ducati Panigale V4', '1.1 V4 90°', { layout: 'v', cylinders: 4, crank: '180', bankAngle: 90, order: '1-3-2-4' }, {
-    displacement: 1.1, redline: 16000, idle: 1300, cam: 0.5, inertia: 0.35,
+  // (Twin Pulse: os dois pares a 90°, 270/90 no simulador contra 90/200/90/340 do motor; corte a 14.500: AUDITORIA F-RON-22)
+  car('panigale', 'moto', 'Ducati Panigale V4', '1.1 V4 90°', { layout: 'v', cylinders: 4, crank: '360', bankAngle: 90, order: '1-2-3-4' }, {
+    displacement: 1.1, redline: 14500, idle: 1300, cam: 0.5, inertia: 0.35,
     header: 'equal', routing: 'single', muffler: 'straight', pipeLen: 1.0, ...NA, intake: 'itb', overrun: 'burble', cat: true, ...MOTO('ign'), gears: 6, transmission: 'manual', shiftTime: 0.07,
     ...moto(158, 270, [2.67, 2.00, 1.62, 1.40, 1.27, 1.19], 4.60) }),
   car('monster', 'moto', 'Ducati Monster 1200', 'V2 90° (L-twin)', { layout: 'v', cylinders: 2, crank: 'shared', bankAngle: 90, order: '1-2' }, {
@@ -391,7 +392,7 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     header: 'unequal', routing: 'dual', muffler: 'straight', pipeLen: 1.0, ...NA, intake: 'airbox', overrun: 'lean', cat: false, ...CUT('fuel', 90, 0.08), gears: 6, transmission: 'manual', shiftTime: 0.35,
     ...moto(70, 410, [3.23, 2.31, 1.72, 1.39, 1.18, 1.00], 2.88, 0.33, 0.42) }),
   car('mt07', 'moto', 'Yamaha MT-07', 'bicilíndrico 270°', { layout: 'inline', cylinders: 2, crank: '270', order: '1-2' }, {
-    displacement: 0.69, redline: 9000, idle: 1250, cam: 0.35, inertia: 0.6,
+    displacement: 0.69, redline: 10500, idle: 1250, cam: 0.35, inertia: 0.6,
     header: 'equal', routing: 'single', muffler: 'sport', pipeLen: 1.0, ...NA, intake: 'sport', overrun: 'lean', cat: true, ...MOTO('fuel'), gears: 6, transmission: 'manual', shiftTime: 0.15,
     ...moto(55, 259, [2.85, 2.13, 1.63, 1.30, 1.09, 0.96], 5.18, 0.31, 0.35) }),
   car('triumph', 'moto', 'Triumph Speed Triple', '1.05 três cilindros', { layout: 'inline', cylinders: 3, crank: '120', order: '1-2-3' }, {

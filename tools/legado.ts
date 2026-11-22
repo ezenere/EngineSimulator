@@ -127,6 +127,14 @@ export const CORRECOES_RONCO: Correcoes = {
   huracan: { crank: 'odd90', bankAngle: 90, order: '1-8-7-4-3-10-9-6-5-2' },
   r8: { crank: 'odd90', bankAngle: 90, order: '1-8-7-4-3-10-9-6-5-2' },
   // S85 (M5 E60, linha acima com as relações): 90°, moentes compartilhados, 90°/54° (https://en.wikipedia.org/wiki/BMW_S85) (F-RON-17)
+  // CBR1000RR SC77 (141 kW): corte a 13 000 rpm; 14 500 é a rotação de potência da CBR1000RR-R (Ultimate Motorcycling,
+  // Motorcycle.com e MCNews, testes de 2017) (F-RON-21)
+  cbr: { tag: '1.0 4 em linha plano · 13.000 rpm', redline: 13000 },
+  // Desmosedici Stradale: Twin Pulse, explosões a 0°, 90°, 290° e 380° (Ducati); o '360' dá 0/90/360/450, os dois pares
+  // a 90°. Corte a 14 500 rpm (Cycle News, AMCN e Asphalt & Rubber, 2018; a Motorcycle.com de 2017 dá 14 000) (F-RON-22)
+  panigale: { crank: '360', order: '1-2-3-4', redline: 14500 },
+  // MT-07: 9 000 rpm é a rotação de potência; o limitador entra a ~10 500 (Ultimate Motorcycling, 2019) (F-RON-23)
+  mt07: { redline: 10500 },
 };
 
 /** Turbina: id do preset → campos corrigidos (valor novo) */
