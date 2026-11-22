@@ -1,5 +1,6 @@
 // Constantes do Elétrico (docs/ELETRICO.md). Unidades do CENA: m, s, rad/s, N·m, Pa; 48 kHz, controle a cada 64 amostras.
 import type { Diretividade } from '../../scene/tipos';
+import type { ListaLinhas } from './linhas';
 
 export const TAU = Math.PI * 2;
 /** amostras entre recálculos das listas de linhas (decisão 1: a cada 64) */
@@ -54,7 +55,23 @@ export class Relevo {
       this.t[i] = Math.pow(10, (g * d) / 20);
     }
   }
-  /** fator linear do relevo em f (Hz) */
+  /**
+   * Multiplica pelo relevo as amplitudes das linhas [de, ate) de uma lista, no lugar (um laço só, sem devolver número por
+   * linha: uma chamada por linha a uma função que o V8 não embute devolve o double numa caixa e aloca no laço de áudio).
+   */
+  aplicar(L: ListaLinhas, de: number, ate: number) {
+    if (this.prof <= 0) return;
+    const t = this.t, f = L.f, a = L.a, K = N_RELEVO / OITAVAS_RELEVO;
+    for (let i = de; i < ate; i++) {
+      const x = f[i];
+      if (x < 20) { a[i] *= t[0]; continue; }
+      const u = Math.log2(x * 0.05) * K;
+      if (u >= N_RELEVO) { a[i] *= t[N_RELEVO]; continue; }
+      const j = u | 0;
+      a[i] *= t[j] + (t[j + 1] - t[j]) * (u - j);
+    }
+  }
+  /** fator linear do relevo em f (Hz): para fora do laço de áudio (testes, telemetria) */
   ganho(f: number) {
     if (this.prof <= 0) return 1;
     const u = Math.log2(f < 20 ? 1 : f * 0.05) * (N_RELEVO / OITAVAS_RELEVO), t = this.t;

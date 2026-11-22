@@ -160,6 +160,8 @@ class Unidade {
   }
 }
 
+/** 1ª chave das linhas do conversor auxiliar no banco (MEC.aux = 15) */
+const CHAVE_AUX = (15 << 16) | 1;
 /** desvios de rotação das unidades (trem: rodas de diâmetros diferentes; ±detune) */
 const DESVIOS = [0, 0.6, -0.6, 1];
 
@@ -183,6 +185,7 @@ export class EletricoDSP implements Motor {
   private regen = 0; private Tf = 0;
   // fontes compartilhadas
   bAux: BancoDeLinhas | null = null; lAux = new ListaLinhas(32); cAux = -1; ruidoAux: RuidoBanda | null = null; rmsAux = 0;
+  private auxN = 0; private auxF = new Float64Array(0); private auxA = new Float64Array(0);
   /** compressor, ventilação e transformador (calibração própria, fora da sonda) */
   auxi: Auxiliares | null = null;
   /** 0..1: o conversor de `fcAux` (CPTM 9500) só toca com o trem parado */
@@ -227,6 +230,9 @@ export class EletricoDSP implements Motor {
     }
     if (temLinhasAux) {
       this.bAux = new BancoDeLinhas(fs, LMAX.aux, this.semente + 77);
+      // as linhas do auxiliar são fixas: a tabela é montada uma vez, e o bloco de controle só a copia (porTabela)
+      this.lAux.limpar(); linhasAux(p, this.lAux);
+      this.auxN = this.lAux.n; this.auxF = this.lAux.f.slice(0, this.auxN); this.auxA = this.lAux.a.slice(0, this.auxN);
       // ventiladores do auxiliar (ar-condicionado, dutos): o largo de ventilador com f_b 250 Hz (plano de 14 a 250 Hz,
       // −6 dB/oitava acima e −12 acima de 2,5 kHz: a densidade medida de dentro da CPTM 9500 parada), na potência relativa do preset. Era um
       // passa-alta em 60 Hz com passa-baixa em 1 kHz: sem nada em 20–60 Hz, onde a gravação tem o rumor dos dutos.
@@ -372,8 +378,9 @@ export class EletricoDSP implements Motor {
     if (this.bAux) {
       // (na sonda e nos testes de bancada, que impõem o torque, o conversor fica ligado)
       if (p.inversor?.fcAux && this.vConhecida && this.torqueFixo == null) this.gEstacao += ((vp < 0.8 ? 1 : 0) - this.gEstacao) * Math.min(1, dt / 0.35);
-      this.lAux.limpar(); if (this.ign) linhasAux(p, this.lAux);
-      this.bAux.atualizar(this.lAux, 1, this.kAbs.aux * this.gEstacao); this.ruidoAux?.alvo(this.ign ? this.rmsAux : 0);
+      const la = this.lAux;
+      la.limpar(); if (this.ign) { la.tF = 1; la.tG = 1; la.porTabela(CHAVE_AUX, this.auxF, this.auxA, this.auxN); }
+      this.bAux.atualizar(la, 1, this.kAbs.aux * this.gEstacao); this.ruidoAux?.alvo(this.ign ? this.rmsAux : 0);
     }
     this.auxi?.controle(dt, this.ign, e.I);
     if (this.avas && this.bAvas) {

@@ -34,6 +34,8 @@ export class RuidoBanda {
 
 const dB = (x: number) => Math.pow(10, x / 20);
 const HARM_ENGR = [1, dB(-8), dB(-14), dB(-18)];
+/** laterais do engrenamento (−10 dB) e o 2º estágio contra o 1º (−4 dB) */
+const L10 = dB(-10), G_ESTAGIO = dB(-4);
 
 /**
  * Ruído largo de ventilador (soprador de tração, ventilador do próprio motor, ar-condicionado): a turbulência das pás
@@ -126,27 +128,28 @@ export class Reducao {
     this.cargaMalha = malha;
     const aT = (tE / this.p.Tn) * nRel * malha;
     if (aT <= 0) return;
-    const rv = this.relevo, L10 = dB(-10);
+    // (direto nos vetores da lista, sem chamada por linha: ver ForcasMotor.emitir)
+    const rv = this.relevo, n0 = L.n, lc = L.chave, lf = L.f, la = L.a, lz = L.fase;
+    let n = L.n, gj = 1;
     for (let j = 0; j < est.length; j++) {
-      const fm = est[j].Zp * f[j], a = aT * dB(-4 * j);
+      const fm = est[j].Zp * f[j], a = aT * gj, fa = f[j], fb = f[j + 1];
+      gj *= G_ESTAGIO;
       for (let h = 1; h <= 4; h++) {
-        const ah = a * HARM_ENGR[h - 1], fh = h * fm;
-        if (rv === null) {
-          L.por(chave(MEC.engren, j * 64 + h * 8), fh, ah);
-          if (h <= 2) {
-            L.por(chave(MEC.engren, j * 64 + h * 8 + 1), fh + f[j], ah * L10); L.por(chave(MEC.engren, j * 64 + h * 8 + 2), fh - f[j], ah * L10);
-            L.por(chave(MEC.engren, j * 64 + h * 8 + 3), fh + f[j + 1], ah * L10); L.por(chave(MEC.engren, j * 64 + h * 8 + 4), fh - f[j + 1], ah * L10);
-          }
-          continue;
-        }
-        L.por(chave(MEC.engren, j * 64 + h * 8), fh, ah * rv.ganho(fh));
+        const ah = a * HARM_ENGR[h - 1], fh = h * fm, k = j * 64 + h * 8;
+        if (n + 5 > L.cap) break;
+        lc[n] = chave(MEC.engren, k); lf[n] = fh; la[n] = ah; lz[n] = NaN; n++;
         if (h <= 2) {
-          const a1 = fh + f[j], a2 = fh - f[j], b1 = fh + f[j + 1], b2 = fh - f[j + 1];
-          L.por(chave(MEC.engren, j * 64 + h * 8 + 1), a1, ah * L10 * rv.ganho(a1)); L.por(chave(MEC.engren, j * 64 + h * 8 + 2), a2, ah * L10 * rv.ganho(a2 < 0 ? -a2 : a2));
-          L.por(chave(MEC.engren, j * 64 + h * 8 + 3), b1, ah * L10 * rv.ganho(b1)); L.por(chave(MEC.engren, j * 64 + h * 8 + 4), b2, ah * L10 * rv.ganho(b2 < 0 ? -b2 : b2));
+          const al = ah * L10;
+          lc[n] = chave(MEC.engren, k + 1); lf[n] = fh + fa; la[n] = al; lz[n] = NaN; n++;
+          lc[n] = chave(MEC.engren, k + 2); lf[n] = fh > fa ? fh - fa : fa - fh; la[n] = al; lz[n] = NaN; n++;
+          lc[n] = chave(MEC.engren, k + 3); lf[n] = fh + fb; la[n] = al; lz[n] = NaN; n++;
+          lc[n] = chave(MEC.engren, k + 4); lf[n] = fh > fb ? fh - fb : fb - fh; la[n] = al; lz[n] = NaN; n++;
         }
       }
     }
+    L.n = n;
+    // o relevo da carcaça da redução, de uma vez
+    if (rv !== null) rv.aplicar(L, n0, n);
   }
   /** níveis dos ruídos do bloco (chamar no início do bloco) */
   inicio(e: EstadoMaquina, det: number, fBase: number) {
@@ -231,13 +234,18 @@ export class Ventilador {
     this.ruido.afinar(1.5 * fb, fv);
     this.ruido.alvo(a * K_RUIDO_VENT);
     if (a <= 0) return;
-    for (let h = 1; h <= 4; h++) L.por(chave(MEC.ventilador, h), h * fb, a * Math.exp(-(h - 1) * 0.6));
-    // soprador com motor próprio: as ordens 1 e 3 da rotação (desbalanceamento e os três braços do suporte) no nível da
-    // passagem de pá, como no Taurus parado (58,3 Hz a −8,7 dB, 175,4 a −10,6 e a passagem de pá, 526,4, a −8,6)
-    // (metade da amplitude medida: fica do lado baixo)
-    if (v.forcada) { L.por(chave(MEC.ventilador, 8), fv, a * 0.5); L.por(chave(MEC.ventilador, 9), 3 * fv, a * 0.4); }
+    // passagem de pá e 3 harmônicos (κ 0,6); no soprador com motor próprio, também as ordens 1 e 3 da rotação
+    // (desbalanceamento e os três braços do suporte): no Taurus parado elas ficam no nível da passagem de pá (58,3 Hz a
+    // −8,7 dB, 175,4 a −10,6 e a passagem de pá, 526,4, a −8,6); aqui, com metade da amplitude (o lado baixo)
+    L.tF = fv; L.tG = a;
+    const o = this.ord;
+    o[0] = v.B; o[1] = 2 * v.B; o[2] = 3 * v.B; o[3] = 4 * v.B;
+    L.porTabela(chave(MEC.ventilador, 1), o, AMP_VENT, v.forcada ? 6 : 4);
   }
+  /** ordens do eixo do ventilador: 4 da passagem de pá e as ordens 1 e 3 (rascunho, sem alocação por bloco) */
+  private ord = Float64Array.of(0, 0, 0, 0, 1, 3);
 }
+const AMP_VENT = Float64Array.of(1, Math.exp(-0.6), Math.exp(-1.2), Math.exp(-1.8), 0.5, 0.4);
 
 /**
  * Escovas e comutador (CC, universal): tons em Z_c·f_rot e 2Z_c·f_rot (−10 dB) ∝ I, e o faiscamento: largo de 2–10 kHz
@@ -257,9 +265,10 @@ export class Escovas {
     const gasto = 1 + es.desgaste;      // +6 dB com desgaste 1
     this.faisca.alvo(fr > 1 ? (this.p.faiscamento ?? 0.5) * Math.pow(Ie, 1.5) * gasto : 0);
     if (semTons || fr <= 0) return;
-    const rv = this.relevo, f1 = es.Zc * fr;
-    L.por(chave(MEC.escova, 1), f1, Ie * (rv ? rv.ganho(f1) : 1));
-    L.por(chave(MEC.escova, 2), 2 * f1, Ie * dB(-10) * (rv ? rv.ganho(2 * f1) : 1));
+    const rv = this.relevo, f1 = es.Zc * fr, n0 = L.n;
+    L.por(chave(MEC.escova, 1), f1, Ie);
+    L.por(chave(MEC.escova, 2), 2 * f1, Ie * dB(-10));
+    if (rv !== null) rv.aplicar(L, n0, L.n);
   }
   ruido(out: Float32Array, off: number, n: number, pos: number, tot: number, escala: number) {
     const R = this.faisca;
@@ -274,6 +283,7 @@ export class Escovas {
   }
 }
 
+const UM = Float64Array.of(1), G_EIXO_HELICE = dB(-18);
 /** harmônicos da BPF medidos no Mavic pairado (3.6), do 1º ao 12º (o 12º extrapolado), dB */
 export const HARM_MAVIC = [0, -6, -7, -6, -10, -8, -13, -19, -18, -18, -24, -26];
 
@@ -291,7 +301,10 @@ export class Helice {
     this.serie = new SerieHarmonica(fs, H.length);
     this.rel = new Float64Array(H.map((x) => dB(x)));
     this.largo = new RuidoBanda(fs, semente, [new Bq().hp(fs, 400, 0.7071), new Bq().lp(fs, 12000, 0.7071)]);
+    this.ordH = Float64Array.from(H, (_, k) => k + 1);
   }
+  /** ordens 1…H da passagem de pá */
+  private ordH: Float64Array;
   linhas(e: EstadoMaquina, L: ListaLinhas, det: number, fRef: number) {
     const h = this.p.helice!, fr = e.frot * det, s = this.serie;
     const nRel = fr / fRef, a = Math.pow(Math.max(0, nRel), 2.5);
@@ -301,7 +314,10 @@ export class Helice {
     const kc = h.largoCarga ? 1 + 2.2 * Math.max(0, e.I - 0.3) : 1;
     this.largo.alvo(a * kc * dB(h.largoDb ?? -3));
     if (a <= 0) return;
-    for (let k = 0; k < s.a.length; k++) L.por(chave(MEC.helice, k + 1), (k + 1) * s.f0, s.a[k] * Math.SQRT2);
-    L.por(chave(MEC.helice, 0), fr, s.a[0] * Math.SQRT2 * dB(-18));
+    // (os harmônicos de uma vez, sem um `por` por linha: ver ListaLinhas.porTabela)
+    L.tF = s.f0; L.tG = Math.SQRT2;
+    L.porTabela(chave(MEC.helice, 1), this.ordH, s.a, s.a.length);
+    L.tF = fr; L.tG = s.a[0] * Math.SQRT2 * G_EIXO_HELICE;
+    L.porTabela(chave(MEC.helice, 0), UM, UM, 1);
   }
 }

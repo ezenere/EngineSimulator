@@ -138,8 +138,8 @@ export class Auxiliares {
       if (this.ligadoComp) this.pressao = Math.min(1, this.pressao + dt / T_LIGA);
       const w = this.wComp;
       if (w > 0.02) {
-        const f0 = this.fK * w * (1 - 0.012 * this.pressao) * jf, a = w * w * (0.7 + 0.3 * this.pressao) * G.compressor;
-        for (let i = 0; i < ORD_COMP.length; i++) L.por(chave(MEC.aux, 64 + i), ORD_COMP[i][0] * f0, a * this.aComp[i]);
+        this.pF0 = this.fK * w * (1 - 0.012 * this.pressao) * jf; this.pG = w * w * (0.7 + 0.3 * this.pressao) * G.compressor;
+        this.porPente(64, this.oComp, this.aComp);
       }
     }
     // ---- ventilação: sobe em ~1 s ao energizar
@@ -148,16 +148,29 @@ export class Auxiliares {
       const w = this.wVent;
       this.largo!.alvo(w * w * this.rmsLargo * G.ventilacao);
       if (w > 0.02) {
-        const f0 = this.fV * w * jf, a = w * w * this.jit.ganho * G.ventilacao;
-        for (let i = 0; i < ORD_VENT.length; i++) L.por(chave(MEC.aux, 96 + i), ORD_VENT[i][0] * f0, a * this.aVent[i]);
+        this.pF0 = this.fV * w * jf; this.pG = w * w * this.jit.ganho * G.ventilacao;
+        this.porPente(96, this.oVent, this.aVent);
       }
     }
     // ---- transformador: 2·f da rede, +8 dB em plena carga (a rede não passeia como um eixo: só ±0,05%)
     if (this.temTrafo && on) {
-      const a = (1 + 1.51 * Math.min(1.5, Math.max(0, corrente))) * G.transformador, fj = 1 + (jf - 1) / 3;
-      for (let i = 0; i < HARM_TRAFO.length; i++) L.por(chave(MEC.aux, 128 + i), (i + 1) * this.fT * fj, a * this.aTrafo[i]);
+      this.pF0 = this.fT * (1 + (jf - 1) / 3); this.pG = (1 + 1.51 * Math.min(1.5, Math.max(0, corrente))) * G.transformador;
+      this.porPente(128, this.oTrafo, this.aTrafo);
     }
     this.banco.atualizar(L, 1, 1);
+  }
+
+  // ordens de cada pente em vetores (o laço de controle só percorre Float64Array)
+  private oComp = Float64Array.from(ORD_COMP, (x) => x[0]); private oVent = Float64Array.from(ORD_VENT, (x) => x[0]);
+  private oTrafo = Float64Array.from(HARM_TRAFO, (_, i) => i + 1);
+  private pF0 = 0; private pG = 0;
+  /** põe um pente na lista: ordens × pF0, amplitudes × pG (direto nos vetores; a frequência e o ganho vêm em campos: um
+   *  número passado em argumento a uma chamada que o V8 não embute vai para uma caixa) */
+  private porPente(base: number, ord: Float64Array, amp: Float64Array) {
+    const L = this.lista, lc = L.chave, lf = L.f, la = L.a, lz = L.fase, f0 = this.pF0, g = this.pG;
+    let n = L.n;
+    for (let i = 0; i < ord.length && n < L.cap; i++) { const a = g * amp[i]; if (a > 0) { lc[n] = chave(MEC.aux, base + i); lf[n] = ord[i] * f0; la[n] = a; lz[n] = NaN; n++; } }
+    L.n = n;
   }
 
   /** soma n amostras do bloco corrente no canal */

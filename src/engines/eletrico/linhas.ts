@@ -29,6 +29,19 @@ export class ListaLinhas {
     const i = this.n++;
     this.chave[i] = chave; this.f[i] = f < 0 ? -f : f; this.a[i] = a; this.fase[i] = NaN;
   }
+  /**
+   * Várias linhas de uma vez: frequências `fr[i]·f0` (ou `fr[i]` se f0 = 1) e amplitudes `am[i]·g`, com as chaves
+   * `chave0 + i`. Os emissores com poucas linhas fixas (ventilador, hélice, auxiliar) usam isto no lugar de um `por` por
+   * linha: `f0` e `g` vêm em `tF` e `tG` (campos), porque um número passado em argumento a uma chamada que o V8 não
+   * embute vai para uma caixa (alocação no laço de áudio).
+   */
+  tF = 1; tG = 1;
+  porTabela(chave0: number, fr: Float64Array, am: Float64Array, n: number) {
+    const lc = this.chave, lf = this.f, la = this.a, lz = this.fase, f0 = this.tF, g = this.tG;
+    let k = this.n;
+    for (let i = 0; i < n && k < this.cap; i++) { const a = am[i] * g; if (a > 0) { const f = fr[i] * f0; lc[k] = chave0 + i; lf[k] = f < 0 ? -f : f; la[k] = a; lz[k] = NaN; k++; } }
+    this.n = k;
+  }
   /** como `por`, com a fase em que a linha nasce (linhas que têm de bater juntas: o par f ± f_e do inversor) */
   porFase(chave: number, f: number, a: number, fase: number) {
     if (!(a > 0) || this.n >= this.cap) return;

@@ -184,22 +184,40 @@ export class ForcasMotor {
   emitir(L: ListaLinhas, fr: number, fe: number) {
     const wl = pesoLaterais(fe), sl = Math.sqrt(wl), F = Math.sqrt(1 + (1 - wl) * DOBRA), fc = this.fc;
     const A = this.amp, K = this.chave, CR = this.cr, CE = this.ce, C0 = this.c0, CT = this.cat, W = this.w, FL = this.fl;
-    const rv = this.relevo;
+    const rv = this.relevo, n0 = L.n;
+    // (as linhas vão direto para os vetores da lista: passar `f` e `a` por uma chamada que o V8 não embute põe cada
+    // número numa caixa, e são ~70 linhas por unidade a cada bloco de controle)
+    const lc = L.chave, lf = L.f, la = L.a, lz = L.fase, cap = L.cap;
+    let n = L.n, semH = 0;
     for (let i = 0; i < this.n; i++) {
       const fl = FL[i];
+      if (fl === SEMH) { semH++; continue; }
       if (fl === LAT && sl === 0) continue;
       let f = CR[i] * fr + CE[i] * fe + C0[i];
       if (f < 0) f = -f;
       const r = f / fc, r4 = r * r * r * r, q = f * (1 / F_CARC_LP);
-      let a = A[CT[i]] * W[i] * (fl === SEMH ? 1 : Math.sqrt(r4 / (1 + r4)) / Math.sqrt(1 + q * q));
+      let a = A[CT[i]] * W[i] * (Math.sqrt(r4 / (1 + r4)) / Math.sqrt(1 + q * q));
       // ranhuras e barras: a onda de força tem ordem espacial alta (|Z_r − Z_s| ± 2p: 6 a 14 no Taurus) e irradia mal em
       // baixa frequência: mais 6 dB/oitava abaixo de 2·f_carc. Com o trem devagar essas linhas ficavam sozinhas em
       // 150–400 Hz (Taurus a 12 km/h: 198 Hz, 27 dB sobre o piso; a gravação A no patamar tem as linhas dali 4–10 dB sobre o piso)
       const ct = CT[i];
       if (ct === CRAN || ct === CBAR) { const u = f / (2 * fc); a *= u / Math.sqrt(1 + u * u); }
-      if (rv !== null && fl !== SEMH) a *= rv.ganho(f);
       if (fl === LAT) a *= sl; else if (fl === CENTRO) a *= F;
-      L.por(K[i], f, a);
+      if (a > 0 && n < cap) { lc[n] = K[i]; lf[n] = f; la[n] = a; lz[n] = NaN; n++; }
+    }
+    L.n = n;
+    // o relevo dos modos da carcaça, de uma vez (sem chamada por linha)
+    if (rv !== null) rv.aplicar(L, n0, n);
+    // o desbalanceamento sacode a máquina inteira: sem a curva da carcaça nem o relevo
+    if (semH > 0) {
+      for (let i = 0; i < this.n; i++) {
+        if (FL[i] !== SEMH) continue;
+        let f = CR[i] * fr + CE[i] * fe + C0[i];
+        if (f < 0) f = -f;
+        const a = A[CT[i]] * W[i];
+        if (a > 0 && n < cap) { lc[n] = K[i]; lf[n] = f; la[n] = a; lz[n] = NaN; n++; }
+      }
+      L.n = n;
     }
   }
 }
