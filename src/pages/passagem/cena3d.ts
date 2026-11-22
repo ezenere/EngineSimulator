@@ -31,6 +31,11 @@ const COR_SOLO: Record<string, number> = { asfalto: 0x3a3d42, concreto: 0x85837d
 // céu de fim de tarde: escuro no alto (combina com a página), claro no horizonte, para o corpo e a via se recortarem
 const CEU_ZENITE = 0x0f1828, CEU_HORIZONTE = 0x56667e;
 /** nome curto de cada portador, para o rótulo do corpo na cena */
+/** (I8) portadores a vapor com silhueta própria: a locomotiva a vapor, o trator e o barco */
+const silhuetaVapor = (c: ControlePassagem) => (c.portador === 'locomotiva' && c.motor === 'vapor') || c.portador === 'trator' || c.portador === 'barco';
+/** altura até onde a caixa do 1º segmento é desenhada nessas máquinas: o estrado da locomotiva, o chassi do trator, o casco */
+const alturaEstrado = (c: ControlePassagem, s: { zPiso: number; altura: number }) => c.portador === 'barco' ? Math.min(s.altura, 2.2) : c.portador === 'trator' ? s.zPiso + 0.7 : s.zPiso + 1.0;
+
 const NOME_CORPO: Record<string, string> = { trem: 'trem', rotor: 'helicóptero', carro: 'carro', helice: 'avião', gerador: 'gerador', locomotiva: 'locomotiva', aviao: 'avião', trator: 'trator', barco: 'barco', drone: 'drone' };
 export type ModoCamera = 'ouvinte' | 'corpo' | 'livre';
 export const NOME_CAMERA: Record<ModoCamera, string> = { ouvinte: 'orbital no ouvinte', corpo: 'segue o corpo', livre: 'livre' };
@@ -261,7 +266,10 @@ export class Cena3D {
       const xc = frente - s.comprimento / 2;
       const g = new THREE.Group();
       const nar = k === 0 ? Math.min(corpo.nariz, s.comprimento * 0.6) : 0, cau = k === n - 1 ? Math.min(corpo.cauda, s.comprimento * 0.6) : 0;
-      const casca = new THREE.Mesh(geometriaSegmento(s.comprimento, s.largura, s.altura, s.zPiso, nar, cau, c.portador === 'rotor'), corM);
+      // (locomotiva a vapor, trator e barco: a caixa do corpo desenhada só até o estrado, o casco ou o chassi; a caldeira,
+      // a chaminé, a cabine e as rodas vêm da silhueta abaixo; I8)
+      const baixa = k === 0 && silhuetaVapor(c) ? alturaEstrado(c, s) : s.altura;
+      const casca = new THREE.Mesh(geometriaSegmento(s.comprimento, s.largura, baixa, s.zPiso, nar, cau, c.portador === 'rotor'), corM);
       casca.userData.pega = 'corpo'; casca.userData.xc = xc;
       g.add(casca);
       if (c.portador === 'trem') {
@@ -327,6 +335,35 @@ export class Cena3D {
       for (const sx of [-0.31, 0.31]) for (const sy of [-1, 1]) {
         const roda = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.24, 20), escM); roda.position.set(sx * L, sy * (s0.largura / 2 - 0.06), r);
         this.anexar(roda, sx * L);
+      }
+    } else if (s0 && silhuetaVapor(c)) {
+      // (I8) as máquinas a vapor com as medidas do 1º segmento: caldeira deitada, chaminé, cabine ou casa de convés, rodas
+      // (motrizes na locomotiva, de ferro no trator) ou as rodas de pás do barco
+      const L = s0.comprimento, W = s0.largura, H = s0.altura, x0 = corpo.comprimento / 2 - L / 2, zE = alturaEstrado(c, s0);
+      const pretoM = new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: 0.6, metalness: 0.3 });
+      const cil = (r: number, comp: number, eixo: 'x' | 'y' | 'z', m: THREE.Material) => { const g = new THREE.Mesh(new THREE.CylinderGeometry(r, r, comp, 24), m); if (eixo === 'x') g.rotation.z = Math.PI / 2; else if (eixo === 'z') g.rotation.x = Math.PI / 2; return g; };
+      const por = (o: THREE.Object3D, x: number, y: number, z: number) => { o.position.set(x, y, z); this.anexar(o, x); };
+      if (c.portador === 'locomotiva') {
+        const r = Math.min(0.42 * W, 0.22 * H), zc = Math.max(zE + r, H - r - 0.9);
+        por(cil(r, 0.68 * L, 'x', pretoM), x0 + 0.12 * L, 0, zc);                                   // caldeira
+        por(cil(0.3, H - zc - r + 0.1, 'z', pretoM), x0 + 0.4 * L, 0, zc + r + (H - zc - r) / 2 - 0.05);  // chaminé
+        por(new THREE.Mesh(new THREE.BoxGeometry(0.2 * L, W, H - zE), corM), x0 - 0.4 * L, 0, zE + (H - zE) / 2);   // cabine
+        const rm = Math.min(0.9, 0.18 * H), nR = 4;
+        for (let i = 0; i < nR; i++) for (const sy of [-1, 1]) por(cil(rm, 0.16, 'y', escM), x0 - 0.22 * L + (i * 0.42 * L) / (nR - 1), sy * (W / 2 - 0.1), rm);
+      } else if (c.portador === 'trator') {
+        por(cil(0.45, 0.55 * L, 'x', pretoM), x0 + 0.05 * L, 0, zE + 0.55);                        // caldeira
+        por(cil(0.16, 1.6, 'z', pretoM), x0 + 0.34 * L, 0, zE + 1.8);                              // chaminé
+        por(new THREE.Mesh(new THREE.BoxGeometry(L * 0.9, W, 0.05), corM), x0 - 0.02 * L, 0, H);   // toldo
+        for (const sx of [-0.4, 0.4]) for (const sy of [-1, 1]) por(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, H - zE), escM), x0 + sx * L, sy * (W / 2 - 0.1), zE + (H - zE) / 2);
+        for (const sy of [-1, 1]) por(cil(0.85, 0.4, 'y', escM), x0 - 0.25 * L, sy * (W / 2 - 0.2), 0.85);   // rodas de trás
+        for (const sy of [-1, 1]) por(cil(0.55, 0.25, 'y', escM), x0 + 0.33 * L, sy * (W / 2 - 0.35), 0.55);  // da frente
+        por(cil(0.6, 0.1, 'y', pretoM), x0 - 0.02 * L, W / 2 + 0.1, zE + 1.2);                      // volante
+      } else {
+        // barco de rodas de pás: casa de convés, chaminé alta e as duas rodas de pás no meio
+        por(new THREE.Mesh(new THREE.BoxGeometry(0.45 * L, 0.6 * W, 2.0), corM), x0 - 0.05 * L, 0, zE + 1.0);
+        por(cil(0.45, 4.5, 'z', pretoM), x0 + 0.05 * L, 0, zE + 2.0 + 2.25);
+        const rp = Math.min(2.6, 0.45 * H);
+        for (const sy of [-1, 1]) { const d = cil(rp, 0.9, 'y', escM); por(d, x0, sy * (W / 2 + 0.5), rp * 0.6); }
       }
     }
     // fontes: esferas de 0,2 m por tipo (o raio segue o ganho)
