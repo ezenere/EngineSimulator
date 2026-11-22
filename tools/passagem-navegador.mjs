@@ -4,7 +4,8 @@
 //
 // Sem url, serve o `dist/` (npm run build antes) em http://127.0.0.1:<porta>/data/engine/, como no site.
 // --reserva bloqueia o AudioWorklet: a página tem de cair no ScriptProcessorNode (DSP na thread principal).
-// Chromium por CDP (/usr/bin/chromium) ou Firefox por WebDriver BiDi (/usr/bin/firefox), sem dependências.
+// Chromium por CDP (/usr/bin/chromium, ou CHROMIUM=/caminho) ou Firefox por WebDriver BiDi (/usr/bin/firefox, ou
+// FIREFOX=/caminho), sem dependências; MUDO=1 roda sem tocar nas caixas (o som continua sendo medido).
 // Um script antes da página grava toda mensagem mandada pela porta do AudioWorklet.
 //
 // Roteiro: carga (presets, portadores pela tabela de compatibilidade, cena 3D desenhando), dispara o
@@ -27,6 +28,10 @@ const porta = +opc('--porta', firefox ? 9470 : 9350);
 const foto = opc('--foto');
 let url = args.find((a) => !a.startsWith('--') && a !== opc('--porta') && a !== opc('--foto'));
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+// MUDO=1: o teste roda sem tocar nas caixas (o áudio continua rodando e sendo medido no analisador): --mute-audio no
+// Chromium; no Firefox, media.volume_scale 0 (o fluxo vai em silêncio ao servidor de áudio)
+const MUDO_CR = process.env.MUDO ? ['--mute-audio'] : [];
+const MUDO_FF = process.env.MUDO ? 'user_pref("media.volume_scale", "0.0");\n' : '';
 
 // ------------------------------------------------------------------ servidor do dist/ em /data/engine/
 let servidor = null;
@@ -60,7 +65,7 @@ let ev, fechar, fotografar, mouse;
 
 if (!firefox) {
   const chrome = spawn(process.env.CHROMIUM || '/usr/bin/chromium', ['--headless=new', `--remote-debugging-port=${porta}`, '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check',
-    '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--window-size=1400,900', `--user-data-dir=${perfil}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+    '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--window-size=1400,900', ...MUDO_CR, `--user-data-dir=${perfil}`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
   let alvo;
   for (let i = 0; i < 50 && !alvo; i++) { await espera(200); try { const l = await (await fetch(`http://127.0.0.1:${porta}/json`)).json(); alvo = l.find((t) => t.type === 'page'); } catch {} }
   const ws = new WebSocket(alvo.webSocketDebuggerUrl);
@@ -92,7 +97,7 @@ if (!firefox) {
   await cmd('Page.addScriptToEvaluateOnNewDocument', { source: GANCHO });
   await cmd('Page.navigate', { url });
 } else {
-  fs.writeFileSync(`${perfil}/user.js`, 'user_pref("media.autoplay.default", 0);\nuser_pref("media.autoplay.blocking_policy", 0);\nuser_pref("webgl.force-enabled", true);\n');
+  fs.writeFileSync(`${perfil}/user.js`, 'user_pref("media.autoplay.default", 0);\nuser_pref("media.autoplay.blocking_policy", 0);\nuser_pref("webgl.force-enabled", true);\n' + MUDO_FF);
   const ff = spawn(process.env.FIREFOX || '/usr/bin/firefox', ['--headless', '--width', '1400', '--height', '900', '--remote-debugging-port', String(porta), '--profile', perfil, '--no-remote'], { stdio: 'ignore' });
   let ws;
   for (let i = 0; i < 60; i++) { await espera(300); try { ws = new WebSocket(`ws://127.0.0.1:${porta}/session`); await new Promise((ok, err) => { ws.onopen = ok; ws.onerror = err; }); break; } catch { ws = null; } }
@@ -125,6 +130,15 @@ let falhas = 0;
 const confere = (ok, rotulo, valor) => { console.log(`${ok ? 'ok  ' : 'FALHA'} ${rotulo}${valor !== undefined ? ` → ${typeof valor === 'string' ? valor : JSON.stringify(valor)}` : ''}`); if (!ok) falhas++; };
 const confereMsg = (ok, rotulo, valor) => (reserva ? console.log(`--    ${rotulo} (pulado: reserva)`) : confere(ok, rotulo, valor));
 const ate = async (expr, ms, passo = 200) => { const t0 = Date.now(); let v; while (Date.now() - t0 < ms) { v = await ev(expr); if (v) return v; await espera(passo); } return v; };
+// Esperas: em vez de dormir um tempo fixo depois de mexer num controle (com a máquina carregada a mensagem ainda não
+// saiu, ou a página ainda está calibrando o motor do preset na thread principal), lê até a condição valer ou o limite
+// passar e devolve a última leitura, que a conferência julga e mostra. O limite é folgado: só pesa quando algo está
+// errado. `janela` mede durante uma passagem: o tempo de antes vira o mínimo e ela se estende (até `maxMs`) enquanto
+// a condição de chegada não vale, em vez de acabar no meio da passagem quando a máquina está lenta.
+const lerAte = async (f, ok, ms = 6000) => { const t0 = Date.now(); let v; for (;;) { v = await f(); if (ok(v) || Date.now() - t0 >= ms) return v; await espera(150); } };
+// (na reserva nada passa pela porta: no lugar da mensagem, os 0,8 s de antes)
+const ultimaAte = (tipo, ok, ms = 6000) => (reserva ? espera(800).then(async () => (await ultimos(tipo)).at(-1)) : lerAte(async () => (await ultimos(tipo)).at(-1), (m) => !!m && ok(m), ms));
+const janela = async (ler, junta, chegou, minMs, maxMs, passo) => { const t0 = Date.now(); for (;;) { const r = await ler(); if (r) await junta(r, (Date.now() - t0) / 1000); const dt = Date.now() - t0; if (dt >= maxMs || (dt >= minMs && chegou(dt / 1000))) return; await espera(passo); } };
 const clicar = (sel) => ev(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) throw new Error('não achei ${sel.replace(/'/g, '')}'); e.click(); return true; })()`);
 const chip = (grupo, texto) => ev(`(() => { const b = [...document.querySelectorAll('#${grupo} .chip')].find((x) => x.textContent.trim().startsWith(${JSON.stringify(texto)})); if (!b) throw new Error('chip ${texto} em ${grupo}'); b.click(); return true; })()`);
 const slider = (id, v) => ev(`(() => { const r = document.getElementById('${id}'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(r, '${v}'); r.dispatchEvent(new Event('input', { bubbles: true })); r.dispatchEvent(new Event('change', { bubbles: true })); return r.closest('.field').querySelector('output').textContent; })()`);
@@ -134,7 +148,7 @@ const P = 'window.__passagem.c';
 // telemetria guardada pela página (vale também na reserva, em que nada passa pela porta)
 const tele = () => ev(`(() => { const t = ${P}.tele; return t && { s: t.portador.s, v: t.portador.v, p: t.cena.pressaoPa, pmax: t.pressao.max, pmin: t.pressao.min, tunel: t.pressao.tunel, spl: t.cena.splDbA, vento: t.cena.ventoMs, n: t.cena.fontes.length, lado: t.lado }; })()`);
 
-await espera(2500);
+await ate(`document.readyState === 'complete' && !!window.__passagem && document.querySelectorAll('.preset').length > 0`, 15000);
 confere((await ev('document.title')) === 'Passagem', 'título');
 const est = await ev(`({
   presets: [...document.querySelectorAll('.preset')].map((b) => b.dataset.id + (b.disabled ? '(d)' : '')),
@@ -172,7 +186,7 @@ if (foto) {
 // ---- dispara o trem-bala no túnel
 await clicar('.preset[data-id="trembala-tunel"]');
 await clicar('#ignicao');
-const pronto = await ate(`${P}.tele && ${P}.andando`, 6000);
+const pronto = await ate(`${P}.tele && ${P}.andando`, 20000);
 confere(!!pronto, 'áudio pronto e telemetria chegando');
 const modo = await ev(`${P}.audio?.modo`);
 confere(reserva ? modo === 'script' : modo === 'worklet', `áudio pelo ${reserva ? 'ScriptProcessorNode (reserva)' : 'AudioWorklet'}`, modo);
@@ -187,25 +201,26 @@ confere(conv.n === false && conv.dur > 5.5, 'reverberação da Cena: resposta po
 
 // acompanha a passagem: 600 m a 97 m/s → nariz abeam em ~6,2 s, cauda em ~8,8 s
 let maxTun = 0, maxP = -1e9, minP = 1e9, maxA = -1e9, tunT = null, narizT = null, vMax = 0;
-const t0 = Date.now();
-while (Date.now() - t0 < 12000) {
-  const r = await ev(`(() => { const t = ${P}.tele; const m = window.__passagem.med; return t && { tun: t.pressao.tunel, max: t.pressao.max, min: t.pressao.min, nariz: t.pressao.nariz, dBA: m.dBA, xi: ${P}.xiNariz(t.portador.s), v: t.portador.v }; })()`);
-  if (r) {
-    const dt = (Date.now() - t0) / 1000;
+// O nível de cada passagem é o máximo que o medidor da página guarda a cada quadro (`med.maxA`, zerado antes da janela):
+// lido só a cada volta do roteiro, o pico curto da passagem se perdia quando cada leitura demorava (máquina carregada).
+const zeraMax = () => ev(`(window.__passagem.med.zerarMax(), true)`);
+// (12 s de janela; se o nariz chegar tarde, ela vai até 5,8 s depois dele, como no tempo nominal)
+await zeraMax();
+await janela(() => ev(`(() => { const t = ${P}.tele; const m = window.__passagem.med; return t && { tun: t.pressao.tunel, max: t.pressao.max, min: t.pressao.min, nariz: t.pressao.nariz, dBA: m.maxA, xi: ${P}.xiNariz(t.portador.s), v: t.portador.v }; })()`),
+  async (r, dt) => {
     if (r.tun > maxTun) maxTun = r.tun; if (tunT == null && r.tun > 500) tunT = dt;
     if (narizT == null && r.xi > 0) { narizT = dt; if (foto) { await espera(900); await fotografar(foto.replace(/\.png$/, '-abeam.png')); } }
     if (Math.abs(r.nariz) > 0) { maxP = Math.max(maxP, r.max - r.tun); minP = Math.min(minP, r.min - r.tun); }
     if (Number.isFinite(r.dBA)) maxA = Math.max(maxA, r.dBA);
     vMax = Math.max(vMax, r.v);
-  }
-  await espera(40);
-}
+  }, (dt) => narizT != null && dt - narizT > 5.8, 12000, 40000, 40);
 confere(Math.abs(vMax * 3.6 - 350) < 1, 'velocidade 350 km/h', (vMax * 3.6).toFixed(1));
 confere(maxTun > 1600 && maxTun < 2400, 'onda de compressão do túnel ~2 kPa', `${maxTun.toFixed(0)} Pa`);
 confere(tunT != null && narizT != null && narizT - tunT > 2.5, 'a onda do túnel chega segundos antes do nariz', { onda: tunT, nariz: narizT });
 confere(maxP - minP > 90 && maxP - minP < 220, 'onda de nariz/cauda (pico a pico, alvo 150 ± 30 Pa)', `${(maxP - minP).toFixed(0)} Pa`);
 confere(maxA > 105 && maxA < 125, 'nível no ouvido real (direto + túnel) em dB(A)', `${maxA.toFixed(1)} dB(A)`);
-const leit = await ev(`({ nivel: document.getElementById('ro-nivel').textContent, doppler: document.getElementById('ro-doppler').textContent, nariz: document.getElementById('ro-nariz').textContent, tunel: document.getElementById('ro-tunel').textContent, hud: document.getElementById('hud').textContent })`);
+const leit = await lerAte(() => ev(`({ nivel: document.getElementById('ro-nivel').textContent, doppler: document.getElementById('ro-doppler').textContent, nariz: document.getElementById('ro-nariz').textContent, tunel: document.getElementById('ro-tunel').textContent, hud: document.getElementById('hud').textContent })`),
+  (l) => /dB\(A\)/.test(l.nivel) && /×/.test(l.doppler) && /kPa/.test(l.tunel) && /km\/h/.test(l.hud), 4000);
 confere(/dB\(A\)/.test(leit.nivel) && /×/.test(leit.doppler) && /kPa/.test(leit.tunel) && /km\/h/.test(leit.hud), 'leituras: nível, Doppler, túnel, HUD', leit);
 const rms = await ev(`document.getElementById('osc').dataset.rms`);
 confere(+rms > -70, 'som saindo (RMS no analisador)', `${rms} dBFS`);
@@ -213,121 +228,111 @@ if (foto) await fotografar(foto.replace(/\.png$/, '-tunel.png'));
 
 // ---- gimbal: atalho lateral, depois arrasta a cabeça na cena 3D
 await clicar('#atalhos [data-id="lateral"]');
-await espera(300);
-const g1 = (await ultimos('cena')).at(-1);
+const g1 = await ultimaAte('cena', (m) => m.ouv?.modo === 'gimbal' && m.ouv.gimbal.az === 90 && m.ouv.gimbal.r === 5, 4000);
 confereMsg(g1?.ouv?.modo === 'gimbal' && g1.ouv.gimbal.az === 90 && g1.ouv.gimbal.r === 5, 'atalho "lateral": gimbal 90°, 5 m', g1?.ouv);
-const sl = await ev(`[document.getElementById('az')?.value, document.getElementById('r')?.value]`);
+const sl = await lerAte(() => ev(`[document.getElementById('az')?.value, document.getElementById('r')?.value]`), (v) => v[0] === '90' && v[1] === '5', 4000);
 confere(sl[0] === '90' && sl[1] === '5', 'sliders do gimbal acompanham', sl);
 await slider('el', 30);
-await espera(200);
-confereMsg((await ultimos('cena')).at(-1)?.ouv.gimbal.el === 30, 'slider de elevação manda o ouvinte novo');
+confereMsg((await ultimaAte('cena', (m) => m.ouv?.gimbal?.el === 30, 4000))?.ouv.gimbal.el === 30, 'slider de elevação manda o ouvinte novo');
 // arrasto da cabeça: projeta a cabeça na tela e arrasta 60 px
 const cab = await ev(`(() => { const k = window.__passagem.cena.current; if (!k) return null; const v = k.cabeca.position.clone().project(k.camera); const r = k.canvas.getBoundingClientRect(); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height, az: ${P}.ouv.gimbal.az, r: ${P}.ouv.gimbal.r }; })()`);
 if (cab) {
   await mouse('down', cab.x, cab.y); await espera(60);
   for (let i = 1; i <= 6; i++) { await mouse('move', cab.x + 10 * i, cab.y + 4 * i); await espera(40); }
-  await mouse('up', cab.x + 60, cab.y + 24); await espera(250);
-  const depois = await ev(`({ az: ${P}.ouv.gimbal.az, r: ${P}.ouv.gimbal.r })`);
+  await mouse('up', cab.x + 60, cab.y + 24);
+  const depois = await lerAte(() => ev(`({ az: ${P}.ouv.gimbal.az, r: ${P}.ouv.gimbal.r })`), (d) => d.az !== cab.az || d.r !== cab.r, 4000);
   confere(depois.az !== cab.az || depois.r !== cab.r, 'arrastar a cabeça muda azimute/distância', { antes: [cab.az, cab.r], depois });
-  confereMsg((await ultimos('cena')).at(-1)?.ouv.gimbal.az === depois.az, 'o arrasto vai ao worklet');
+  confereMsg((await ultimaAte('cena', (m) => m.ouv?.gimbal?.az === depois.az, 4000))?.ouv.gimbal.az === depois.az, 'o arrasto vai ao worklet');
 } else confere(false, 'arrastar a cabeça (sem cena 3D)');
 // cabine (lei da massa)
 await clicar('#atalhos [data-id="cabine"]');
-await espera(200);
-confere((await texto('localEfetivo')).includes('cabine'), 'atalho "cabine": local automático vira cabine', await texto('localEfetivo'));
+const local = await lerAte(() => texto('localEfetivo'), (v) => !!v?.includes('cabine'), 4000);
+confere(!!local?.includes('cabine'), 'atalho "cabine": local automático vira cabine', local);
 // clique numa fonte: vira alvo e mostra a ficha
 await ev(`(() => { ${P}.escolherFonte('pantografo.0'); ${P}.setOuvinte({}, { alvo: 'pantografo.0' }); })()`);
-await espera(200);
-confere(/pantografo\.0/.test((await texto('ficha')) || ''), 'ficha da fonte escolhida', (await texto('ficha'))?.slice(0, 60));
+const ficha = await lerAte(() => texto('ficha'), (v) => /pantografo\.0/.test(v || ''), 4000);
+confere(/pantografo\.0/.test(ficha || ''), 'ficha da fonte escolhida', ficha?.slice(0, 60));
 await chip('modoOuvinte', 'Parado');
 
 // ---- troca de ambiente: resposta ao impulso nova e mensagem com o ambiente
 const durAntes = await ev(`${P}.audio.conv.buffer.duration`);
 await chip('ambiente', 'Estação');
-await espera(400);
-const amb2 = (await ultimos('cena')).at(-1);
-const durDepois = await ev(`${P}.audio.conv.buffer.duration`);
+const amb2 = await ultimaAte('cena', (m) => m.amb?.id === 'estacao', 4000);
+const durDepois = await lerAte(() => ev(`${P}.audio.conv.buffer.duration`), (d) => d !== durAntes, 4000);
 confereMsg(amb2?.amb?.id === 'estacao' && amb2.amb.solo.tipo === 'concreto', 'ambiente estação mandado (solo concreto)', amb2?.amb?.id);
 confere(durDepois !== durAntes, 'resposta ao impulso trocada', { antes: durAntes, depois: durDepois });
 await chip('ambiente', 'Céu aberto');
 await slider('lateral', 7.5);
-await espera(200);
-confereMsg((await ultimos('cena')).at(-1)?.traj.lateral === 7.5, 'slider da lateral manda a trajetória');
+confereMsg((await ultimaAte('cena', (m) => m.traj?.lateral === 7.5, 4000))?.traj.lateral === 7.5, 'slider da lateral manda a trajetória');
 // trem com menos vagões: monta de novo
 await slider('N', 6);
-await espera(400);
-const port2 = (await ultimos('portador')).at(-1);
+const port2 = await ultimaAte('portador', (m) => m.config?.N === 6, 8000);
 confereMsg(port2?.config.N === 6, 'N = 6 vagões monta o trem de novo', port2?.config.N);
-confere((await ev(`${P}.corpo.comprimento`)) === 149.5, 'comprimento do corpo com 6 vagões', await ev(`${P}.corpo.comprimento`));
+const comp6 = await lerAte(() => ev(`${P}.corpo.comprimento`), (c) => c === 149.5, 4000);
+confere(comp6 === 149.5, 'comprimento do corpo com 6 vagões', comp6);
 // passa de novo a céu aberto, repetindo
 await clicar('#repetir');
 await clicar('#ignicao');
 if (!(await ev(`${P}.andando`))) await clicar('#ignicao');
-await espera(3500);
-const tc = await tele();
+const tc = await lerAte(tele, (x) => !!x && x.v > 90 && x.n > 30, 20000);
 confere(tc && tc.v > 90 && tc.n > 30, 'passagem a céu aberto andando', tc);
 // câmera: os três modos
-await clicar('.camera [data-cam="corpo"]'); await espera(300);
-await clicar('.camera [data-cam="livre"]'); await espera(300);
-confere((await ev(`window.__passagem.cena.current?.modo`)) === 'livre', 'câmera livre');
+await clicar('.camera [data-cam="corpo"]');
+await lerAte(() => ev(`window.__passagem.cena.current?.modo`), (m) => m === 'corpo', 3000);
+await clicar('.camera [data-cam="livre"]');
+const cam = await lerAte(() => ev(`window.__passagem.cena.current?.modo`), (m) => m === 'livre', 3000);
+confere(cam === 'livre', 'câmera livre');
 await clicar('.camera [data-cam="ouvinte"]');
 // helicóptero
 await chip('portador', 'Helicóptero');
-await espera(800);
-const port3 = (await ultimos('portador')).at(-1);
+// (o portador sai depois de a página calibrar o motor na thread principal: segundos, com a máquina carregada)
+const port3 = await ultimaAte('portador', (m) => m.tipo === 'rotor', 25000);
+await lerAte(() => ev(`${P}.traj.altitude`), (a) => a === 150, 4000);
 confereMsg(port3?.tipo === 'rotor' && port3.motor?.familia === 'pistao' && port3.motor.cfg.id === 'r44', 'helicóptero montado com o O-540 do R44 (família aviação do Ronco)', port3 && { tipo: port3.tipo, motor: port3.motor?.familia, id: port3.motor?.cfg.id });
 confere((await ev(`${P}.traj.altitude`)) === 150, 'padrão do helicóptero: altitude 150 m');
 // ---- carro na rua a 6 m: Camaro SS (Ronco adaptado), 3ª, pé no fundo, 108 km/h
 await clicar('#ignicao');
 if (await ev(`${P}.andando`)) await clicar('#ignicao');
 await clicar('.preset[data-id="carro-rua"]');
-await espera(600);
-const portC = (await ultimos('portador')).at(-1);
+const portC = await ultimaAte('portador', (m) => m.tipo === 'carro' && m.motor?.cfg?.id === 'muscle', 25000);
 confereMsg(portC?.tipo === 'carro' && portC.motor?.familia === 'pistao' && portC.motor.cfg.id === 'muscle' && portC.motor.cfg.kAbs > 0, 'carro montado com o motor do Ronco calibrado na página (kAbs)', portC && { tipo: portC.tipo, motor: portC.motor?.familia, id: portC.motor?.cfg.id, kAbs: portC.motor?.cfg.kAbs });
-const secC = await ev(`[...document.querySelectorAll('#controls h2')].map((h) => h.textContent)`);
-confere(secC.includes('Motor') && (await ev(`document.getElementById('motorPreset')?.options.length`)) > 50, 'seção Motor com os presets do Ronco', secC);
+const secC = await lerAte(() => ev(`[...document.querySelectorAll('#controls h2')].map((h) => h.textContent)`), (v) => v.includes('Motor'), 4000);
+confere(secC.includes('Motor') && (await lerAte(() => ev(`document.getElementById('motorPreset')?.options.length`), (n) => n > 50, 4000)) > 50, 'seção Motor com os presets do Ronco', secC);
 await clicar('#ignicao');
 let maxC = -1e9, rpmC = 0, vC = 0, marchaC = 0;
-const tc0 = Date.now();
-while (Date.now() - tc0 < 9000) {
-  const r = await ev(`(() => { const t = ${P}.tele; const m = window.__passagem.med; return t && { dBA: m.dBA, rpm: t.portador.rpm, v: t.portador.v, marcha: t.portador.marcha }; })()`);
-  if (r) { if (Number.isFinite(r.dBA)) maxC = Math.max(maxC, r.dBA); rpmC = Math.max(rpmC, r.rpm || 0); vC = Math.max(vC, r.v); marchaC = r.marcha; }
-  await espera(60);
-}
+await zeraMax();
+await janela(() => ev(`(() => { const t = ${P}.tele; const m = window.__passagem.med; return t && { dBA: m.maxA, rpm: t.portador.rpm, v: t.portador.v, marcha: t.portador.marcha }; })()`),
+  (r) => { if (Number.isFinite(r.dBA)) maxC = Math.max(maxC, r.dBA); rpmC = Math.max(rpmC, r.rpm || 0); vC = Math.max(vC, r.v); marchaC = r.marcha; },
+  () => Math.abs(vC - 30) < 0.5 && marchaC === 3 && rpmC > 3500 && maxC > 80, 9000, 30000, 60);
 confere(Math.abs(vC - 30) < 0.5 && marchaC === 3 && rpmC > 3500 && rpmC < 4500, 'carro a 108 km/h em 3ª com o motor preso às rodas', { v: vC, marcha: marchaC, rpm: Math.round(rpmC) });
 confere(maxC > 80 && maxC < 100, 'nível no ouvido na passagem do carro (direto + reverberação)', `${maxC.toFixed(1)} dB(A)`);
 await clicar('#ignicao');
 if (await ev(`${P}.andando`)) await clicar('#ignicao');
 // ---- RX-7 FD na rua (rotativo adaptado, etapa 4): 3ª, pé no fundo, 100 km/h
 await clicar('.preset[data-id="rx7-rua"]');
-await espera(800);
-const portR = (await ultimos('portador')).at(-1);
+const portR = await ultimaAte('portador', (m) => m.tipo === 'carro' && m.motor?.cfg?.id === 'rx7fd', 25000);
 confereMsg(portR?.tipo === 'carro' && portR.motor?.familia === 'rotativo' && portR.motor.cfg.id === 'rx7fd' && portR.motor.cfg.kAbs > 0, 'carro montado com o Wankel do RX-7 calibrado na página (kAbs)', portR && { tipo: portR.tipo, motor: portR.motor?.familia, id: portR.motor?.cfg.id, kAbs: portR.motor?.cfg.kAbs });
 await clicar('#ignicao');
 let maxR = -1e9, rpmR = 0;
-const tr0 = Date.now();
-while (Date.now() - tr0 < 8000) {
-  const r = await ev(`(() => { const t = ${P}.tele; const m = window.__passagem.med; return t && { dBA: m.dBA, rpm: t.portador.rpm }; })()`);
-  if (r) { if (Number.isFinite(r.dBA)) maxR = Math.max(maxR, r.dBA); rpmR = Math.max(rpmR, r.rpm || 0); }
-  await espera(60);
-}
+await zeraMax();
+await janela(() => ev(`(() => { const t = ${P}.tele; const m = window.__passagem.med; return t && { dBA: m.maxA, rpm: t.portador.rpm }; })()`),
+  (r) => { if (Number.isFinite(r.dBA)) maxR = Math.max(maxR, r.dBA); rpmR = Math.max(rpmR, r.rpm || 0); },
+  () => rpmR > 4300 && maxR > 75, 8000, 30000, 60);
 confere(rpmR > 4300 && rpmR < 5300, 'RX-7 a 100 km/h em 3ª com o motor preso às rodas (≈ 4 790 rpm)', Math.round(rpmR));
 confere(maxR > 75 && maxR < 105, 'nível no ouvido na passagem do RX-7', `${maxR.toFixed(1)} dB(A)`);
 await clicar('#ignicao');
 if (await ev(`${P}.andando`)) await clicar('#ignicao');
 // ---- locomotiva EMD em N8 (diesel adaptado, governador do motor, carga do portador)
 await clicar('.preset[data-id="locomotiva-patio"]');
-await espera(600);
-const portL = (await ultimos('portador')).at(-1);
+const portL = await ultimaAte('portador', (m) => m.tipo === 'locomotiva' && m.motor?.familia === 'diesel', 25000);
 confereMsg(portL?.tipo === 'locomotiva' && portL.motor?.familia === 'diesel' && portL.motor.cfg.uso === 'locomotiva' && portL.comando?.notch === 8, 'locomotiva montada com o EMD 710 (uso locomotiva) e notch 8', portL && { tipo: portL.tipo, motor: portL.motor?.familia, uso: portL.motor?.cfg.uso, notch: portL.comando?.notch });
 await clicar('#ignicao');
 let rpmL = 0, maxL = -1e9;
-const tl0 = Date.now();
-while (Date.now() - tl0 < 16000) {
-  const r = await ev(`(() => { const t = ${P}.tele; const m = window.__passagem.med; return t && { dBA: m.dBA, rpm: t.portador.rpmEixo }; })()`);
-  if (r) { if (Number.isFinite(r.dBA)) maxL = Math.max(maxL, r.dBA); rpmL = Math.max(rpmL, r.rpm || 0); }
-  await espera(80);
-}
+await zeraMax();
+// (só conta a telemetria da locomotiva, que tem o notch: as primeiras leituras ainda podem ser as do RX-7)
+await janela(() => ev(`(() => { const t = ${P}.tele; const m = window.__passagem.med; return t && t.portador.notch !== undefined && { dBA: m.maxA, rpm: t.portador.rpmEixo }; })()`),
+  (r) => { if (Number.isFinite(r.dBA)) maxL = Math.max(maxL, r.dBA); rpmL = Math.max(rpmL, r.rpm || 0); },
+  () => rpmL > 840 && maxL > 75, 16000, 40000, 80);
 confere(rpmL > 840 && rpmL < 920, 'locomotiva sobe ao notch 8 (EMD 710: 904 rpm)', Math.round(rpmL));
 confere(maxL > 75 && maxL < 110, 'nível no ouvido com a locomotiva', `${maxL.toFixed(1)} dB(A)`);
 await clicar('#ignicao');
@@ -336,10 +341,10 @@ if (await ev(`${P}.andando`)) await clicar('#ignicao');
 await chip('portador', 'Trem');
 await slider('ur', 30); await slider('temperatura', -5);
 await clicar('#padrao');
-await espera(300);
-const pd = await ev(`({ ur: ${P}.ar.ur, t: ${P}.ar.temperatura, lat: ${P}.traj.lateral, v: ${P}.vKmh, amb: ${P}.ambiente, N: ${P}.trem.N, comp: ${P}.traj.comprimento })`);
+const pd = await lerAte(() => ev(`({ ur: ${P}.ar.ur, t: ${P}.ar.temperatura, lat: ${P}.traj.lateral, v: ${P}.vKmh, amb: ${P}.ambiente, N: ${P}.trem.N, comp: ${P}.traj.comprimento })`),
+  (d) => d.ur === 60 && d.t === 20 && d.lat === 3 && d.v === 350 && d.amb === 'tunel' && d.N === 10 && d.comp === 3000, 6000);
 confere(pd.ur === 60 && pd.t === 20 && pd.lat === 3 && pd.v === 350 && pd.amb === 'tunel' && pd.N === 10 && pd.comp === 3000, 'voltar ao padrão (CENA 3.1)', pd);
-const ar = (await ultimos('ar')).at(-1);
+const ar = await ultimaAte('ar', (m) => m.ur === 60 && m.temperatura === 20, 4000);
 confereMsg(ar?.ur === 60 && ar?.temperatura === 20, 'ar padrão mandado');
 await clicar('#ignicao');
 if (foto) await fotografar(foto);

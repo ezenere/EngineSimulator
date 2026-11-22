@@ -7,7 +7,8 @@
 //   node tools/rotativo-navegador.mjs [url da rotativo.html] [chromium|firefox] [porta]
 //   sem url: serve o dist/ em http://127.0.0.1:<porta+1>/data/engine/ (rode npm run build antes)
 //
-// CHROMIUM=/caminho e FIREFOX=/caminho trocam os executáveis; SHOT=arquivo.png grava uma captura (Chromium);
+// CHROMIUM=/caminho e FIREFOX=/caminho trocam os executáveis; MUDO=1 roda sem tocar nas caixas (o som continua sendo
+// medido); SHOT=arquivo.png grava uma captura (Chromium);
 // RESERVA=1 bloqueia o AudioWorklet para testar a reserva na thread principal. Sai com código ≠ 0 se algo falhar.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -21,6 +22,10 @@ let url = process.argv[2];
 const nav = process.argv[3] || 'chromium';
 const porta = +(process.argv[4] || (nav === 'firefox' ? 9690 : 9570));
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+// MUDO=1: o teste roda sem tocar nas caixas (o áudio continua rodando e sendo medido no analisador): --mute-audio no
+// Chromium; no Firefox, media.volume_scale 0 (o fluxo vai em silêncio ao servidor de áudio)
+const MUDO_CR = process.env.MUDO ? ['--mute-audio'] : [];
+const MUDO_FF = process.env.MUDO ? 'user_pref("media.volume_scale", "0.0");\n' : '';
 const perfil = fs.mkdtempSync(path.join(os.tmpdir(), `rotativo-${nav}-`));
 const logs = [];
 let falhas = 0;
@@ -46,7 +51,7 @@ if (!url || url === 'dist') {
 // ------------------------------------------------------------------ drivers (os de ronco-navegador.mjs)
 async function abrirChromium() {
   const bin = process.env.CHROMIUM || '/usr/bin/chromium';
-  const proc = spawn(bin, ['--headless=new', `--remote-debugging-port=${porta}`, '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check', `--user-data-dir=${perfil}`, 'about:blank'], { stdio: 'ignore' });
+  const proc = spawn(bin, ['--headless=new', `--remote-debugging-port=${porta}`, '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check', ...MUDO_CR, `--user-data-dir=${perfil}`, 'about:blank'], { stdio: 'ignore' });
   let alvo;
   for (let i = 0; i < 50 && !alvo; i++) { await espera(200); try { alvo = (await (await fetch(`http://127.0.0.1:${porta}/json`)).json()).find((t) => t.type === 'page'); } catch {} }
   const ws = new WebSocket(alvo.webSocketDebuggerUrl);
@@ -75,7 +80,7 @@ async function abrirChromium() {
 
 async function abrirFirefox() {
   const bin = process.env.FIREFOX || '/usr/bin/firefox';
-  fs.writeFileSync(path.join(perfil, 'user.js'), 'user_pref("media.autoplay.default", 0);\nuser_pref("media.autoplay.blocking_policy", 0);\n');
+  fs.writeFileSync(path.join(perfil, 'user.js'), 'user_pref("media.autoplay.default", 0);\nuser_pref("media.autoplay.blocking_policy", 0);\n' + MUDO_FF);
   const proc = spawn(bin, ['--headless', '--remote-debugging-port', String(porta), '--profile', perfil, '--no-remote', '--width', '1400', '--height', '900'], { stdio: 'ignore' });
   let ws;
   for (let i = 0; i < 60; i++) { await espera(300); try { ws = new WebSocket(`ws://127.0.0.1:${porta}/session`); await new Promise((ok, err) => { ws.onopen = ok; ws.onerror = err; }); break; } catch { ws = null; } }
@@ -111,11 +116,18 @@ const chip = (grupo, texto) => ev(`(() => { const el = [...document.querySelecto
 const texto = (sel) => ev(`document.querySelector(${JSON.stringify(sel)})?.textContent ?? null`);
 const tele = () => ev(`(() => { const k = window.__rotativo; const t = k.tele; return { rpm: t.rpm, state: t.state, theta: t.theta, cyc: t.cyc, rotores: t.rotores, camara: t.camara, estouros: t.estouros, tEscape: t.tEscape, fHC: t.fHC, gear: t.gear, kmh: t.kmh, Nr: t.Nr, palhetas: t.palhetas, fPalheta: t.fPalheta, rpmHospedeiro: t.rpmHospedeiro, trailing: t.trailing, janelas: t.janelas, modo: k.audio?.modo, sr: k.audio?.ctx.sampleRate, estadoCtx: k.audio?.ctx.state, idade: performance.now() - (t.t || 0) }; })()`);
 const rms = () => ev(`(() => { const an = window.__rotativo.audio?.analyser; if (!an) return -999; const x = new Float32Array(an.fftSize); an.getFloatTimeDomainData(x); let s = 0; for (const v of x) s += v * v; return 10 * Math.log10(s / x.length + 1e-20); })()`);
-const esperaAte = async (f, ms = 8000) => { const t0 = Date.now(); let v; while (Date.now() - t0 < ms) { v = await f(); if (v) return v; await espera(250); } return v; };
+// Esperas: em vez de dormir um tempo fixo depois de mexer num controle (com a máquina carregada a página ainda não
+// respondeu), lê até a condição valer ou o limite passar e devolve a última leitura, que a conferência julga e mostra.
+// `min` espera pelo menos isso antes de olhar, onde a medida é de um estado assentado (a lenta que serve de referência).
+// O limite é folgado: só pesa quando algo está errado.
+const lerAte = async (f, ok, ms = 6000, min = 0) => { const t0 = Date.now(); if (min) await espera(min); let v; for (;;) { v = await f(); if (ok(v) || Date.now() - t0 >= ms) return v; await espera(150); } };
+const esperaAte = async (f, ms = 8000) => (await lerAte(f, Boolean, ms)) || null;
+const teleAte = (ok, ms = 8000, min = 0) => lerAte(tele, ok, ms, min);
+const textoAte = (sel, ok, ms = 4000) => lerAte(() => texto(sel), (v) => v != null && ok(v), ms).then((v) => v ?? '');
 
 try {
   await b.ir(url);
-  await espera(2500);
+  await esperaAte(() => ev(`document.readyState === 'complete' && !!window.__rotativo && !!document.querySelector('.preset[aria-pressed=true]')`), 15000);
   confere((await ev('document.title')) === 'Rotativos', 'título');
   const ini = await ev(`({ familias: document.querySelectorAll('.fam').length, presets: document.querySelectorAll('.preset').length, marcado: document.querySelector('.preset[aria-pressed=true]')?.dataset.id, placa: document.querySelector('.plate')?.textContent, secoes: [...document.querySelectorAll('.controls h2')].map((h) => h.textContent), sliders: document.querySelectorAll('.controls input[type=range]').length, anel: !!document.getElementById('anel'), pAlfa: !!document.getElementById('pAlfa') })`);
   confere(ini.familias === 6 && ini.presets === 5 && ini.marcado === 'rx7fd', 'presets: 6 famílias, 5 Mazda de rua, RX-7 FD marcado', JSON.stringify([ini.familias, ini.presets, ini.marcado]));
@@ -126,72 +138,66 @@ try {
 
   // liga o FD
   await clicar('.bar .ignition');
-  let t = await esperaAte(async () => { const x = await tele(); return x.state === 'run' && x.rpm > 500 ? x : null; }, 10000);
+  let t = await esperaAte(async () => { const x = await tele(); return x.state === 'run' && x.rpm > 500 ? x : null; }, 20000);
   if (process.env.RESERVA) confere(t?.modo === 'script', 'áudio pela reserva (ScriptProcessorNode)', `${t?.modo}`);
   else confere(t?.modo === 'worklet', 'áudio pelo AudioWorklet (não a reserva)', `${t?.modo} · ${t?.sr} Hz · ${t?.estadoCtx}`);
   confere(!!t, 'pegou', t ? `${Math.round(t.rpm)} rpm` : 'não pegou');
-  await espera(1500);
-  t = await tele();
+  // (a lenta medida aqui é a referência do "em carga soa mais alto": os 1,5 s de antes viram o mínimo)
+  t = await teleAte((x) => x.cyc === 1080 && x.rotores === 2 && !!x.camara && x.idade < 500, 8000, 1500);
   confere(t.cyc === 1080 && t.rotores === 2 && t.camara && t.camara.a >= 0 && t.camara.a < 1080, 'telemetria do rotativo: ciclo de 1 080°, 2 rotores, câmara', JSON.stringify({ cyc: t.cyc, rotores: t.rotores, a: Math.round(t.camara?.a) }));
   confere(t.idade < 500 && t.theta >= 0 && t.theta < 1080, 'eixo no anel de 1 080°', `θ ${Math.round(t.theta)}°`);
-  confere(/Hz/.test(await texto('#roFreqRot')) && /°C/.test(await texto('#roGas')), 'leituras (ignição, gás de escape)', `${await texto('#roFreqRot')} · ${await texto('#roGas')}`);
+  const lr = await lerAte(async () => [await texto('#roFreqRot'), await texto('#roGas')], (l) => /Hz/.test(l[0]) && /°C/.test(l[1]), 4000);
+  confere(/Hz/.test(lr[0]) && /°C/.test(lr[1]), 'leituras (ignição, gás de escape)', lr.join(' · '));
   const lenta = await rms();
   confere(lenta > -60, 'som na saída em lenta', `${lenta.toFixed(1)} dBFS`);
 
   // acelera (a medida fica antes do corte de giro: em ponto morto o FD chega ao corte em ~1 s)
   await tecla('KeyW');
-  await espera(500);
-  t = await tele();
+  t = await teleAte((x) => x.rpm > 2500, 6000);
   const alto = await rms();
   confere(t.rpm > 2500, 'W: acelera', `${Math.round(t.rpm)} rpm`);
   confere(alto > lenta + 3, 'em carga soa mais alto', `${alto.toFixed(1)} vs ${lenta.toFixed(1)} dBFS`);
   await tecla('KeyW', 'keyup');
-  await espera(1500);
+  await teleAte((x) => x.rpm < 1500, 10000); // volta perto da lenta antes de engatar
   // câmbio
   await tecla('KeyE');
-  await espera(500);
-  confere(/^1$/.test(await texto('#gearRead')), 'E engata a 1ª', await texto('#gearRead'));
+  const g1 = await textoAte('#gearRead', (v) => /^1$/.test(v));
+  confere(/^1$/.test(g1), 'E engata a 1ª', g1);
   await tecla('KeyQ');
   // ambiente e microfone
   await clicar('#env .chip:nth-child(3)');
-  await espera(400);
-  confere((await ev(`window.__rotativo.estado.params.env`)) === 'tunnel', 'ambiente Túnel');
+  confere((await lerAte(() => ev(`window.__rotativo.estado.params.env`), (v) => v === 'tunnel', 3000)) === 'tunnel', 'ambiente Túnel');
   await tecla('KeyC');
-  await espera(300);
-  confere((await ev(`window.__rotativo.audio.ouvinte`)) === 'int', 'C: microfone na cabine');
+  confere((await lerAte(() => ev(`window.__rotativo.audio.ouvinte`), (v) => v === 'int', 3000)) === 'int', 'C: microfone na cabine');
   await clicar('#env .chip:nth-child(1)');
   await tecla('KeyC'); await tecla('KeyC'); await tecla('KeyC');
   // janelas, velas, pré-silencioso
   await chip('#admissao', 'Periférica');
-  await espera(1200);
-  confere((await ev(`window.__rotativo.estado.spec.janelas.admissao`)) === 'periferica', 'janela de admissão periférica');
+  confere((await lerAte(() => ev(`window.__rotativo.estado.spec.janelas.admissao`), (v) => v === 'periferica', 3000)) === 'periferica', 'janela de admissão periférica');
   await chip('#trailing', 'Desligadas');
-  await espera(800);
-  t = await tele();
+  t = await teleAte((x) => x.trailing === false, 6000);
   confere(t.trailing === false, 'velas trailing desligadas (telemetria)', String(t.trailing));
   await chip('#presilencioso', 'Retirado');
-  await espera(1500);
+  await espera(1500); // (o motor não pode apagar com o escape novo: a janela de observação é o teste)
   t = await tele();
   confere(t.state === 'run', 'pré-silencioso retirado com o motor funcionando', `${t.state} ${Math.round(t.rpm)} rpm`);
 
   // 787B
   await clicar('.fam:nth-child(2)');
   await clicar('.preset[data-id=r26b]');
-  await espera(2500);
-  t = await esperaAte(async () => { const x = await tele(); return x.rotores === 4 ? x : null; }, 8000);
+  t = await esperaAte(async () => { const x = await tele(); return x.rotores === 4 ? x : null; }, 15000);
   confere(t?.rotores === 4, '787B: 4 rotores', JSON.stringify(t?.janelas));
-  confere(/^Wankel 4 rotores/.test(await texto('.plate')), 'placa do 787B', await texto('.plate'));
+  const p787 = await textoAte('.plate', (v) => /^Wankel 4 rotores/.test(v));
+  confere(/^Wankel 4 rotores/.test(p787), 'placa do 787B', p787);
   // AE50R com o rotor
   await clicar('.fam:nth-child(4)');
   await clicar('.preset[data-id=ae50r]');
-  await espera(2000);
-  const sec = await ev(`[...document.querySelectorAll('.controls h2')].map((h) => h.textContent).join(',')`);
+  const sec = await lerAte(() => ev(`[...document.querySelectorAll('.controls h2')].map((h) => h.textContent).join(',')`), (v) => v.includes('Rotor') && !v.includes('Transmissão'), 5000);
   confere(sec.includes('Rotor') && !sec.includes('Transmissão'), 'AE50R: seção do rotor, sem transmissão', sec);
   // X Mini
   await clicar('.fam:nth-child(5)');
   await clicar('.preset[data-id=xmini]');
-  await espera(2500);
-  t = await tele();
+  t = await teleAte((x) => x.cyc === 720, 15000);
   confere(t.cyc === 720, 'X Mini: ciclo de 720°', String(t.cyc));
   confere(/aproximação/i.test(await ev(`document.querySelector('.controls').textContent`)), 'etiqueta "aproximação" no painel');
 
@@ -207,8 +213,7 @@ try {
   const pal = await rms();
   confere(pal > -50, 'som das palhetas', `${pal.toFixed(1)} dBFS`);
   for (let i = 0; i < 5; i++) await tecla('BracketRight');
-  await espera(1200);
-  const t2 = await tele();
+  const t2 = await teleAte((x) => x.rpm < 0.85 * (t?.rpm || 1), 8000);
   confere(t2.rpm < 0.85 * (t?.rpm || 1), '] carrega a ferramenta: a rotação cai', `${Math.round(t2.rpm)} rpm`);
   await tecla('KeyW', 'keyup');
   // arranque a ar
