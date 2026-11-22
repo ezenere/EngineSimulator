@@ -131,6 +131,8 @@ export class RedeEscape {
   rngT = new RNG(0x7b0e); kT: number; tb1 = 0; tb2 = 0; lpT = new Biquad();
   /** variação de chuff a chuff (água arrastada, turbulência): o DSP sorteia ±1,3 dB em cada abertura de escape */
   gAlvo = 1; gVar = 1; kVar: number;
+  /** desvio relativo da turbulência da mistura (as ferramentas o zeram para isolar o "hoot" do pulso) */
+  sigmaTurb = SIGMA_TURB;
   /** (ferramentas) impulso de pressão na base da chaminé e de vazão na caixa, numa amostra */
   impulso = 0; massaExtra = 0;
   // passa-alta de 4 polos em 20 Hz no canal (7.1: o Helmholtz só na telemetria; com 2 polos sobravam −29 dB dele)
@@ -216,7 +218,7 @@ export class RedeEscape {
     this.tb1 += this.kT * (t - this.tb1); this.tb2 += this.kT * (this.tb1 - this.tb2);
     const tb = this.lpT.run(this.tb2);
     this.gVar += this.kVar * (this.gAlvo - this.gVar);
-    const dP = this.mix2 * (1 + SIGMA_TURB * 3 * tb) * this.gVar + this.impulso;
+    const dP = this.mix2 * (1 + this.sigmaTurb * 3 * tb) * this.gVar + this.impulso;
     this.impulso = 0;
     this.dPJato = dP;
     // caixa (volume) ligada à base da chaminé, implícita: a vazão na chaminé é (p + ΔP − 2·in0)/Z;

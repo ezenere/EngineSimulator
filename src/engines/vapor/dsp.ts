@@ -166,6 +166,8 @@ export class VaporDSP implements Motor {
   tirR!: Ruido;
   sM = new Float64Array(2); cM = new Float64Array(2); sPhi = new Float64Array(0); cPhi = new Float64Array(0);
   condEnv = 0; condEnv2 = 0; kCondEnv = 0; momS = 0; kMom = 0;
+  /** ganho do sopro da tiragem e do chiado do condensador (unidades da linha; as ferramentas os zeram para isolar a fonte) */
+  gTiragem = 0; gCondensador = 0;
 
   constructor(fs: number) { this.fs = fs; this.rng = new RNG(1); }
 
@@ -292,6 +294,7 @@ export class VaporDSP implements Motor {
     // bandas de perto (3.3); o choque fica 6 dB acima da mistura quando pleno (controle "Ar")
     this.jato.gMistura = (K_MISTURA * 0.0177) / this.rede.aBico;
     this.jato.gChoque = 0.9 * this.jato.gMistura;
+    this.gTiragem = this.jato.gMistura * K_TIRAGEM; this.gCondensador = K_CONDENSADOR * this.jato.gMistura;
     this.lpCond.lp(this.fs, 300, 0.7071); this.lpCond2.lp(this.fs, 300, 0.7071); this.kCondEnv = onePole(this.fs, 5); this.kMom = onePole(this.fs, 0.5);
     // (tiragem: 200–1500 Hz; o 1.4 diz 300–1500)
     this.tirR = new Ruido(P.semente ^ 0x7123, [new Biquad().hp(this.fs, 200, 0.7071), new Biquad().lp(this.fs, 1500, 0.7071), new Biquad().lp(this.fs, 4000, 0.7071)]);
@@ -609,14 +612,14 @@ export class VaporDSP implements Motor {
       // subsônico, a tiragem sopra menos e o espectro escurece, 3.3)
       this.momS += this.kMom * (rede.mJato * rede.mach - this.momS);
       const mr = this.momS / P.evaporacaoMax;
-      if (!cond) jat += this.jato.gMistura * K_TIRAGEM * mr * mr * this.tirR.amostra();
+      if (!cond) jat += this.gTiragem * mr * mr * this.tirR.amostra();
       let chamine = tom + jat * mixAr;
       if (cond) {
         // condensador e abafador: a rede só recebe o pulso abafado (passa-baixa de 300 Hz) e o que se ouve é o chiado do
         // vapor entrando no condensador, com a envoltória alisada pelo volume dele (2 polos em 5 Hz): um ronronar de 2–4 dB
         this.condEnv += this.kCondEnv * (mCond - this.condEnv);
         this.condEnv2 += this.kCondEnv * (this.condEnv - this.condEnv2);
-        chamine = 0.03 * this.lpCond2.run(this.lpCond.run(chamine)) + K_CONDENSADOR * this.jato.gMistura * this.condEnv2 * this.tirR.amostra();
+        chamine = 0.03 * this.lpCond2.run(this.lpCond.run(chamine)) + this.gCondensador * this.condEnv2 * this.tirR.amostra();
       }
       const sopr = this.soprador.amostra(this.sopradorLigado * (1 - this.reg));
       S[ch.chamine][k] = gChuff * chamine + gSopr * sopr;
