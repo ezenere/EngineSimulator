@@ -34,7 +34,7 @@ export function sondarNivelRotativo(cfg: any, fs: number) {
   const abs = !!cfg.nivelEscape;
   const t = new RotativoDSP(fs);
   const ref = abs ? { ...cfg } : { ...cfg, escape: { ...ESCAPE_REF, Lp: cfg.escape?.Lp ?? 0.3, Dp: cfg.escape?.Dp ?? 50 }, muffler: 'sport', pipeD: 2.5, turbo: cfg.turbo ? { ...cfg.turbo, sequencial: false } : undefined };
-  t.setConfig({ ...ref, gain: 1, mkIdle: 1 }, false);
+  t.setConfig({ ...ref, gain: 1, mkIdle: 1, ...t.refMedios(cfg) }, false); // (carcaça e batida fora da sonda de nível, como no Ronco)
   t.state = 'run'; t.lockOmega = true; t.tempMode = 'fixed'; t.tempSet = 90; t.coolant = 90; t.runT = 100;
   t.omega = (cfg.redline * 0.55 * TAU) / 60; t.rpmAvg = cfg.redline * 0.55;
   t.thrTarget = 1; t.thr = 1; t.turboW = 0.6; t.boost = cfg.boost * 0.3; t.maxBoost = cfg.boost * 0.4;

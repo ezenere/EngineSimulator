@@ -1746,14 +1746,77 @@ A pós-queima na boca era ruído puro (branco de 400 Hz a 3 kHz) injetado a 6 cm
 
 **Sem gravação casada** (medidos só pelo orçamento e pelos portões): X Mini e XTS-210, AE50R, AR741, MidWest, Mistral, RX-3, Cosmo 110S e RX-8 de 4 janelas (neles o jato da ponta passou a ler a razão de áreas ponteira/tubo no lugar da área absoluta: nos tubos finos, onde ele era 64–99% do agudo, cai 8–24 dB); e o motor de palhetas (outro sintetizador, que esta rodada não tocou; as duas gravações de retífica do acervo ficaram por comparar). O Eunos Cosmo em carga só tem gravação de cabine sem som periódico (fração periódica 0,07: vento e rolagem), que não serve de alvo.
 
+### Segunda passada: carcaça do escape, batida e trocas de configuração (novembro de 2026)
+
+Os dois mecanismos de médios do motor-base (Ronco → "Médios: carcaça do escape e batida periódica") ligados nos Rotativos, o jato num caminho só e a lenta que afundava a cada troca de configuração. Renders e painéis em `referencias/_sim/rotativo/p2-*`; painéis reduzidos da passagem do RX-8 em [`docs/ouvido/rotativo/`](ouvido/rotativo/).
+
+**O RX-8 em giro alto: o que a gravação tem.** A primeira rodada escreveu que faltavam "20 dB ou mais de 1 a 6 kHz, em linhas". O nível falta; as linhas, não. Nas aceleradas paradas de fora com o escape original (`rx8-original-lenta-aceleradas.wav`, 8–15 s) as bandas de 1–2,5 kHz e 2,5–6 kHz são leito liso (96–100% da banda; o espectrograma só mostra harmônicos até ~700 Hz). Na passagem (`rx8-passagem-original.wav`, 9–11 s, ~7 070 rpm com o Doppler) as linhas de 1–2,5 kHz ficam em −13,9 dB rel. 150–400 Hz e o nível da banda em −6,4: a diferença é rolagem, vento e sopro. O simulado em plena carga tinha as linhas em −16,9: faltavam 3 dB de tom. O resto do que a gravação tem ali é ar, que o viés do simulador manda não repor. (O cruzeiro a bordo, `rx8-original-aceleracao.wav` 27–39 s, é quase só vento e rolagem, fração periódica 0,13: não serve de alvo de timbre.)
+
+**Carcaça do escape** (`carcaca`, em dB; controle "Carcaça do escape" em Escapamento). O `buildExhaust` do rotativo preenche `carcSrc`, um tubo por boca: o que entra no abafador daquela saída (depois do catalisador e do pré-silencioso); no megafone, que não tem caixa, o que entra no cone (o direto e o megafone irradiam 0,3×, a escala do motor-base). As sondas (`calibrate`, `measurePower`, `sondarNivelRotativo`) rodam sem ela (`refMedios`): o controle muda o volume de verdade. Nível escolhido pela régua, no RX-8 em plena carga a 7 070 rpm, de fora:
+
+| `carcaca` | linhas de 1–2,5 kHz (gravação −13,9) | nível de 1–2,5 kHz (gravação −6,4) | 2,5–6 kHz (gravação −14,6) | FC na lenta, 1–2,5 kHz (gravação −35,2) | ponteira de 20 mm: queda em plena carga |
+|---|---|---|---|---|---|
+| sem | −16,9 | −16,6 | −28,3 | −36,8 | −18,1 dB |
+| **−16 (padrão)** | **−12,6** | −12,4 | −26,6 | −34,8 | −13,9 dB |
+| −12 | ≈ −10 | −10,0 | −25,4 | −33,7 | −10,9 dB |
+| −10 | −8,7 | −8,5 | −24,5 | −32,9 | −9,1 dB |
+| −7 | −6,5 | −6,3 | −23,2 | −31,6 | — |
+| 0 (referência dos carros do Ronco) | +0,2 | +0,4 | −17,5 | — | — |
+
+O padrão ficou em **−16 dB**: as linhas do simulado ficam a 1,3 dB das da gravação, a lenta do FC fica no nível da gravação casada (−34,8 contra −35,2) e a ponteira fina continua amolecendo o pulso em carga. A carcaça não passa pela ponteira: com −12 a queda em plena carga encolhe de 18 para 11 dB e a medida "pelo menos 6 dB a mais em carga que na lenta" do teste deixa de valer; com −10 o nível da banda chega perto do da gravação (−8,5 contra −6,4), em linhas onde ela tem leito. O controle vai até +12 para quem quiser mais motor nos médios. Acima de 2,5 kHz continuam faltando 12 dB: é o filtro do abafador original em `src/acoustics/guias.ts` (−47 dB em 4 kHz), do motor-base.
+
+**Batida periódica** (`batida`, em dB; controle "Batida da mecânica" em Características). O Wankel não tem válvula assentando nem pistão encostando. Ficou ligado o que tem contrapartida: a vedação de ápice, que a mola empurra para dentro da janela e a borda de saída devolve à ranhura (um impacto por passagem, no fechamento do escape e no da admissão: `batV` em `janelasRot`), e a folga da engrenagem de fase e do mancal do excêntrico tomada pela força de cada explosão (o ramo de centelha do Ronco, `batC`). Os tiques sorteados (`clickEnv`) continuam. O padrão é **−12 dB** (a sugestão do motor-base era −6); medidas com a carcaça em −10 dB:
+
+| `batida` | FD a bordo em carga: `ar` / tom a menos | FC na lenta: picos/s · curtose de 1–6 kHz (gravação 16,1 · 6,8) | Ro 80 no cofre: curtose (gravação 3,3) | bridge na lenta: `ar` | 787B a 7 700 rpm: 2·ign − ign (gravação −6 ± 4) |
+|---|---|---|---|---|---|
+| sem | 3,58 / 1,81 | 27,7 · 16,2 | 16,9 | 0,56–0,59 | −8,2 dB |
+| **−12 (padrão)** | 3,28 / 1,54 | 32,9 · 15,6 | 15,2 | 0,60–0,61 | −9,8 dB |
+| −6 | 2,62 / 1,21 | 39,3 · 14,9 | 19,4 (p90/p10 de 11,5 para 14,7 dB; gravação 11,1) | 0,63 | −10,6 dB |
+
+Com −6 a cabine ganha mais (é onde a estrutura do motor mais se ouve), mas no cofre aberto a envoltória de 1–6 kHz passa a ter dois calombos por ignição (vira tique), o `ar` do bridge passa do limite de 0,6 (as batidas seguem as rajadas e contam como leito) e a linha de 2·ign do 787B, que a batida cancela em parte no ouvinte de fora, sai da tolerância. Com −12 o `ar` do bridge fica em 0,61 (era 0,59; limite 0,6): desvio de 0,01, anotado.
+
+**Jato: um caminho só.** A `BocaRot` já é o orifício (contrapressão, velocidade na ponteira, teto sônico). O `jato: 'sonico'` do motor-base trocaria o `step` dela pelo bocal dele: o `tune` do rotativo força `jatoFis = false`. Conferido: o mesmo render com e sem `jato: 'sonico'` (ponteira de 20 mm, plena carga) sai igual amostra a amostra.
+
+**Lenta que afundava nas trocas de configuração.** Cada troca estrutural no painel (abafador, pré-silencioso, janela) manda a configuração inteira, e o `setConfig` do motor-base recomeça todas as câmaras com o gás do coletor e sem ar contado: um ciclo de câmara inteiro (três voltas do eixo) sem queimar. Com as janelas de fábrica a lenta caía de 750 para ~600 rpm a cada troca (medido: mínimo de 596–654 rpm, depois 880–980 na volta). Com a janela periférica somava-se a composição do gás recomeçando do zero em todas as câmaras, e a lenta de rua (750 rpm) que o FD mantinha com uma janela de corrida, caçando de 400 a 1 000 rpm sozinha: um ciclo sem queima em cima de uma rajada de falhas apagava o motor. Três mudanças:
+
+- **O estado passa de uma configuração para a outra** (`RotativoDSP.setConfig`): com o motor funcionando, as mesmas câmaras e a mesma geometria, pressão, massa, ar, queima em curso e composição do gás de cada câmara são guardados antes do `setConfig` do motor-base e postos de volta. Se a janela mudou, a composição recomeça (era a das janelas antigas) e o resto passa. Trocas de escape com as janelas de fábrica: 708–799 rpm, sem afundar.
+- **A lenta acompanha a janela** (`setJanelas` da página): ao escolher bridge ou periférica a lenta sobe para 1 500 ou 1 800 rpm (as dos rótulos do painel) se estiver abaixo; ao voltar para uma janela de rua, a do preset.
+- **Teste** (`npm run lenta:rotativo`, quatro casos novos): três trocas de escape seguidas, 0,4 s entre elas, com as janelas de fábrica, com a periférica e no 787B (mínimo nas trocas ≥ o mínimo dos 6 s de antes − 8% do alvo, sem apagar), e a troca da janela para a periférica com o motor na lenta. Com a correção desligada o caso de fábrica falha (596 rpm; mínimo aceito 663).
+
+O ciclo sem queima a cada `setConfig` é do motor-base e vale para todas as famílias que herdam dele; aqui foi contornado só nos Rotativos.
+
+**Antes → depois desta passada** (régua; níveis em dB rel. 150–400 Hz, gravação / antes / depois):
+
+| caso | ar | tom a menos | pulso a menos | total | 1–2,5 kHz | 2,5–6 kHz |
+|---|---|---|---|---|---|---|
+| fc-lenta | 0,00 → 0,00 | 0,18 → 0,17 | 0,15 → 0,15 | 2,06 → 2,05 | −35,2 / −36,8 / −34,8 | −41,0 / −40,5 / −40,5 |
+| fc-3550 | 0,00 → 0,00 | 0,00 → 0,00 | 0,62 → 0,50 | 3,38 → 3,09 | −12,3 / −19,2 / −17,5 | −24,2 / −30,7 / −30,5 |
+| bridge-lenta | 0,59 → 0,61 | 1,32 → 1,32 | 0,12 → 0,12 | 2,76 → 2,72 | −16,9 / −19,6 / −19,5 | −20,2 / −30,1 / −30,1 |
+| fd-carga-cabine | 3,58 → 3,28 | 1,80 → 1,54 | 1,92 → 2,30 | 2,67 → 2,83 | −11,3 / −30,1 / −29,3 | −23,7 / −48,1 / −47,9 |
+| fd-carga-ext | 0,00 → 0,00 | 0,34 → 0,34 | 0,00 → 0,00 | 2,66 → 2,51 | −11,3 / −4,6 / −4,7 | −23,7 / −9,9 / −9,9 |
+| rx8-lenta-esportivo | 0,00 → 0,00 | 0,03 → 0,05 | 0,00 → 0,00 | 4,17 → 4,11 | −21,3 / −19,0 / −18,1 | −27,9 / −39,1 / −39,0 |
+| 20b-lenta | 0,00 → 0,00 | 0,00 → 0,00 | 0,00 → 0,00 | 2,22 → 2,27 | −34,9 / −33,7 / −31,3 | −43,7 / −42,6 / −42,4 |
+| 787b-lenta | 0,00 → 0,00 | 0,25 → 0,25 | 0,94 → 0,98 | 1,59 → 1,59 | −20,0 / −16,8 / −16,6 | −14,1 / −18,4 / −18,3 |
+| 787b-7700 | 0,00 → 0,00 | 0,02 → 0,02 | 0,58 → 0,55 | 2,17 → 2,19 | −1,2 / −10,1 / −9,2 | −13,6 / −20,6 / −20,4 |
+| 787b-bordo | 0,00 → 0,00 | 1,10 → 1,12 | 0,35 → 0,00 | 2,53 → 2,42 | −8,3 / −14,2 / −14,1 | −8,9 / −49,3 / −44,4 |
+| 787b-bordo-ext | 0,00 → 0,00 | 1,24 → 1,25 | 0,00 → 0,00 | 2,75 → 2,78 | −8,3 / −2,7 / −2,1 | −8,9 / −11,3 / −11,2 |
+| norton-lenta | 0,00 → 0,00 | 0,77 → 0,78 | 0,22 → 0,22 | 3,66 → 3,56 | −2,8 / −16,8 / −15,9 | −12,7 / −38,7 / −38,8 |
+| ro80-lenta | 0,00 → 0,00 | 0,00 → 0,00 | 0,44 → 0,33 | 2,51 → 2,58 | −0,7 / −18,8 / −15,1 | −14,2 / −24,7 / −24,1 |
+| rx8-passagem (novo) | 0,00 → 0,00 | 0,00 → 0,00 | 1,84 → 2,56 | 3,58 → 3,55 | −6,4 / −16,6 / −12,4 | −14,6 / −28,3 / −26,6 |
+| rx8-cruzeiro-cabine (novo) | 0,00 → 0,00 | 0,21 → 0,21 | 0,09 → 0,24 | 4,48 → 4,33 | −13,6 / −24,2 / −22,3 | −23,5 / −54,2 / −50,0 |
+| rx8-cruzeiro-ext (novo) | 0,00 → 0,00 | 0,06 → 0,06 | 0,00 → 0,09 | 3,74 → 3,48 | −13,6 / −16,8 / −16,0 | −23,5 / −29,7 / −28,9 |
+
+Na passagem o "pulso a menos" (1,84 → 2,56) é da gravação: em 2 s o carro chega e o nível sobe 15 dB, e a régua lê isso como envoltória funda. Os totais dos casos do RX-8 seguem altos pelo mesmo motivo da primeira rodada (a gravação é leito, o simulado é tom). No `teste:rotativo` (151 medidas: 137 ok, 14 desvios, 0 falhas) duas medidas saíram da lista de desvios (centroide do 787B a 7 700 rpm, 627 → 657 Hz; lenta → plena carga do Cosmo, +17,9 → +18,0 dB) e nenhuma entrou; as que mexeram mais: ponteira de 20 mm em plena carga −18,1 → −13,9 dB (a carcaça), 2·ign − ign do 787B −8,2 → −9,8 dB (a batida), RX-8 a 5 000 rpm sustentados 1–2,5 kHz −29,1 → −25,7 e Ro 80 frio 1–2,5 kHz −22,0 → −15,8 (a carcaça).
+
 ### Pendente (TODO)
 
-- Médios em carga leve e giro alto no megafone (787B a 7 700 rpm em ponto morto): pulso mais forte na abertura com pouca carga e os modos do megafone (um tubo cônico, que o DSP não tem).
+- Médios em carga leve e giro alto no megafone (787B a 7 700 rpm em ponto morto): pulso mais forte na abertura com pouca carga e os modos do megafone (um tubo cônico, que o DSP não tem). Na segunda passada só a batida mexeu nisso (1–2,5 kHz de −10,1 para −9,2 dB; a gravação tem −1,2): a carcaça é linear e somaria igual em plena carga, onde 1–2,5 kHz já passa da gravação de bordo.
+- A cada `setConfig` o motor-base recomeça as câmaras (um ciclo sem queimar); os Rotativos passam o estado de uma configuração para a outra, as outras famílias não.
 - O "brap" do bridge de plenum comum se repete a cada 7 voltas (8 queimas, 6 falhas); as gravações dão 6. No 787B, de dutos individuais, o período já é de 6 voltas, mas a rajada é menos funda que a do vídeo (modulação a 5 Hz de −12 dB contra −5).
 - Cabine: o filtro de cabine do Ronco tira o tom acima de 1 kHz (FD e 787B a bordo); é do motor-base.
 - Irradiação: no Ronco o ganho da boca cresce com d² (d³ no grave); o rotativo passou a d (monopolo). Vale conferir no motor-base.
 - Norton e os demais Sachs: eventos das janelas "a conferir" (a duração de admissão da tabela, 330°e, não fecha com uma janela periférica, que fica aberta pelo menos 360°e); o agudo mecânico do motor refrigerado a ar que a gravação mostra.
-- RX-8 em giro alto, de fora (genérico, do abafador de série): sustentado a 5 000 rpm o simulado tem 1–2,5k / 2,5–6k a −29,1 / −35,6 dB rel. 150–400; as gravações de fora do acervo dão −7,4 / −11,4 (aceleradas paradas, escape original, trecho de 8–15 s) e −4,8 / −14,5 (passagem). Faltam 20 dB ou mais de 1 a 6 kHz, em linhas e não em chiado: o abafador `stock` do Ronco e o que a carroceria irradia. A lenta com o escape original do acervo é só ruído de gravação (−41 dBFS) e não serve de alvo.
+- RX-8 em giro alto, de fora: com a carcaça em −16 dB as linhas de 1–2,5 kHz em plena carga ficam a 1,3 dB das da passagem gravada; o nível das bandas segue abaixo do da gravação (−12,4 contra −6,4 em 1–2,5 kHz, −26,6 contra −14,6 em 2,5–6 kHz), porque lá ele é leito (sopro, rolagem, vento) e não linhas. O que falta acima de 2,5 kHz em tom é o filtro do abafador original em `src/acoustics/guias.ts` (motor-base). A lenta com o escape original do acervo é só ruído de gravação (−41 dBFS) e não serve de alvo.
 - Ro 80: a admissão do KKM 612 é periférica e a ficha usa a lateral (aproximação declarada no preset). Tentada uma periférica de rua (eventos estimados: abre 60° antes do PMS, fecha 70° depois do PMI; dois estágios de 0,036 + 0,114·boreEq²): o modelo de diluição põe a lenta a queimar em 51% das explosões, com o ritmo de 6 voltas de um bridge port (autocorrelação −0,91 a 3 voltas e +0,81 a 6; coletor a 0,85 bar), e contra a gravação casada o total vai de 2,51 a 3,03, com 20 estalos/s contra 1,8. Faltam duas coisas: os tempos reais da janela (não achados; a fonte primária é Froede, SAE 680461) e, no modelo, o estrangulamento entre as duas janelas periféricas durante a sobreposição (o gás do escape só chega à admissão pela folga do flanco na cintura da carcaça e pelo rebaixo do rotor, poucos cm², e o modelo liga as duas janelas pela câmara inteira). Com ele os limiares de diluição do bridge e do 787B precisam ser calibrados de novo.
 - CPU (10 s em Node, máquina carregada, relativo ao 787B = 1): `rx8hp` 0,8; `rx7fd` 1,8; `cosmo20b` 2,3. Os caros são os turbo (igual antes da rodada: 0,8 / 1,8 / 2,3 no código anterior), não o RX-8; o teste de CPU só mede o 787B.
 - Estouros por segundo do mecanismo do Ronco com o ciclo de 1 080°e (a taxa por evento conta N·rpm/120; o Wankel tem N·rpm/180): um termo `× cyc/720` no `dsp.ts` do Ronco.

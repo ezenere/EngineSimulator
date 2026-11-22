@@ -174,6 +174,8 @@ function Caracteristicas({ k, e }: P) {
           atual={s.vedacoes || 'novas'} aoEscolher={(v) => k.setSpec({ vedacoes: v as any }, { structural: false })} />
       </Field>
       <Slider id="variacao" rotulo="Variação entre explosões" min={0.5} max={5} passo={0.1} valor={s.variacao ?? 3.5} formatar={(v) => `${virgula(v, 1)}×`} aoMudar={(v) => k.setSpec({ variacao: v }, { structural: false, render: false })} />
+      <Slider id="batida" rotulo="Batida da mecânica (vedações nas janelas, engrenagem de fase)" min={-30} max={12} passo={1} valor={s.batida ?? -30} formatar={(v) => (v <= -30 ? 'sem' : `${v > 0 ? '+' : ''}${v} dB`)}
+        aoMudar={(v) => k.setSpec({ batida: v }, { structural: false, render: false })} />
       <Slider id="kVed" rotulo="Chiado das vedações (fundo mecânico)" min={0} max={2} passo={0.05} valor={s.kVed ?? 0.5} formatar={pct} aoMudar={(v) => k.setSpec({ kVed: v }, { structural: false, render: false })} />
     </Section>
   );
@@ -292,6 +294,8 @@ function Escapamento({ k, e }: P) {
         aoSoltar={(v) => k.setEscape({ saidas: esc.saidas.map((x) => ({ ...x, D: v })) })} />
       <Slider id="Dtip" rotulo="Ponteira (jato)" min={20} max={130} passo={1} valor={esc.ponteira ?? esc.saidas[0]?.D ?? 63.5} formatar={(v) => `${v} mm`}
         aoSoltar={(v) => k.setEscape({ ponteira: v })} />
+      <Slider id="carcaca" rotulo="Carcaça do escape (parede dos tubos e do abafador)" min={-30} max={12} passo={1} valor={s.carcaca ?? -30} formatar={(v) => (v <= -30 ? 'sem' : `${v > 0 ? '+' : ''}${v} dB`)}
+        aoMudar={(v) => k.setSpec({ carcaca: v }, { structural: false, render: false })} />
       {esc.tipo !== 'megafone' && (
         <Field rotulo="Saídas">
           <ChipGroup id="saidas" classe="num" opcoes={[1, 2].map((n) => ({ valor: n, rotulo: String(n) }))} atual={saidas}

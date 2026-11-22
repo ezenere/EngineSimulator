@@ -53,10 +53,13 @@ class PosQueimaBoca {
   }
 }
 
+/** o estado de composição do gás (fração queimada por câmara, na janela de escape, no duto e no plenum; mistura crua) */
+const COMPOSICAO = ['mq', 'arQ', 'xRes', 'xEsc', 'admQ', 'cru', 'plenQ', 'hcQ', 'hcC', 'falhaRot'];
+
 export class RotativoDSP extends EngineDSP {
   declare jAd: Janela; declare jEx: Janela; declare AinPrim: number; declare AinSec: number; declare AinAux: number; declare AinMaxRpm: number; declare apv: number[];
   declare hcQ: Float64Array; declare hcN: RNG; declare hcS: Float64Array; declare hcBoca: number; declare kBoca: number; declare hcKh: number; declare hcKl: number; declare bocas: { j: Junction; Z: number }[]; declare bocasF: { j: Junction; Z: number }[]; declare kQuente: number; declare kPrim: number; declare kEsp: number; declare kHC: number; declare fHCatual: number; declare ov: number; declare rotores: number;
-  declare hcTurb: number; declare mEscAc: number; declare mEscMed: number; declare bocasR: BocaRot[];
+  declare hcTurb: number; declare mEscAc: number; declare mEscMed: number; declare bocasR: BocaRot[]; declare kBatJan: number;
   declare mq: Float64Array; declare arQ: Float64Array; declare xRes: Float64Array; declare xEsc: Float64Array; declare admQ: Float64Array; declare cru: Float64Array; declare plenQ: number; declare kPlen: number; declare kVed: number; declare kApito: number; declare hcC: Float64Array; declare kTurbCru: number; declare kChama: number; declare thB: number[] | null; declare mPorta: number; declare vAdm: number; declare xF0: number; declare xF1: number; declare kCru: number; declare falhaBase: number; declare sondaEv: ((c: number, queimou: boolean, residual: number, p: number) => void) | null;
   declare kVelas: number; declare trailingOn: boolean; declare velas: number; declare tipoRot: string; declare fHCextra: number; declare fHCcat: number;
   declare seq: boolean; declare trocaRpm: number; declare transT: number; declare seqW: number; declare boostBase: number; declare rpmPrevSeq: number; declare phT2: number;
@@ -81,6 +84,20 @@ export class RotativoDSP extends EngineDSP {
 
   // ------------------------------------------------------------------ configuração
   setConfig(cfg, calibrate = true) {
+    // Troca de configuração com o motor funcionando e as mesmas câmaras (janela, escape, abafador, velas): o estado de
+    // cada câmara e a composição do gás passam de uma configuração para a outra. O `setConfig` do motor-base recomeça
+    // todas as câmaras com o gás do coletor e sem ar contado (um ciclo inteiro, três voltas do eixo, sem queimar: a lenta
+    // de fábrica caía de 750 para ~600 rpm a cada troca), e aqui a composição recomeçava do zero em todas juntas: nas
+    // janelas de competição as câmaras, que em regime alternam queima e falha cada uma no seu passo, passavam a queimar
+    // todas juntas e a falhar todas juntas, e três trocas seguidas às vezes apagavam o motor
+    const a0: any = this.cfg;
+    const vivo = !!a0 && (this.state === 'run' || this.state === 'crank') && !cfg.fresh && this.N === cfg.N && this.cyc === (cfg.cyc || 1080)
+      && a0.Vcam === cfg.Vcam && a0.compression === cfg.compression && (a0.rotores || 1) === (cfg.rotores || 1);
+    const guardado: Record<string, any> | null = vivo ? {
+      p: this.p, m: this.m, Vprev: this.Vprev, aPrev: this.aPrev, mEx: this.mEx, mIn: this.mIn, densC: this.densC, Q: this.Q, xb: this.xb, air: this.air,
+      armed: this.armed, spk: this.spk, burnK: this.burnK, hcQ: this.hcQ, hcC: this.hcC, mq: this.mq, arQ: this.arQ, xRes: this.xRes, xEsc: this.xEsc,
+      admQ: this.admQ, cru: this.cru, plenQ: this.plenQ, pEO: this.pEO, TEO: this.TEO, MjEO: this.MjEO, falhaRot: this.falhaRot,
+    } : null;
     this.cyc = cfg.cyc || 1080; this.kVol = cfg.kVol || 2 / 3; this.tipoRot = cfg.tipo || 'wankel'; this.rotores = cfg.rotores || 1;
     const N = cfg.N;
     // dispersão por flanco (a do Ronco: ar ±7%, janela ±10%, energia ±5%, × 2,6 com carburador) escalada por `dispersao`:
@@ -91,6 +108,11 @@ export class RotativoDSP extends EngineDSP {
     this.falhaRot = new Float64Array(N); this.hcC = new Float64Array(N); this.mq = new Float64Array(N); this.arQ = new Float64Array(N); this.xRes = new Float64Array(N);
     this.xEsc = new Float64Array(this.rotores).fill(1); this.admQ = new Float64Array(this.rotores); this.cru = new Float64Array(this.rotores); this.plenQ = 0;
     super.setConfig(cfg, calibrate);
+    if (guardado) {
+      // (janelas trocadas: a composição guardada era a das janelas antigas; fica a nova, zerada, e o resto do estado passa)
+      const mesmas = a0.janelas?.admissao === cfg.janelas?.admissao && a0.janelas?.escape === cfg.janelas?.escape;
+      for (const k in guardado) if (mesmas || !COMPOSICAO.includes(k)) (this as any)[k] = guardado[k];
+    }
     if (cfg.iacLenta) this.iacLenta = cfg.iacLenta;
     this.arDeLenta();
     // dispersão por rotor (1.2): além da do Ronco por flanco, ±4% na energia e ±6% na janela de escape de cada rotor (a
@@ -176,6 +198,11 @@ export class RotativoDSP extends EngineDSP {
     // jato na abertura da janela (o `turb` do Ronco, M³·vazão): a aresta do alojamento descoberta pelo ápice solta um jato
     // sônico desde o primeiro grau, em vez da lâmina anular da válvula de prato (0,05 no Ronco)
     this.valveNoise = cfg.kJato ?? 0.05;
+    // jato da ponteira: um caminho só. A `BocaRot` já é o orifício (contrapressão, velocidade na ponteira, teto sônico);
+    // o `jato: 'sonico'` do motor-base trocaria o `step` dela pelo bocal dele e saturaria a velocidade outra vez
+    this.jatoFis = false;
+    // batida periódica: peso da parte das janelas (a vedação de ápice na borda) em relação à das explosões
+    this.kBatJan = cfg.batJanelas ?? 1;
   }
 
   // ------------------------------------------------------------------ ganchos do laço
@@ -226,10 +253,16 @@ export class RotativoDSP extends EngineDSP {
         }
       }
     }
-    if (ap < jE.fecha && a >= jE.fecha) this.clickEnv += 0.3 * (0.5 + 0.5 * rng.next());
+    // batida periódica da mecânica (`batida`, o mecanismo do motor-base): o Wankel não tem válvula assentando nem pistão
+    // encostando. O que se repete igual em todo ciclo é a vedação de ápice, que a mola empurra para dentro da janela e a
+    // borda de saída empurra de volta para a ranhura (um impacto por passagem, no fechamento do escape e no da admissão,
+    // com o tamanho fixo daquela vedação), e, a cada explosão, a folga da engrenagem de fase e do mancal do excêntrico
+    // sendo tomada pela força do gás (essa parte entra pelo ramo de centelha do Ronco, `batC`). Impulsos iguais a cada
+    // volta do rotor excitam a carcaça nos modos dela: linhas, não chiado (os tiques sorteados de `clickEnv` continuam)
+    if (ap < jE.fecha && a >= jE.fecha) { this.clickEnv += 0.3 * (0.5 + 0.5 * rng.next()); if (this.batK) this.batV += this.kBatJan * this.batW[this.N + c]; }
     if (ap < jA.abre && a >= jA.abre) { this.clickEnv += 0.3 * (0.5 + 0.5 * rng.next()); this.air[c] = 0; this.arQ[c] = 0; }
     if (ap < jA.fecha && a >= jA.fecha) {
-      this.clickEnv += 0.3 * (0.5 + 0.5 * rng.next());
+      this.clickEnv += 0.3 * (0.5 + 0.5 * rng.next()); if (this.batK) this.batV += this.kBatJan * this.batW[2 * this.N + c];
       // (a carga está presa: fração de gás queimado que ficou nela, o que decide se a mistura acende)
       this.xRes[c] = clamp(this.mq[c] / Math.max(this.m[c], 1e-9), 0, 1);
     }
@@ -439,6 +472,10 @@ export class RotativoDSP extends EngineDSP {
   buildExhaust(cfg) {
     const fs = this.fs, N = this.N, Rn = Math.max(1, cfg.rotores || 1), e: EscapeRotativo = cfg.escape || ESCAPE_REF;
     const lines: Line[] = [], nodes: any[] = [], rads: Radiator[] = [], panPhi: number[] = [];
+    // carcaça do escape (o mecanismo do motor-base, `ronco/medios.ts`): a parede do abafador de cada saída responde à onda
+    // que chega a ele e irradia em linhas. Um tubo por boca, na ordem de `rads`: o que entra no abafador daquela saída; no
+    // megafone, que não tem caixa, o tubo que entra no cone (a parede fina do próprio megafone)
+    const carc: (Line | null)[] = [];
     const kNL0 = cfg.kNL ?? 0.6;
     const L = (len: number, Y: number, loss: number, damp = 1) => { const l = new Line(fs, Math.max(0.02, len), Y, loss, damp); l.kNL = kNL0; lines.push(l); return l; };
     const Dp = e.Dp || 50;
@@ -472,11 +509,11 @@ export class RotativoDSP extends EngineDSP {
     // catalisador, antes do pré-silencioso e do abafador: é onde o gás cru ainda quente se mistura e queima)
     const quentes: { j: Junction; Z: number }[] = [];
     const bocasF: { j: Junction; Z: number }[] = [];
-    const boca = (line: Line, s: { D: number; phi: number }, Dref: number, R = 0.93, fc?: number) => {
+    const boca = (line: Line, s: { D: number; phi: number }, Dref: number, fonte: Line | null, R = 0.93, fc?: number) => {
       const tb = L(0.06, line.Y, 9000, dw(s.D)); tb.kNL = line.kNL;
       const j = new Junction([port(line, 1), port(tb, 0)]); nodes.push(j);
       bocasF.push({ j, Z: SOUND_SPEED / ((Math.PI / 4) * (s.D / 1000) ** 2) });
-      radiar(tb, s, Dref, R, fc);
+      radiar(tb, s, Dref, R, fc); carc.push(fonte);
     };
     const quente = (line: Line, D: number) => {
       const nx = L(0.06, line.Y, 9000, dw(D)); nx.kNL = line.kNL;
@@ -496,7 +533,7 @@ export class RotativoDSP extends EngineDSP {
         const tail = L(0.3 * s.L, Yd(s.D), 9000, dw(s.D));
         tail.kNL = cfg.muffler === 'stock' ? 0.05 : cfg.muffler === 'classic' ? 0.15 : 0.6;
         nodes.push(new TwoPort(fs, port(feeds[k], 1), port(tail, 0), cfg.muffler || 'stock'));
-        boca(tail, s, Dde);
+        boca(tail, s, Dde, feeds[k]);
       });
     };
     if (e.tipo === 'megafone') {
@@ -506,6 +543,7 @@ export class RotativoDSP extends EngineDSP {
       bankJ.fill(j);
       const m = e.megafone || { L: 0.5, Dboca: 120 };
       let prev = quente(col, 90), Y = col.Y;
+      const entrada = prev;
       for (let k = 0; k < 3; k++) {
         Y *= 1.6;
         const seg = L(m.L / 3, Y, 10000, 0.6); seg.kNL = cfg.kNLmeg ?? 0.88; // (megafone sem abafador: a onda segue afiando até a boca)
@@ -513,7 +551,7 @@ export class RotativoDSP extends EngineDSP {
         prev = seg;
       }
       // boca larga: reflexão −0,6 abaixo de ~300 Hz (a do Ronco é −0,93): perde grave e irradia o médio com eficiência
-      boca(prev, { D: m.Dboca, phi: e.saidas[0]?.phi ?? 5 }, m.Dboca, 0.6, 300);
+      boca(prev, { D: m.Dboca, phi: e.saidas[0]?.phi ?? 5 }, m.Dboca, entrada, 0.6, 300);
     } else if (e.tipo === 'duplo') {
       // Ro80, Cosmo 110S: um downpipe por rotor → Y → silencioso dianteiro ('classic') → tubo → traseiro (abafador do preset)
       const dp = e.downpipe || { L: 1.5, D: 50 };
@@ -534,8 +572,9 @@ export class RotativoDSP extends EngineDSP {
       const j = new Junction([...runs.map((r) => port(r, 1)), port(col, 0)]); nodes.push(j); bankJ.fill(j);
       const tail = L(Math.max(0.1, s0.L), Yd(s0.D), 9000, dw(s0.D));
       tail.kNL = cfg.muffler === 'stock' ? 0.05 : cfg.muffler === 'classic' ? 0.15 : 0.6;
-      nodes.push(new TwoPort(fs, port(quente(col, s0.D), 1), port(tail, 0), cfg.muffler || 'stock'));
-      boca(tail, s0, Math.max(s0.D, Dp));
+      const pre = quente(col, s0.D);
+      nodes.push(new TwoPort(fs, port(pre, 1), port(tail, 0), cfg.muffler || 'stock'));
+      boca(tail, s0, Math.max(s0.D, Dp), pre);
     } else {
       // série (RX-7, RX-8, Cosmo 20B, RX-3): coletor [reator] → [turbo] → downpipe → [cat] → [pré-silencioso] → tubo → abafador → saídas
       const dp = e.downpipe || { L: 1.0, D: 63.5 };
@@ -564,6 +603,7 @@ export class RotativoDSP extends EngineDSP {
     for (let c = 0; c < N; c++) runners[c] = runs[Math.min(cfg.bank[c], Rn - 1)];
     this.pipeA = A2out;
     this.lines = lines; this.nodes = nodes; this.runners = runners; this.rads = rads; this.rotFase = Float64Array.from(panPhi);
+    this.carcSrc = carc;
     this.radHP = rads.map(() => new Biquad().hp(fs, 45, 0.7));
     this.radSh = rads.map(() => new Biquad().peak(fs, 110, 0.6, 3));
     let ib = 64; while (ib < fs * 0.0015) ib <<= 1;
@@ -594,7 +634,7 @@ export class RotativoDSP extends EngineDSP {
       : { ...cfg, escape: { ...ESCAPE_REF, Lp: cfg.escape?.Lp ?? 0.3, Dp: cfg.escape?.Dp ?? 50 }, muffler: 'sport', pipeD: 2.5,
         turbo: cfg.turbo ? { ...cfg.turbo, sequencial: false } : undefined, gain: undefined, powerModel: undefined, breakout: 'sealed', valve: 'none', reso: false, twoStep: false };
     const t = new RotativoDSP(this.fs);
-    t.setConfig(ref, false);
+    t.setConfig({ ...ref, ...this.refMedios(cfg) }, false); // (carcaça e batida ficam fora das sondas, como no Ronco)
     t.state = 'run'; t.lockOmega = true; t.tempMode = 'fixed'; t.tempSet = 90; t.coolant = 90; t.runT = 100;
     t.omega = (rpm * TAU) / 60; t.rpmAvg = rpm;
     if (t.av) { t.magnetos = 'ambos'; t.mistura = 0.8; }
