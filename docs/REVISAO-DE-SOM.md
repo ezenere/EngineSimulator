@@ -72,11 +72,18 @@ Estes erros aconteceram na sessão que gerou este método. Cada um virou uma reg
 4. **Achar a rotação e confirmar o ciclo** (`auditoria.py lines`). Errar por um fator 2 (confundir volta com ciclo de
    720°) inverte todas as conclusões. Confirme dobrando o sinal no ângulo do virabrequim.
 5. **Renderizar o simulador na mesma condição** (`render.js`): giro travado na rotação da gravação, acelerador no ponto
-   em que o torque líquido zera (é o que segura o giro em neutro). Para comparar com a versão anterior, renderize
-   também o HEAD:
+   em que o torque líquido zera (é o que segura o giro em neutro). Para comparar com outra versão do DSP, renderize as
+   duas com o mesmo comando, trocando o DSP por `DSP=` (as opções estão em `use()`, no começo de
+   `tools/analise-som/harness.js`): `DSP=legado` é o `src/dsp.js` de antes da reestruturação, lido do histórico do git
+   (`REF_LEGADO` em `tools/legado.ts`); para a versão de antes da sua mudança, aponte o `dsp.ts` de uma segunda cópia
+   de trabalho do repositório naquele commit (o `dsp.ts` sozinho não carrega: importa `../../acoustics`). As saídas
+   ficam em `referencias/` (fora do git), não em `/tmp`, que o sistema apaga:
    ```
-   git show HEAD:src/dsp.js > /tmp/dsp.head.js
-   DSP=/tmp/dsp.head.js node tools/analise-som/render.js fusca 1974 /tmp/head.f32
+   mkdir -p referencias/sim
+   node tools/analise-som/render.js fusca 1974 referencias/sim/fusca-agora.f32
+   DSP=legado node tools/analise-som/render.js fusca 1974 referencias/sim/fusca-legado.f32
+   git worktree add ../engine-antes HEAD     # a versão de antes, numa árvore completa
+   DSP=../engine-antes/src/engines/ronco/dsp.ts node tools/analise-som/render.js fusca 1974 referencias/sim/fusca-antes.f32
    ```
 6. **Comparar** com a figura (`comparar.py`) e as tabelas (`tercos.py`, `modulacao.py`, `variacao.py`,
    `auditoria.py shape|sync|orders`). Olhe nível por banda, forma do espectro, envoltória do agudo, ritmo e variação
@@ -476,12 +483,15 @@ python3 -m venv /tmp/venv-som && /tmp/venv-som/bin/pip install numpy scipy matpl
 Exemplos:
 
 ```
-node tools/analise-som/render.js fusca 1974 /tmp/sim.f32
-python tools/analise-som/comparar.py --ciclo 16.45 --saida /tmp/cmp.png "real=/tmp/gravacao.f32:3:21" "sim=/tmp/sim.f32:1:10"
-python tools/analise-som/tercos.py "real:/tmp/gravacao.f32:3:21" "sim:/tmp/sim.f32:1:10"
-python tools/analise-som/auditoria.py --ffmin 55 --ffmax 80 sync --case real:/tmp/gravacao.f32:3:21 --case sim:/tmp/sim.f32:1:10:65.8 --png /tmp/ciclo.png
+node tools/analise-som/render.js fusca 1974 referencias/sim/fusca.f32
+python tools/analise-som/comparar.py --ciclo 16.45 --saida referencias/sim/cmp.png "real=referencias/sim/gravacao.f32:3:21" "sim=referencias/sim/fusca.f32:1:10"
+python tools/analise-som/tercos.py "real:referencias/sim/gravacao.f32:3:21" "sim:referencias/sim/fusca.f32:1:10"
+python tools/analise-som/auditoria.py --ffmin 55 --ffmax 80 sync --case real:referencias/sim/gravacao.f32:3:21 --case sim:referencias/sim/fusca.f32:1:10:65.8 --png referencias/sim/ciclo.png
 node tools/analise-som/regressao.js
 ```
+
+(`referencias/` fica fora do git; as gravações de verdade ficam lá, com o índice em `referencias/INDEX.md`. A
+`gravacao.f32` dos exemplos é o trecho de uma delas convertido para float32 estéreo a 48 kHz.)
 
 ### O kit ouvido
 
