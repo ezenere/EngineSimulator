@@ -14,22 +14,30 @@
 //     (M-14P), contagem de pás, estouros da partida, refrigeração a ar das aletas expostas (gancho 12).
 //
 // Regra do DSP: nada do navegador; a taxa entra no construtor; RNG com semente.
-import { TAU, DEG, P0, clamp, smooth, flow, RNG, Biquad, Line, Junction, TwoPort, Radiator, port } from '../../acoustics';
+import { TAU, DEG, P0, clamp, smooth, flow, onePole, RNG, Biquad, Line, Junction, TwoPort, Radiator, port } from '../../acoustics';
 import { EngineDSP } from '../ronco/dsp';
 import { T_MAN } from '../ronco/constantes';
 import { AV, arranqueBase, paLw5 } from '../ronco/aviacao';
 import type { EscapeRadial } from './geometria';
 import { BocaEscape } from './boca';
+import { FonteHelice } from '../../carriers/helice';
 
 /** escape de referência da calibração (RADIAL.md 2.3): um anel de uma saída */
 export const ESCAPE_REF: EscapeRadial = { tipo: 'anel', Danel: 1.1, Oanel: 80, Lp: 0.2, saidas: [{ L: 0.8, O: 80, phi: 180 }] };
 
-/** turbulência do sopro na boca do escape (boca.ts): intensidade (fração RMS da vazão) e o quanto cresce com o Mach².
- *  Lado baixo de propósito (PLANO: mais motor, menos ar): um escoamento pulsado em tubo tem 4 a 10 % */
-export const SOPRO = { kT: 0.05, kJ: 0.1 };
+/** turbulência do sopro na boca do escape (boca.ts): intensidade (fração RMS da vazão).
+ *  Lado baixo de propósito (PLANO: mais motor, menos ar): um escoamento pulsado em tubo tem 4 a 10 %. `coletor` e
+ *  `turbina` (dB): num anel coletor o jato de cada válvula se desfaz no caminho (o gás dá a volta no anel, passa pelas
+ *  junções dos outros cilindros e sai somado numa saída larga, quase sem pulsar) e chega à boca como escoamento de tubo
+ *  comum; no estaque ele chega fresco, a 10–16 diâmetros da válvula. Depois de metros de tubo e de uma turbina, menos ainda */
+export const SOPRO = { kT: 0.05, coletor: -8, turbina: -6 };
 /** juntas do anel coletor e dos estaques (o `breakout`): cada uma vaza diferente. Desvio do log do vazamento por junta
  *  (0 = todas iguais) e o que sobra vazando entre as rajadas, relativo à média (o Ronco usa 0,5) */
-export const JUNTAS = { old: 0.7, leaky: 1.1, piso: 0.15 };
+export const JUNTAS = { old: 0.7, leaky: 1.25, piso: 0.15, queda: 0.035, corte: 1600 };
+
+/** argumento do `tanh` de saída em que fica o percentil 99,5 da decolagem com o volume padrão (tanh(0,8) = 0,66: no
+ *  máximo 0,5% das amostras acima disso, contra o critério de 1% acima de 0,7 da AUDITORIA R-02) */
+const LIM_DECOLAGEM = 0.8;
 
 /** rotação em que o arranque de inércia entrega o volante (s de energização, automático) */
 const T_ENERGIZAR = 16;
@@ -37,10 +45,10 @@ const T_ENERGIZAR = 16;
 export class RadialDSP extends EngineDSP {
   declare fase: any; declare tFase: any; declare tGiro: any; declare pas: any; declare magAuto: any; declare encharque: any; declare fumaca: any;
   declare radPhi: any; declare rotAng: any; declare apF: any; declare apPh: any; declare apHz: any; declare apAmp: any; declare apNz: any;
-  declare kSopro: any; declare jSopro: any; declare exposto: any;
+  declare margemDb: any; declare kSopro: any; declare exposto: any;
   declare Aar: any; declare blowerAlta: any; declare engateT: any; declare falhaMedia: any; declare galL: any; declare galN: any; declare falhaLenta: any; declare qMix0: any;
   // (da aviação, postos por instalarAviacao: src/engines/ronco/aviacao.ts)
-  declare heliceSom: any; declare magnetos: any; declare mistura: any; declare partidaTipo: any; declare prime: any; declare cargaAv: any; declare falhaMix: any; declare nivelEscape: any;
+  declare heliceSom: any; declare helK: any; declare magnetos: any; declare mistura: any; declare partidaTipo: any; declare prime: any; declare cargaAv: any; declare falhaMix: any; declare nivelEscape: any;
 
   constructor(fs: number) {
     super(fs);
@@ -61,7 +69,15 @@ export class RadialDSP extends EngineDSP {
     // encharque (3.4): óleo nos cilindros de baixo com o motor parado; 1 no de baixo, 0 nos de cima
     this.encharque = Float64Array.from(cfg.phi || cfg.axis, (p: number) => Math.max(0, -Math.cos(p * DEG)));
     super.setConfig(cfg, calibrate);
+    // margem da decolagem (calibrate): com o ganho vindo pronto da página, a margem vem junto; a hélice e o apito da
+    // página usam `nivelEscape` como referência de nível, e descem com o motor
+    if (cfg.gain) this.margemDb = cfg.margemDb || 0; else if (!calibrate) this.margemDb = 0;
+    this.nivelEscape = (cfg.nivelEscape || 135) + (this.margemDb || 0);
     if (this.heliceSom) this.heliceSom.pasLentas = true; // (contagem de pás: o "vuff" de cada pá passando devagar)
+    // a hélice da página com a mesma lei de nível da hélice do portador na Cena (src/carriers/leis-helice.ts: o tom de
+    // carga de Gutin com o torque absorvido): sem isso a página tocava a lei do JetDSP, que só olha o Mach da ponta, e o
+    // mesmo avião saía com a hélice 6 a 8 dB mais alta em radial.html do que na Passagem
+    if (this.heliceSom) this.heliceSom.lei = 'carga';
     this.rotAng = cfg.rotativo ? 0 : undefined;
   }
 
@@ -79,9 +95,10 @@ export class RadialDSP extends EngineDSP {
     this.breakK = ({ sealed: 0, old: 1, leaky: 2.2 }[cfg.breakout] || 0) * Math.pow(10, (cfg.vazamento || 0) / 20);
     this.brkFloor = JUNTAS.piso; // (entre as rajadas quase nada vaza: o chiado do anel pulsa com cada abertura, não é um leito)
     // sopro das bocas (boca.ts), com o acerto do preset em dB (`sopro`)
-    const ks = Math.pow(10, (cfg.sopro || 0) / 20);
-    this.kSopro = SOPRO.kT * ks; this.jSopro = SOPRO.kJ * ks;
-    if (this.rads) for (const r of this.rads) if (r instanceof BocaEscape) { r.kT = this.kSopro; r.kJ = this.jSopro; }
+    const esc = cfg.escape || ESCAPE_REF;
+    const ks = Math.pow(10, ((cfg.sopro || 0) + (esc.tipo === 'tubos' ? 0 : SOPRO.coletor) + (esc.turbina ? SOPRO.turbina : 0)) / 20);
+    this.kSopro = SOPRO.kT * ks;
+    if (this.rads) for (const r of this.rads) if (r instanceof BocaEscape) r.kT = this.kSopro;
     // ouvinte de fora da página (5 m do cubo) com os cilindros expostos na boca da carenagem: os mesmos pesos do
     // adaptador da Cena (motor.ts: admissão 0,12, bloco 0,12 sem a sombra de uma carroceria, compressor 0,5, coletor 1).
     // Com os pesos do carro de motor dianteiro do Ronco (mecânica 0,1 atrás de um passa-baixa de 3 kHz, coletor 0,3) a
@@ -119,7 +136,7 @@ export class RadialDSP extends EngineDSP {
     const radiar = (line: Line, ph: number, O: number) => {
       const d = ds(O), A2 = d * d, p = Math.sin(ph * DEG);
       const r = new BocaEscape(fs, line, 0.62 - 0.34 * p, 0.62 + 0.34 * p, 1500 / d, A2, 400 / (TAU * 0.03175 * d),
-        { D: Math.max(0.02, O / 1000), kT: this.kSopro, kJ: this.jSopro, params: this.params, semente: 0xb0ca + 7919 * rads.length + 131 * N });
+        { D: Math.max(0.02, O / 1000), kT: this.kSopro, params: this.params, semente: 0xb0ca + 7919 * rads.length + 131 * N });
       nodes.push(r); rads.push(r); radPhi.push(ph);
     };
     const angMedio = (cs: number[]) => Math.atan2(cs.reduce((s, c) => s + Math.sin(phi[c] * DEG), 0), cs.reduce((s, c) => s + Math.cos(phi[c] * DEG), 0)) / DEG;
@@ -235,6 +252,13 @@ export class RadialDSP extends EngineDSP {
 
   buildFilters(cfg) {
     super.buildFilters(cfg);
+    // rajada do coletor: o anel fica pressurizado enquanto o gás do cilindro escoa por ele, e a junta vaza esse tempo
+    // todo (um sopro de dezenas de ms por abertura, como na gravação do T-6G: 60 a 100 ms), não só no estouro da válvula
+    // (os 10 ms do Ronco, afinados num coletor de carro, davam um tique por explosão)
+    this.brkKd = 1 - Math.exp(-1 / (JUNTAS.queda * this.fs));
+    // (e o anel é de tubo largo: a chapa irradia mais grave que o coletor de um carro; o polo desce de 2,5 para 1,6 kHz.
+    // Nas gravações de anel coletor 2,5–6 kHz fica 3 a 6 dB abaixo de 1–2,5 kHz; com o polo do Ronco saíam iguais)
+    this.brkKl = onePole(this.fs, JUNTAS.corte);
     // apito do volante do arranque de inércia (3.4): ruído em banda estreita (Q 25) em volta do tom
     this.apF = new Biquad().bp(this.fs, 300, 25); this.apNz = new RNG(0xa917);
   }
@@ -271,8 +295,50 @@ export class RadialDSP extends EngineDSP {
     }
     const rmsIdle = Math.sqrt(acc2 / Math.max(1, cnt2)) / 0.01;
     const gIdle = (target * 0.09) / Math.max(rmsIdle, 1e-6);
-    const gain = clamp(gWot, 0.05, 40);
+    // margem da decolagem: a referência de volume é o escape a 55% da rotação máxima; em potência de decolagem o escape
+    // do próprio preset sobe e a hélice entra por cima (num T-6, 17 dB acima dessa referência), e a soma passava do
+    // limitador de saída (o `tanh` achatava o som em 10 dos 17 presets: AUDITORIA R-02). O ganho do motor e o nível da
+    // hélice descem juntos o quanto for preciso para a decolagem caber; a lenta mantém o nível dela (o reforço `mkIdle`
+    // compensa). O limitador volta a ser proteção, não parte do timbre
+    const m = this.margemDecolagem(cfg, gWot);
+    this.margemDb = -20 * Math.log10(m);
+    const gain = clamp(gWot * m, 0.05, 40);
     return { gain, idle: clamp(gIdle / gain, 1, 8) };
+  }
+
+  /**
+   * Fator (≤ 1) que põe a decolagem abaixo do limitador de saída: o motor com o escape do próprio preset na rotação
+   * máxima, manete toda e pressão cheia, mais a hélice da página na rotação governada com o torque da potência da ficha
+   * (a lei de carga), somados amostra a amostra como a página soma; o percentil 99,5 do módulo, com o volume padrão
+   * (0,8), fica em `LIM_DECOLAGEM` de argumento do `tanh`.
+   */
+  private margemDecolagem(cfg, gWot: number) {
+    const B = 256, L = new Float32Array(B), R = new Float32Array(B), fs = this.fs;
+    const t = new RadialDSP(fs);
+    t.setConfig({ ...cfg, gain: undefined, powerModel: undefined, rotativo: undefined }, false);
+    t.state = 'run'; t.lockOmega = true; t.tempMode = 'fixed'; t.tempSet = 90; t.coolant = 90; t.runT = 100; t.exhT = 700;
+    t.omega = (this.redline * TAU) / 60; t.rpmAvg = this.redline; t.magnetos = 'ambos'; t.mistura = 0.8;
+    t.thrTarget = 1; t.thr = 1; t.boost = cfg.boost; t.maxBoost = cfg.boost; t.params.master = 0.02;
+    const n0 = Math.round(0.15 * fs), n = Math.round(0.3 * fs), x = new Float32Array(2 * n);
+    for (let i = -n0; i < n; i += B) {
+      t.process(L, R, B);
+      if (i >= 0) for (let k = 0; k < B && i + k < n; k++) { x[2 * (i + k)] = L[k] / 0.01; x[2 * (i + k) + 1] = R[k] / 0.01; }
+    }
+    // hélice da página em decolagem (Pa a 30 m → unidades da saída: aviacao.ts, somExtraAv)
+    const h = this.cargaAv?.hcfg, hel = new Float32Array(n);
+    if (h && this.heliceSom) {
+      const f = new FonteHelice(fs, h.B, h.D, h.nHelice);
+      f.onLenta = h.onLenta ?? 0; f.kapK = h.kapK ?? 1; f.largoK = h.largoK ?? 1; f.lei = 'carga';
+      f.np = 1; f.u = 1; f.torque = ((cfg.power || 100) * 1000) / ((h.nHelice * TAU) / 60);
+      f.preencher(hel, n);
+      const k = (30 / 5) * (0.17 / paLw5(cfg.nivelEscape || 135));
+      for (let i = 0; i < n; i++) hel[i] *= k;
+    }
+    const a = new Float32Array(2 * n);
+    for (let i = 0; i < n; i++) { a[2 * i] = Math.abs(x[2 * i] * gWot + hel[i]); a[2 * i + 1] = Math.abs(x[2 * i + 1] * gWot + hel[i]); }
+    a.sort();
+    const q = a[Math.min(a.length - 1, Math.floor(0.995 * a.length))];
+    return Math.min(1, LIM_DECOLAGEM / (0.8 * 0.5 * Math.max(q, 1e-9)));
   }
 
   measurePower(cfg) {
@@ -410,6 +476,9 @@ export class RadialDSP extends EngineDSP {
 
   /** hélice (aviacao.ts) + apito do arranque de inércia (0,02 Pa a 5 m, tom + 2º harmônico −12 dB + banda estreita) */
   somExtraRadial() {
+    // (o torque que a hélice absorve, no eixo dela: é o que a lei de carga da FonteHelice lê a cada tique)
+    const f = this.heliceSom, ca = this.cargaAv;
+    if (f && ca?.helice && this.helK >= 128) f.torque = ca.helice.torque(this.omega) * ca.hcfg.i;
     let x = AV.somExtraAv.call(this);
     if (this.apAmp > 1e-3 && !this.lockOmega) {
       this.apPh += this.apHz / this.fs; if (this.apPh > 1) this.apPh -= 1;

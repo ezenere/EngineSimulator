@@ -20,8 +20,10 @@
 //  - **Sem bocal.** A velocidade na boca é a da onda no tubo, v = p/ρc (ρc ≈ 250 Pa·s/m no gás de escape): o estaque é
 //    o próprio primário. O chiado de jato do Ronco dividia a velocidade pela área da ponteira relativa a um tubo de
 //    2,5" (÷ 0,36 num estaque de 38 mm: +18 dB), como se o gás acelerasse num bocal que não existe, e o ruído (∝ v²)
-//    virava 87–100 % do som acima de 400 Hz na lenta. O ruído de mistura do jato de verdade (∝ M³ sobre o pulso) só
-//    aparece perto de Mach 1, em plena potência: é o termo `kJ·M²`.
+//    virava 87–100 % do som acima de 400 Hz na lenta. (Um termo a mais para o ruído de mistura do jato perto de Mach 1,
+//    intensidade crescendo com M², foi medido e saiu: na decolagem do Corsair ele punha 2,5–6 kHz 7 dB acima da
+//    gravação, com o sopro em 100 % de tudo acima de 1 kHz. Com a intensidade constante o sopro em potência já rasga,
+//    porque o joelho do espectro sobe com a velocidade.)
 //
 // Ruído com semente própria por boca (a renderização segue determinística). O controle "Ar" da página (`params.air`)
 // multiplica a turbulência, como multiplica o chiado da admissão.
@@ -29,34 +31,32 @@ import { Radiator, RNG, type Line } from '../../acoustics';
 
 /** ρc do gás de escape (Pa·s/m): ~0,48 kg/m³ a 450 °C × 520 m/s */
 const RHO_C = 250;
-/** Strouhal do joelho do espectro da turbulência na boca e comprimento de mistura em diâmetros */
-const ST = 0.3, MISTURA_D = 5;
-/** velocidade do som no gás (m/s) e a amplitude de onda (Pa) em que a boca fica sônica */
-const C_GAS = 520, U_SONICO = RHO_C * C_GAS;
+/** Strouhal do joelho do espectro da turbulência na boca; diâmetros que a camada de mistura leva para enrolar (a
+ *  turbulência não nasce no instante em que a vazão sobe) e para se desfazer depois que o sopro passa */
+export const BOCA = { ST: 0.3, ROLO_D: 4, MISTURA_D: 20 };
 
 export type OpBoca = {
   /** diâmetro interno da boca (m) */
   D: number;
   /** intensidade da turbulência do sopro (fração RMS da vazão) */
   kT: number;
-  /** quanto a intensidade cresce com o Mach² (ruído de mistura do jato em potência) */
-  kJ: number;
   /** objeto `params` do DSP (lê `air` a cada amostra) */
   params: { air: number };
   semente: number;
 };
 
 export class BocaEscape extends Radiator {
-  D: number; kT: number; kJ: number; params: { air: number };
+  D: number; kT: number; params: { air: number };
   /** envoltória da vazão turbulenta (Pa de onda) e o ruído filtrado */
   env = 0; nz = 0; rng: RNG;
-  private dt: number; private kMist: number; private kSt: number;
+  private dt: number; private kRolo: number; private kMist: number; private kSt: number;
   constructor(fs: number, line: Line, panL: number, panR: number, fc: number, gain: number, fRad: number, op: OpBoca) {
     super(fs, line, panL, panR, fc, gain, fRad);
-    this.D = op.D; this.kT = op.kT; this.kJ = op.kJ; this.params = op.params; this.rng = new RNG(op.semente);
+    this.D = op.D; this.kT = op.kT; this.params = op.params; this.rng = new RNG(op.semente);
     this.dt = 1 / fs;
-    this.kMist = this.dt / (RHO_C * MISTURA_D * op.D);        // dE/dt = −E²/(ρc·5D)
-    this.kSt = (2 * Math.PI * ST * this.dt) / (RHO_C * op.D); // coeficiente do passa-baixa por Pa de envoltória
+    this.kRolo = this.dt / (RHO_C * BOCA.ROLO_D * op.D);           // sobe em ROLO_D diâmetros à velocidade da vazão
+    this.kMist = this.dt / (RHO_C * BOCA.MISTURA_D * op.D);        // dE/dt = −E²/(ρc·MISTURA_D·D)
+    this.kSt = (2 * Math.PI * BOCA.ST * this.dt) / (RHO_C * op.D); // coeficiente do passa-baixa por Pa de envoltória
   }
   step() {
     const x = this.line.in1;
@@ -64,16 +64,15 @@ export class BocaEscape extends Radiator {
     const refl = -this.R * this.s;
     this.line.out1 = refl;
     const u = x - refl, au = u < 0 ? -u : u;
-    // envoltória: sobe com a vazão, desce com o tempo de mistura do próprio sopro
+    // envoltória: sobe com a vazão (no tempo de a camada de mistura enrolar) e desce com o tempo de mistura do próprio sopro
     let e = this.env;
-    if (au > e) e = au; else e -= Math.min(e, e * e * this.kMist);
+    if (au > e) e += (au - e) * Math.min(1, au * this.kRolo); else e -= Math.min(e, e * e * this.kMist);
     this.env = e;
     // ruído de banda larga com o joelho no Strouhal da boca (um polo), normalizado para RMS 1 em qualquer joelho
     const k = Math.min(0.6, Math.max(0.004, e * this.kSt));
     // (o ganho entra antes do filtro: o estado já fica normalizado e não salta quando o joelho muda com o sopro)
     this.nz += k * (this.rng.bi() * Math.sqrt((3 * (2 - k)) / k) - this.nz);
-    const M = Math.min(1, e / U_SONICO);
-    this.emit = this.radiate(u + (this.kT + this.kJ * M * M) * e * this.nz * this.params.air);
+    this.emit = this.radiate(u + this.kT * e * this.nz * this.params.air);
     this.u = u; // (a vazão sem a turbulência: é o que o laço do EngineDSP lê)
   }
 }

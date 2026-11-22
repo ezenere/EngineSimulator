@@ -169,7 +169,9 @@ async function grupo(nome: string): Promise<Linha[]> {
     // T-RAD-05: as mesmas lentas pelo RadialDSP da página (radial.html, ouvinte de fora, 5 m do cubo, hélice do próprio
     // DSP), contra os mesmos alvos das gravações. A distância da página não é a da gravação (4–12 m): comparação aproximada,
     // mas é o que se ouve lá
-    const { preset, novoDSP, renderizar, mono, trecho, media } = await import('./radial-comum');
+    // (um ouvido só, o do lado das bocas: a soma em mono dos dois ouvidos, cada boca com o seu atraso de até 0,6 ms, tirava
+    // 2 a 4 dB de 1–2,5 kHz na medida; radial-comum.ts, `ouvido`)
+    const { preset, novoDSP, renderizar, ouvido, trecho, media } = await import('./radial-comum');
     const { medir } = await import('./radial-bandas');
     for (const [n, id, , o, alvo, cent] of REG) {
       if (!n.startsWith('lenta')) continue;
@@ -178,7 +180,7 @@ async function grupo(nome: string): Promise<Linha[]> {
       const r = renderizar(d, 12);
       const rpm = media(trecho(r.tele, 4, 12).map((q) => q.rpm));
       const fIgn = ((rpm / 60) * s.cylinders) / 2, B = s.helice?.B || 0, i = 1 / (s.reducao || 1);
-      const m = medir(mono(r.L, r.R, 4, 12), SR, { N: s.cylinders, fileiras: s.rows, fIgn, B, i, rastrear: false });
+      const m = medir(ouvido(r.L, r.R, 4, 12), SR, { N: s.cylinders, fileiras: s.rows, fIgn, B, i, rastrear: false });
       const b = [m.b[0], m.b[2], m.b[3], m.b[4]];
       const erro = Math.max(...b.map((v, k) => Math.abs(v - alvo[k])));
       const curto = n.replace(/^lenta /, '').replace(/, \d+ m \(/, ' (');

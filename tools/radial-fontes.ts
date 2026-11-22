@@ -7,7 +7,7 @@
 //   npx tsx tools/radial-fontes.ts <preset> <pasta/> --cada [opções]   (<pasta>/<preset>_<cond>_<caminho>_tudo.wav, _sem-<fonte>.wav, _semente2.wav)
 //
 //   --caminho pagina|cena   `pagina` (padrão): o RadialDSP de radial.html, ouvinte de fora a 5 m do cubo, com o `tanh` da
-//                           saída; `cena`: o MotorRadial no portador hélice, ouvinte parado de lado a `--d` metros
+//                           saída, num ouvido só (o de maior potência; `--canal e|d|media` escolhe outro); `cena`: o MotorRadial no portador hélice, ouvinte parado de lado a `--d` metros
 //                           (padrão 5), solo de grama, em Pa (o caminho da Passagem)
 //   --lenta                 lenta livre e quente (padrão): o giro vaga como no navegador; `--idle R` troca a rotação-alvo
 //                           da lenta pela da gravação
@@ -73,7 +73,7 @@ export function escalar(d: any, f: string, g: number, helice?: any) {
   }
 }
 
-export type Op = { caminho: 'pagina' | 'cena'; d: number; idle?: number; rpm?: number; pedal?: number; decolagem?: boolean; rpmAlvo?: number; dur: number; descarta?: number;
+export type Op = { caminho: 'pagina' | 'cena'; canal?: string; d: number; idle?: number; rpm?: number; pedal?: number; decolagem?: boolean; rpmAlvo?: number; dur: number; descarta?: number;
   campo: any; sem: string[]; escala: [string, number][]; semente?: number; iac?: number };
 
 function specDe(id: string, campo: any) {
@@ -137,16 +137,21 @@ function renderPagina(id: string, op: Op) {
   } else { d = novo(spec.idle); modo = 'lenta'; }
   const descarta = op.descarta ?? (modo === 'decolagem' ? 8 : 4);
   const n0 = Math.round(descarta * SR), n = Math.round(op.dur * SR);
-  const m = new Float32Array(n);
-  let somaRpm = 0, cont = 0, rpmMin = Infinity, rpmMax = 0;
+  const mL = new Float32Array(n), mR = new Float32Array(n);
+  let somaRpm = 0, cont = 0, rpmMin = Infinity, rpmMax = 0, eL = 0, eR = 0;
   for (let i = -n0; i < n; i += B) {
     d.process(l, r, B);
     if (i >= 0) {
       const k = Math.min(B, n - i);
-      for (let j = 0; j < k; j++) m[i + j] = 0.5 * (l[j] + r[j]);
+      for (let j = 0; j < k; j++) { mL[i + j] = l[j]; mR[i + j] = r[j]; eL += l[j] * l[j]; eR += r[j] * r[j]; }
       somaRpm += d.rpmAvg; cont++; rpmMin = Math.min(rpmMin, d.rpmAvg); rpmMax = Math.max(rpmMax, d.rpmAvg);
     }
   }
+  // um ouvido só, o de maior potência (o do lado das bocas): é o que se compara com um microfone. A soma em mono dos
+  // dois ouvidos, cada boca com o seu atraso de até 0,6 ms, forma um pente que tira 2 a 4 dB de 1–2,5 kHz (`--canal media`)
+  let m = eR > eL ? mR : mL;
+  if (op.canal === 'media') { m = new Float32Array(n); for (let i = 0; i < n; i++) m[i] = 0.5 * (mL[i] + mR[i]); }
+  else if (op.canal === 'e') m = mL; else if (op.canal === 'd') m = mR;
   const rpm = somaRpm / Math.max(1, cont);
   return { m, d, spec, modo, rpm, rpmMin, rpmMax, pedal: Number.isFinite(pedal) ? pedal : d.thr, iac: Number.isFinite(iac) ? iac : null };
 }
@@ -219,7 +224,7 @@ if (process.argv[1] && process.argv[1].endsWith('radial-fontes.ts')) {
   const [id, saida] = pos;
   if (!id || !saida) { console.error('uso: tsx tools/radial-fontes.ts <preset> <saida.wav | pasta/ --cada> [--caminho pagina|cena] [--d m] [--lenta [--idle R] | --rpm R [--pedal x] | --decolagem [--rpmAlvo x]] [--dur s] [--descarta s] [--campo JSON] [--sem a,b] [--escala a=g] [--semente N] [--fontes a,b] [--rotulo nome]'); process.exit(2); }
   const op: Op = {
-    caminho: (val('--caminho') as any) || 'pagina', d: num('--d') ?? 5, idle: num('--idle'), rpm: num('--rpm'), pedal: num('--pedal'), decolagem: tem('--decolagem'), rpmAlvo: num('--rpmAlvo'),
+    caminho: (val('--caminho') as any) || 'pagina', canal: val('--canal'), d: num('--d') ?? 5, idle: num('--idle'), rpm: num('--rpm'), pedal: num('--pedal'), decolagem: tem('--decolagem'), rpmAlvo: num('--rpmAlvo'),
     dur: num('--dur') ?? 12, descarta: num('--descarta'), campo: JSON.parse(val('--campo') || '{}'), sem: (val('--sem') || '').split(',').filter(Boolean),
     escala: (val('--escala') || '').split(',').filter(Boolean).map((kv) => { const [k, v] = kv.split('='); return [k, +v] as [string, number]; }), semente: num('--semente'),
   };

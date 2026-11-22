@@ -152,6 +152,10 @@ function Escapamento({ k, e }: P) {
         <ChipGroup id="breakout" opcoes={[{ valor: 'sealed', rotulo: 'Soldado' }, { valor: 'old', rotulo: 'Juntas deslizantes' }, { valor: 'leaky', rotulo: 'Chapa fina, vazando' }]}
           atual={e.spec.breakout || 'old'} aoEscolher={(v) => k.setSpec({ breakout: v })} />
       </Field>
+      {(e.spec.breakout || 'old') !== 'sealed' && (
+        <Slider id="vazamento" rotulo="Vazamento das juntas (rajada do coletor)" min={-24} max={6} passo={1} valor={e.spec.vazamento ?? 0} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoSoltar={(v) => k.setSpec({ vazamento: v })} />
+      )}
+      <Slider id="sopro" rotulo="Sopro das bocas (turbulência do escape)" min={-12} max={12} passo={1} valor={e.spec.sopro ?? 0} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoSoltar={(v) => k.setSpec({ sopro: v })} />
       <p className="note">Bocas (fontes do escape): {e.motor.grupos} · cilindros por grupo de escape: {e.motor.grupo.length / Math.max(1, e.motor.grupos)}</p>
     </Section>
   );

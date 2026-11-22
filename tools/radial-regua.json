@@ -85,14 +85,26 @@
    "renderCena": [
     "--lenta",
     "--idle",
-    "525"
+    "525",
+    "--campo",
+    {
+     "escape": {
+      "saidas": [
+       {
+        "L": 1.0,
+        "O": 76,
+        "phi": 270
+       }
+      ]
+     }
+    }
    ],
    "caminhos": [
     "pagina",
     "cena"
    ],
    "d": 4,
-   "nota": "motor ainda frio, 6 s de trecho. A rotação é 525 rpm (ciclo de 4,38 Hz pela dobra do f0.py, ignição em 39,4 Hz), não os 916 rpm do INDEX e do RADIAL.md: a linha mais forte, 70 Hz, é o 16º harmônico do ciclo (8ª ordem), e o agudo vem em uma rajada por ciclo"
+   "nota": "motor ainda frio, 6 s de trecho. A rotação é 525 rpm (ciclo de 4,38 Hz pela dobra do f0.py, ignição em 39,4 Hz), não os 916 rpm do INDEX e do RADIAL.md: a linha mais forte, 70 Hz, é o 16º harmônico do ciclo (8ª ordem), e o agudo vem em uma rajada por ciclo. Pela Cena o ouvinte fica do lado esquerdo do avião: a saída do anel vai espelhada (phi 270) para ele ouvir o lado do escape, como o microfone da gravação"
   },
   {
    "id": "corsair-lenta",
@@ -197,6 +209,58 @@
    ],
    "d": 10,
    "nota": "dois motores (linhas de 101 e 105,5 Hz); passa-baixa da gravação em 12,5 kHz"
+  },
+  {
+   "id": "beaver-lenta",
+   "titulo": "Beaver R-985 · lenta 705 rpm (de fora, perto)",
+   "preset": "r985",
+   "real": "beaver-r985-partida.wav",
+   "trecho": [
+    20,
+    50
+   ],
+   "rpm": 705,
+   "render": [
+    "--rpm",
+    "705"
+   ],
+   "renderCena": [
+    "--lenta",
+    "--idle",
+    "705"
+   ],
+   "caminhos": [
+    "pagina",
+    "cena"
+   ],
+   "d": 6,
+   "nota": "DHC-2 Beaver, o mesmo R-985 do preset (que é o do Ford Trimotor, de passo fixo); rotação pelo f0.py (linha de 52,8 Hz = 9º harmônico do ciclo); tom fixo de 8,1 kHz que não é do motor; distância não anotada (≈ 6 m)"
+  },
+  {
+   "id": "t28-lenta",
+   "titulo": "T-28 R-1820 · lenta 842 rpm (perto)",
+   "preset": "r1820",
+   "real": "t28-r1820-partida-lenta.wav",
+   "trecho": [
+    60,
+    80
+   ],
+   "rpm": 842,
+   "render": [
+    "--rpm",
+    "842"
+   ],
+   "renderCena": [
+    "--lenta",
+    "--idle",
+    "842"
+   ],
+   "caminhos": [
+    "pagina",
+    "cena"
+   ],
+   "d": 5,
+   "nota": "gravação de perto, quase sem grave (30–100 Hz a −19 dB): a banda âncora pesa mais que o grave real; rotação do INDEX (pente da ignição, 63,2 Hz), não conferida pela dobra"
   },
   {
    "id": "sherman-lenta",
