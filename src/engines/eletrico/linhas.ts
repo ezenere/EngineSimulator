@@ -19,13 +19,22 @@ export class ListaLinhas {
   n = 0;
   cap: number;
   chave: Int32Array; f: Float64Array; a: Float64Array;
-  constructor(cap = 256) { this.cap = cap; this.chave = new Int32Array(cap); this.f = new Float64Array(cap); this.a = new Float64Array(cap); }
+  /** fase inicial (rad) de uma linha que nasce neste bloco; NaN = sorteada pelo banco */
+  fase: Float64Array;
+  constructor(cap = 256) { this.cap = cap; this.chave = new Int32Array(cap); this.f = new Float64Array(cap); this.a = new Float64Array(cap); this.fase = new Float64Array(cap); }
   limpar() { this.n = 0; }
   /** f em Hz (o sinal é ignorado: |f|), a em Pa (amplitude de pico) */
   por(chave: number, f: number, a: number) {
     if (!(a > 0) || this.n >= this.cap) return;
     const i = this.n++;
-    this.chave[i] = chave; this.f[i] = f < 0 ? -f : f; this.a[i] = a;
+    this.chave[i] = chave; this.f[i] = f < 0 ? -f : f; this.a[i] = a; this.fase[i] = NaN;
+  }
+  /** como `por`, com a fase em que a linha nasce (linhas que têm de bater juntas: o par f ± f_e do inversor) */
+  porFase(chave: number, f: number, a: number, fase: number) {
+    if (!(a > 0) || this.n >= this.cap) return;
+    const i = this.n++;
+    // (frequência negativa: sen(−x) = −sen(x); o oscilador roda em |f| com a fase espelhada)
+    this.chave[i] = chave; this.f[i] = f < 0 ? -f : f; this.a[i] = a; this.fase[i] = f < 0 ? Math.PI - fase : fase;
   }
 }
 
@@ -128,7 +137,7 @@ export class BancoDeLinhas {
     // linhas na mesma frequência (|Δf| < 0,1 Hz: duas ordens de mecanismos diferentes que coincidem, como 12·f_e e as
     // ranhuras de uma PMSM com Z_s/p inteiro) somam em potência numa só: com fases sorteadas, a soma de duas senoides de
     // mesma frequência daria qualquer nível entre a diferença e a soma
-    this.fundir(sel, ns, lf, la);
+    this.fundir(sel, ns, L);
     const piso = aMax * Math.pow(10, PISO_LINHA_DB / 20);
     let m = 0;
     for (let j = 0; j < ns; j++) { const i = sel[j]; if (la[i] >= piso && la[i] > 0) sel[m++] = i; }
@@ -147,7 +156,7 @@ export class BancoDeLinhas {
         j = this.livre();
         if (j < 0) continue;
         A[j] = 1; K[j] = k; this.env[j] = 0; this.a[j] = 0;
-        const ph = this.rng.next() * TAU; this.c[j] = Math.cos(ph); this.s[j] = Math.sin(ph);
+        const fi = L.fase[i], ph = fi === fi ? fi : this.rng.next() * TAU; this.c[j] = Math.cos(ph); this.s[j] = Math.sin(ph);
         this.d[j] = lf[i] * ds;
         this.inserir(k, j);
       }
@@ -174,8 +183,10 @@ export class BancoDeLinhas {
   }
 
   private tq = new Int32Array(2048); private ti = new Int32Array(2048);
-  /** funde as candidatas de frequências iguais (±0,1 Hz) em potência, na primeira delas */
-  private fundir(sel: Int32Array, ns: number, lf: Float64Array, la: Float64Array) {
+  /** funde as candidatas de frequências iguais (±0,1 Hz) em potência, numa só, que fica com a chave e a fase da mais
+   *  forte (é ela que continua no mesmo oscilador e que guarda a fase com que nasceu) */
+  private fundir(sel: Int32Array, ns: number, L: ListaLinhas) {
+    const lf = L.f, la = L.a;
     const TQ = this.tq, TI = this.ti, M = TQ.length - 1;
     TI.fill(-1);
     for (let j = 0; j < ns; j++) {
@@ -186,7 +197,10 @@ export class BancoDeLinhas {
         let h = Math.imul(qq, 0x9e3779b1) >>> 0 & M;
         while (TI[h] >= 0) { if (TQ[h] === qq && Math.abs(lf[TI[h]] - f) < 0.1) { achou = TI[h]; break; } h = (h + 1) & M; }
       }
-      if (achou >= 0) { la[achou] = Math.sqrt(la[achou] * la[achou] + la[i] * la[i]); la[i] = 0; continue; }
+      if (achou >= 0) {
+        if (la[i] > la[achou]) { L.chave[achou] = L.chave[i]; L.fase[achou] = L.fase[i]; }
+        la[achou] = Math.sqrt(la[achou] * la[achou] + la[i] * la[i]); la[i] = 0; continue;
+      }
       let h = Math.imul(q, 0x9e3779b1) >>> 0 & M;
       while (TI[h] >= 0) h = (h + 1) & M;
       TQ[h] = q; TI[h] = i;

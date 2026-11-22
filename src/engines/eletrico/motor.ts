@@ -19,6 +19,8 @@ const BASES: IdCanalEletrico[] = ['motor', 'inversor', 'reducao', 'ventilador', 
 function medir(p: PresetEletrico, fs: number, fracBase: number) {
   const d = new EletricoDSP(fs);
   d.configurar({ ...p, kAbs: undefined }, fs);
+  // compressor, ventilação e transformador têm calibração própria (auxiliares.ts): ficam fora da sonda
+  if (d.auxi) d.auxi.mudo = true;
   const wb = (p.rpmBase * TAU) / 60;
   d.comandar({ acelerador: 1, ignicao: true, partida: false, omegaImposta: wb * fracBase, torqueFixo: p.Tn, v: 20 } as never);
   // ventiladores forçados já na rotação (a subida de 1,5 s fica fora da sonda)

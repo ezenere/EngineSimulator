@@ -12,7 +12,7 @@ import { pesoLaterais } from './maquina';
 import type { ListaLinhas } from './linhas';
 import { RNG } from '../../acoustics/rng';
 import { Bq, rmsCadeia } from '../../scene/filtros';
-import { TAU, MEC, chave, hCarcaca, F_CARC, I_VAZIO, ESCADA_F0, ESCADA_DELTA, NOTAS_TAURUS, PATAMAR_TAURUS } from './constantes';
+import { TAU, MEC, chave, hCarcaca, F_CARC, I_VAZIO, ESCADA_F0, ESCADA_DELTA, NOTAS_TAURUS, PATAMAR_TAURUS, type Relevo } from './constantes';
 
 export type ModoModulacao = 'assincrona' | 'escada' | 'sincrona' | 'auto' | 'aleatoria' | 'chopper';
 /** modo que está tocando (com os casos que não são escolha do usuário) */
@@ -53,6 +53,19 @@ const DB_HARM = [1, dB20(-4), dB20(-8), dB20(-12), dB20(-16)];
 const BLOCO_N = [6, 12, 5, 7], BLOCO_A = [1, dB20(-8), dB20(-14), dB20(-14)];
 /** curva da carcaça (fc = 0: sem curva, a tensão pura dos testes) */
 function hc(f: number, fc: number) { return fc === 0 ? 1 : hCarcaca(f < 0 ? -f : f, fc); }
+/**
+ * A força que soa é o produto da ondulação de corrente do chaveamento pelo fluxo fundamental (1.2: "mais ± f_e"): cada
+ * harmônico de tensão em f vira, na carcaça, o par f − f_e e f + f_e, com um resto no centro (o que a ondulação faz
+ * sozinha: reatores, barramentos). O par bate a 2·f_e: é o tremor do tom do inversor, que acelera com a velocidade (medido
+ * no patamar do Taurus: a envoltória de 560–640 Hz pulsa a 8–14 Hz, com vales de 15–25 dB, onde uma senoide parada dava
+ * 3 dB). O fluxo é um só: o par de cada harmônico nasce com as fases θ − ψ e θ + ψ, ψ = a fase do fluxo fundamental, e
+ * todos os harmônicos da portadora pulsam JUNTOS (um tremor do tom inteiro, não um vaivém entre harmônicos). Com
+ * f_e → 0 os três caem na mesma frequência e o banco os soma em potência (sem salto). Potência média conservada:
+ * K_CENTRO² + 2·K_PAR² = 1.
+ */
+const K_CENTRO = 0.15, K_PAR = Math.sqrt((1 - K_CENTRO * K_CENTRO) / 2);
+/** fase da portadora de uma linha (rad), fixa pela chave: mistura de 32 bits */
+function faseDe(k: number, sem: number) { let h = Math.imul(k ^ sem, 0x9e3779b1); h ^= h >>> 15; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; return ((h >>> 0) * 2.3283064365386963e-10) * TAU; }
 
 export class Inversor {
   p: PresetEletrico; fs: number;
@@ -72,8 +85,10 @@ export class Inversor {
   private eG = [0, 0];
 
   private permitidosP: ModoModulacao[];
-  constructor(p: PresetEletrico, fs: number, semente: number) {
-    this.p = p; this.fs = fs; this.rng = new RNG(semente);
+  /** relevo da carcaça (modos) nas linhas que varrem; null = curva lisa */
+  relevo: Relevo | null;
+  constructor(p: PresetEletrico, fs: number, semente: number, relevo: Relevo | null = null) {
+    this.p = p; this.fs = fs; this.rng = new RNG(semente); this.relevo = relevo; this.semFase = (semente * 2654435761) >>> 0;
     this.permitidosP = Inversor.permitidos(p);
     this.bqC.bp(fs, 800, 1);
   }
@@ -147,6 +162,17 @@ export class Inversor {
     }
   }
 
+  /** fase do fluxo fundamental (rad), integrada a cada bloco de controle; e a semente das fases das portadoras */
+  private psi = 0; private semFase: number;
+  /** uma linha de tensão em f: sozinha (testes de tensão) ou o par acústico f ± f_e com o resto no centro */
+  private por(L: ListaLinhas, k: number, f: number, a: number, fe: number, fcar: number, rv: Relevo | null) {
+    if (fcar === 0) { L.por(chave(MEC.portadora, k), f, a); return; }
+    const fm = f - fe, fp = f + fe, th = faseDe(k, this.semFase), ps = this.psi;
+    L.porFase(chave(MEC.portadora, k), f, a * K_CENTRO * hc(f, fcar) * (rv ? rv.ganho(f < 0 ? -f : f) : 1), th);
+    L.porFase(chave(MEC.portadora, k | 0x1000), fm, a * K_PAR * hc(fm, fcar) * (rv ? rv.ganho(fm < 0 ? -fm : fm) : 1), th - ps);
+    L.porFase(chave(MEC.portadora, k | 0x2000), fp, a * K_PAR * hc(fp, fcar) * (rv ? rv.ganho(fp < 0 ? -fp : fp) : 1), th + ps);
+  }
+
   /** linhas do bloco (tensão → corrente → força × curva da carcaça), em unidades relativas (sem alocação: sem fechos) */
   linhas(e: EstadoMaquina, L: ListaLinhas, det = 1, soTensao = false) {
     const inv = this.p.inversor;
@@ -155,9 +181,12 @@ export class Inversor {
     const fcar = soTensao ? 0 : F_CARC[this.p.carcaca];
     const gI = soTensao ? 1 : Math.max(e.I, I_VAZIO);
     const fe = e.fe * det, g = this.gen << 8;
+    const rv = soTensao ? null : this.relevo;
+    // fase do fluxo (um bloco de controle por chamada): o par f ± f_e de cada harmônico nasce amarrado a ela
+    this.psi += (TAU * fe * 64) / this.fs; if (this.psi > TAU) this.psi -= TAU; else if (this.psi < 0) this.psi += TAU;
     if (this.modo === 'csi') {
       // inversor de corrente (TGV): sem portadora; 6f_e dominante, 12f_e −8, 18f_e −16, e o chopper de entrada
-      for (let h = 1; h <= 3; h++) { const f = 6 * h * fe; L.por(chave(MEC.csi, h), f, gI * DB_CSI[h - 1] * hc(f, fcar)); }
+      for (let h = 1; h <= 3; h++) { const f = 6 * h * fe; L.por(chave(MEC.csi, h), f, gI * DB_CSI[h - 1] * hc(f, fcar) * (rv ? rv.ganho(f) : 1)); }
       const fch = inv.fcEntrada ?? 300;
       for (let h = 1; h <= 3; h++) L.por(chave(MEC.chopper, h), h * fch, 0.3 * gI * DB_HARM[h - 1] * hc(h * fch, fcar));
       return;
@@ -173,11 +202,13 @@ export class Inversor {
     if (this.modo === 'bloco') {
       // onda quadrada (N = 1): sem portadora; 6f_e da 5ª e 7ª da corrente, 12f_e −8, 5f_e e 7f_e −14 (≈ a f_c com M = 1)
       const a0 = (Math.abs(jTab(0, Math.PI / 2)) / J_REF) * gI;
-      for (let i = 0; i < BLOCO_N.length; i++) { const o = BLOCO_N[i], f = o * fe; L.por(chave(MEC.bloco, (this.gen << 6) | o), f, a0 * BLOCO_A[i] * hc(f, fcar)); }
+      for (let i = 0; i < BLOCO_N.length; i++) { const o = BLOCO_N[i], f = o * fe; L.por(chave(MEC.bloco, (this.gen << 6) | o), f, a0 * BLOCO_A[i] * hc(f, fcar) * (rv ? rv.ganho(f < 0 ? -f : f) : 1)); }
       return;
     }
     const M = e.M, fc = this.fc;
     const perfil = inv.perfilGrupos;
+    // o perfil medido (Taurus, bonde) já é acústico: traz o relevo da carcaça de verdade, e a portadora não varre
+    const rvP = perfil && this.modo !== 'sincrona' ? null : rv;
     const mMax = perfil ? Math.max(3, perfil.length) : 3;
     const a10 = Math.abs(jTab(0, (Math.PI * M) / 2)) / J_REF;    // f_c (tensão)
     for (let m = 1; m <= mMax; m++) {
@@ -193,8 +224,8 @@ export class Inversor {
         potLat += 2 * av * av;
         if (w > 0) {
           const a = av * Math.sqrt(w) * corr * gI;
-          L.por(chave(MEC.portadora, g | (m << 4) | (n + 8)), fm + n * fe, a * hc(fm + n * fe, fcar));
-          L.por(chave(MEC.portadora, g | (m << 4) | (8 - n)), fm - n * fe, a * hc(fm - n * fe, fcar));
+          this.por(L, g | (m << 4) | (n + 8), fm + n * fe, a, fe, fcar, rvP);
+          this.por(L, g | (m << 4) | (8 - n), fm - n * fe, a, fe, fcar, rvP);
         }
         pot += 2 * av * av * (1 - w);
       }
@@ -208,7 +239,16 @@ export class Inversor {
         if (ap * hc(fc, fcar) > ac * hm) hm = hc(fc, fcar);
         if (ap > ac) ac = ap;
       }
-      if (ac > 0) L.por(chave(MEC.portadora, g | (m << 4) | 8), fm, ac * gI * hm);
+      if (ac > 0) {
+        if (soTensao) L.por(chave(MEC.portadora, g | (m << 4) | 8), fm, ac * gI * hm);
+        else {
+          // (a curva da carcaça do grupo vale para o centro e para o par: f_e é pequeno perto de m·f_c)
+          const a = ac * gI * hm, k = g | (m << 4) | 8, f1 = fm - fe, f2 = fm + fe, th = faseDe(k, this.semFase), ps = this.psi;
+          L.porFase(chave(MEC.portadora, k), fm, a * K_CENTRO * (rvP ? rvP.ganho(fm) : 1), th);
+          L.porFase(chave(MEC.portadora, k | 0x1000), f1, a * K_PAR * (rvP ? rvP.ganho(f1 < 0 ? -f1 : f1) : 1), th - ps);
+          L.porFase(chave(MEC.portadora, k | 0x2000), f2, a * K_PAR * (rvP ? rvP.ganho(f2) : 1), th + ps);
+        }
+      }
       if (m <= 2) this.eG[m - 1] = (ac * ac + potLat * corr * corr) * gI * gI * hm * hm * 0.5;
     }
   }
@@ -267,4 +307,3 @@ export function linhasAux(p: PresetEletrico, L: ListaLinhas) {
   const ex = p.auxLinhas;
   if (ex) for (let i = 0; i < ex.length; i++) L.por(chave(MEC.aux, 32 + i), ex[i][0], Math.pow(10, ex[i][1] / 20));
 }
-void TAU;

@@ -1,5 +1,5 @@
 // Medida de linhas (porte de doremi.py, ridges.py e ordens.py do projetista, eletrico-analise/): pico de uma faixa a
-// cada passo com janela de Hann e interpolação parabólica no dB, patamares (frames seguidos dentro de 1,5%), picos de um
+// cada passo com janela de Hann e interpolação parabólica no dB, patamares (frames seguidos dentro de 1,5%, com furos curtos), picos de um
 // trecho por proeminência. Os .py originais estão em tools/eletrico/analise/ (rodam com `python3 -I` sobre as gravações).
 import { fft, SR } from './comum';
 
@@ -36,22 +36,39 @@ export function rastrear(x: ArrayLike<number>, t0: number, t1: number, fa: numbe
     for (let k = Math.round((100 * N) / SR); k < Math.round((6000 * N) / SR); k++) tot += Math.pow(10, P[k] / 10);
     if (best < 0) { out.push({ t: t + jan / 2, f: NaN, rel: -99 }); continue; }
     const a = P[best - 1], b = P[best], c = P[best + 1], d = a - 2 * b + c !== 0 ? (0.5 * (a - c)) / (a - 2 * b + c) : 0;
-    out.push({ t: t + jan / 2, f: ((best + d) * SR) / N, rel: b - 10 * Math.log10(tot) });
+    // o tom de um inversor é o par f_c ± f_e (poucos Hz de cada lado, que esta janela não separa): a frequência do tom é
+    // o centro de potência de ±2,5% em volta do pico (numa linha só, coincide com o pico interpolado)
+    const fp = ((best + d) * SR) / N, k0 = Math.max(ka, Math.floor((fp * 0.975 * N) / SR)), k1 = Math.min(kb, Math.ceil((fp * 1.025 * N) / SR));
+    let sp = 0, sf = 0;
+    for (let k = k0; k <= k1; k++) { const w = Math.pow(10, P[k] / 10); sp += w; sf += w * k; }
+    out.push({ t: t + jan / 2, f: sp > 0 && k1 - k0 >= 4 ? ((sf / sp) * SR) / N : fp, rel: b - 10 * Math.log10(tot) });
   }
   return out;
 }
 
 export interface Patamar { f: number; t: number; dur: number; rel: number }
-/** patamares: quadros seguidos dentro de 1,5% da mediana corrente, com pelo menos `min` quadros */
-export function patamares(q: Quadro[], min = 4, passo = 0.05): Patamar[] {
+/**
+ * Patamares: quadros seguidos dentro de 1,5% da mediana corrente, com pelo menos `min` quadros. Um tom de inversor treme
+ * (o par f ± f_e bate a 2·f_e, e nos vales da batida o pico some ou escorrega): até `furo` quadros seguidos sem pico ou
+ * fora da faixa não fecham o patamar se o tom volta à mesma frequência logo depois.
+ */
+export function patamares(q: Quadro[], min = 4, passo = 0.05, furo = 3): Patamar[] {
   const med = (v: number[]) => { const s = [...v].sort((a, b) => a - b); return s[s.length >> 1]; };
   const out: Patamar[] = [];
   let cur: Quadro[] = [];
   const fecha = () => { if (cur.length >= min) out.push({ f: med(cur.map((c) => c.f)), t: cur[0].t, dur: cur[cur.length - 1].t - cur[0].t + passo, rel: cur.reduce((a, c) => a + c.rel, 0) / cur.length }); cur = []; };
-  for (const x of q) {
-    if (!Number.isFinite(x.f)) { fecha(); continue; }
-    if (cur.length && Math.abs(x.f - med(cur.map((c) => c.f))) / x.f > 0.015) fecha();
-    cur.push(x);
+  const dentro = (x: Quadro, m: number) => Number.isFinite(x.f) && Math.abs(x.f - m) / x.f <= 0.015;
+  for (let i = 0; i < q.length; i++) {
+    const x = q[i];
+    if (!cur.length) { if (Number.isFinite(x.f)) cur.push(x); continue; }
+    const m = med(cur.map((c) => c.f));
+    if (dentro(x, m)) { cur.push(x); continue; }
+    // furo: o tom volta em até `furo` quadros?
+    let j = i + 1;
+    while (j < q.length && j <= i + furo && !dentro(q[j], m)) j++;
+    if (j < q.length && j <= i + furo) { i = j - 1; continue; }
+    fecha();
+    if (Number.isFinite(x.f)) cur.push(x);
   }
   fecha();
   return out;

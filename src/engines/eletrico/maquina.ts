@@ -6,7 +6,7 @@
 // vem da sonda (`kAbs`, motor.ts) na condição de referência.
 import type { PresetEletrico } from './dsp';
 import type { ListaLinhas } from './linhas';
-import { TAU, MEC, chave, I_VAZIO, I_VAZIO_CC, F_CARC, F_CARC_LP } from './constantes';
+import { TAU, MEC, chave, I_VAZIO, I_VAZIO_CC, F_CARC, F_CARC_LP, type Relevo } from './constantes';
 
 /** estado elétrico e mecânico da máquina, recalculado a cada bloco de controle */
 export class EstadoMaquina {
@@ -101,7 +101,10 @@ export class ForcasMotor {
   /** fatores por categoria do bloco */
   amp = new Float64Array(8);
   fc: number;
-  constructor(p: PresetEletrico) {
+  /** relevo da carcaça (modos): multiplica a curva lisa em cada linha; null = curva lisa */
+  relevo: Relevo | null;
+  constructor(p: PresetEletrico, relevo: Relevo | null = null) {
+    this.relevo = relevo;
     const L: [number, number, number, number, number, number, number][] = [];
     const exc = Math.pow(10, (-20 + 12 * (p.excentricidade ?? 0.2)) / 20);
     const add = (k: number, cr: number, ce: number, c0: number, cat: number, w: number, fl: number, laterais: boolean) => {
@@ -181,6 +184,7 @@ export class ForcasMotor {
   emitir(L: ListaLinhas, fr: number, fe: number) {
     const wl = pesoLaterais(fe), sl = Math.sqrt(wl), F = Math.sqrt(1 + (1 - wl) * DOBRA), fc = this.fc;
     const A = this.amp, K = this.chave, CR = this.cr, CE = this.ce, C0 = this.c0, CT = this.cat, W = this.w, FL = this.fl;
+    const rv = this.relevo;
     for (let i = 0; i < this.n; i++) {
       const fl = FL[i];
       if (fl === LAT && sl === 0) continue;
@@ -188,6 +192,12 @@ export class ForcasMotor {
       if (f < 0) f = -f;
       const r = f / fc, r4 = r * r * r * r, q = f * (1 / F_CARC_LP);
       let a = A[CT[i]] * W[i] * (fl === SEMH ? 1 : Math.sqrt(r4 / (1 + r4)) / Math.sqrt(1 + q * q));
+      // ranhuras e barras: a onda de força tem ordem espacial alta (|Z_r − Z_s| ± 2p: 6 a 14 no Taurus) e irradia mal em
+      // baixa frequência: mais 6 dB/oitava abaixo de 2·f_carc. Com o trem devagar essas linhas ficavam sozinhas em
+      // 150–400 Hz (Taurus a 12 km/h: 198 Hz, 27 dB sobre o piso; a gravação A no patamar tem as linhas dali 4–10 dB sobre o piso)
+      const ct = CT[i];
+      if (ct === CRAN || ct === CBAR) { const u = f / (2 * fc); a *= u / Math.sqrt(1 + u * u); }
+      if (rv !== null && fl !== SEMH) a *= rv.ganho(f);
       if (fl === LAT) a *= sl; else if (fl === CENTRO) a *= F;
       L.por(K[i], f, a);
     }
