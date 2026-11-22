@@ -79,3 +79,30 @@ Divisão do trabalho: o mecanismo de médios e o limite do jato no **motor-base*
 6. **Mecanismo físico, não ganho** (princípios do `REVISAO-DE-SOM.md`): cada correção nomeia a peça ou o fenômeno. Atenuar é atenuar. Todo campo de preset tem controle no painel.
 7. **Portões intactos:** `paridade:ronco`, `paridade:turbina`, `paridade:acoustics` idênticos; `teste:*` e `lenta:*` da família sem falhas (alvos e desvios atualizados com justificativa); `typecheck`, `build`, `navegador:*`.
 8. **Quem decide é o ouvido do dono.** O relatório de cada agente termina com "o que ouvir": preset, condição, o que deve ter mudado.
+
+### Depois das auditorias (22/11/2026)
+
+As duas auditorias estão mescladas: `docs/AUDITORIA-UI.md` (87 defeitos, 86 corrigidos) e `docs/AUDITORIA.md` (296 achados; a tabela "Pendências, por prioridade" tem os blocos A a F com arquivo e o que fazer). O portão único é `npm run verificar` (`verificar:rapido` para o dia a dia).
+
+**Decisões do coordenador sobre a lista "o que o dono precisa decidir"** (reversíveis; o dono pode mudar qualquer uma):
+
+1. Desvios com teto: **sim**. As listas `DESVIOS` viram um retrato do valor aceito com folga (piorou além da folga, falha; voltou a passar, avisa).
+2. Sementes: **mediana de 3** nas medidas de contagem, transiente e CV.
+3. CPU e coleta de lixo saem dos `teste:*` para `cpu:*`.
+4. Referência das locomotivas diesel: refazer a partir do acervo novo (`referencias/diesel/`), depois que a passada de som do Diesel entrar.
+5. Sherman, RX-7 FD e Metropolis: vale a ficha real; o alvo do teste é corrigido junto.
+6. Valores "≈": ficam marcados como aproximação, sem inventar número.
+7. A alocação no laço de áudio, a unificação das quatro páginas a pistão e a FFT única das ferramentas ficam para depois da etapa de som (mexem nos mesmos arquivos).
+
+**Quem faz o quê** (um dono por pasta, para as mesclagens não conflitarem):
+
+| Agente | Modelo | Território | Itens |
+|---|---|---|---|
+| Diesel | Fable | `src/engines/diesel/**`, ramos `cc` do `dsp.ts`, `tools/diesel-*` | som (B1), C6; depois, bloco A do Diesel com Opus |
+| Rotativos | Fable | `src/engines/rotativo/**`, ramos `rot`, `tools/rotativo-*` | som (B3), C7, D2; depois, A3 com Opus |
+| Base | Fable | caminho da gasolina e compartilhado de `src/engines/ronco/**` | médios, jato da ponteira; depois, C1 a C4 com Opus |
+| Passagem e portadores | Opus | `src/scene/**`, `src/carriers/**`, `src/pages/passagem/**`, `src/engines/turbina/**`, `tools/cena/**` | B7 a B11, C5, C11, E1 a E3, F3, bloco A da Cena |
+| Radial, Vapor e Elétrico | Opus | presets e `tools/` dessas três famílias, `avas.ts` | bloco A dessas famílias, A4, A5, A9, C8 a C10, D1, D3, estouro do AVAS, E4 |
+| Interface e documentação | Opus | `src/pages/**` (fora da Passagem), `src/ui/**`, `tools/*-navegador.mjs`, `docs/` | pendências I1 a I10 da auditoria visual, E5, E6, F4, F6, onda e espectro no Vapor |
+
+O retoque de som do Radial, do Vapor e do Elétrico (B4, B5, o grave do B6) vem depois, medido com o kit, quando os testes dessas famílias já tiverem teto.
