@@ -26,6 +26,7 @@
 import { RNG, BiquadComPiso as Biquad, clamp, smooth, onePole, TAU, C0, PREF, R_REF } from '../../acoustics';
 import type { DSPDeAudio } from '../../worklet/tipos';
 import { sinr, DIR, dir, PASS_LOOP } from './constantes';
+import { escalaCarga } from '../../carriers/leis-helice';
 
 export class JetDSP implements DSPDeAudio {
   // campos (declare: não geram código; a classe compilada fica igual à do legado)
@@ -51,6 +52,11 @@ export class JetDSP implements DSPDeAudio {
   declare V: any; declare Vb: any; declare VcOut: any; declare vFly: any; declare Vj: any;
   // adaptador Motor da Cena (src/engines/turbina/motor.ts): só lê os barramentos antes da propagação; null na Turbina
   declare tap: any;
+  // (Cena) lei física do nível da hélice do turboélice: o tom de carga de Gutin com o torque do eixo, e o ruído largo de
+  // pá junto (src/carriers/leis-helice.ts). Só o adaptador da Cena liga (`leiCarga`, com `kwHelice` = potência de
+  // decolagem no eixo, kW por motor); na página Turbina fica falso e a hélice é a de sempre. `qHelice`: o torque do
+  // último tique
+  declare leiCarga: any; declare kwHelice: any; declare qHelice: any;
 
   constructor(fs) {
     this.fs = fs;
@@ -58,6 +64,7 @@ export class JetDSP implements DSPDeAudio {
     this.params = { listener: 'ground', env: 'runway', angle: 90, dist: 40, seat: 'wing', alt: 150, speed: 300, fan: 1, core: 1, jet: 1, master: 0.8 };
     this.tla = 0; this.revCmd = 0; this.state = 'off';
     this.post = null; this.telem = 0; this.ctrl = 0;
+    this.leiCarga = false; this.kwHelice = 0; this.qHelice = 0;
     this.cfgGain = 1; this.mk = 1; this.fade = 1; this.lvl = 0; this.splAcc = 0; this.splN = 0; this.spl = 0;
     this.flyX = -PASS_LOOP / 2; this.vFly = 0; this.ab = 0; this.abWhump = 0; this.rev = 0; this.lvl2 = 0; this.clickE = 0; this.ignT = 0; this.boomT = -1; this.boomAge = 99; this.starterW = 0; this.starterAir = 0; this.fuelOn = false; this.boomDb = 0; this.inCone = false;
     this.ambL = 0; this.ambR = 0;
@@ -498,6 +505,15 @@ export class JetDSP implements DSPDeAudio {
       const pload = (0.3 + 0.7 * u) * (1 + 0.8 * rv);
       this.aProp = 9 * Math.pow(Mh / 0.75, 4) * pload * (this.propD / 3.9) * smooth(0.05, 0.3, this.np) * P.fan;
       this.aPbb = 0.55 * Math.pow(Mh / 0.75, 5) * (1 + 2 * rv) * (this.propD / 3.9) * smooth(0.05, 0.3, this.np) * P.fan;
+      if (this.leiCarga) {
+        // (Cena) o nível pela física, como a FonteHelice com a lei de carga: o tom de carga de Gutin com o torque do eixo
+        // da hélice, que sai da potência de decolagem da ficha (5% na lenta, a fração `u` do gerador de gás acima dela; o
+        // reverso carrega a pá como no `pload`, ×(1 + 0,8·rv)), contra o da lei de cima; o ruído largo vai junto
+        const om = 2 * Math.PI * this.np * this.propHz;
+        this.qHelice = om > 0.1 ? ((this.kwHelice * 1000 * (0.05 + 0.95 * u)) / om) * (1 + 0.8 * rv) : 0;
+        const g = escalaCarga(this.propB, this.propD, om, this.qHelice, C0, Mh, pload);
+        this.aProp *= g; this.aPbb *= g;
+      }
       this.fPbb = 900 + 900 * Mh;
       if (++this.propBuild >= 8) { this.propBuild = 0; this.buildPropTab(Mh, pload); }
     }

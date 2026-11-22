@@ -64,6 +64,9 @@ export interface ComandoMotor {
    * com o isócrono acertado por motor). O portador manda o alvo (notch, rede) e não o combustível.
    */
   rpmAlvo?: number;
+  /** (extensão) notch da locomotiva (0–8): o motor com governador próprio que traz a tabela por notch (`Motor.notchRpm`)
+   *  recebe o notch direto, sem procurar a rotação mais próxima numa segunda tabela */
+  notch?: number;
 }
 
 // ---------------------------------------------------------------- 1.5 Cena → ouvinte

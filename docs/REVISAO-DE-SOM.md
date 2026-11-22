@@ -16,6 +16,7 @@ qualquer veículo, antigo ou novo.
 - [Caso: a Fórmula 1](#caso-a-fórmula-1)
 - [Caso: o compressor do Hellcat](#caso-o-compressor-do-hellcat)
 - [Caso: o som de ar dos Rotativos](#caso-o-som-de-ar-dos-rotativos)
+- [Caso: Rotativos: motor, não ar](#caso-rotativos-motor-não-ar)
 - [Caso: os pipocos do radial](#caso-os-pipocos-do-radial)
 - [Ferramentas](#ferramentas)
 - [O que olhar em cada tipo de veículo](#o-que-olhar-em-cada-tipo-de-veículo)
@@ -434,6 +435,40 @@ do gás até a boca, 9 ms, com controle no painel de 0 a 20 ms), escolhido pelo 
 (desvio/média ≥ 0,5 **e** p90/p10 dentro do medido) e uma atenuação de 3,8 dB na boca. Lições: um número que bate não
 prova o caráter (o espectro fino do agudo da gravação tem estrutura que o ruído do modelo não tem); quando gravação e
 ouvido discordam, ponha o parâmetro no painel e deixe o ouvido decidir.
+## Caso: Rotativos: motor, não ar
+
+**Queixa (segunda vez):** "o rotativo dos Mazda deixava o som parecendo que era apenas ar"; "com o Ø da saída no mínimo é só som de ar". A primeira passada (o caso acima) atenuou 3,8 dB e não resolveu. E a regra de gosto do dono, acima da fidelidade à gravação: "pro simulador ele tem que soar mais motor e menos som de ar do motor".
+
+**Como se mediu:** o kit ouvido contra gravações casadas (RX-7 FC na lenta e a ~3 550 rpm, RX-8 e 20B na lenta, bridgeport na lenta, FD em carga a bordo, 787B na lenta, a 7 700 rpm e a bordo), a rotação de cada trecho conferida pela dobra e pelo pente, o orçamento de ruído por fonte com a mesma semente (`tools/rotativo-fontes.ts`) e a varredura dos controles de Ø e ponteira. Números, tabelas e mecanismos em `TECNICO.md` → Rotativos → Rodada de som; painéis em [`docs/ouvido/rotativo/`](ouvido/rotativo/).
+
+**O que a medida mostrou:**
+
+- **Na lenta de rua, metade do som (ponderado A) e 99–100% de tudo acima de 1 kHz era uma fonte só:** a parte da pós-queima que o modelo queimava "na boca", ruído puro injetado a 6 cm da ponta, depois de todos os abafadores. O agudo ficava 21 e 31 dB acima da gravação casada do FC3S em 1–2,5 e 2,5–6 kHz (11 e 21 no RX-8; 26 e 38 no 20B).
+- **Essa fonte existia para bater com uma gravação.** O alvo de lenta do projeto era um RX-7 do Wikimedia Commons, de microfone desconhecido, com 24–30 dB a mais de agudo que as gravações casadas feitas atrás do carro. Só pelo tubo o modelo dava "o espectro de um pistão"; a boca foi o jeito de chegar ao alvo.
+- **Com a ponteira no mínimo o jato era 75–99% do som em plena carga** (chiado ∝ 1/área², sem limite): o "papel rasgando". Com o Ø da saída no mínimo a pós-queima na boca era 94–99%.
+- **Na lenta do 787B, 98% do som eram estouros soltos** (15 por segundo): cada falha sorteada virava um estouro. A gravação tem outra coisa: **rajadas regulares a 5,2 Hz**, e a mesma conta fecha em três motores (787B a 1 890 rpm, RX-7 preparado a 1 730, bridgeport a 1 980): uma rajada a cada 6 voltas do eixo, rpm/360.
+
+**O que mudou** (cada item é uma peça ou um fenômeno; nenhum é equalização):
+
+| Mudança | Controle | Por quê |
+|---|---|---|
+| Nada queima na boca de um escape de rua; a pós-queima é a expansão do gás no primário, presa a cada abertura | "Chama na boca" (0 de fábrica), "Chiado da pós-queima" | Depois de 3–6 m de tubo o gás sai a 200–300 °C. A parte lisa da expansão reforça o pulso; só a flutuação da chama é ruído, e nasce antes dos abafadores |
+| A ponteira e a saída fina são um orifício | "Ø da saída", "Ponteira (jato)" | Com o gás escoando, a saída fina vira resistência e contrapressão: amolece o pulso (−8 dB na lenta, −18 dB em plena carga com 20 mm num escape de 70) em vez de acelerar o jato sem limite; o jato satura na velocidade do som e tem teto contra o pulso |
+| Janela periférica abrindo em 33°e; onda afiando com o coeficiente do gás nos primários | — | A janela fica aberta 360°e mais a própria altura: 393 − 360 = 33°e. Era 47°e. Em carga a frente chega ao coletor quase em choque: linhas até vários kHz, o "rasgado" tonal |
+| A lenta de bridge e periférica pela diluição: a carga com gás queimado demais não acende; a que falha manda mistura crua, e a seguinte acende | janelas de admissão (bridge, periférica) | Cada câmara alterna queima e falha com período de 2 ciclos = 6 voltas do eixo: o ritmo do "brap" sai da física. A mistura crua queima em parte no tubo (o ronco rouco da rajada) |
+| Apito e sopro do turbo a 30%; chiado das vedações à metade | "Som do turbo", "Chiado das vedações" | O apito era um tom puro em 6,7 kHz, 34–46 dB sobre o piso em plena carga; a gravação de bordo não tem tom ali |
+
+**Resultado** (antes → depois): na lenta do FC, 1–2,5k / 2,5–6k rel. 150–400 de −13,8 / −10,0 para −36,8 / −40,5 (gravação −35,2 / −41,0), com o leito de ruído abaixo do da gravação em toda banda; as fontes de ar contínuas juntas mudam o nível ponderado A em menos de 0,05 dB na lenta e a 3 000 rpm; o jato fica em 0–2% em todas as posições de Ø e ponteira; a lenta do 787B sai de 4,35 para 1,59 na distância total, com as rajadas a 5,2 Hz. Em plena carga a 8 160 rpm o 787B tem 1–2,5 kHz a −3 dB e 2,5–6 kHz a −11 dB da banda da ignição, em linhas (as gravações de fora dão −1 a −3 e −7 a −14).
+
+**Lições:**
+
+- **Um alvo de gravação sem microfone conhecido fabrica ruído.** Quando só uma fonte de ruído consegue levar o modelo ao alvo, desconfie do alvo: procure uma gravação casada (mesma posição) antes de inventar a fonte.
+- **A fração de leito pode esconder o nível.** O defeito `ar` do kit compara a *fração* de leito de cada banda; no RX-8 e no 20B dava 0,0–0,1 com o piso de ruído 11–38 dB acima do da gravação, porque a gravação, baixa, também era quase toda ruído. Confira também o **nível** do leito relativo à âncora (a tabela de `tools/rotativo-regua.py`).
+- **O total simétrico pune o que o dono pediu.** Tirado o ar, o simulado fica mais limpo e mais preso ao pulso que gravações que somam microfone e sala, e a distância total sobe (RX-8 na lenta: 1,67 → 4,17) com os três defeitos de um lado só em zero. Leia os defeitos de um lado só e o painel; o total serve para o que é tonal.
+- **Uma medida que melhorava por causa de um defeito.** No meio do trabalho a lenta do 787B chegou a 1,84 porque uma câmara que falhava repetia a pós-queima do ciclo anterior (estado que não era zerado) e enchia o intervalo entre as rajadas. Corrigido o defeito a distância piorou; o que a medida pedia era físico (a carga crua queimando no tubo), e entrou como mecanismo.
+- **Calibração por sorte.** O reforço da lenta era medido numa janela de 0,4 s de um laço que oscila em 0,8 s: mexer em qualquer coisa mudava o volume da lenta em até 4 dB. Medidas de calibração precisam cobrir o período do que oscila.
+- **Ritmo antes de textura.** O "brap" não é chiado nem estalo sorteado: é quais explosões acontecem. A dobra do sinal em N períodos (`f0.py`) achou o padrão de 6 voltas; a linha mais forte do bridgeport (71,5 Hz) era a ignição de 66 Hz mais o ritmo de 5,5 Hz.
+
 ## Caso: os pipocos do radial
 
 **Queixa:** "tem muito pipoco nos motores radiais".

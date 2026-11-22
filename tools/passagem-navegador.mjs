@@ -285,15 +285,17 @@ confere(cam === 'livre', 'câmera livre');
 await clicar('.camera [data-cam="ouvinte"]');
 // helicóptero
 await chip('portador', 'Helicóptero');
-// (o portador sai depois de a página calibrar o motor na thread principal: segundos, com a máquina carregada)
+// (o portador sai depois de a página calibrar o motor, num worker: espera a calibração e a mensagem do portador)
+await ate(`!${P}.calibrando`, 30000);
 const port3 = await ultimaAte('portador', (m) => m.tipo === 'rotor', 25000);
 await lerAte(() => ev(`${P}.traj.altitude`), (a) => a === 150, 4000);
-confereMsg(port3?.tipo === 'rotor' && port3.motor?.familia === 'pistao' && port3.motor.cfg.id === 'r44', 'helicóptero montado com o O-540 do R44 (família aviação do Ronco)', port3 && { tipo: port3.tipo, motor: port3.motor?.familia, id: port3.motor?.cfg.id });
+confereMsg(port3?.tipo === 'rotor' && port3.motor?.familia === 'pistao' && port3.motor.cfg.id === 'r44', 'helicóptero montado com o IO-540 do R44 (família aviação do Ronco)', port3 && { tipo: port3.tipo, motor: port3.motor?.familia, id: port3.motor?.cfg.id });
 confere((await ev(`${P}.traj.altitude`)) === 150, 'padrão do helicóptero: altitude 150 m');
 // ---- carro na rua a 6 m: Camaro SS (Ronco adaptado), 3ª, pé no fundo, 108 km/h
 await clicar('#ignicao');
 if (await ev(`${P}.andando`)) await clicar('#ignicao');
 await clicar('.preset[data-id="carro-rua"]');
+await ate(`!${P}.calibrando`, 30000);
 const portC = await ultimaAte('portador', (m) => m.tipo === 'carro' && m.motor?.cfg?.id === 'muscle', 25000);
 confereMsg(portC?.tipo === 'carro' && portC.motor?.familia === 'pistao' && portC.motor.cfg.id === 'muscle' && portC.motor.cfg.kAbs > 0, 'carro montado com o motor do Ronco calibrado na página (kAbs)', portC && { tipo: portC.tipo, motor: portC.motor?.familia, id: portC.motor?.cfg.id, kAbs: portC.motor?.cfg.kAbs });
 const secC = await lerAte(() => ev(`[...document.querySelectorAll('#controls h2')].map((h) => h.textContent)`), (v) => v.includes('Motor'), 4000);
@@ -310,6 +312,7 @@ await clicar('#ignicao');
 if (await ev(`${P}.andando`)) await clicar('#ignicao');
 // ---- RX-7 FD na rua (rotativo adaptado, etapa 4): 3ª, pé no fundo, 100 km/h
 await clicar('.preset[data-id="rx7-rua"]');
+await ate(`!${P}.calibrando`, 30000);
 const portR = await ultimaAte('portador', (m) => m.tipo === 'carro' && m.motor?.cfg?.id === 'rx7fd', 25000);
 confereMsg(portR?.tipo === 'carro' && portR.motor?.familia === 'rotativo' && portR.motor.cfg.id === 'rx7fd' && portR.motor.cfg.kAbs > 0, 'carro montado com o Wankel do RX-7 calibrado na página (kAbs)', portR && { tipo: portR.tipo, motor: portR.motor?.familia, id: portR.motor?.cfg.id, kAbs: portR.motor?.cfg.kAbs });
 await clicar('#ignicao');
@@ -324,6 +327,7 @@ await clicar('#ignicao');
 if (await ev(`${P}.andando`)) await clicar('#ignicao');
 // ---- locomotiva EMD em N8 (diesel adaptado, governador do motor, carga do portador)
 await clicar('.preset[data-id="locomotiva-patio"]');
+await ate(`!${P}.calibrando`, 30000);
 const portL = await ultimaAte('portador', (m) => m.tipo === 'locomotiva' && m.motor?.familia === 'diesel', 25000);
 confereMsg(portL?.tipo === 'locomotiva' && portL.motor?.familia === 'diesel' && portL.motor.cfg.uso === 'locomotiva' && portL.comando?.notch === 8, 'locomotiva montada com o EMD 710 (uso locomotiva) e notch 8', portL && { tipo: portL.tipo, motor: portL.motor?.familia, uso: portL.motor?.cfg.uso, notch: portL.comando?.notch });
 await clicar('#ignicao');

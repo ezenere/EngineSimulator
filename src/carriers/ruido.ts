@@ -196,6 +196,30 @@ export class FonteAero extends FonteRuido {
 }
 
 /**
+ * Pneu na estrada (CENA 4.1), a única classe de pneu dos portadores (carro elétrico, trólebus, Stanley, carro a
+ * combustão). O padrão é o do CENA: pico de 1/3 de oitava em 800–1250 Hz, −10 dB em 250 Hz e 4 kHz (passa-banda em
+ * 1 kHz com Q 0,8: duas oitavas para cada lado dão −10 dB), modulação lenta pela textura (±1,5 dB); L_W 95 dB(A) por
+ * roda a 80 km/h, n 3,5, a 7,5 m. Opções: `lw` por roda (pneu de ônibus e caminhão 98), `centro` e `q` do passa-banda,
+ * `subirComV` (o centro, e o passa-baixa `lp` se houver, sobem com √(v/v_ref)), `modLenta` e `refDist`. O Stanley usa
+ * a forma dele (800 Hz·√k, Q 0,6, passa-baixa em 3 kHz·√k, L_W 92, sem modulação lenta).
+ */
+export interface OpcoesPneu { lw?: number; n?: number; centro?: number; q?: number; subirComV?: boolean; lp?: number; modLenta?: number; refDist?: number }
+export class FontePneu extends FonteRuido {
+  op: Required<Omit<OpcoesPneu, 'lp'>> & { lp: number };
+  constructor(fs: number, semente: number, o: OpcoesPneu = {}) {
+    const op = { lw: 95, n: 3.5, centro: 1000, q: 0.8, subirComV: false, lp: 0, modLenta: 1.5, refDist: 7.5, ...o };
+    super(fs, { lw: op.lw, n: op.n, vRef: 80 / 3.6, refDist: op.refDist, ...(op.modLenta ? { modLenta: op.modLenta } : {}) }, semente);
+    this.op = op;
+    this.ramos = [new Ramo(semente, [new Bq()], op.lp)];
+  }
+  montar(v: number) {
+    const o = this.op, k = o.subirComV ? Math.sqrt(Math.max(0.05, v / this.esp.vRef)) : 1;
+    this.ramos[0].bq[0].bp(this.fs, o.centro * k, o.q);
+    if (o.lp > 0) this.definirLp(this.ramos[0], o.lp * k);
+  }
+}
+
+/**
  * Polo do aerodinâmico acima de f_p. Em 2,5 kHz (antes) o 1/3 de oitava caía −9 dB/oitava acima de 2,5 kHz e o
  * "silvo" do corpo e dos truques sumia (8 kHz a −21 dB do pico, 16 kHz a −32); o CENA 2.7 pede −3 dB/oitava até
  * 2 kHz e −6 acima: com o polo em 5 kHz dá −10, −16 e −26 dB do pico em 4, 8 e 16 kHz (−5, −7, −10 dB por oitava).
