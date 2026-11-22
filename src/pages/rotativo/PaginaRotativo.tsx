@@ -107,7 +107,7 @@ function Interior({ k, e }: { k: ControleRotativo; e: EstadoRot }) {
               <button type="button" className="key" aria-label="Subir marcha" onClick={() => k.shift(1)}>E</button>
             </div>
           )}
-          <p className="hints"><kbd>W</kbd>/<kbd>↑</kbd> {pal ? 'gatilho' : 'acelerador'} · <kbd>Shift</kbd> meio · <kbd>I</kbd> {pal ? 'ar' : 'ignição'} · <kbd>C</kbd> microfone{carro ? <> · <kbd>Q</kbd>/<kbd>E</kbd> câmbio · <kbd>S</kbd> freio</> : null}{pal ? <> · <kbd>[</kbd>/<kbd>]</kbd> carga</> : null}</p>
+          <p className="hints"><kbd>W</kbd>/<kbd>↑</kbd> {pal ? 'gatilho' : 'acelerador'} · <kbd>Shift</kbd> meio · <kbd>I</kbd> {pal ? 'ar' : 'ignição'} · <kbd>C</kbd> microfone{carro ? <> · <kbd>Q</kbd>/<kbd>E</kbd> câmbio · <kbd>S</kbd> freio</> : null}{e.spec.aviation ? <> · <kbd>M</kbd> magnetos</> : null}{pal ? <> · <kbd>[</kbd>/<kbd>]</kbd> carga</> : null}</p>
         </section>
       </main>
 
