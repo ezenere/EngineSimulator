@@ -153,7 +153,9 @@ export const PRESETS_RADIAL: PresetRadial[] & { families: FamiliaRadial[] } = Ob
     // só com os 2,84 o tanque andava 3,5 vezes mais rápido que o real, 140 km/h em 5ª (AUDITORIA F-RAD-03). A 2 400 rpm:
     // 3,8 / 9,3 / 16,2 / 26,0 / 39,6 km/h por marcha
     gears: 5, ratios: [7.56, 3.11, 1.78, 1.11, 0.73], finalDrive: 10.03, wheelR: 0.32, mass: 30300, drag: 4.5, rolagem: 0.06,
-    nivelEscape: 138, portadores: ['carro', 'nenhum'], veiculo: { massa: 30300, comprimento: 5.9, largura: 2.6, altura: 2.7 },
+    // (136: eram 138, estimados; com o sopro das saídas no lugar do chiado de jato o tanque passava a 8 m com 103,4 dB(A),
+    // 1,4 dB acima da faixa do teste:passagem; com 136 volta aos 101,3 de antes)
+    nivelEscape: 136, portadores: ['carro', 'nenhum'], veiculo: { massa: 30300, comprimento: 5.9, largura: 2.6, altura: 2.7 },
     aproximacao: 'sem o ruído da esteira' },
   { ...R16, id: 'trossi', family: 'terra', name: 'Monaco-Trossi', tag: 'carro de GP 1935 · 16 cil. em 2 fileiras · 4 L',
     displacement: 3.98, cr: 6.5, idle: 1200, rpmMax: 6000, power: 186, J: 0.4,
