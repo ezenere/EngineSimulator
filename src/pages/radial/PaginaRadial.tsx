@@ -4,7 +4,7 @@
 // helicóptero é a manete da Turbina (src/ui/Manete.tsx: fica onde foi deixada, com as posições); o do tanque, do carro e
 // da moto, o pedal do Ronco.
 import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react';
-import { AudioShell, Barra, BotaoIgnicao, FamilyNav, Manete, PresetNav, PERFIL_RONCO, useAudioShell } from '../../ui';
+import { AudioShell, Barra, BotaoIgnicao, FamilyNav, Manete, PresetNav, PERFIL_RONCO, useAudioShell, dec, grau, resumoGraus, listaGraus } from '../../ui';
 import { RadialDSP } from '../../engines/radial/dsp';
 import { PRESETS_RADIAL } from '../../engines/radial/presets';
 import urlRadial from '../../worklet/processador-radial.ts?worker&url';
@@ -53,6 +53,8 @@ function Interior({ k, e }: { k: ControleRadial; e: EstadoRadial }) {
   useEffect(() => {
     // alça para os testes no navegador (tools/radial-navegador.mjs)
     (window as any).__radial = k;
+    // (refrigerado a ar: a temperatura do conta-giros é a da cabeça dos cilindros, não a da água)
+    (k as any).rotuloTemp = 'cabeça';
     const m = new Mostradores(k as any);
     m.iniciar();
     // leituras da aviação a cada quadro, fora do React; e a manete com as teclas seguradas
@@ -73,7 +75,8 @@ function Interior({ k, e }: { k: ControleRadial; e: EstadoRadial }) {
   return (
     <div className="app">
       <Barra logo="Radial" placa={placa(e)}>
-        <BotaoIgnicao id="ignition" ligado={e.ignicao} rotulo={rotuloPartida(e, e.fase)} aoClicar={ligar} />
+        <BotaoIgnicao id="ignition" ligado={e.ignicao} rotulo={rotuloPartida(e, e.fase)} aoClicar={ligar}
+          estado={erro ? 'erro' : estado === 'carregando' ? 'ocupado' : undefined} />
       </Barra>
 
       <nav className="presets" id="presets" aria-label="Motores prontos">
@@ -83,7 +86,7 @@ function Interior({ k, e }: { k: ControleRadial; e: EstadoRadial }) {
 
       <main className="cluster">
         <section className="tach-wrap" aria-label="Conta-giros">
-          <canvas id="tach" />
+          <canvas id="tach" role="img" aria-label="Conta-giros: rotação do motor, rotação da hélice, torque, temperatura e fase da partida" />
           {terra ? (
             <div className="pedal" id="pedal" ref={pedal} role="slider" tabIndex={0} aria-label="Acelerador" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}
               onPointerDown={(ev) => { pedal.current!.setPointerCapture(ev.pointerId); k.input.pad = padFrom(ev); k.sendInput(); }}
@@ -96,12 +99,12 @@ function Interior({ k, e }: { k: ControleRadial; e: EstadoRadial }) {
         </section>
 
         <section className="firing" aria-label="Ciclo de ignição">
-          <canvas id="ring" />
+          <canvas id="ring" role="img" aria-label="Ciclo de ignição de 720 graus, com uma trilha por fileira de cilindros" />
           <Leitura e={e} />
         </section>
 
         <section className="scope-wrap" aria-label="Forma de onda e espectro">
-          <canvas id="scope" />
+          <canvas id="scope" role="img" aria-label="Forma de onda e espectro do som no ouvido do observador" />
         </section>
 
         <section className="drive">
@@ -138,35 +141,48 @@ function Posicoes({ k }: { k: ControleRadial }) {
   return (
     <div className="gearbox detentes" id="detents">
       {POSICOES_MANETE.map(([x, , texto]) => (
-        <button key={texto} type="button" className={`key${Math.abs(x - v) < 0.01 ? ' at' : ''}`} data-manete={x} onClick={() => k.setManete(x)}>{texto}</button>
+        <button key={texto} type="button" className={`key wide${Math.abs(x - v) < 0.01 ? ' at' : ''}`} data-manete={x} onClick={() => k.setManete(x)}>{texto}</button>
       ))}
     </div>
   );
 }
 
 // ordem, intervalos (total e por fileira), ΔPMS das articuladas e balanceamento
+// Com muitos cilindros as listas viram resumos (a lista inteira fica na dica de cada leitura), para o ciclo ter espaço.
 function Leitura({ e }: { e: EstadoRadial }) {
   const m = e.motor;
-  const graus = (xs: number[]) => xs.map((x) => `${Math.round(x * 10) / 10}°`).join(' ');
   const b = m.balance;
-  const items: [string, number][] = [['1ª − N/2', m.f1Residuo], ['Força 2ª', b.f2], ['Momento 1ª', b.m1], ['Momento 2ª', b.m2]];
+  const items: [string, number, string][] = [
+    ['Força 1ª', m.f1Residuo, 'Força de 1ª ordem que sobra depois do contrapeso (o contrapeso leva metade dos cilindros)'],
+    ['Força 2ª', b.f2, 'Força alternativa de 2ª ordem'], ['Momento 1ª', b.m1, 'Momento de 1ª ordem entre as fileiras'], ['Momento 2ª', b.m2, 'Momento de 2ª ordem entre as fileiras'],
+  ];
+  const dp = m.dPMS.slice(0, m.cylPerRow);
+  const dpTexto = dp.map((x) => (x >= 0 ? '+' : '−') + dec(Math.abs(x), 1)).join(' ') + '°';
+  const mesmasFileiras = m.rows > 2;
   return (
     <div className="readout">
       <div className="ro-row"><span className="k">Ordem</span><span className="v mono" id="roOrder">{m.decorrente ? `${m.ordemTexto} (decorrente)` : m.ordemTexto}</span></div>
-      <div className="ro-row"><span className="k">Intervalos</span><span className="v mono" id="roIntervals">{graus(m.intervals)}</span></div>
-      {m.rows > 1 && m.perBank.map((pb, r) => (
-        <div key={r} className="ro-row"><span className="k">Fileira {r + 1}</span><span className="v mono">{graus(pb)}</span></div>
+      <div className="ro-row"><span className="k">Intervalos</span><span className="v mono" id="roIntervals" title={listaGraus(m.intervals)}>{resumoGraus(m.intervals, 9)}</span></div>
+      {m.rows > 1 && !mesmasFileiras && m.perBank.map((pb, r) => (
+        <div key={r} className="ro-row"><span className="k">Fileira {r + 1}</span><span className="v mono" title={listaGraus(pb)}>{resumoGraus(pb, 7)}</span></div>
       ))}
-      <div className="ro-row"><span className="k">ΔPMS das articuladas</span><span className="v mono">{m.dPMS.slice(0, m.cylPerRow).map((x) => (x >= 0 ? '+' : '') + x.toFixed(1)).join(' ')}°</span></div>
+      {mesmasFileiras && (
+        <div className="ro-row" title={m.perBank.map((pb, r) => `Fileira ${r + 1}: ${listaGraus(pb)}`).join('\n')}>
+          <span className="k">Fileiras</span><span className="v mono">{m.rows} de {m.cylPerRow} cilindros · {grau(Math.min(...m.perBank.flat()))} a {grau(Math.max(...m.perBank.flat()))}</span>
+        </div>
+      )}
+      <div className="ro-row" title={`Quanto o ponto morto superior de cada biela articulada foge do ideal: ${dpTexto}`}>
+        <span className="k">Desvio PMS</span><span className="v mono">{dp.length > 7 ? `de ${dec(Math.min(...dp), 1)}° a +${dec(Math.max(...dp), 1)}°` : dpTexto}</span>
+      </div>
       <div className="ro-row"><span className="k">Ignição</span><span className="v mono" id="roFreq">—</span></div>
       <div className="balance" id="balance">
-        {items.map(([kk, v]) => {
+        {items.map(([kk, v, dica]) => {
           const w = clamp(v / Math.max(2, m.N * 0.5), 0, 1) * 100;
           return (
-            <div key={kk} className="bal" title="Forças alternativas que sobram depois do contrapeso, em múltiplos de um cilindro">
+            <div key={kk} className="bal" title={`${dica}, em múltiplos de um cilindro`}>
               <span className="k">{kk}</span>
               <div className="meter"><i className={v < 1e-3 ? 'zero' : ''} style={{ width: `${w}%` }} /></div>
-              <span className="val">{v < 1e-3 ? 'zero' : v.toFixed(2)}</span>
+              <span className="val">{v < 1e-3 ? 'zero' : dec(v, 2)}</span>
             </div>
           );
         })}

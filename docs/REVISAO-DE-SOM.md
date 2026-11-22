@@ -556,6 +556,37 @@ Três coisas que a régua mostrou e que valem como método:
 - **A gravação é teto de ruído e piso de pulso.** Ela soma sala, vento e microfone. Simulado mais limpo que a gravação
   não é defeito; mais liso, é.
 
+### Gravações de referência
+
+As gravações reais que servem de alvo ficam em `referencias/`, na raiz do checkout principal, **fora do git** (uso
+privado de análise: nada dali vai para o repositório nem para o site; o que veio do YouTube não pode ser
+redistribuído). Não use `/tmp`: o sistema apaga, e foi assim que o primeiro acervo se perdeu.
+
+- `referencias/<familia>/<slug>.wav`: mono, 48 kHz, 16 bits, até 240 s, pico normalizado a −1 dBFS. Famílias: `diesel`,
+  `radial`, `aviacao-pistao`, `rotativo`, `vapor`, `eletrico`, `trem`, `helicoptero`, `turbina` (e `gasolina`, mantida
+  à parte).
+- `referencias/INDEX.md` (para gente) e `referencias/index.json` (para programa): fonte, licença, critério de qualidade
+  medido (banda, clipping, grave, fala, vento) e, por **trecho**, o que se ouve, a posição do microfone, a rotação ou
+  velocidade (a anotada, como foi estimada, e a automática ao lado), as bandas em dB relativas a 150–400 Hz, o
+  centroide e, nos motores, o tom agudo mais proeminente (apito de turbo: faixa, presença, nível relativo às ordens).
+  No topo do `INDEX.md` há a tabela "Trechos recomendados": os melhores trechos, condição por condição, das famílias
+  que vão primeiro para a etapa de som (diesel com turbo e rotativos da Mazda).
+- `tools/referencias/lista.json` guarda só os links e as anotações; `baixar.py` rebaixa tudo a partir dela e `medir.py`
+  refaz as medidas e os índices. Detalhes, critério de entrada e como acrescentar uma gravação em
+  `tools/referencias/README.md`.
+
+```
+python3 -I tools/referencias/baixar.py     # rebaixa o que falta (pula o que já existe)
+python3 -I tools/referencias/medir.py      # refaz referencias/index.json e INDEX.md
+python3 -I tools/referencias/medir.py --espectrograma referencias/diesel/cat-c15-apito-do-turbo-cabine.wav --png /tmp/x.png
+```
+
+Para casar preset × gravação × trecho por programa, leia `index.json`: cada item tem `familia`, `slug`, `arquivo`,
+`motor`, `ignPorVolta`, `voltasPorCiclo` e `trechos[]` com `ini`, `fim`, `rotulo`, `rpm`/`ignHz` (anotados),
+`ritmo.auto` (automático, com o apoio que teve) e `medidas`. Os trechos foram delimitados pela linha do tempo de níveis
+e pelo espectrograma, não de ouvido: antes de tomar um trecho como alvo, confira a rotação (Armadilhas) e olhe o
+espectrograma.
+
 ## O que olhar em cada tipo de veículo
 
 - **Antigos (carburador, anos 50–80):** taxa de compressão baixa, abafador sem lã, juntas e paredes que vazam,

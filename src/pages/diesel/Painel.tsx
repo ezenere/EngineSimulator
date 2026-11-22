@@ -39,6 +39,7 @@ export function Painel({ k }: { k: ControleDiesel }) {
 // ---- Escuta e ambiente (igual ao Ronco)
 function Escuta({ k, e }: P) {
   const { params, eq } = e;
+  const veiculo = e.portador === 'carro';
   const mix = (id: string, rotulo: string, chave: 'exhaust' | 'intake' | 'mech' | 'air' | 'master', max = 2) => (
     <Slider id={id} rotulo={rotulo} min={0} max={max} passo={0.01} valor={params[chave]} formatar={pct} aoMudar={(v) => k.setParams({ [chave]: v })} />
   );
@@ -47,14 +48,17 @@ function Escuta({ k, e }: P) {
   );
   return (
     <Section titulo="Escuta e ambiente">
-      <Field rotulo="Observador">
-        <ChipGroup id="observer" opcoes={[{ valor: 'car', rotulo: 'Junto com o veículo' }, { valor: 'road', rotulo: 'Parado na via' }]} atual={e.observer} aoEscolher={(v) => k.setObserver(v as 'car' | 'road')} />
-      </Field>
+      {/* a via só faz sentido com o veículo; o campo fica à vista se o observador já estiver nela */}
+      {(veiculo || e.observer === 'road') && (
+        <Field rotulo="Observador">
+          <ChipGroup id="observer" opcoes={[{ valor: 'car', rotulo: 'Junto com o veículo' }, { valor: 'road', rotulo: 'Parado na via' }]} atual={e.observer} aoEscolher={(v) => k.setObserver(v as 'car' | 'road')} />
+        </Field>
+      )}
       {e.observer === 'car' ? (
         <Field rotulo="Microfone">
           <ChipGroup id="mic" opcoes={[
-            { valor: 'pipe', rotulo: 'Ao lado do escape' }, { valor: 'ext', rotulo: 'Câmera atrás' },
-            { valor: 'int', rotulo: 'Cabine' }, { valor: 'bay', rotulo: 'Cofre' },
+            { valor: 'pipe', rotulo: 'Ao lado do escape' }, { valor: 'ext', rotulo: veiculo ? 'Câmera atrás' : 'De fora, a alguns metros' },
+            { valor: 'int', rotulo: 'Cabine' }, { valor: 'bay', rotulo: veiculo ? 'Cofre' : 'Junto ao motor' },
           ]} atual={e.carMic} aoEscolher={(v) => k.setCarMic(v)} />
         </Field>
       ) : (
@@ -86,7 +90,7 @@ function Escuta({ k, e }: P) {
       {mix('mxAir', 'Ar (jato, chiado)', 'air')}
       {mix('mxVol', 'Volume', 'master', 1.5)}
       <Field rotulo="Equalização">
-        <div className="chips"><button type="button" className="chip" onClick={() => k.setEq({ lo: 0, mid: 0, hi: 0 }, true)}>Zerar</button></div>
+        <div className="chips" role="group" aria-label="Equalização"><button type="button" className="chip" onClick={() => k.setEq({ lo: 0, mid: 0, hi: 0 }, true)}>Zerar</button></div>
       </Field>
       {tom('eqLo', 'Grave (abaixo de 160 Hz)', 'lo')}
       {tom('eqMid', 'Médio (900 Hz)', 'mid')}
@@ -255,7 +259,7 @@ function Temperatura({ k, e }: P) {
         ]} atual={e.tempMode} aoEscolher={(v) => k.setTempMode(v as 'real' | 'fixed')} />
       </Field>
       <AguaDoMotor k={k} />
-      <div className="chips">
+      <div className="chips" role="group" aria-label="Temperaturas prontas">
         <button type="button" className="chip" onClick={() => k.setCoolant(20)}>Partida a frio (20 °C)</button>
         <button type="button" className="chip" onClick={() => k.setCoolant(-10)}>Inverno (−10 °C)</button>
         <button type="button" className="chip" onClick={() => k.setCoolant(90)}>Motor quente (90 °C)</button>
@@ -299,10 +303,10 @@ function Transmissao({ k, e }: P) {
         </Field>
       )}
       {ratios.map((r, i) => (
-        <Slider key={`ratio${i + 1}`} id={`ratio${i + 1}`} rotulo={`${i + 1}ª marcha`} min={0.4} max={16} passo={0.01} valor={r} formatar={(v) => `${v.toFixed(2)} : 1 · ${vmax(v)} km/h`}
+        <Slider key={`ratio${i + 1}`} id={`ratio${i + 1}`} rotulo={`${i + 1}ª marcha`} min={0.4} max={16} passo={0.01} valor={r} formatar={(v) => `${virgula(v, 2)} : 1 · ${vmax(v)} km/h`}
           aoMudar={(v) => { const next = k.currentRatios(); next[i] = v; k.setSpec({ ratios: next }, nt); }} />
       ))}
-      <Slider id="final" rotulo="Diferencial" min={1.5} max={12} passo={0.01} valor={fin} formatar={(v) => `${v.toFixed(2)} : 1`} aoMudar={(v) => k.setSpec({ finalDrive: v }, nt)} />
+      <Slider id="final" rotulo="Diferencial" min={1.5} max={12} passo={0.01} valor={fin} formatar={(v) => `${virgula(v, 2)} : 1`} aoMudar={(v) => k.setSpec({ finalDrive: v }, nt)} />
       <Slider id="mass" rotulo="Massa (com carga)" min={800} max={60000} passo={50} valor={spec.mass || 2000} formatar={(v) => `${br(v)} kg`} aoMudar={(v) => k.setSpec({ mass: v }, nt)} />
       <Slider id="wheelR" rotulo="Raio da roda" min={0.25} max={0.6} passo={0.005} valor={spec.wheelR || 0.33} formatar={(v) => `${Math.round(v * 1000)} mm`} aoMudar={(v) => k.setSpec({ wheelR: v }, nt)} />
       <Slider id="drag" rotulo="Arrasto aerodinâmico (½·ρ·Cd·A)" min={0.1} max={5} passo={0.01} valor={spec.drag ?? 0.42} formatar={(v) => `${virgula(v, 2)} N/(m/s)²`} aoMudar={(v) => k.setSpec({ drag: v }, nt)} />
@@ -333,12 +337,12 @@ function Escapamento({ k, e }: P) {
       <Slider id="pipe" rotulo="Comprimento do escape" min={0.6} max={8} passo={0.1} valor={esc.comprimento} formatar={(v) => `${virgula(v, 1)} m`} aoSoltar={(v) => setE({ comprimento: v })} />
       <Slider id="pipeD" rotulo="Diâmetro do escape" min={1.5} max={18} passo={0.25} valor={esc.diametro} formatar={(v) => `${virgula(v, 2)}" · ${Math.round(v * 25.4)} mm`} aoSoltar={(v) => setE({ diametro: v })} />
       <Field rotulo="Chaminé">
-        <ChipGroup id="chamine" opcoes={LIGADO} atual={!!esc.chamine} aoEscolher={(v) => setE({ chamine: v ? { altura: 1, diametro: esc.diametro } : null })} />
+        <ChipGroup id="chamine" opcoes={[{ valor: true, rotulo: 'Com' }, { valor: false, rotulo: 'Sem' }]} atual={!!esc.chamine} aoEscolher={(v) => setE({ chamine: v ? { altura: 1, diametro: esc.diametro } : null })} />
       </Field>
       {esc.chamine && (
         <>
           <Slider id="chAltura" rotulo="Altura da chaminé" min={0.3} max={5} passo={0.1} valor={esc.chamine.altura} formatar={(v) => `${virgula(v, 1)} m`} aoSoltar={(v) => setE({ chamine: { ...esc.chamine!, altura: v } })} />
-          <Slider id="chDiam" rotulo="Diâmetro da chaminé" min={2} max={20} passo={0.25} valor={esc.chamine.diametro} formatar={(v) => `${virgula(v, 2)}"`} aoSoltar={(v) => setE({ chamine: { ...esc.chamine!, diametro: v } })} />
+          <Slider id="chDiam" rotulo="Diâmetro da chaminé" min={2} max={20} passo={0.25} valor={esc.chamine.diametro} formatar={(v) => `${virgula(v, 2)}" · ${Math.round(v * 25.4)} mm`} aoSoltar={(v) => setE({ chamine: { ...esc.chamine!, diametro: v } })} />
         </>
       )}
       <Slider id="tempGas" rotulo="Gás no escape (velocidade do som)" min={420} max={600} passo={5} valor={esc.tempGas} formatar={(v) => `${v} m/s · ${Math.round((v / 20.05) ** 2 - 273)} °C`} aoSoltar={(v) => setE({ tempGas: v })} />
@@ -441,7 +445,7 @@ function Admissao({ k, e }: P) {
       )}
       {spec.soprador && (
         <>
-          <Slider id="scRatio" rotulo="Relação do soprador" min={1} max={3} passo={0.01} valor={spec.soprador.relacao} formatar={(v) => `${v.toFixed(2)}:1 · ${Math.round((spec.rpmMax / 60) * v * 2 * spec.soprador!.lobulos)} Hz na máxima`} aoSoltar={(v) => k.setSpec({ soprador: { ...spec.soprador!, relacao: v } })} />
+          <Slider id="scRatio" rotulo="Relação do soprador" min={1} max={3} passo={0.01} valor={spec.soprador.relacao} formatar={(v) => `${virgula(v, 2)}:1 · ${Math.round((spec.rpmMax / 60) * v * 2 * spec.soprador!.lobulos)} Hz na máxima`} aoSoltar={(v) => k.setSpec({ soprador: { ...spec.soprador!, relacao: v } })} />
           <Slider id="scWhine" rotulo="Volume do uivo" min={-30} max={12} passo={1} valor={spec.soprador.uivo} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoSoltar={(v) => k.setSpec({ soprador: { ...spec.soprador!, uivo: v } })} />
         </>
       )}

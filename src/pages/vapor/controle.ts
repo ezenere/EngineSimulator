@@ -32,12 +32,12 @@ export const AMBIENTES_VAPOR: { id: IdAmbienteVapor; nome: string }[] = [
 export type IdCenario = 'parada' | 'arrancada' | 'cruzeiro60' | 'cruzeiro100' | 'drifting' | 'lickey' | 'apito' | 'passagem';
 export const CENARIOS: { id: IdCenario; nome: string; titulo: string }[] = [
   { id: 'parada', nome: 'Parada', titulo: 'pressão e auxiliares, 60 s: bomba de ar, injetor, segurança, sino e apito' },
-  { id: 'arrancada', nome: 'Arrancada', titulo: 'reverser 80%, regulador 0,2 → 0,6 em 5 s, torneiras no automático (patina no trilho molhado)' },
-  { id: 'cruzeiro60', nome: 'Cruzeiro 60', titulo: 'velocidade fixa a 60 km/h, corte 25%' },
-  { id: 'cruzeiro100', nome: 'Cruzeiro 100', titulo: 'velocidade fixa a 100 km/h, corte 20%' },
-  { id: 'drifting', nome: 'Drifting', titulo: 'regulador fechado a 60 km/h: rolamento, bielas e o bufo dos cilindros' },
-  { id: 'lickey', nome: 'Lickey', titulo: 'subida de 2,65% com 10 vagões, corte 55%, regulador cheio' },
-  { id: 'apito', nome: 'Apito', titulo: 'longo, longo, curto, longo' },
+  { id: 'arrancada', nome: 'Arrancada', titulo: 'reversão a 80%, regulador de 20% a 60% em 5 s, torneiras no automático (patina no trilho molhado)' },
+  { id: 'cruzeiro60', nome: 'Cruzeiro a 60', titulo: 'velocidade fixa a 60 km/h, corte 25%' },
+  { id: 'cruzeiro100', nome: 'Cruzeiro a 100', titulo: 'velocidade fixa a 100 km/h, corte 20%' },
+  { id: 'drifting', nome: 'Regulador fechado', titulo: 'regulador fechado a 60 km/h: rolamento, bielas e o bufo dos cilindros' },
+  { id: 'lickey', nome: 'Subida forte', titulo: 'a rampa de Lickey: 2,65% com 10 vagões, corte 55%, regulador cheio' },
+  { id: 'apito', nome: 'Toque de apito', titulo: 'longo, longo, curto, longo (passagem de nível)' },
   { id: 'passagem', nome: 'Passagem', titulo: 'a composição passando a 40 km/h pelo ouvinte parado junto à via' },
 ];
 

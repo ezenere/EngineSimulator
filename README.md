@@ -11,7 +11,9 @@ Simuladores de som de motor que rodam direto no navegador. O site começa num me
 - **Elétrico**, carros elétricos, metrôs e trens (o do-re-mi do Taurus), trem-bala, bonde, trólebus, ferramentas e drone: https://ezenere.com/data/engine/eletrico.html
 - **Passagem**, qualquer coisa passando por você (trem-bala, carro na rua, picape diesel, locomotiva, turboélice, jato, helicóptero R44, Corsair, Yak-52, Sherman) com o ouvinte livre em 3D: https://ezenere.com/data/engine/passagem.html
 
-![Ronco com uma Ferrari 458 no corte de giro](docs/ronco.png)
+![Menu com os tipos de motor](docs/ui/menu.png)
+
+![Ronco com um Camaro SS no corte de giro](docs/ui/ronco.png)
 
 Nenhum som aqui é gravação. Tudo é criado na hora pelo computador, a partir de como o motor funciona de verdade: as explosões dentro dos cilindros, o ar passando pelo escapamento, as pás girando na turbina. Por isso o som muda sozinho quando você muda qualquer peça.
 
@@ -34,7 +36,7 @@ Dá para mexer em quase tudo:
 
 Você também escolhe de onde ouve: ao lado do escape, atrás do carro, dentro da cabine, no cofre do motor ou parado na rua vendo o carro passar. E escolhe o lugar: céu aberto, rua com prédios, túnel, garagem, autódromo ou serra. Isso fica no topo do painel, em "Escuta e ambiente". Ali também dá para escolher o volume do motor (Real, com a marcha lenta bem mais baixa que o giro alto, como num carro de verdade, ou Arcade, com o som parecido em qualquer rotação), desligar o som de fundo do lugar e dosar o chiado de ar.
 
-![Mustang passando pela rua, com o mapa mostrando onde ele está](docs/ronco-rua.png)
+![Camaro visto da rua, com o mapa mostrando onde ele está](docs/ui/ronco-rua.png)
 
 **Teclas:** `I` liga · `W` acelera · `S` freia · `E` e `Q` trocam marcha · `C` muda o microfone · `V` alterna entre dentro do carro e na rua · `B` troca o modo do escape ativo (silencioso, normal, esportivo, pista) · `M` muda o modo do câmbio automático (pista, esportivo, normal, econômico, automático).
 
@@ -42,7 +44,7 @@ Você também escolhe de onde ouve: ao lado do escape, atrás do carro, dentro d
 
 Escolha um avião: Boeing 737, Airbus A320, 747, Concorde, caças como F-16 e F-22, turboélices como ATR e Super Tucano, jatos executivos.
 
-![Boeing 737 em potência de decolagem](docs/turbina.png)
+![Boeing 737 em potência de decolagem](docs/ui/turbina.png)
 
 Você dá a partida, que leva uns 15 segundos como num avião de verdade. Depois empurra a manete e ouve o motor de vários lugares:
 
@@ -50,7 +52,7 @@ Você dá a partida, que leva uns 15 segundos como num avião de verdade. Depois
 - dentro do avião, na cabine ou no cockpit;
 - vendo o avião passar por cima. Acima da velocidade do som, você ouve o estrondo sônico.
 
-![F-16 passando acima da velocidade do som: o cone de Mach chegou e veio o estrondo](docs/turbina-estrondo.png)
+![F-16 passando acima da velocidade do som: o cone de Mach chegou e veio o estrondo](docs/ui/turbina-estrondo.png)
 
 Também dá para pôr pós-combustão em qualquer jato, usar reversor e trocar peças do motor.
 
@@ -61,6 +63,8 @@ Também dá para pôr pós-combustão em qualquer jato, usar reversor e trocar p
 Motores em estrela: o R-2800 do Corsair e do P-47, o R-1830 do DC-3, o R-1820 do T-28, o R-1340 do T-6, o M-14P do Yak-52, o R-4360 de 28 cilindros, Rotec e Verner de ultraleve, o R-975 do tanque Sherman, o Monaco-Trossi, a moto Megola e o helicóptero S-55. A partida é como num avião: no DC-3 você energiza o volante do arranque (o apito sobe) e engata; nos outros o motor gira, você conta as pás e os magnetos ligam. Depois mexe na manete, na mistura, nos magnetos e no passo da hélice. Os motores planos de avião e de helicóptero (Cessna, Piper, Cirrus, Rotax, Robinson R22 e R44, Bell 47, Schweizer) ficam na família Aviação do Ronco.
 
 A manete de potência é a mesma da Turbina: fica onde você a deixa (arraste com o mouse ou use as teclas), com as posições de lenta, cruzeiro, subida e decolagem. No Sherman, no Monaco-Trossi e na Megola é o pedal, com câmbio. Na família Aviação do Ronco a manete também substitui o pedal.
+
+![R-4360 de 28 cilindros: uma trilha por fileira no ciclo de ignição](docs/ui/radial.png)
 
 **Teclas:** `I` partida (energizar, engatar, magnetos) · `W` e `S` mexem a manete · `1` a `4` posições da manete · `M` magnetos · `[` e `]` mistura · `,` e `.` manete de passo · `C` muda o microfone · no tanque, `W` acelera e `Q`/`E` trocam marcha.
 
@@ -74,11 +78,15 @@ O motor Wankel não tem pistão nem válvula: um rotor triangular gira dentro de
 
 Locomotivas, uma máquina de moinho Corliss, um trator a vapor, o carro Stanley e um vapor de rodas de pás. Não há partida: a caldeira já começa quente e com pressão. Você abre o regulador, escolhe o corte no reverser e a máquina sai andando com o trem atrás; cada "chuff" é o vapor de um cilindro saindo pela chaminé, então eles aceleram com a roda e mudam com o corte. Parada, a locomotiva continua viva: bomba de ar, injetor, válvula de segurança quando a pressão passa do ajuste, sino e apito. No trilho molhado, abrir demais faz as rodas patinarem (a areia resolve). Os cenários (arrancada, cruzeiro, subida da Lickey, passagem) programam os comandos sozinhos.
 
+![Locomotiva K4s saindo com o apito aberto](docs/ui/vapor.png)
+
 **Teclas:** `W` e `S` regulador · `X` fecha o regulador · `A` e `D` reverser · `H` apito (segure) · `B` sino · `E` areia (segure) · `T` torneiras dos cilindros · `Espaço` freio · `I` injetor.
 
 ## Elétrico (motores elétricos)
 
 Carros (Tesla Model 3, Nissan Leaf, BYD Dolphin, Fórmula E), trens e metrôs (o Siemens Taurus que sobe a escala "do-re-mi" ao partir, Vectron, CPTM 9500 e 9000, Metrô de São Paulo, Shinkansen N700, TGV), bonde e trólebus, furadeira e liquidificador, o drone DJI Mavic e um motor industrial de 11 kW. O som sai das forças magnéticas na carcaça, do inversor (a portadora e as bandas laterais, as "marchas" do modo síncrono), da redução, dos ventiladores, das escovas e das hélices; nos carros, pneus e vento entram junto. Você acelera, regenera, troca o modo de modulação, liga o som de aviso (AVAS), põe carga, trava a velocidade num dinamômetro e escolhe onde ouvir (fora, na cabine, junto ao motor ou livre). O espectro mostra cada linha com o nome dela.
+
+![Taurus subindo a escala do-re-mi: a nota acesa no teclado e as linhas do espectro com nome](docs/ui/eletrico.png)
 
 **Teclas:** `Espaço` liga e desliga · `↑` e `↓` acelerador · `R` regeneração (segure) · `M` modo de modulação.
 

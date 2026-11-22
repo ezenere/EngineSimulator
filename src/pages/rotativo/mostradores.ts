@@ -32,8 +32,9 @@ export class MostradoresRot {
       get tele() { return k.tele; }, get audio() { return k.audio; }, get lento() { return k.lento; },
       mudarLento: (p: any) => k.mudarLento(p),
       get estado() {
-        const m = k.estado.motor, ev = m ? m.eventosPorVolta : 1;
-        return { ...k.estado, motor: { N: 2 * ev, banks: 1, fire: [], bank: [] } };
+        // (palhetas: sem ignição para marcar no espectro, N = 0; e a segunda linha do conta-giros só mostra km/h onde há rodas)
+        const m = k.estado.motor, ev = m ? m.eventosPorVolta : 0;
+        return { ...k.estado, spec: { ...k.estado.spec, portadores: k.estado.spec.portadores || [] }, motor: { N: 2 * ev, banks: 1, fire: [], bank: [] } };
       },
     };
     this.ronco = new Mostradores(fachada);
@@ -65,7 +66,8 @@ export class MostradoresRot {
     const { C, k } = this, t = k.tele, m = k.estado.motor;
     const [g, w, h] = fit(cv);
     g.clearRect(0, 0, w, h);
-    const cx = w / 2, cy = h / 2, R = Math.min(w * 0.42, h * 0.38);
+    // (o raio deixa lugar para os graus do lado de fora)
+    const cx = w / 2, cy = h / 2, R = Math.max(30, Math.min(w / 2 - 52, h / 2 - 36));
     g.textAlign = 'center'; g.textBaseline = 'middle';
     if (!m) {
       // palhetas: o rotor com as palhetas girando
@@ -79,7 +81,7 @@ export class MostradoresRot {
         g.beginPath(); g.moveTo(cx + R * 0.12 + Math.cos(a) * R * 0.2, cy + Math.sin(a) * R * 0.2); g.lineTo(cx + R * 0.12 + Math.cos(a) * R * 0.86, cy + Math.sin(a) * R * 0.86); g.stroke();
       }
       g.fillStyle = C.muted; g.font = `500 10px ${C.mono}`;
-      g.fillText(`${z} palhetas · ${Math.round(t.fPalheta || 0)} Hz`, cx, cy + R * 1.15);
+      g.fillText(`${z} palhetas · ${Math.round(t.fPalheta || 0).toLocaleString('pt-BR')} Hz`, cx, cy + R + 18);
       return;
     }
     const cyc = m.cyc;
@@ -93,10 +95,11 @@ export class MostradoresRot {
     g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
     if (m.rotores > 1) { g.beginPath(); g.arc(cx, cy, R * 0.72, 0, Math.PI * 2); g.stroke(); }
     g.font = `500 10px ${C.mono}`; g.fillStyle = C.faint;
+    const sMax = Math.min(14, Math.max(9, R * 0.1)), fora = R + sMax + 3;
     for (let d = 0; d < cyc; d += cyc === 1080 ? 135 : 90) {
       const a = toA(d);
-      g.beginPath(); g.moveTo(cx + Math.cos(a) * R * 1.04, cy + Math.sin(a) * R * 1.04); g.lineTo(cx + Math.cos(a) * R * 1.1, cy + Math.sin(a) * R * 1.1); g.stroke();
-      g.fillText(`${d}°`, cx + Math.cos(a) * R * 1.22, cy + Math.sin(a) * R * 1.22);
+      g.beginPath(); g.moveTo(cx + Math.cos(a) * fora, cy + Math.sin(a) * fora); g.lineTo(cx + Math.cos(a) * (fora + 5), cy + Math.sin(a) * (fora + 5)); g.stroke();
+      g.fillText(`${d}°`, cx + Math.cos(a) * (fora + 22), cy + Math.sin(a) * (fora + 13));
     }
     // câmaras: as do rotor 1 por fora, em cores por flanco; as dos outros rotores por dentro
     const cores = [C.gold, C.blue, C.violet];
@@ -104,7 +107,7 @@ export class MostradoresRot {
       const rot = m.bank[c], flanco = m.tipo === 'x' ? c : c % 3, r = rot === 0 ? R : R * 0.72;
       // aceso logo depois da ignição dela (a frente do eixo passou por ela há menos de 60°)
       const desde = (((this.fase - f) % cyc) + cyc) % cyc, aceso = rodando && desde < 60 ? 1 - desde / 60 : 0;
-      const a = toA(f), x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r, s = rot === 0 ? Math.max(9, R * 0.09) : Math.max(6, R * 0.06);
+      const a = toA(f), x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r, s = rot === 0 ? sMax : Math.max(5, sMax * 0.62);
       if (aceso > 0) { g.globalAlpha = 0.35 * aceso; g.fillStyle = cores[flanco]; g.beginPath(); g.arc(x, y, s * (1.8 + aceso), 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; }
       g.fillStyle = aceso > 0.5 ? cores[flanco] : C.panel; g.strokeStyle = cores[flanco]; g.lineWidth = 1.5;
       g.beginPath(); g.arc(x, y, s, 0, Math.PI * 2); g.fill(); g.stroke();
@@ -112,29 +115,33 @@ export class MostradoresRot {
     });
     // eixo excêntrico
     const ha = toA(this.fase);
+    // (o ponteiro do eixo sai de fora do miolo, para não riscar o texto do centro)
+    const miolo = Math.max(14, Math.min(R * 0.42, (m.rotores > 1 ? R * 0.72 : R) - sMax - 6));
     g.strokeStyle = C.muted; g.lineWidth = 1.5; g.globalAlpha = clamp(40 / Math.max(1, (t.rpm || 0) * 6 * dt), 0.25, 1);
-    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(ha) * R * 0.98, cy + Math.sin(ha) * R * 0.98); g.stroke(); g.globalAlpha = 1;
-    g.fillStyle = C.ink; g.font = `800 ${Math.round(R * 0.2)}px ${C.display}`;
-    g.fillText(m.tipo === 'x' ? 'X' : `${m.rotores}×3`, cx, cy - R * 0.06);
-    g.font = `500 10px ${C.mono}`; g.fillStyle = C.muted;
-    g.fillText(m.tipo === 'x' ? '3 câmaras fixas' : m.rotores === 1 ? 'câmaras · 1 rotor' : `câmaras · ${m.rotores} rotores`, cx, cy + R * 0.13);
-    if (R > 100) { g.fillStyle = C.faint; g.fillText(`ciclo de ${cyc}° do eixo · tempo real`, cx, cy + R * 0.27); }
+    g.beginPath(); g.moveTo(cx + Math.cos(ha) * miolo, cy + Math.sin(ha) * miolo); g.lineTo(cx + Math.cos(ha) * R * 0.98, cy + Math.sin(ha) * R * 0.98); g.stroke(); g.globalAlpha = 1;
+    const fn = Math.round(clamp(miolo * 0.7, 13, 36)), comNome = miolo >= 30;
+    g.fillStyle = C.ink; g.font = `800 ${fn}px ${C.display}`;
+    g.fillText(m.tipo === 'x' ? 'X' : `${m.rotores} × 3`, cx, comNome ? cy - 6 : cy + 1);
+    if (comNome) { g.font = `500 10px ${C.mono}`; g.fillStyle = C.muted; g.fillText('câmaras', cx, cy + fn * 0.5 + 2); }
   }
 
   private desenharPAlfa(cv: HTMLCanvasElement) {
     const { C, k } = this, t = k.tele, tr: number[] | undefined = t.traco;
     const [g, w, h] = fit(cv);
     g.clearRect(0, 0, w, h);
-    g.strokeStyle = C.line; g.lineWidth = 1; g.strokeRect(0.5, 0.5, w - 1, h - 1);
     g.font = `500 10px ${C.mono}`; g.fillStyle = C.faint; g.textAlign = 'left'; g.textBaseline = 'top';
-    g.fillText('p × α da câmara 1', 6, 4);
-    if (!tr || !k.estado.motor) return;
+    g.fillText('pressão na câmara 1', 6, 5);
+    if (!tr || !k.estado.motor || !(t.rpm > 30)) {
+      g.fillStyle = C.muted; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('sem leitura: motor parado', w / 2, h / 2 + 6);
+      return;
+    }
     const pmax = Math.max(5, ...tr), cyc = k.estado.motor.cyc;
     g.strokeStyle = C.gold; g.lineWidth = 1.4; g.beginPath();
-    tr.forEach((p, i) => { const x = 4 + ((w - 8) * i) / (tr.length - 1), y = h - 4 - ((h - 20) * p) / pmax; if (i) g.lineTo(x, y); else g.moveTo(x, y); });
+    tr.forEach((p, i) => { const x = 4 + ((w - 8) * i) / (tr.length - 1), y = h - 16 - ((h - 36) * p) / pmax; if (i) g.lineTo(x, y); else g.moveTo(x, y); });
     g.stroke();
-    g.fillStyle = C.muted; g.textAlign = 'right'; g.fillText(`${pmax.toFixed(0)} bar`, w - 6, 4);
-    g.textAlign = 'left'; g.textBaseline = 'bottom'; g.fillText(`0°`, 4, h - 2); g.textAlign = 'right'; g.fillText(`${cyc}°`, w - 4, h - 2);
+    g.fillStyle = C.muted; g.textAlign = 'right'; g.fillText(`${Math.round(pmax).toLocaleString('pt-BR')} bar`, w - 6, 5);
+    g.fillStyle = C.faint; g.textAlign = 'left'; g.textBaseline = 'bottom'; g.fillText(`0°`, 4, h - 2); g.textAlign = 'right'; g.fillText(`${cyc}°`, w - 4, h - 2);
   }
 
   private leituras() {
