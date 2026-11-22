@@ -23,8 +23,9 @@
 //   const r = avaliarDesvios('tools/radial-desvios.json', linhas, { atualizar: op.atualizar, grupos });
 //   imprimirAvaliacao(r); process.exitCode = r.contagem.falha ? 1 : 0;
 //
-// CLI comum: `--semente N`, `--atualizar` (regrava tudo o que mudou) ou `--atualizar=<nome exato>` (só essa medida;
-// repetível). Nomes exatos, sem expressão regular.
+// CLI comum: `--semente N`, `--atualizar` (regrava o que saiu da folga, cria as entradas novas e tira as órfãs) ou
+// `--atualizar=<nome exato>` (só essa medida, mesmo dentro da folga: a mudança que a ficha explica; repetível). Nomes
+// exatos, sem expressão regular. Folga na entrada: "±1 dB", "±5 %", "±0.2" (absoluta) ou "±10 % (≥ 0.5)" (com piso).
 import fs from 'node:fs';
 import { RNG } from '../src/acoustics/rng';
 
@@ -193,7 +194,9 @@ export function avaliarDesvios<T extends Medida>(arquivo: string, linhas: T[], o
       out.push({ ...l, estado: 'FALHA', nota: `desvio sem motivo no retrato (${arquivo})` });
       continue;
     }
-    if (dentro) { out.push({ ...l, estado: 'desv', nota: `retrato ${fmtV(e.medido)} ${folga}`, motivo: e.motivo }); continue; }
+    // (com --atualizar=<este nome>, o valor é regravado mesmo dentro da folga: a mudança foi explicada por quem a pediu)
+    const nomeado = Array.isArray(op.atualizar) && op.atualizar.includes(l.nome);
+    if (dentro && !nomeado) { out.push({ ...l, estado: 'desv', nota: `retrato ${fmtV(e.medido)} ${folga}`, motivo: e.motivo }); continue; }
     if (at) {
       const antes = fmtV(e.medido);
       e.medido = arredV(l.valor); e.unidade = l.unidade ?? e.unidade; mudou = true;
