@@ -50,10 +50,11 @@ export function fontesRadial(dsp: RadialDSP, cfg: any) {
   };
   add('admissao', 'admissao', 0.12, true, T_DENTRO, [1, 0, 0], [0.3, 0, -0.3]);
   add('bloco', 'mecanica', 0.12, !expostos, expostos ? T_BLOCO : T_DENTRO, [1, 0, 0], [0.2, 0, 0]);
-  add('vibracao', 'mecanica', 0.3, true, T_DENTRO, [1, 0, 0], [0, 0, 0]);
+  add('vibracao', 'mecanica', 0.1, true, T_DENTRO, [1, 0, 0], [0, 0, 0]); // (0,1: o peso do ouvinte de fora da página)
   if (dsp.blower) add('compressor', 'compressor', 0.5, true, T_DENTRO, [1, 0, 0], [-0.4, 0, 0]);
   // rajada do anel de chapa fina e das juntas deslizantes (breakout 'old'/'leaky'), colada a cada abertura de válvula
-  if (dsp.breakK) add('coletor', 'escape', 0.7, false, T_BOCA, [-1, 0, -0.3], [-0.5, 0, 0]);
+  // (peso 1, como o ouvinte de fora da página com o motor exposto; o nível de antes, 0,7, está no `breakK` do RadialDSP)
+  if (dsp.breakK) add('coletor', 'escape', expostos ? 1 : 0.7, false, T_BOCA, [-1, 0, -0.3], [-0.5, 0, 0]);
   return { fontes, especs };
 }
 

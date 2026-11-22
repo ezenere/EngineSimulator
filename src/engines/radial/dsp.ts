@@ -19,9 +19,17 @@ import { EngineDSP } from '../ronco/dsp';
 import { T_MAN } from '../ronco/constantes';
 import { AV, arranqueBase, paLw5 } from '../ronco/aviacao';
 import type { EscapeRadial } from './geometria';
+import { BocaEscape } from './boca';
 
 /** escape de referência da calibração (RADIAL.md 2.3): um anel de uma saída */
 export const ESCAPE_REF: EscapeRadial = { tipo: 'anel', Danel: 1.1, Oanel: 80, Lp: 0.2, saidas: [{ L: 0.8, O: 80, phi: 180 }] };
+
+/** turbulência do sopro na boca do escape (boca.ts): intensidade (fração RMS da vazão) e o quanto cresce com o Mach².
+ *  Lado baixo de propósito (PLANO: mais motor, menos ar): um escoamento pulsado em tubo tem 4 a 10 % */
+export const SOPRO = { kT: 0.05, kJ: 0.1 };
+/** juntas do anel coletor e dos estaques (o `breakout`): cada uma vaza diferente. Desvio do log do vazamento por junta
+ *  (0 = todas iguais) e o que sobra vazando entre as rajadas, relativo à média (o Ronco usa 0,5) */
+export const JUNTAS = { old: 0.7, leaky: 1.1, piso: 0.15 };
 
 /** rotação em que o arranque de inércia entrega o volante (s de energização, automático) */
 const T_ENERGIZAR = 16;
@@ -29,6 +37,7 @@ const T_ENERGIZAR = 16;
 export class RadialDSP extends EngineDSP {
   declare fase: any; declare tFase: any; declare tGiro: any; declare pas: any; declare magAuto: any; declare encharque: any; declare fumaca: any;
   declare radPhi: any; declare rotAng: any; declare apF: any; declare apPh: any; declare apHz: any; declare apAmp: any; declare apNz: any;
+  declare kSopro: any; declare jSopro: any; declare exposto: any;
   declare Aar: any; declare blowerAlta: any; declare engateT: any; declare falhaMedia: any; declare galL: any; declare galN: any; declare falhaLenta: any; declare qMix0: any;
   // (da aviação, postos por instalarAviacao: src/engines/ronco/aviacao.ts)
   declare heliceSom: any; declare magnetos: any; declare mistura: any; declare partidaTipo: any; declare prime: any; declare cargaAv: any; declare falhaMix: any; declare nivelEscape: any;
@@ -36,6 +45,9 @@ export class RadialDSP extends EngineDSP {
   constructor(fs: number) {
     super(fs);
     this.av = true; this.radial = true;
+    // o chiado de jato do Ronco (ruído ∝ v² somado depois da ponteira) sai: a boca do radial tem o sopro turbulento dela
+    // (boca.ts), que irradia pelo mesmo monopolo do pulso
+    this.jetGain = 0;
     // os ganchos do EngineDSP chamam estas (propriedades da instância, como no DieselDSP)
     this.falhaAv = this.falhaRadial; this.torquePartida = this.torqueRadial; this.partidaAr = this.arRadial; this.somPartidaAv = this.somArranque;
     this.avControle = this.controleRadial; this.avMensagem = this.mensagemRadial; this.avTelemetria = this.telemetriaRadial; this.avSomExtra = this.somExtraRadial;
@@ -65,6 +77,18 @@ export class RadialDSP extends EngineDSP {
     this.Athr *= clamp(cfg.displacement / 10, 1, 1.6); // (nos pequenos, Rotec e Verner, a do Ronco já basta)
     // vazamento do anel de chapa e das juntas (breakout do Ronco), com o acerto da instalação em dB (`vazamento`, RADIAL.md 2.1)
     this.breakK = ({ sealed: 0, old: 1, leaky: 2.2 }[cfg.breakout] || 0) * Math.pow(10, (cfg.vazamento || 0) / 20);
+    this.brkFloor = JUNTAS.piso; // (entre as rajadas quase nada vaza: o chiado do anel pulsa com cada abertura, não é um leito)
+    // sopro das bocas (boca.ts), com o acerto do preset em dB (`sopro`)
+    const ks = Math.pow(10, (cfg.sopro || 0) / 20);
+    this.kSopro = SOPRO.kT * ks; this.jSopro = SOPRO.kJ * ks;
+    if (this.rads) for (const r of this.rads) if (r instanceof BocaEscape) { r.kT = this.kSopro; r.kJ = this.jSopro; }
+    // ouvinte de fora da página (5 m do cubo) com os cilindros expostos na boca da carenagem: os mesmos pesos do
+    // adaptador da Cena (motor.ts: admissão 0,12, bloco 0,12 sem a sombra de uma carroceria, compressor 0,5, coletor 1).
+    // Com os pesos do carro de motor dianteiro do Ronco (mecânica 0,1 atrás de um passa-baixa de 3 kHz, coletor 0,3) a
+    // página ficava 4 a 11 dB mais escura que a Passagem acima de 400 Hz. No tanque e no carro o motor fica num
+    // compartimento: valem os do Ronco
+    this.exposto = !(cfg.portadores || []).includes('carro');
+    if (this.exposto) { this.posW = [0.12, 0.12, 0.5, 1, 0.12]; this.breakK *= 0.7; }
     // superalimentador de duas velocidades (R-2800): a relação e a pressão da marcha alta
     const sa = cfg.superalimentador;
     if (sa?.duasVelocidades && this.blowerAlta) { this.scOrder = sa.duasVelocidades.relacao * sa.pas; this.maxBoost = sa.duasVelocidades.boost; }
@@ -80,14 +104,22 @@ export class RadialDSP extends EngineDSP {
     const ds = (mm: number) => clamp(mm / 63.5, 0.4, 2.4);
     const phi: number[] = cfg.phi || cfg.axis, grupo: number[] = cfg.bank, nG: number = cfg.banks, fil: number[] = cfg.fileira || new Array(N).fill(0);
     this.brkW = new Float64Array(N);
+    // juntas: cada cilindro entra no anel (ou no estaque) por uma junta deslizante, e uma ou duas vazam bem mais que as
+    // outras; a rajada do coletor fica presa ao ciclo (um sopro por volta do comando, o "tch… tch…" de um T-6 de perto)
+    // em vez de um chiado igual em todas as explosões. Pesos de média quadrática 1: o nível médio não muda
+    const sj = (JUNTAS as any)[cfg.breakout] || 0;
+    let w2 = 0;
     for (let c = 0; c < N; c++) {
       const r = L(cfg.runners[c], 1, 12000); r.runner = true; runners[c] = r;
-      this.brkW[c] = 1 + 0.2 * new RNG(0x7a11 + 977 * c + 31 * N).bi();
+      this.brkW[c] = Math.exp(sj * new RNG(0x7a11 + 977 * c + 31 * N).gauss());
+      w2 += this.brkW[c] * this.brkW[c];
     }
+    for (let c = 0; c < N; c++) this.brkW[c] /= Math.sqrt(w2 / N);
     this.bankJ = new Array(nG).fill(null);
     const radiar = (line: Line, ph: number, O: number) => {
       const d = ds(O), A2 = d * d, p = Math.sin(ph * DEG);
-      const r = new Radiator(fs, line, 0.62 - 0.34 * p, 0.62 + 0.34 * p, 1500 / d, A2, 400 / (TAU * 0.03175 * d));
+      const r = new BocaEscape(fs, line, 0.62 - 0.34 * p, 0.62 + 0.34 * p, 1500 / d, A2, 400 / (TAU * 0.03175 * d),
+        { D: Math.max(0.02, O / 1000), kT: this.kSopro, kJ: this.jSopro, params: this.params, semente: 0xb0ca + 7919 * rads.length + 131 * N });
       nodes.push(r); rads.push(r); radPhi.push(ph);
     };
     const angMedio = (cs: number[]) => Math.atan2(cs.reduce((s, c) => s + Math.sin(phi[c] * DEG), 0), cs.reduce((s, c) => s + Math.cos(phi[c] * DEG), 0)) / DEG;
