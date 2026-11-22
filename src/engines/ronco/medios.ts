@@ -9,7 +9,7 @@
 //     ordem de `this.rads`); sem a lista, a carcaça não irradia;
 //   · batida: os impulsos são somados em `this.batC` (pistão) e `this.batV` (válvulas) pelo ramo do motor;
 //   · jato: usa `this.pipeA` e `this.tipA`, que toda subclasse já define.
-import { Biquad, RNG, P0, GAM } from '../../acoustics';
+import { Biquad, RNG, P0, GAM, onePole } from '../../acoustics';
 import { CARCACA, BATIDA, JATO_MACH } from './constantes';
 
 /**
@@ -36,11 +36,12 @@ export function montarMedios(d: any, _cfg: any) {
   const fs = d.fs, rads = d.rads, n = rads.length, N = d.N;
   const pipeA = d.pipeA || 1, tipA = d.tipA || 1, ds = Math.sqrt(pipeA);
 
-  // ---- carcaça do escape, por boca: a ressonância da parede (passa-alta ressonante: rígida abaixo, 12 dB/oitava) e o
-  // corte da massa acima dela (a parede maior ressoa mais grave)
+  // ---- carcaça do escape, por boca: a ressonância da parede (passa-alta ressonante: rígida abaixo, 12 dB/oitava), o
+  // corte da massa acima dela e a irradiação fraca do grave por uma fonte pequena (a parede maior ressoa mais grave)
   if (!d.carcSrc || d.carcSrc.length !== n) d.carcSrc = rads.map(() => null);
   d.carcF = rads.map(() => [new Biquad().hp(fs, CARCACA.f0 / ds, CARCACA.q), new Biquad().lp(fs, CARCACA.fMassa / ds, 0.7)]);
   d.carcOut = new Float64Array(n);
+  d.carcS = new Float64Array(n); d.carcKp = onePole(fs, CARCACA.fGrave / ds); // (a caixa irradia mal abaixo de ~600 Hz)
 
   // ---- batida periódica: modos do bloco e do cabeçote, e o tamanho fixo do impulso de cada pistão e de cada válvula
   // (folgas diferentes: é isso que põe as meias ordens; sorteio com semente própria, igual em toda renderização)

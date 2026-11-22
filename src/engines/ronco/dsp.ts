@@ -86,7 +86,7 @@ export class EngineDSP implements DSPDeAudio {
   declare rotQueima: any; declare rotJanelas: any; declare rotEscape: any; declare rotAdmissao: any; declare rotDens: any; declare posQueima: any; declare mechRot: any; declare rotTBurn: any; declare rotTelemetria: any;
   // médios e jato da ponteira (docs/TECNICO.md → Ronco → "Médios" e "Jato da ponteira"): tudo nasce no valor legado (desligado)
   // e quem liga é o preset (`carcaca`, `batida`, `jato`, `bombaAr`); as famílias que herdam não mudam sem eles
-  declare carcK: any; declare carcSrc: any; declare carcF: any; declare carcOut: any; declare batK: any; declare batF: any; declare batW: any; declare batC: any; declare batV: any; declare batQ0: any;
+  declare carcK: any; declare carcSrc: any; declare carcF: any; declare carcOut: any; declare carcS: any; declare carcKp: any; declare batK: any; declare batF: any; declare batW: any; declare batC: any; declare batV: any; declare batQ0: any;
   declare jatoFis: any; declare jatoQ: any; declare jatoM: any; declare saModo: any; declare saJit: any;
 
   constructor(fs) {
@@ -128,7 +128,7 @@ export class EngineDSP implements DSPDeAudio {
     this.av = false; this.radial = false; this.carga = null; // (RADIAL.md 1.6, gancho 1: gasolina sem aviação)
     this.rot = false; this.cyc = 720; // (rotativo, gancho 1: pistão de 4 tempos; o RotativoDSP põe rot = true e cyc = 1080)
     // médios e jato físico: valor legado (o som de antes) até o preset pedir
-    this.carcK = 0; this.carcSrc = null; this.carcF = null; this.carcOut = null; this.batK = 0; this.batF = null; this.batW = null; this.batC = 0; this.batV = 0; this.batQ0 = 1;
+    this.carcK = 0; this.carcSrc = null; this.carcF = null; this.carcOut = null; this.carcS = null; this.carcKp = 0; this.batK = 0; this.batF = null; this.batW = null; this.batC = 0; this.batV = 0; this.batQ0 = 1;
     this.jatoFis = false; this.jatoQ = 0; this.jatoM = 0; this.saModo = 0; this.saJit = 0;
   }
 
@@ -1193,8 +1193,9 @@ export class EngineDSP implements DSPDeAudio {
         else x += (this.jetF[i][0].run(nz) + 0.8 * this.jetF[i][1].run(nz)) * jv * jv * this.jetGain * P.air;
         // carcaça do escape: a parede dos tubos e do abafador responde à onda que passa por dentro (antes do abafador) e
         // irradia a sua aceleração: abaixo da ressonância da parede (~1 kHz) ela é rígida e a resposta sobe 12 dB/oitava,
-        // na ressonância reforça, acima a massa segura. É um filtro fixo sobre um sinal periódico: sai em linhas, coladas ao pulso
-        if (carcK) { const src = this.carcSrc[i]; if (src) { const f = this.carcF[i], cz = f[1].run(f[0].run(src.in1)) * carcK; this.carcOut[i] = cz; x += cz; } }
+        // na ressonância reforça, acima a massa segura; e uma caixa pequena irradia mal o grave (mais 6 dB/oitava abaixo de
+        // ~600 Hz: sem isso ela cancelava parte do grave da boca). É um filtro fixo sobre um sinal periódico: sai em linhas
+        if (carcK) { const src = this.carcSrc[i]; if (src) { const f = this.carcF[i], pw = src.in1, lo = (this.carcS[i] += this.carcKp * (pw - this.carcS[i])), cz = f[1].run(f[0].run(pw - lo)) * carcK; this.carcOut[i] = cz; x += cz; } }
         if (this.tap) this.tap.jato(i, x);
         exL += x * rd.panL; exR += x * rd.panR;
         const ib = this.itdB[i], dd = this.itdD[i]; ib[iw] = x;

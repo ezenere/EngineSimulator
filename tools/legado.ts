@@ -49,6 +49,9 @@ export function extrairLegado(arquivos: readonly string[], pasta: string, ref = 
 // ponteira em "Legado" e Bomba de ar secundário em "Tom parado (legado)".
 export const MODO_LEGADO_RONCO: Record<string, undefined> = { carcaca: undefined, batida: undefined, jato: undefined, bombaAr: undefined };
 
+/** a posição legada de cada controle novo no painel do Ronco (src/pages/ronco/Painel.tsx): tem de soar igual ao campo ausente */
+export const POSICAO_LEGADA_PAINEL: Record<string, unknown> = { carcaca: -30, batida: -30, jato: 'legado', bombaAr: 'tom' };
+
 /** o preset sem os campos dos mecanismos novos (para a comparação campo a campo com o legado, que não os tem) */
 export function semCamposNovos<T extends Record<string, unknown>>(p: T): T {
   const r: Record<string, unknown> = {};

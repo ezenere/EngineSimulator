@@ -25,8 +25,9 @@
 // tools/legado.ts; aqui na ferramenta, não nos padrões do produto) e ignora esses campos na comparação dos presets.
 // Ela garante que, com os controles novos na posição legada, o DSP migrado é o legado, amostra a amostra; não diz
 // nada sobre o som novo. Para o portão não virar enfeite, ela também confere que os padrões do produto de fato
-// diferem do legado (se não diferissem, o modo legado não estaria provando nada) e que o EngineDSP sem os campos
-// toca igual ao EngineDSP com os valores legados explícitos.
+// diferem do legado (se não diferissem, o modo legado não estaria provando nada), que o EngineDSP sem os campos
+// toca igual ao EngineDSP com os valores legados explícitos e que a POSIÇÃO LEGADA de cada controle do painel (Carcaça e
+// Batida no mínimo, Jato em "Legado", Bomba de ar em "Tom parado") também toca igual: é por ela que o dono volta ao som antigo.
 //
 // Sai com código 0 só se tudo for idêntico. --manter não apaga a pasta temporária com os WAVs.
 import fs from 'node:fs';
@@ -41,7 +42,7 @@ import * as G from '../src/engines/ronco/geometria';
 import { PRESETS, ACESSORIOS_PADRAO } from '../src/engines/ronco/presets';
 import { EngineDSP, gearRatios, defaultFinal } from '../src/engines/ronco/dsp';
 import { configCalibrada } from '../src/engines/ronco/config';
-import { REF_LEGADO, lerLegado, comCorrecoes, contarCorrecoes, CORRECOES_RONCO, MODO_LEGADO_RONCO, semCamposNovos, presetsEmModoLegado } from './legado';
+import { REF_LEGADO, lerLegado, comCorrecoes, contarCorrecoes, CORRECOES_RONCO, MODO_LEGADO_RONCO, POSICAO_LEGADA_PAINEL, semCamposNovos, presetsEmModoLegado } from './legado';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const req = createRequire(import.meta.url);
@@ -159,10 +160,11 @@ console.log(`modo legado: campos forçados no lado migrado antes de renderizar: 
     const legadoExplicito = tocar1s({ ...ACESSORIOS_PADRAO, ...p, ...MODO_LEGADO_RONCO });
     const semCampos = tocar1s(semCamposNovos({ ...ACESSORIOS_PADRAO, ...p }));
     if (!igual(legadoExplicito, semCampos)) falha(`${id}: o DSP com os valores legados explícitos difere do DSP sem os campos novos`);
+    if (!igual(tocar1s({ ...ACESSORIOS_PADRAO, ...p, ...POSICAO_LEGADA_PAINEL }), semCampos)) falha(`${id}: a posição legada dos controles do painel não toca igual ao legado`);
     if (!igual(produto, legadoExplicito)) difere++;
   }
   if (!difere) falha('os padrões do produto soam igual ao legado: o modo legado não está forçando nada (os mecanismos novos estão desligados nos padrões?)');
-  else console.log(`modo legado: os padrões do produto diferem do legado em ${difere}/3 presets conferidos (é o som novo); sem os campos e com os valores legados explícitos o DSP toca igual`);
+  else console.log(`modo legado: os padrões do produto diferem do legado em ${difere}/3 presets conferidos (é o som novo); sem os campos, com os valores legados explícitos e na posição legada dos controles do painel o DSP toca igual`);
 }
 
 async function renderizarTudo() {
