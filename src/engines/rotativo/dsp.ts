@@ -270,7 +270,7 @@ export class RotativoDSP extends EngineDSP {
     // seguinte que aspirar por ele (o duto é varrido pelo ar novo conforme a vazão passa)
     // (o duto de cada rotor troca com o plenum comum: uma parte `kPlen` do que volta vai para o plenum e chega às câmaras
     // dos outros rotores. É o que põe as câmaras no mesmo passo: no 13B de plenum único as rajadas saem inteiras, todas as
-    // câmaras queimam três voltas e falham três; no 787B, de cornetas individuais, cada rotor segue o seu passo)
+    // câmaras queimam umas quatro voltas e falham três; no 787B, de cornetas individuais, cada câmara segue o seu passo)
     const r = this.cfg.bank[c], dm = m * this.dt, mDuto = (pMan * this.vAdm) / (RGAS * T_MAN), mPlen = mDuto * (this.cfg.kVPlen ?? 2) * this.rotores;
     if (dm > 0) {
       const q = Math.min(this.admQ[r], (dm * this.admQ[r]) / mDuto);
@@ -317,7 +317,7 @@ export class RotativoDSP extends EngineDSP {
     return Zr * mEq * this.kHC * this.kPrim * (1 + (this.hcTurb + (this.kTurbCru * this.hcC[c]) / h) * this.ruidoHC(0));
   }
 
-  /** ruído de combustão turbulenta: branco → passa-alta de 1ª ordem em 250 Hz → passa-baixa de 1ª ordem em 4 kHz (2 estados por canal) */
+  /** ruído de combustão turbulenta: branco → passa-alta de 1ª ordem em 400 Hz → passa-baixa de 1ª ordem em 3 kHz (2 estados por canal) */
   ruidoHC(k: number) {
     const w = this.hcN.bi(), s = this.hcS;
     s[2 * k] += this.hcKh * (w - s[2 * k]);
