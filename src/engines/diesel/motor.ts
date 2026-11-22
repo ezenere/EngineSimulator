@@ -106,20 +106,27 @@ export class MotorDiesel extends MotorPistaoBase {
   /** fora do carro o governador é o isócrono do próprio DieselDSP (acertado por motor: Kp = ω_c/P, TECNICO → Diesel);
    * o portador manda o alvo (`rpmAlvo`): na locomotiva vira o notch da tabela do preset, no gerador a frequência da rede */
   get governadorProprio() { return this.uso === 'gerador' || this.uso === 'locomotiva'; }
+  /** (locomotiva) a tabela por notch e a potência de notch 8 no eixo, da ficha (`locomotiva.notchRpm`, `kW`): o portador
+   *  usa estas (uma fonte só; antes o portador tinha uma cópia e aqui se procurava o notch da rotação mais próxima) */
+  get notchRpm(): readonly number[] | undefined { return this.uso === 'locomotiva' ? this.dsp.locCfg?.notchRpm : undefined; }
+  get potenciaEixo(): number | undefined { return this.uso === 'locomotiva' && this.dsp.locCfg ? this.dsp.locCfg.kW * 1000 : undefined; }
+  /** comando de combustível do governador (0..1): o regulador de carga da locomotiva olha se ele está no batente */
+  get combustivelGovernador(): number { return this.dsp.fuelCmd; }
   private alvoAnt = -1;
-  comandar(c: { acelerador: number; ignicao: boolean; partida: boolean; combustivel?: number; rpmAlvo?: number }) {
+  comandar(c: { acelerador: number; ignicao: boolean; partida: boolean; combustivel?: number; rpmAlvo?: number; notch?: number }) {
     if (c.ignicao !== this.ign) { this.ign = c.ignicao; this.dsp.message({ type: 'input', ignition: c.ignicao }); }
     this.dsp.message({ type: 'input', throttle: c.acelerador });
+    if (c.notch !== undefined && this.uso === 'locomotiva' && this.dsp.locCfg) {
+      // a locomotiva manda o notch (a tabela de rotação é a da ficha, `notchRpm`, que o portador também lê)
+      const n = Math.max(0, Math.min(8, Math.round(c.notch)));
+      if (n !== this.alvoAnt) { this.alvoAnt = n; this.dsp.message({ type: 'diesel', notch: n, combustivel: null }); }
+      return;
+    }
     if (c.rpmAlvo !== undefined && this.governadorProprio) {
       if (c.rpmAlvo !== this.alvoAnt) {
         this.alvoAnt = c.rpmAlvo;
         const d = this.dsp;
-        if (this.uso === 'locomotiva' && d.locCfg) {
-          // notch cuja rotação é a mais próxima do alvo (as tabelas do CENA 4.5 e do preset são as mesmas)
-          const t: number[] = d.locCfg.notchRpm;
-          let nb = 0; for (let k = 0; k < t.length; k++) if (Math.abs(t[k] - c.rpmAlvo) <= Math.abs(t[nb] - c.rpmAlvo)) nb = k;
-          d.message({ type: 'diesel', notch: c.rpmAlvo <= t[0] + 1 ? 0 : nb, combustivel: null });
-        } else if (this.uso === 'gerador' && d.gerCfg) d.message({ type: 'diesel', fRede: (c.rpmAlvo * d.gerCfg.polos) / 120, combustivel: null });
+        if (this.uso === 'gerador' && d.gerCfg) d.message({ type: 'diesel', fRede: (c.rpmAlvo * d.gerCfg.polos) / 120, combustivel: null });
         else d.message({ type: 'diesel', rpmAlvo: c.rpmAlvo, combustivel: null });
       }
       return;

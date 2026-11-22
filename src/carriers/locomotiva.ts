@@ -4,6 +4,11 @@
 //
 //   rpm alvo = tabela[notch], rampa de 100 rpm/s; potência = fração[notch]·P_nominal, com 1,5 s de atraso
 //   (o regulador de carga sobe a excitação depois do giro); Q = P/(η_ger·ω)
+//   Com o diesel de locomotiva (que traz a ficha: `Motor.notchRpm` e `potenciaEixo`), a tabela de rotação e a potência
+//   de notch 8 são as da ficha do motor, e o portador manda o notch: uma fonte só (AUDITORIA.md F-DSL-14). A potência da
+//   ficha é a do eixo do motor (a entrada do gerador de tração): o gerador pede no eixo fração·P_eixo, não fração·P/η
+//   (com P/η o EMD de 3 356 kW recebia 3 608 kW em N8, saturava o combustível e ficava 3% abaixo do notch: P-08).
+//   As frações de potência por notch são as do próprio DieselDSP (NOTCH_POT de src/engines/diesel/constantes.ts).
 //   governador PI sobre o combustível: K_p 0,6 por %, K_i 0,3/s
 //   freio dinâmico: motor em notch fixo (EMD: 8 na rotação, carga do gerador zero), grades e sopradores ligados
 import type { Carga, Vec3, Diretividade } from '../scene/tipos';
@@ -12,12 +17,16 @@ import { PortadorComMotor, GovernadorPI, SerieHarmonica, Soma, calibrarSerieA, g
 import { FonteRuido, FonteRolamento, Ramo, paDeLw, type EspecFonteRuido } from './ruido';
 import { Bq } from '../scene/filtros';
 import { REF_DIST_PORTADOR } from './trem';
+import { NOTCH_POT } from '../engines/diesel/constantes';
 
+/** rotação por notch do CENA 4.5, só para a locomotiva sem diesel de ficha (o motor de bancada dos testes): com o diesel
+ *  acoplado vale a tabela da ficha dele (`Motor.notchRpm`, `locomotiva.notchRpm` em src/engines/diesel/presets.ts) */
 export const NOTCH_RPM = {
   emd710: [269, 269, 343, 490, 568, 651, 729, 820, 904],     // notch 0 = lenta (200 em lenta baixa)
   ge7fdl: [440, 440, 511, 585, 672, 764, 846, 950, 1050],
 } as const;
-export const NOTCH_POTENCIA = [0, 0.05, 0.12, 0.23, 0.35, 0.48, 0.64, 0.82, 1.0] as const;
+/** fração da potência por notch: a do DieselDSP (uma tabela só) */
+export const NOTCH_POTENCIA: readonly number[] = NOTCH_POT;
 export const BUZINA_K5LA = [311, 370, 440, 494, 622] as const;
 
 export interface ConfigLocomotiva {
@@ -67,10 +76,11 @@ class Pulsos implements GeradorCanal {
   }
 }
 
+/** carga do gerador de tração no eixo do motor: `P` é a potência no eixo (W), Q = P/ω */
 export class CargaLocomotiva implements Carga {
-  inercia: number; P = 0; eta: number;
-  constructor(c: ConfigLocomotiva) { this.inercia = c.J_ger; this.eta = c.etaGer; }
-  torque(omega: number) { return this.P / (this.eta * Math.max(omega, 1)); }
+  inercia: number; P = 0;
+  constructor(c: ConfigLocomotiva) { this.inercia = c.J_ger; }
+  torque(omega: number) { return this.P / Math.max(omega, 1); }
 }
 
 export class Locomotiva extends PortadorComMotor {
@@ -119,12 +129,19 @@ export class Locomotiva extends PortadorComMotor {
   }
   carga() { return this.cargaL; }
   gRel = 0;
-  acoplar(m: import('./tipos').Motor | null) { this.gRel = 0; super.acoplar(m); }
+  /** excitação do regulador de carga (0,3–1) */
+  regCarga = 1;
+  acoplar(m: import('./tipos').Motor | null) { this.gRel = 0; this.regCarga = 1; super.acoplar(m); }
+
+  /** tabela de rotação por notch: a da ficha do motor, se ele traz (o diesel de locomotiva), senão a do CENA 4.5 */
+  tabela(): readonly number[] { return this.motor?.notchRpm ?? NOTCH_RPM[this.cfg.motor]; }
+  /** potência no eixo do motor em notch 8 (W): a da ficha do motor, se ele traz; senão a nominal do gerador sobre η */
+  potenciaEixo() { return this.motor?.potenciaEixo ?? (this.cfg.potenciaNominal * 1000) / this.cfg.etaGer; }
 
   protected fisica(n: number, dt: number) {
     const c = this.cfg, tb = n * dt;
     const notch = this.cmd.notch ?? 0, fd = this.cmd.freioDinamico ?? 0;
-    const tabela = NOTCH_RPM[c.motor];
+    const tabela = this.tabela();
     // freio dinâmico: motor no notch 8 de rotação, sem carga de tração
     const nRot = fd > 0 ? 8 : notch;
     const alvo = tabela[nRot];
@@ -132,7 +149,8 @@ export class Locomotiva extends PortadorComMotor {
     this.rpmAlvo += Math.max(-d, Math.min(d, alvo - this.rpmAlvo));
     // potência pedida com atraso de 1,5 s (fila)
     if (this.pFila.length === 0) this.pFila = new Float64Array(Math.max(1, Math.round(c.atrasoCarga / tb)));
-    const pPed = fd > 0 ? 0 : NOTCH_POTENCIA[notch] * c.potenciaNominal * 1000;
+    // (potência no eixo; a carga do gerador é P/ω)
+    const pPed = fd > 0 ? 0 : NOTCH_POTENCIA[notch] * this.potenciaEixo();
     const k = this.pI % this.pFila.length;
     const pAt = this.pI >= this.pFila.length ? this.pFila[k] : 0;
     this.pFila[k] = pPed; this.pI++;
@@ -141,10 +159,21 @@ export class Locomotiva extends PortadorComMotor {
     // regulador de carga: corta a excitação se a rotação cai mais de 10% abaixo do alvo (uma carga de
     // potência constante num eixo que perde rotação pede cada vez mais torque e apagaria o motor)
     const wAlvo = (this.rpmAlvo * 2 * Math.PI) / 60;
-    this.cargaL.P = pAt * Math.max(0, Math.min(1, (w / wAlvo - 0.9) / 0.08));
+    // e, como o regulador de carga da EMD (a válvula de controle de carga do governador): com o combustível do governador
+    // no batente e o motor abaixo do notch, a excitação cai (0,3/s); com folga de combustível, volta (0,2/s), as taxas do
+    // DieselDSP. O gerador pede o que o motor entrega na rotação do notch, não o da tabela: sem isso, com a ficha um pouco
+    // acima do que o modelo do motor entrega, o EMD ficava em 880–885 rpm em N8 (alvo 904, AUDITORIA.md P-08) com o
+    // combustível saturado
+    const comb = m?.combustivelGovernador;
+    if (comb !== undefined) {
+      if (comb > 0.97 && w < 0.995 * wAlvo) this.regCarga = Math.max(0.3, this.regCarga - 0.3 * tb);
+      else if (comb < 0.95) this.regCarga = Math.min(1, this.regCarga + 0.2 * tb);
+    }
+    this.cargaL.P = pAt * this.regCarga * Math.max(0, Math.min(1, (w / wAlvo - 0.9) / 0.08));
     if (m && m.governadorProprio) {
-      // motor com governador próprio (o diesel, isócrono com a rampa de 100 rpm/s dele): o alvo é o do notch
-      m.comandar({ acelerador: 0, ignicao: this.cmd.ignicao !== false, partida: false, rpmAlvo: alvo });
+      // motor com governador próprio (o diesel, isócrono com a rampa de 100 rpm/s dele): o notch (o de rotação, que no
+      // freio dinâmico é o 8) e a rotação-alvo
+      m.comandar({ acelerador: 0, ignicao: this.cmd.ignicao !== false, partida: false, rpmAlvo: alvo, notch: nRot });
     } else if (m) {
       const erro = (100 * ((this.rpmAlvo * 2 * Math.PI) / 60 - w)) / ((tabela[8] * 2 * Math.PI) / 60);
       // ganhos acertados com o motor de bancada de tools/cena/portadores.ts (48 000 N·m, 60 + 120 kg·m²), escalados pela planta
@@ -154,7 +183,7 @@ export class Locomotiva extends PortadorComMotor {
     // fontes próprias
     const rpm = (w * 60) / (2 * Math.PI), frac = rpm / tabela[8];
     this.turbo.nivel = Math.pow(Math.max(frac, 0.05), 3);   // 60·log(rpm_turbo) em amplitude: ^3
-    const pf = this.cargaL.P / (c.potenciaNominal * 1000);
+    const pf = this.cargaL.P / this.potenciaEixo();
     this.sopr.nivel = 0.3 + 0.7 * Math.max(pf, fd);
     this.grades.nivel = fd;
     // ventiladores: ligam por temperatura (ciclo de 2–5 min): aqui altos acima do notch 5, baixos de 3 a 5
@@ -173,6 +202,7 @@ export class Locomotiva extends PortadorComMotor {
 
   telemetria(): TelemetriaPortador {
     const w = this.motor ? this.motor.eixo.omega : (this.rpmAlvo * 2 * Math.PI) / 60;
-    return { v: this.cinematica.v, s: this.cinematica.s, rpmEixo: (w * 60) / (2 * Math.PI), torqueCarga: this.cargaL.torque(w), rpmAlvo: this.rpmAlvo, potencia: this.cargaL.P, notch: this.cmd.notch ?? 0 };
+    // (potencia: a elétrica do gerador de tração, η·P_eixo)
+    return { v: this.cinematica.v, s: this.cinematica.s, rpmEixo: (w * 60) / (2 * Math.PI), torqueCarga: this.cargaL.torque(w), rpmAlvo: this.rpmAlvo, potencia: this.cargaL.P * this.cfg.etaGer, notch: this.cmd.notch ?? 0 };
   }
 }

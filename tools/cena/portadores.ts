@@ -70,7 +70,11 @@ export function medirPortadores(): Linha[] {
     const r = new Rotor(SR);
     const tele = r.telemetria();
     const p = r.cargaR.potencias((ROTOR_R44.Nr * 2 * Math.PI) / 60);
-    out.push(L('4.3', 'R44: potência no coletivo de pairado', '≈ 170 kW (110 + 40 + 15 + 5)', `${f1(p.total / 1000, 0)} kW (induzida ${f1(p.ind / 1000, 0)}, perfil ${f1(p.perfil / 1000, 0)}, cauda ${f1(p.cauda / 1000, 0)}, acess. 5)`, Math.abs(p.total / 1000 - 170) <= 10));
+    // (o CENA 4.3 dava ≈ 170 kW = 110 + 40 + 15 + 5 com 1 090 kg e a figura de mérito 0,72 sobre a induzida MAIS o perfil, que
+    // assim contava duas vezes; com κ 1,15 da teoria do momento modificada (Leishman, cap. 2) e o peso máximo do Raven II,
+    // 1 134 kg: 97 + 41 + 14 + 5. O IO-540 do Raven II dá 205 hp = 153 kW por 5 min na decolagem: o pairado fora do efeito
+    // solo no peso máximo cabe nisso, e com 170 kW não caberia)
+    out.push(L('4.3', 'R44: potência no coletivo de pairado (peso máximo, 1 134 kg)', '≈ 155 kW (97 + 41 + 14 + 5)', `${f1(p.total / 1000, 0)} kW (induzida ${f1(p.ind / 1000, 0)}, perfil ${f1(p.perfil / 1000, 0)}, cauda ${f1(p.cauda / 1000, 0)}, acess. 5)`, Math.abs(p.total / 1000 - 155) <= 10));
     // BPF e cauda medidos no canal do rotor (sem motor: Nr imposto)
     r.comandar({ pedal: 0.75 });
     const s = rodar(r, 6, undefined, true);
@@ -114,7 +118,8 @@ export function medirPortadores(): Linha[] {
     });
     const droop = 100 * (1 - nrMin / nr0);
     tMin -= 2; tRec -= 2;
-    out.push(L('5 #10', 'R44: droop ao puxar o coletivo (0,75 → 1,0 em 0,2 s)', '2–3% em ~1 s', `${f1(droop, 2)}% (mínimo ${f1(tMin - 3, 2)} s depois; volta a 99,5% em ${f1(tRec - 3, 2)} s)`, droop >= 2 && droop <= 3 && tMin - 3 < 1.5));
+    out.push(L('5 #10', 'R44: droop ao puxar o coletivo (0,75 → 1,0 em 0,2 s)', '2–3% em ~1 s', `${f1(droop, 2)}% (mínimo ${f1(tMin - 3, 2)} s depois; volta a 99,5% em ${f1(tRec - 3, 2)} s)`, droop >= 2 && droop <= 3 && tMin - 3 < 1.5,
+      'Até 22/11/2026 dava 2,35% (mínimo 1,33 s depois, volta em 2,97 s). Com a potência do rotor corrigida (a figura de mérito 0,72 do CENA 4.3 contava o perfil duas vezes; agora κ 1,15 da teoria do momento modificada) e a tração caindo com Nr² (o rotor que perde giro pede menos), o mesmo puxão pede menos potência a mais e o motor de bancada (Tmax 900 N·m, atraso de torque de 1,1 s, que imita o O-540 com o correlacionador) cai 1,1% e volta em 1,35 s. O droop de 2–3% de 5.10 é o do R44 de verdade; o atraso do motor de bancada não foi reacertado para ele.'));
     out.push(L('4.3', 'tabela de helicópteros: BPF B·Nr/60 e cauda', 'R44 13,6/93; R22 17,7/111; AS350 19,5/69,5; 206 13,1/85; UH-60 17,2/79,3; Mi-8 16,0/56,2',
       Object.entries(HELICOPTEROS).map(([id, h]) => `${id} ${f1((h.B * h.Nr) / 60, 1)}/${f1((h.Bc * h.rpmCauda) / 60, 1)}`).join('; '),
       // (a linha tinha `ok` fixo em true; agora confere a tabela contra os valores do CENA.md 4.3: ±0,1 Hz no principal, ±0,5 Hz na cauda)
@@ -162,7 +167,8 @@ export function medirPortadores(): Linha[] {
         if (notch === 3) { if (t < 0.01) { t0n = t; } if (Math.abs(t - 0.5) < 0.002) r1 = loc.telemetria().rpmAlvo as number; if (Math.abs(t - 1.0) < 0.002) rampaMed = ((loc.telemetria().rpmAlvo as number) - r1) / 0.5; }
       });
       const e = (100 * (rpm() - tab[notch])) / tab[notch];
-      const pe = (100 * (loc.cargaL.P / 1000 - NOTCH_POTENCIA[notch] * 3200)) / (NOTCH_POTENCIA[notch] * 3200);
+      // (a potência elétrica do gerador de tração: η·P no eixo, que a telemetria dá)
+      const pe = (100 * ((loc.telemetria().potencia as number) / 1000 - NOTCH_POTENCIA[notch] * 3200)) / (NOTCH_POTENCIA[notch] * 3200);
       if (Math.abs(e) > 1) okRpm = false;
       if (Math.abs(pe) > 3) okPot = false;
       erros.push(`N${notch} ${f1(rpm(), 0)} rpm (${f1(e, 2)}%)`);
