@@ -22,10 +22,10 @@
   },
   "locomotiva trabalhando a 15 m (UP 844, lwChuff 128, 4/s, corte 50%)": {
     "grupo": "niveis",
-    "medido": 89.1,
+    "medido": 89.91,
     "unidade": "dB",
     "folga": "±1 dB",
-    "motivo": "Ver a K4s a 15 m: 128 − 23,5 − 11 = 93,5 dB(A) em campo livre, menos os ~3 dB da média dos ouvidos (convenção dos testes da Cena) e a brita: 89 dB(A), a 1 dB da faixa."
+    "motivo": "Ver a K4s a 15 m: 128 − 23,5 − 11 = 93,5 dB(A) em campo livre, menos os ~3 dB da média dos ouvidos (convenção dos testes da Cena) e a brita: 89 dB(A), a 1 dB da faixa. [AUDITORIA F-VAP-04: com a 844 no comprimento real (34,81 m com o tênder) a chaminé fica mais perto do ponto de escuta: 89,9 dB(A).]"
   },
   "apito a 30 m (lateral, solo de brita)": {
     "grupo": "niveis",
@@ -36,17 +36,17 @@
   },
   "segurança a 10 m": {
     "grupo": "niveis",
-    "medido": 104.4,
+    "medido": 105.4,
     "unidade": "dB",
     "folga": "±1 dB",
-    "motivo": "A 10 m da lateral a válvula (no meio da caldeira, 4,7 m de altura) fica a 11,9 m: 140 − 21,5 − 11 = 107,5 dB(A) em campo livre, menos os ~3 dB da média dos ouvidos (o splDbA da Cena dá o mesmo, 104,4)."
+    "motivo": "A 10 m da lateral a válvula (no meio da caldeira, 4,7 m de altura) fica a 11,9 m: 140 − 21,5 − 11 = 107,5 dB(A) em campo livre, menos os ~3 dB da média dos ouvidos (o splDbA da Cena dá o mesmo, 104,4). [AUDITORIA F-VAP-04: com a K4s no comprimento real (13,65 m de locomotiva e 11,8 de tênder, 25,45 m no total) a válvula fica mais perto do ouvinte: 105,4 dB(A), +1 dB.]"
   },
   "composição a 100 km/h, 12 vagões, 15 m: vagões contra a locomotiva": {
     "grupo": "composicao",
-    "medido": -9.634,
+    "medido": -9.61,
     "unidade": "dB",
     "folga": "±1 dB",
-    "motivo": "A conta de 3.5 (+14 dB de rolamento contra +4 do chuff) não conta o rolamento da própria locomotiva: 6 eixos (3 motrizes a 103 dB(A), 1.7) e os 4 eixos do tênder (F-VAP-01: a ficha contava 8, as rodas) em 34,5 m de locomotiva com tênder, contra 4 eixos em 20 m num vagão; a 100 km/h a janela da locomotiva fica 9–10 dB acima da dos vagões só pelo rolamento."
+    "motivo": "A conta de 3.5 (+14 dB de rolamento contra +4 do chuff) não conta o rolamento da própria locomotiva: 6 eixos (3 motrizes a 103 dB(A), 1.7) e os 4 eixos do tênder (F-VAP-01: a ficha contava 8, as rodas) em 25,45 m de locomotiva com tênder (F-VAP-04: a ficha tinha 34,5), contra 4 eixos em 20 m num vagão; a 100 km/h a janela da locomotiva fica 9–10 dB acima da dos vagões só pelo rolamento."
   },
   "nível por chuff em cruzeiro (corte 25%, 15/s) contra a referência": {
     "grupo": "niveis",
@@ -170,10 +170,10 @@
   },
   "banda 400–1k no pico a 25 m (844 a 36 km/h, pela Cena)": {
     "grupo": "bandas",
-    "medido": 6.163,
+    "medido": 6.393,
     "unidade": "dB",
     "folga": "±1 dB",
-    "motivo": "O alvo é a média de 3.3 (844, Big Boy, 6024). A 25 m, com a chaminé a 4,8 m e o ouvido a 1,6 m, o nulo do solo (Δr = 0,61 m) cai em 280 Hz, na banda de referência, e sobe as relativas; a gravação do próprio 844 nesse trecho (Apêndice A) dá +4,0 em 400–1k e +4,9 em 1–2,5k."
+    "motivo": "O alvo é a média de 3.3 (844, Big Boy, 6024). A 25 m, com a chaminé a 4,8 m e o ouvido a 1,6 m, o nulo do solo (Δr = 0,61 m) cai em 280 Hz, na banda de referência, e sobe as relativas; a gravação do próprio 844 nesse trecho (Apêndice A) dá +4,0 em 400–1k e +4,9 em 1–2,5k. [AUDITORIA F-VAP-04: a 844 no comprimento real muda o caminho da chaminé ao ouvinte: +6,4.]"
   },
   "banda 1–2,5k no pico a 25 m (844 a 36 km/h, pela Cena)": {
     "grupo": "bandas",
@@ -184,10 +184,10 @@
   },
   "pico/vale a 25 m, 6,3/s": {
     "grupo": "bandas",
-    "medido": 13.28,
+    "medido": 14.01,
     "unidade": "dB",
     "folga": "±1 dB",
-    "motivo": "A passagem é renderizada sem a reverberação nem o fundo (o vale das gravações a 20–30 m tem o campo reverberante e o vento): 13 dB contra 7–8."
+    "motivo": "A passagem é renderizada sem a reverberação nem o fundo (o vale das gravações a 20–30 m tem o campo reverberante e o vento): 13 dB contra 7–8. [AUDITORIA F-VAP-04: com a 844 no comprimento real, 14,0 dB.]"
   },
   "ataque 10–90%, 9/s corte 40% (k4s)": {
     "grupo": "forma",
