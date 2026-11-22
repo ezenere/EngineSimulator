@@ -345,6 +345,9 @@ function Escapamento({ k, e }: P) {
         aoSoltar={(v) => k.setSpec({ escape: { ...esc, diametro: v }, ponteira: spec.ponteira ?? esc.diametro })} />
       <Slider id="ponteira" rotulo="Boca de saída (ponteira)" min={1.5} max={18} passo={0.25} valor={spec.ponteira ?? esc.diametro} formatar={(v) => `${virgula(v, 2)}" · ${Math.round(v * 25.4)} mm`} aoSoltar={(v) => k.setSpec({ ponteira: v })} />
       <Slider id="jatoBoca" rotulo="Chiado do jato na boca (só em giro alto com carga)" min={-30} max={12} passo={1} valor={spec.jatoBoca || 0} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ jatoBoca: v }, nt)} />
+      {/* (carcaça do escape, do motor-base: a parede do abafador irradiando a onda que chega a ele; no Diesel nasce desligada) */}
+      <Slider id="carcaca" rotulo="Carcaça do escape (linhas de 300 a 1000 Hz em carga)" min={-30} max={30} passo={1} valor={spec.carcaca ?? -30} formatar={(v) => (v <= -30 ? 'desligada' : `${v > 0 ? '+' : ''}${v} dB`)}
+        aoMudar={(v) => k.setSpec({ carcaca: v }, nt)} />
       <Field rotulo="Chaminé">
         <ChipGroup id="chamine" opcoes={[{ valor: true, rotulo: 'Com' }, { valor: false, rotulo: 'Sem' }]} atual={!!esc.chamine} aoEscolher={(v) => setE({ chamine: v ? { altura: 1, diametro: esc.diametro } : null })} />
       </Field>

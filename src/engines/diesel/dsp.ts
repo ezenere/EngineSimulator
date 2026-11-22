@@ -354,7 +354,7 @@ export class DieselDSP extends EngineDSP {
     const fs = this.fs, N = this.N;
     const esc = cfg.escape || { turbina: this.turbo, dpf: false, abafador: 'stock', comprimento: cfg.pipeLen || 3, diametro: cfg.pipeD || 2.5, chamine: null, tempGas: 470 };
     const kc = SOUND_SPEED / (esc.tempGas || 470); // comprimentos escalados pela velocidade do som do gás frio (2.5)
-    const lines = [], nodes = [], runners = new Array(N), rads = [];
+    const lines = [], nodes = [], runners = new Array(N), rads = [], carc = [];
     const L = (len, Y, loss, damp = 1) => { const l = new Line(fs, len * kc, Y, loss, damp); l.kNL = 0.6; lines.push(l); return l; };
     const ds = clamp((esc.diametro || 2.5) / 2.5, 0.6, 3), A2 = ds * ds, dw = 1 / Math.min(ds, 1.6);
     this.pipeA = A2;
@@ -401,13 +401,16 @@ export class DieselDSP extends EngineDSP {
       // boca: ka = 1 em c/(2πa) com o gás já mais frio na ponta (~400 m/s): chaminé de 0,45 m → 283 Hz (5)
       const fRad = 400 / (TAU * 0.03175 * dch);
       const r = new Radiator(fs, tail, panL, panR, 1500 / Math.min(dch, 1.6), Math.min(dch * dch, 4), fRad); nodes.push(r); rads.push(r);
+      // carcaça do escape (motor-base, campo `carcaca`): a parede do abafador responde à onda que chega a ele por este
+      // tubo e irradia em linhas; sem abafador (a chaminé da locomotiva) não há caixa que irradie
+      carc.push(ab === 'nenhum' ? null : feed);
     };
     if (saidas === 2) {
       const a = seg(0.3), b = seg(0.3 * 1.04);
       nodes.push(new Junction([port(cur, 1), port(a, 0), port(b, 0)]));
       fimComRadiador(a, 0.95, 0.32); fimComRadiador(b, 0.32, 0.95);
     } else fimComRadiador(cur, 0.62, 0.78);
-    this.lines = lines; this.nodes = nodes; this.runners = runners; this.rads = rads; this.g0Rad = null;
+    this.lines = lines; this.nodes = nodes; this.runners = runners; this.rads = rads; this.carcSrc = carc; this.g0Rad = null;
     this.zTurb = this.Zr * 0.7; // (a pressão do pulso no primário é Zr·ṁ; depois da junção das bancadas e da turbina, menos)
     // (o resto é igual ao fim do buildExhaust do Ronco: o laço de amostra usa estes campos)
     this.radHP = rads.map(() => new Biquad().hp(fs, 45, 0.7));
@@ -1085,7 +1088,7 @@ export class DieselDSP extends EngineDSP {
         if (!this.rpmAlvo) this.rpmAlvo = Math.max(rpm, it);
         this.rpmAlvo += clamp(alvoBruto - this.rpmAlvo, -rampa * dtc, rampa * dtc);
         const e = (this.rpmAlvo - rpmG) / this.rpmAlvo;
-        // (gerador: ω_c 3,7 rad/s, o que dá o Kp 5 do DIESEL.md no QSX15; locomotiva 2,5; bancada 8)
+        // (gerador: ω_c 2,7 rad/s, o que dá o Kp 5 do DIESEL.md no QSX15; locomotiva 2,5; bancada 8)
         const wc = this.portador === 'locomotiva' ? 2.5 : this.portador === 'gerador' ? 2.7 : 8;
         const Kp = wc / P((this.rpmAlvo * TAU) / 60), Ki = Kp * wc / (this.portador === 'locomotiva' && this.tempos === 2 && this.rpmAlvo < 250 ? 6 : 4);
         this.gI = clamp(this.gI + Ki * e * dtc, 0, 1);
@@ -1254,7 +1257,8 @@ export class DieselDSP extends EngineDSP {
   // de lenta quente (referência do nível dos tiques de injeção) e o combustível de lenta (início do integrador).
   sonda0(cfg, rpm, fuel, tw, boost) {
     const t = new DieselDSP(this.fs);
-    t.setConfig({ ...cfg, valve: 'none', reso: false, breakout: 'sealed', freioMotor: 'nenhum', gain: undefined, powerModel: undefined, fuelLenta: undefined, refKnock: undefined }, false);
+    // (as sondas rodam sem os mecanismos de médios do motor-base, como as do Ronco: eles mudam o volume de verdade)
+    t.setConfig({ ...cfg, valve: 'none', reso: false, breakout: 'sealed', freioMotor: 'nenhum', gain: undefined, powerModel: undefined, fuelLenta: undefined, refKnock: undefined, ...this.refMedios(cfg) }, false);
     t.state = 'run'; t.lockOmega = true; t.tempMode = 'fixed'; t.tempSet = 90; t.coolant = 90; t.runT = 100; t.warm = 1;
     t.omega = (rpm * TAU) / 60; t.rpmAvg = rpm; t.sonda = true; t.fuelCmd = fuel; t.thr = 0; t.thrTarget = 0;
     t.tw = tw; t.turboW = tw; t.nTurbo = tw * t.turboRpmMax;

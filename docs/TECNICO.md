@@ -1452,9 +1452,20 @@ da passada, a lenta: 2,2–6,0). O que passa de 2,2 vem das distâncias simétri
   de 150–400 Hz cresce 34 dB. O que falta é conteúdo tonal do escape e da carcaça dele nessa faixa: é o mecanismo
   genérico do caminho compartilhado (`ronco/dsp.ts`), fora do ramo `cc`. Esse mecanismo chegou depois ao motor-base
   (campo `carcaca` do preset: a carcaça do abafador irradiando a onda que chega a ela; Ronco → "Médios") e nasce
-  desligado nas famílias que herdam. Para o Diesel usá-lo, o `buildExhaust` do Diesel (que monta a própria rede) tem de
-  preencher `carcSrc` com a onda que chega a cada abafador, e os presets pesados ganham `carcaca`; muda o nível em
-  carga, então o acerto da `mecanica` e a validação se refazem. Não foi feito nesta passada.
+  desligado nas famílias que herdam. O Diesel ficou ligado a ele (`buildExhaust` preenche `carcSrc` com o tubo que chega
+  a cada abafador, as sondas rodam sem ela por `refMedios`, e o painel tem o controle "Carcaça do escape"), mas
+  **desligado nos presets**: a medida não confirmou o valor recomendado para os carros. Com `carcaca` −6 dB nenhuma
+  banda muda (0,0 dB em 13 casos da régua). Com +18 e +24 dB, relativo a 150–400 Hz, a banda de 400–1000 Hz sobe 2,0
+  e 4,8 dB no Cat C15 em carga na cabine (−17,2 → −15,2 → −12,4; gravação −10,7), 1,9 e 3,6 no Scania (−14,1 → −12,2 →
+  −10,5; gravação −4,1) e 4,5 e 7,3 no ônibus de fora (−11,4 → −6,9 → −4,1; gravação −3,1), o HNR dela sobe de 4,5 para
+  11 dB (são linhas) e os totais da régua mudam de −0,25 a +0,1; a de 1–2,5 kHz não sobe (relativa, cai 1 a 2,5 dB, porque a de
+  150–400 sobe junto): com tubo de 5" a parede ressoa em 475 Hz e a massa corta em 1,3 kHz. É um caminho para os médios
+  de 300 a 1000 Hz em carga, com valores 24 a 30 dB acima dos do Ronco; ligá-lo muda o nível em carga e pede refazer o
+  acerto da `mecanica` e a validação. O que falta de 1 a 2,5 kHz na cabine não vem dele.
+- **O que o Diesel não herda do motor-base**: a `batida` periódica (o Diesel tem a dele, pela queima); o `jato: 'sonico'`
+  (o jato do Diesel já segue a velocidade média na boca e a boca é um campo à parte: com o tubo em 1,5" o jato muda o
+  nível ponderado A em 0,0 a 0,3 dB); e a bomba de ar secundário não toca no Diesel (`hasCat = false` em `tune()`:
+  render de lenta fria idêntico com `bombaAr: 'tom'` e sem o campo).
 - **A lenta continua mais seca que as gravações.** Com o chocalho das engrenagens o p90/p10 de 1–6 kHz na lenta fica em
   14–21 dB (sem ele, 19–27; gravações, 5–13). O controle "Reflexos do cofre" enche mais o intervalo entre as explosões;
   o padrão (−10 dB) ficou baixo para a carga não perder os pulsos (com −7 dB o "pulso a menos" do Scania em carga passa
