@@ -12,18 +12,23 @@
 //    depois da boca. O espectro é o de um escoamento livre: banda larga com o joelho no Strouhal da boca
 //    (f ≈ 0,3·v/D: ~300 Hz num estaque de 38 mm na lenta, alguns kHz em potência), então o sopro escurece na lenta e
 //    rasga em carga sem nenhum filtro fixo.
-//  - **A nuvem de cada sopro continua misturando depois que a vazão cai.** A envoltória da turbulência sobe com a vazão
-//    e desce com o tempo de mistura de ~5 diâmetros à velocidade do próprio sopro (dv/dt = −v²/5D: meia-vida de 5 ms
-//    num estaque de 38 mm a 40 m/s, mais curta em potência): é o "corpo" do pulso de um tubo aberto. Sem isso o agudo
-//    era uma agulha de 2 ms por explosão com silêncio em volta (o "pipoco": 20 a 36 picos por segundo e curtose 50–90
-//    nos motores de estaques, contra 0–7 e 3–6 das gravações).
+//  - **A turbulência leva um tempo para nascer e outro para se desfazer.** A camada de mistura enrola em ~4 diâmetros
+//    à velocidade da vazão (a envoltória não salta com o pico de 1–2 ms do estouro da válvula) e a nuvem de cada sopro
+//    continua misturando por ~20 diâmetros depois que a vazão cai (dE/dt = −E²/(ρc·20D): meia-vida de 19 ms num
+//    estaque de 38 mm a 40 m/s, mais curta em potência). É o "corpo" do pulso de um tubo aberto. Sem isso o agudo era
+//    uma agulha de 2 ms por explosão com silêncio em volta (o "pipoco": 20 a 36 picos por segundo e curtose 50–90 nos
+//    motores de estaques, contra 0–7 e 3–6 das gravações), e as explosões fortes do galope da lenta saíam como estalos
+//    soltos 16 a 20 dB acima das vizinhas.
 //  - **Sem bocal.** A velocidade na boca é a da onda no tubo, v = p/ρc (ρc ≈ 250 Pa·s/m no gás de escape): o estaque é
 //    o próprio primário. O chiado de jato do Ronco dividia a velocidade pela área da ponteira relativa a um tubo de
 //    2,5" (÷ 0,36 num estaque de 38 mm: +18 dB), como se o gás acelerasse num bocal que não existe, e o ruído (∝ v²)
-//    virava 87–100 % do som acima de 400 Hz na lenta. (Um termo a mais para o ruído de mistura do jato perto de Mach 1,
-//    intensidade crescendo com M², foi medido e saiu: na decolagem do Corsair ele punha 2,5–6 kHz 7 dB acima da
-//    gravação, com o sopro em 100 % de tudo acima de 1 kHz. Com a intensidade constante o sopro em potência já rasga,
-//    porque o joelho do espectro sobe com a velocidade.)
+//    virava 87–100 % do som acima de 400 Hz na lenta.
+//
+// Medido e deixado de fora (decolagem do Corsair contra a gravação a 150 m): a intensidade crescendo com M², como o
+// ruído de mistura de um jato livre, punha 2,5–6 kHz 7 dB acima da gravação; caindo com o Mach (a válvula blocada flutua
+// menos), o nível baixava mas o que sobrava era o chiado liso da hélice e do coletor, e o `ar` do kit ouvido subia de
+// 0,57 para 1,35. Fica a intensidade constante: em potência o sopro já rasga, porque o joelho do espectro sobe com a
+// velocidade. Tirar a vazão média (só o pulso chiaria) mudou menos de 0,5 dB na lenta e também não entrou.
 //
 // Ruído com semente própria por boca (a renderização segue determinística). O controle "Ar" da página (`params.air`)
 // multiplica a turbulência, como multiplica o chiado da admissão.

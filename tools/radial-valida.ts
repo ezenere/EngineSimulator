@@ -15,7 +15,7 @@
 //
 //   npx tsx tools/radial-valida.ts [grupos...] [--j 8] [--semente N] [--atualizar[=nome exato]]
 //   grupos: geometria razoes bandas pagina linhas linhas-b linhas-decolagem niveis galope galope-b partida partida-b
-//           estouros (a–d) estalos (a–d) motor aviacao potencia; sem grupo, todos em paralelo
+//           estouros (a–d) estalos (a–d) limitador (a–b) motor aviacao potencia; sem grupo, todos em paralelo
 // Sai ≠ 0 se houver falha (os desvios do retrato aparecem como "desv", com o teto).
 import os from 'node:os';
 import path from 'node:path';
@@ -51,6 +51,13 @@ const ESTALOS: Record<string, string[]> = {
   'estalos-c': ['c172', 'o360', 'o200', 'io540', 'io550'],
   'estalos-d': ['rotax912', 'bell47', 'r22', 'r44', 's300'],
 };
+/** limitador de saída em potência de decolagem, pela página (AUDITORIA R-02): menos de 1% das amostras acima de 0,7 */
+const LIMITADOR: Record<string, string[]> = {
+  'limitador-a': ['r1820', 'r1830', 'r2800', 'r2800turbo', 'r4360', 'r1340', 'r985', 'm14p'],
+  'limitador-b': ['m14pf', 'rotec2800', 'rotec3600', 'verner3', 'verner5', 'r975', 'trossi', 's55'],
+};
+/** página × Cena: o mesmo motor nos dois caminhos, na mesma posição (5 m de lado, sem o solo da Cena) */
+const PAGINA_CENA = ['r1830', 'r2800turbo', 'm14p', 'rotec2800'];
 const ESTOUROS: Record<string, string[]> = { 'estouros-a': ['r1820'], 'estouros-b': ['r1830'], 'estouros-c': ['r2800'], 'estouros-d': ['r2800turbo'] };
 
 // ------------------------------------------------------------------ grupos
@@ -186,6 +193,37 @@ async function grupo(nome: string): Promise<Linha[]> {
       const curto = n.replace(/^lenta /, '').replace(/, \d+ m \(/, ' (');
       add(`bandas da página na lenta, ${curto}`, `${alvo.map((x) => sg(x)).join(' / ')} ± 4 dB`, `${b.map((x) => sg(x)).join(' / ')} (6–12k ${sg(m.b[5])}; ${f1(rpm, 0)} rpm; erro máx ${f1(erro)} dB)`, erro <= 4, b, 'dB');
       add(`centroide da página na lenta, ${curto}`, `${cent} Hz ± 30%`, `${f1(m.cent, 0)} Hz`, Math.abs(m.cent / cent - 1) <= 0.3, m.cent, 'Hz');
+    }
+    // página × Cena (T-RAD-05): o mesmo preset na lenta quente pelos dois caminhos, na mesma posição de ouvinte: de lado,
+    // a 5 m, e a Cena sem o solo (a página não tem reflexão do solo; com a grama a Cena fica 3 a 5 dB mais brilhante
+    // em relação a 150–400 Hz, porque a banda de referência cai no vale da interferência). Bandas relativas a 150–400 Hz
+    const { bandas } = await import('./radial-bandas');
+    const { ouvirParado } = await import('./radial-cena');
+    for (const id of PAGINA_CENA) {
+      const s = preset(id);
+      const r = renderizar(novoDSP(s, { quente: true }), 12);
+      const pg = bandas(ouvido(r.L, r.R, 4, 12), SR).b;
+      const cn = bandas(ouvirParado(id, { d: 5, pedal: 0, rpm: s.idle, dur: 12, t0: 4, solo: 'nenhum' }).x, SR).b;
+      const dif = [2, 3, 4].map((k) => cn[k] - pg[k]), pior = Math.max(...dif.map(Math.abs));
+      add(`${id}: Cena (5 m, sem solo) menos página, 400–1k / 1–2,5k / 2,5–6k`, '0 ± 2 dB', `${dif.map((x) => sg(x)).join(' / ')} dB`, pior <= 2, dif, 'dB');
+    }
+  }
+
+  if (nome in LIMITADOR) {
+    // potência de decolagem pela página, com o volume padrão (0,8): manete toda (hélice no alvo máximo; tanque e carro
+    // em ponto morto), 5 s para assentar e 4 s medidos. O limitador de saída (o `tanh`) é proteção, não parte do timbre
+    const { preset, novoDSP } = await import('./radial-comum');
+    const B = 128, l = new Float32Array(B), r = new Float32Array(B);
+    for (const id of LIMITADOR[nome]) {
+      const d: any = novoDSP(preset(id), { quente: true });
+      d.message({ type: 'av', rpmAlvo: 1 }); d.message({ type: 'input', throttle: 1 });
+      let acima = 0, n = 0, pico = 0;
+      for (let i = -5 * SR; i < 4 * SR; i += B) {
+        d.process(l, r, B);
+        if (i >= 0) for (let k = 0; k < B; k++) { const m = Math.max(Math.abs(l[k]), Math.abs(r[k])); if (m > 0.7) acima++; if (m > pico) pico = m; n++; }
+      }
+      const pc = (100 * acima) / n;
+      add(`${id}: decolagem pela página, amostras acima de 0,7`, '< 1 %', `${f1(pc, 2)} % (pico ${f1(pico, 2)}; ${f1(d.rpmAvg, 0)} rpm; margem de decolagem ${f1(d.margemDb || 0)} dB)`, pc < 1, pc, '%');
     }
   }
 
@@ -456,8 +494,8 @@ async function grupo(nome: string): Promise<Linha[]> {
 }
 
 // ------------------------------------------------------------------ CLI
-const GRUPOS = ['geometria', 'razoes', 'bandas', 'pagina', 'linhas', 'linhas-b', 'linhas-decolagem', 'niveis', 'galope', 'galope-b', 'partida', 'partida-b', ...Object.keys(ESTOUROS), ...Object.keys(ESTALOS), 'motor', 'aviacao', 'potencia'];
-const ALIAS: Record<string, string[]> = { estouros: Object.keys(ESTOUROS), estalos: Object.keys(ESTALOS) };
+const GRUPOS = ['geometria', 'razoes', 'bandas', 'pagina', 'linhas', 'linhas-b', 'linhas-decolagem', 'niveis', 'galope', 'galope-b', 'partida', 'partida-b', ...Object.keys(ESTOUROS), ...Object.keys(ESTALOS), ...Object.keys(LIMITADOR), 'motor', 'aviacao', 'potencia'];
+const ALIAS: Record<string, string[]> = { estouros: Object.keys(ESTOUROS), estalos: Object.keys(ESTALOS), limitador: Object.keys(LIMITADOR) };
 const args = process.argv.slice(2);
 if (args[0] === '--grupo') {
   iniciarSementes();
