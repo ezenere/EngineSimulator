@@ -260,6 +260,15 @@ try {
   const ps = await ev(`document.getElementById('pedalFill').style.height`);
   confere(pw === '100%' && ps === '0%', 'Sherman: W no pedal, volta a zero ao soltar', `${pw} → ${ps}`);
 
+  // temperatura fixa: o controle nasce da telemetria (não de um valor fixo) e manda no motor
+  await chip('#tempMode', 'Fixa');
+  const ct = await esperaAte(async () => { const v = await ev(`document.getElementById('coolant')?.value ?? null`); return v === null ? null : { v: +v, tele: Math.round((await ev(`window.__radial.tele.coolant`)) ?? -999) }; }, 4000);
+  confere(!!ct && Math.abs(ct.v - ct.tele) <= 1, 'temperatura fixa: o controle nasce da cabeça dos cilindros', ct ? `${ct.v} °C no controle · ${ct.tele} °C na telemetria` : 'sem o controle');
+  await deslizar('coolant', 60);
+  const c60 = await esperaAte(async () => { const c = await ev(`window.__radial.tele.coolant`); return Math.round(c) === 60 ? c : null; }, 4000);
+  confere(!!c60 && (await ev(`document.getElementById('coolant').value`)) === '60', 'temperatura fixa em 60 °C', String(await ev(`window.__radial.tele.coolant`)));
+  await chip('#tempMode', 'Real');
+
   // I desliga
   await tecla('KeyI');
   await espera(1500);
