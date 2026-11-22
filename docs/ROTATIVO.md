@@ -6,11 +6,11 @@
 > - **Atrito e queima.** O atrito usa 2× a cilindrada nominal; a queima fica mais lenta com o vácuo (`kBurn × (1 + 1,65·vácuo)`).
 > - **Calibração.** É feita com o escape de fábrica do preset, não com a série de referência que o documento pedia.
 > - **X-Engine (4).** IC a 620° (o texto traz ≈ 560); o XTS-210, diesel no real, roda a centelha com CR 18 (aproximação declarada).
-> - **Fichas (6.2).** RX-7 FD com a 5ª de 0,761 (a ficha diz 0,806); 787B com o mapa `burble` (não `popbang`); geradores do X-Engine com alternador leve. O alvo de 2 750 rpm do RX-8 a 100 km/h não fecha com a própria ficha (dá 3 011).
+> - **Fichas (6.2).** RX-7 FD com a caixa do Type RS, 5ª de 0,762 e diferencial 4,3 (a tabela de 6.2 traz 0,806 / 4,1; o alvo a 100 km/h em 5ª passou de 2 600 para 2 750 rpm); Ro 80 com a admissão lateral no lugar da periférica do KKM 612 (aproximação declarada no preset: com uma periférica de rua o modelo de diluição dá uma lenta de bridge port; ver `TECNICO.md`, Pendente); 787B com o mapa `burble` (não `popbang`); geradores do X-Engine com alternador leve. O alvo de 2 750 rpm do RX-8 a 100 km/h não fecha com a própria ficha (dá 3 011).
 > - **Ponteira.** O jato da ponteira (`escape.ponteira`) é separado do Ø da saída.
 > - **Compatibilidade (6.3).** O rotativo entrou também no rotor (AE50R no Camcopter) e no gerador (X-Engine); a tabela 1.6 do `CENA.md` não foi atualizada.
 > - **Apêndice B.** O volume da câmara do 13B dá 654,7 cm³ (o apêndice escreve 654,3).
-> - **Alvos de 3.1 a 3.3.** As seis comparações de bandas com gravações estão na lista de desvios; as medidas de meia-ordem do teste não medem nada (devolvem −∞). Ver `AUDITORIA.md`.
+> - **Alvos de 3.1 a 3.3.** As seis comparações de bandas com gravações estão na lista de desvios; a meia-ordem (3.2) é medida pela banda lateral a ±rpm/120 em volta de 2·ign e 3·ign, com o eixo travado na rotação da lenta e um controle (o mesmo trecho modulado em 720°) que prova que a medida enxerga a linha; a medida antiga devolvia −∞ e passava (`AUDITORIA.md`, T-ROT-01).
 
 Documento de projeto da etapa 4 (ver `PLANO.md`). Define como o motor Wankel estende o `EngineDSP` do Ronco sem mudar o som a gasolina (câmara trocoidal em vez de cilindro, janelas em vez de válvulas, 3 câmaras por rotor, ciclo de 1 080° do eixo excêntrico), o escape dos rotativos (pré-silencioso, turbo sequencial, megafone do 787B, lateral × periférico), os alvos medidos nas gravações, o X-Engine da LiquidPiston e o motor de palhetas (ambos marcados **aproximação**), os presets com ficha, a página `rotativo.html` e o plano de implementação com medidas. A implementação segue este texto à letra; o que estiver marcado **decisão** não se renegocia dentro da etapa sem anotar no relatório. Unidades: SI; **ângulos em graus do eixo excêntrico** (°e), contados como no `dsp.ts` (0° = PMS de ignição da câmara; ciclo da câmara de 1 080°e no Wankel, 720° no X-Engine). As linhas citadas (`dsp.ts:NNN`) são as de `src/engines/ronco/dsp.ts` no commit `d313d2f`.
 
@@ -23,12 +23,15 @@ Documento de projeto da etapa 4 (ver `PLANO.md`). Define como o motor Wankel est
 - [6. Presets](#6-presets)
 - [7. Interface da página `rotativo.html`](#7-interface-da-página-rotativohtml)
 - [8. Plano de implementação e verificação](#8-plano-de-implementação-e-verificação)
+- [9. Rodada de som de novembro de 2026: o que mudou neste projeto](#9-rodada-de-som-de-novembro-de-2026-o-que-mudou-neste-projeto)
 - [Apêndice A. Medidas das gravações](#apêndice-a-medidas-das-gravações)
 - [Apêndice B. Geometria conferida](#apêndice-b-geometria-conferida)
 
 ---
 
 ## 0. Decisões
+
+*As decisões 5 (pós-queima), 9 (lenta irregular) e 12 (alvos) e as seções 1.3, 1.4, 2.2 e 3.1 foram revistas na rodada de som de novembro de 2026: ver a [seção 9](#9-rodada-de-som-de-novembro-de-2026-o-que-mudou-neste-projeto). O texto abaixo é o projeto original.*
 
 1. **Subclasse, não cópia** (o padrão de `DIESEL.md` seção 1 e `RADIAL.md` 1.6). `RotativoDSP extends EngineDSP` em `src/engines/rotativo/dsp.ts`. O `EngineDSP` ganha uma flag neutra `this.rot = false` no construtor e ramos `if (this.rot)` nos pontos da tabela 1.6; com `rot = false` nenhuma operação aritmética muda, e `npm run paridade:ronco` (200 cenários) é o portão de cada commit que toca `dsp.ts`. **Terceiro na fila do `dsp.ts`**: os ganchos do rotativo só entram depois de os do Diesel (`cc`, `tempos`, `cyc`) e os do Radial (`av`, `radial`, `carga`) estarem na branch. Um só arquivo-base, uma pessoa por vez. O rotativo **depende de `cyc`** (o ciclo da câmara em graus, que o Diesel introduz para o 2T com 360): aqui `cyc = 1080`.
 2. **Câmara = "cilindro" do modelo.** Cada câmara do Wankel é um volume de controle do laço do Ronco: `N = 3·rotores` câmaras, cada uma com o próprio `fire[c]`, pressão, massa, Wiebe e janelas. O que muda é a função volume (1.1), o perfil de área das janelas (1.3), as fases (1.2) e o fato de as 3 câmaras de um rotor **compartilharem** a mesma janela e o mesmo tubo primário de escape (1.3).
@@ -466,6 +469,27 @@ Ferramentas (`tools/`, TypeScript com `tsx`): `rotativo-render.ts` (cenários `i
 | **X-Engine sem referência** | Marcado aproximação; só os testes de contagem (`f_ign`, `cyc`, pressão na abertura) e nenhum alvo de banda |
 | **Palhetas sem gravação no acervo** | Antes do passo 10, uma gravação Commons de ferramenta pneumática (retífica/parafusadeira) medida com `scan.py`/`picos.py`; sem ela, os alvos de 5.3 ficam como estão e o preset leva "aproximação" |
 | **`COMPAT` e `HELICOPTEROS` são de outra etapa** | Relatar as duas linhas (`rotor`, `gerador` + `s100`) em vez de mudar; até lá os presets 13 e 16 rodam em `nenhum` |
+
+---
+
+## 9. Rodada de som de novembro de 2026: o que mudou neste projeto
+
+O dono ouviu os Rotativos e reprovou duas vezes: "apenas ar". A regra de gosto dele vale acima da fidelidade à gravação: **mais motor, menos som de ar do motor**. Esta seção diz o que do projeto acima deixou de valer e por quê; as medidas estão em `TECNICO.md` → Rotativos → Rodada de som, e o caso em `REVISAO-DE-SOM.md`.
+
+| Onde | O projeto dizia | Agora | Por quê |
+|---|---|---|---|
+| 3.1, decisão 12 | Lenta de 2 rotores: 400–1k −1, 1–2,5k −11, 2,5–6k −10,5 dB rel. 150–400 (RX-7 do Commons, "perto do carro"); "o que separa o Wankel do pistão na lenta" é o 1–6 kHz 8–20 dB mais forte | Alvo: as gravações casadas de `referencias/rotativo`, com a gravação como **teto** no agudo. FC3S 13B turbo, da traseira, 750 rpm: −17 / −35 / −41; 20B a 880 rpm: −18 / −35 / −44 | O microfone do vídeo do Commons é desconhecido (cofre aberto ou muito perto daria aquele agudo). Atrás do carro, um rotativo de rua na lenta é tão escuro quanto um pistão; o que o distingue é o pulso, não o chiado |
+| 1.4, decisão 5 | Pós-queima como "chiado quente" de cada pulso, ruído de combustão com envoltória de 2/12 ms; na implementação, distribuída em três pontos, 45–70% na boca | Expansão do gás presa ao evento no primário (0,5) e no ponto quente (0,2); a parte lisa reforça o pulso, a flutuação turbulenta é ~10% rms; **nada na boca** de fábrica | Depois de 3–6 m de tubo o gás sai a 200–300 °C. A boca era uma fonte de ruído fora de todos os abafadores: 99–100% do som acima de 1 kHz na lenta, 20–38 dB acima das gravações casadas |
+| 2.2 | O pré-silencioso tira o agudo da lenta (medido: não tirava, +1,4 / +0,1 dB ao retirá-lo) | Tira: +6,5 / +10,3 dB em 1–2,5k / 2,5–6k ao retirá-lo | O agudo agora nasce antes dele |
+| 1.3 | Rampa do escape periférico 0,12 (≈ 47°e) na abertura e 0,15 no fechamento | (duração − 360)/duração nas duas: 33°e no 13B | A janela fica aberta 360°e (a distância entre as vedações de ápice) mais a própria altura; 393 − 360 = 33°e = 20 mm a 0,61 mm/°e. A Sachs, de eventos estimados, fica com a rampa antiga |
+| 2.1 | Tubos com o afiamento não linear do Ronco (`kNL` 0,6) | Primários e megafone com o coeficiente do gás: (γ+1)/(2γ) = 0,88·p/p₀ | É nos primários que a onda é forte (0,3–0,6 bar em carga). Com a janela de 33°e a frente chega ao coletor quase em choque: o "rasgado" em linhas |
+| decisão 9, 1.4 | Lenta de bridge e periférica: `misfire` de base 6% crescendo com a sobreposição e o vácuo, estouro em 35–70% das falhas (16 estalos/s no 787B) | A fração de gás queimado presa na carga decide se ela acende; cada câmara alterna queima e falha; a mistura crua da falha queima em parte no tubo e o resto é aceso pela próxima queima; o estouro solto ficou raro | As gravações (787B, RX-7 preparado, bridgeport) têm rajadas a rpm/360, uma a cada 6 voltas do eixo: o período de duas voltas do rotor, que é o de uma câmara alternando. Sorteio dá estalo solto, não ritmo |
+| 2.1 (boca), 7 | Ø da saída e ponteira só mudavam a irradiação e o ganho do chiado do jato (∝ 1/área²) | A saída fina é um orifício: resistência pelo escoamento médio e contrapressão; o jato lê a velocidade na ponteira, satura no som e tem teto contra o pulso; irradiação de monopolo (ganho ∝ d) | Com a ponteira no mínimo o jato era 75–99% do som em plena carga ("papel rasgando"); com o Ø no mínimo o tom caía 33 dB e sobrava o ruído |
+| 2.3, 1.5 | Apito do turbo do Ronco; vedações como chiado contínuo de 2–6 kHz | Apito e sopro a 30%; chiado das vedações à metade (controles no painel) | Padrões dos controles de ar do lado baixo: o turbo é um detalhe por cima do motor |
+
+**Campos novos de preset** (todos com controle no painel, todos do lado baixo de fábrica): `hcTurb` (chiado da pós-queima, 0,2), `kBoca` (chama na boca, 0), `kVed` (chiado das vedações, 0,5), `kApito` (som do turbo, 0,3), `variacao` (variação entre explosões, 3,5; a Norton usa 1,5). Parâmetros internos, sem campo de preset: os limiares de diluição (`xFalha0`/`xFalha1`, 0,44–0,48), `kCru` (0,05), `kChama` (0,015), `kPlenum` (0,6; 0,15 com admissão periférica) e `tetoJato` (0,1).
+
+**Critérios de aceite da rodada** (PLANO, viés do simulador), medidos em `npm run teste:rotativo` (grupo `ar`) e em `tools/rotativo-regua.py`: defeito `ar` ≤ 0,6 e leito de ruído ≤ o da gravação casada até 6 kHz; as fontes de ar contínuas juntas mudam o nível ponderado A em menos de 1,5 dB na lenta e em carga parcial; em nenhuma posição de Ø e ponteira o jato é a fonte dominante; tom a menos ≤ 2,4 e pulso a menos ≤ 1,3.
 
 ---
 

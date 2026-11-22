@@ -19,7 +19,7 @@ import { TAU, DEG, P0, RGAS, SOUND_SPEED, clamp, smooth, flow, onePole, RNG, Biq
 import { EngineDSP } from '../ronco/dsp';
 import { T_MAN } from '../ronco/constantes';
 import { ADMISSAO, ESCAPE, K_VELAS, T_EXREF_ROT, DENS_TETO_ROT, DENTES_ENGRENAGEM, type Janela } from './constantes';
-import { DoisPortasRotativo } from './escape';
+import { DoisPortasRotativo, BocaRot } from './escape';
 import { PRESETS_ROTATIVO, type EscapeRotativo } from './presets';
 
 /** escape de referência da calibração (ROTATIVO.md 1.6): série com pré-silencioso, abafador esportivo, Ø 2,5" */
@@ -32,23 +32,22 @@ export function areaJanela(a: number, j: Janela) {
   return Math.min(1, u / j.ra, (1 - u) / j.rf);
 }
 
-/** nó da rede do escape que injeta a parte distribuída da pós-queima no ponto quente e na boca (1.4) */
+/** nó da rede do escape que injeta a parte da pós-queima que queima adiante: no ponto quente e, se houver chama, na boca (1.4) */
 class PosQueimaBoca {
   d: RotativoDSP; e = 0;
-  // A envoltória de cada evento (subida de 2 ms, queda de 12 ms, ROTATIVO.md 1.4) chega ao ponto quente e à boca espalhada
-  // pela mistura no caminho: um polo de `hcEspalha` ms (9 por padrão), com a mesma integral. Era 15 ms: na lenta do FD, a
-  // 25 eventos/s, um evento emendava no outro e a boca virava um chiado quase contínuo, o "som de ar" que o ouvido apontou
-  // (p10 da envoltória de 1–6 kHz a −6 dB da média, desvio/média 0,40 contra o ≥ 0,5 do ROTATIVO 8.1). Com 9 ms o desvio/
-  // média passa a 0,51 e o p90/p10 fica em 12 dB, dentro dos 7–13 medidos na gravação; com 0 ms (o evento puro) o p90/p10
-  // vai a 21 dB e cada pulso vira um estalo isolado (25/s), contra 6,8 dB e 0,5/s da gravação do RX-7
+  // A envoltória de cada evento (subida de 2 ms, queda de 12 ms, ROTATIVO.md 1.4) chega ao ponto quente espalhada pela
+  // mistura no caminho: um polo de `hcEspalha` ms (9 por padrão), com a mesma integral.
+  // No ponto quente a queima é, como no primário, uma expansão do gás presa ao evento (a parte lisa, que só reforça o
+  // pulso) com uma flutuação turbulenta pequena por cima (`hcTurb`). Na boca só existe a chama: turbulenta, ao ar livre.
   constructor(d: RotativoDSP) { this.d = d; }
   step() {
     const d = this.d, n = d.ruidoHC(1), bs = d.bocas;
     this.e += d.kEsp * (d.hcBoca - this.e);
     d.hcBoca = 0;
     if (this.e < 1e-12) return;
-    const k = (d.kHC * d.kQuente * this.e * n) / bs.length;
+    const k = (d.kHC * d.kQuente * this.e * (1 + d.hcTurb * n)) / bs.length;
     for (let i = 0; i < bs.length; i++) bs[i].j.inj += bs[i].Z * k;
+    if (d.kBoca <= 0) return;
     const bb = d.bocasF, kb = (d.kHC * d.kBoca * this.e * n) / bb.length;
     for (let i = 0; i < bb.length; i++) bb[i].j.inj += bb[i].Z * kb;
   }
@@ -57,6 +56,8 @@ class PosQueimaBoca {
 export class RotativoDSP extends EngineDSP {
   declare jAd: Janela; declare jEx: Janela; declare AinPrim: number; declare AinSec: number; declare AinAux: number; declare AinMaxRpm: number; declare apv: number[];
   declare hcQ: Float64Array; declare hcN: RNG; declare hcS: Float64Array; declare hcBoca: number; declare kBoca: number; declare hcKh: number; declare hcKl: number; declare bocas: { j: Junction; Z: number }[]; declare bocasF: { j: Junction; Z: number }[]; declare kQuente: number; declare kPrim: number; declare kEsp: number; declare kHC: number; declare fHCatual: number; declare ov: number; declare rotores: number;
+  declare hcTurb: number; declare mEscAc: number; declare mEscMed: number; declare bocasR: BocaRot[];
+  declare mq: Float64Array; declare arQ: Float64Array; declare xRes: Float64Array; declare xEsc: Float64Array; declare admQ: Float64Array; declare cru: Float64Array; declare plenQ: number; declare kPlen: number; declare kVed: number; declare kApito: number; declare hcC: Float64Array; declare kTurbCru: number; declare kChama: number; declare thB: number[] | null; declare mPorta: number; declare vAdm: number; declare xF0: number; declare xF1: number; declare kCru: number; declare falhaBase: number; declare sondaEv: ((c: number, queimou: boolean, residual: number, p: number) => void) | null;
   declare kVelas: number; declare trailingOn: boolean; declare velas: number; declare tipoRot: string; declare fHCextra: number; declare fHCcat: number;
   declare seq: boolean; declare trocaRpm: number; declare transT: number; declare seqW: number; declare boostBase: number; declare rpmPrevSeq: number; declare phT2: number;
   declare pEO: Float64Array; declare TEO: Float64Array; declare MjEO: Float64Array; declare nEstouros: number; declare estourosS: number; declare tEst: number; declare fumaca: number;
@@ -68,8 +69,9 @@ export class RotativoDSP extends EngineDSP {
     // os ganchos do EngineDSP chamam estas (propriedades da instância, como no DieselDSP e no RadialDSP)
     this.rotQueima = this.queimaRot; this.rotJanelas = this.janelasRot; this.rotEscape = this.escapeRot; this.rotAdmissao = this.admissaoRot;
     this.rotDens = this.densRot; this.posQueima = this.posQueimaRot; this.mechRot = this.mecanicaRot; this.rotTBurn = this.tBurnRot; this.rotTelemetria = this.telemetriaRot;
-    this.kBurn = 1.5 * 1.15; this.falhaRot = 0; this.prRot = 0.04; this.runRot = [];
-    this.hcN = new RNG(0x4c0b); this.hcS = new Float64Array(4); this.hcBoca = 0; this.kBoca = 0.45; this.kQuente = 0.2; this.kPrim = 0.1; this.kEsp = 1; this.hcKh = 0; this.hcKl = 0; this.bocas = []; this.bocasF = []; this.kHC = 1; this.fHCatual = 0; this.ov = 0; this.rotores = 2;
+    this.rotApito = this.apitoRot; this.kVed = 0.5; this.kApito = 0.3; this.thB = null;
+    this.kBurn = 1.5 * 1.15; this.falhaRot = new Float64Array(0); this.falhaBase = 0; this.prRot = 0.04; this.runRot = [];
+    this.hcN = new RNG(0x4c0b); this.hcS = new Float64Array(4); this.hcBoca = 0; this.kBoca = 0; this.kQuente = 0.2; this.kPrim = 0.5; this.hcTurb = 0.2; this.kEsp = 1; this.mEscAc = 0; this.mEscMed = 0; this.bocasR = []; this.hcKh = 0; this.hcKl = 0; this.bocas = []; this.bocasF = []; this.kHC = 1; this.fHCatual = 0; this.ov = 0; this.rotores = 2;
     this.seq = false; this.trocaRpm = 4500; this.transT = -1; this.seqW = 0; this.boostBase = 0; this.rpmPrevSeq = 0; this.phT2 = 0;
     this.traco = new Float32Array(64); this.iacLenta = 0; this.estourosTotal = 0; this.nEstouros = 0; this.estourosS = 0; this.tEst = 0; this.fumaca = 0; this.densMax = 0;
     // (conta os estouros: o mecanismo é o do Ronco, que põe cada um em `pops`)
@@ -85,8 +87,12 @@ export class RotativoDSP extends EngineDSP {
     // as câmaras de um rotor dividem a mesma janela de admissão e o mesmo primário, então variam menos que cilindros
     this.spread = cfg.dispersao ?? 2.5;
     this.hcQ = new Float64Array(N); this.pEO = new Float64Array(N); this.TEO = new Float64Array(N); this.MjEO = new Float64Array(N);
+    // composição do gás (fração queimada): câmaras, região da janela de escape e duto de admissão de cada rotor
+    this.falhaRot = new Float64Array(N); this.hcC = new Float64Array(N); this.mq = new Float64Array(N); this.arQ = new Float64Array(N); this.xRes = new Float64Array(N);
+    this.xEsc = new Float64Array(this.rotores).fill(1); this.admQ = new Float64Array(this.rotores); this.cru = new Float64Array(this.rotores); this.plenQ = 0;
     super.setConfig(cfg, calibrate);
     if (cfg.iacLenta) this.iacLenta = cfg.iacLenta;
+    this.arDeLenta();
     // dispersão por rotor (1.2): além da do Ronco por flanco, ±4% na energia e ±6% na janela de escape de cada rotor (a
     // ordem 1 do eixo sai 8–15 dB abaixo da ignição, como nas gravações)
     const sr = new RNG(0x707a + 131 * N), sp = (cfg.fuel === 'carb' ? 2.6 : 1) * (cfg.dispersaoRotor ?? 3);
@@ -140,6 +146,11 @@ export class RotativoDSP extends EngineDSP {
     this.reator = !!cfg.escape?.reator;
     if (this.reator) { this.hasCat = true; this.catNoise = 0.8; }
     this.fHCextra = cfg.fHCextra || 0;
+    // composição do gás (ver `escapeRot`/`admissaoRot`): massa da região da janela de escape onde o gás das câmaras se
+    // mistura (0,25 m do primário, gás a ~780 K) e volume do duto de admissão de cada rotor (meia câmara)
+    this.mPorta = 0.45 * this.Ar * Math.min(0.25, cfg.escape?.Lp ?? 0.3); this.vAdm = 0.5 * this.Vd;
+    this.xF0 = cfg.xFalha0 ?? 0.44; this.xF1 = cfg.xFalha1 ?? 0.48; this.kCru = cfg.kCru ?? 0.05; this.kChama = cfg.kChama ?? 0.015; this.kTurbCru = cfg.kTurbCru ?? 1.5;
+    this.kPlen = cfg.kPlenum ?? (cfg.janelas?.admissao === 'periferica' ? 0.15 : 0.6);
     // variação explosão a explosão (a dispersão do Ronco, `varScale`): a câmara alongada, a chama que não volta para o lado
     // da vela trailing e o apagamento nas vedações fazem cada queima sair mais diferente que num cilindro (CVciclo 0,20–0,25
     // na lenta da gravação do RX-7, contra 0,07 com a dispersão do pistão)
@@ -147,11 +158,20 @@ export class RotativoDSP extends EngineDSP {
     this.fHCcat = this.hasCat ? 0.6 : 1;
     // turbo sequencial (2.3)
     this.seq = !!cfg.turbo?.sequencial && this.turbo; this.trocaRpm = cfg.turbo?.trocaRpm || 4500;
-    // pós-queima distribuída (1.4): partes que queimam no primário, no ponto quente (depois do catalisador) e na boca. A
-    // da boca era 0,7 (o resto do 1 no primário): na lenta ela dava ~100% do agudo acima de 1 kHz e soava como "ar" alto;
-    // atenuada para 0,45 (−3,8 dB) sem passar a diferença ao primário: o HC que não queima na boca sai cru (ou queima sem
-    // ruído no catalisador)
-    this.kHC = cfg.kHC ?? 0.85; this.kBoca = cfg.kBoca ?? 0.45; this.kQuente = cfg.kQuente ?? 0.2; this.kPrim = cfg.kPrim ?? 0.1;
+    // pós-queima (1.4): o HC que a câmara não queimou só queima onde o gás ainda está quente, logo depois da janela. Metade
+    // queima no primário do rotor (`kPrim`) e um quinto no ponto quente, depois do downpipe (`kQuente`); o resto sai cru ou
+    // é oxidado sem ruído no catalisador. É uma EXPANSÃO do gás presa a cada abertura (fonte de volume com a envoltória do
+    // evento): a parte lisa, igual em todo ciclo, reforça o pulso e é tom; só a flutuação turbulenta da chama (`hcTurb`,
+    // ~10% rms da taxa de queima) é ruído, e ela nasce dentro do tubo, antes do turbo, do pré-silencioso e do abafador.
+    // Na BOCA de um escape de rua não queima nada: depois de 3–6 m de tubo o gás sai a 200–300 °C (`kBoca` = 0; o controle
+    // "Chama na boca" existe para o escape curto e aberto de corrida). Até a rodada de som de 11/2026 o modelo queimava
+    // 45% na boca, como ruído puro: uma fonte que não passava por abafador nenhum e dava 99–100% do som acima de 1 kHz e
+    // metade do nível ponderado A na lenta (20–38 dB acima das gravações casadas): o "apenas ar" que o dono ouviu
+    this.kHC = cfg.kHC ?? 0.85; this.kBoca = cfg.kBoca ?? 0; this.kQuente = cfg.kQuente ?? 0.2; this.kPrim = cfg.kPrim ?? 0.5;
+    this.hcTurb = cfg.hcTurb ?? 0.2;
+    // fundo mecânico contínuo (o chiado das vedações raspando na carcaça) e apito do turbo: do lado baixo de fábrica
+    this.kVed = cfg.kVed ?? 0.5; this.kApito = cfg.kApito ?? 0.3;
+    this.somDoTurbo();
     const esp = cfg.hcEspalha ?? 9; this.kEsp = esp > 0 ? 1 - Math.exp(-1 / (esp * 1e-3 * this.fs)) : 1;
     // jato na abertura da janela (o `turb` do Ronco, M³·vazão): a aresta do alojamento descoberta pelo ápice solta um jato
     // sônico desde o primeiro grau, em vez da lâmina anular da válvula de prato (0,05 no Ronco)
@@ -172,7 +192,11 @@ export class RotativoDSP extends EngineDSP {
     f = f * this.fHCcat + this.fHCextra + ((this.runT || 0) < 20 ? 0.01 : 0);
     f = clamp(f, 0, 0.3);
     this.fHCatual = f;
+    // (do "ar" que a câmara aspirou, a parte que era gás queimado voltando do duto de admissão não leva combustível)
+    const ar = this.air[c];
+    if (ar > 1e-9 && this.arQ[c] > 0) this.Q[c] *= clamp(1 - this.arQ[c] / ar, 0, 1);
     this.hcQ[c] = this.Q[c] * f; this.Q[c] -= this.hcQ[c];
+    this.mq[c] = this.m[c]; // (queimou: o que há na câmara passa a ser gás queimado)
   }
 
   /** gancho 9: tiques das vedações de ápice nas bordas das janelas (peso 0,3) e nos furos das velas (0,15); o ar zera no IO */
@@ -184,10 +208,31 @@ export class RotativoDSP extends EngineDSP {
       // (sonda: pressão e temperatura na abertura do escape)
       const p = this.p[c], V = this.Vprev[c];
       this.pEO[c] = p; this.TEO[c] = (p * V) / (Math.max(this.m[c], 1e-9) * RGAS); this.MjEO[c] = 0;
+      if (this.sondaEv) this.sondaEv(c, this.Q[c] > 0, this.xRes[c], p);
+      // mistura crua no primário: a câmara que falhou (com combustível) manda a carga inteira sem queimar para o tubo do
+      // rotor; a próxima que queimar abre a janela em cima dela e acende uma parte (`kCru`): essa queima entra na
+      // pós-queima do evento (expansão presa à abertura), e queima como chama turbulenta (`kTurbCru`): ruído rouco preso à
+      // rajada. É o estalo que abre cada rajada do "brap"
+      const r = this.cfg.bank[c];
+      if (this.Q[c] > 0) { const q = this.kCru * this.cru[r]; this.hcQ[c] += q; this.hcC[c] = q; this.cru[r] -= q; }
+      else {
+        // (a que falhou: uma parte pequena da carga crua, `kChama`, já queima ao entrar no tubo quente, como chama
+        // turbulenta: é o ronco rouco que enche a rajada e o intervalo entre as rajadas, sem pulso de câmara; o resto
+        // fica no primário para a próxima que queimar. Sem combustível, corte de injeção, não há nada para queimar)
+        this.hcQ[c] = 0; this.hcC[c] = 0;
+        if (this.state === 'run' && !this.dfcoOn && !(this.limiter && this.limType !== 'ign')) {
+          const cruE = Math.max(0, this.air[c] - this.arQ[c]) * 2.6e6, q = this.kChama * cruE;
+          this.hcQ[c] = q; this.hcC[c] = q; this.cru[r] += cruE - q;
+        }
+      }
     }
     if (ap < jE.fecha && a >= jE.fecha) this.clickEnv += 0.3 * (0.5 + 0.5 * rng.next());
-    if (ap < jA.abre && a >= jA.abre) { this.clickEnv += 0.3 * (0.5 + 0.5 * rng.next()); this.air[c] = 0; }
-    if (ap < jA.fecha && a >= jA.fecha) this.clickEnv += 0.3 * (0.5 + 0.5 * rng.next());
+    if (ap < jA.abre && a >= jA.abre) { this.clickEnv += 0.3 * (0.5 + 0.5 * rng.next()); this.air[c] = 0; this.arQ[c] = 0; }
+    if (ap < jA.fecha && a >= jA.fecha) {
+      this.clickEnv += 0.3 * (0.5 + 0.5 * rng.next());
+      // (a carga está presa: fração de gás queimado que ficou nela, o que decide se a mistura acende)
+      this.xRes[c] = clamp(this.mq[c] / Math.max(this.m[c], 1e-9), 0, 1);
+    }
     if (this.tipoRot !== 'x' && ((ap < this.cyc - 30 && a >= this.cyc - 30) || (ap < 30 && a >= 30))) this.clickEnv += 0.15 * (0.5 + 0.5 * rng.next());
   }
 
@@ -197,6 +242,16 @@ export class RotativoDSP extends EngineDSP {
     if (a <= j.abre || a >= j.fecha) return 0;
     const A = this.AexMax * this.cylEx[c] * areaJanela(a, j);
     const m = this.exhaustFlow(A, p, T, P0 + 2 * run.in0, Zr);
+    if (m > 0) this.mEscAc += m; // (escoamento médio do escape, para a ponteira: `BocaRot`)
+    // composição: o que sai leva a fração queimada da câmara para a região da janela; o que volta do primário para a
+    // câmara (a sobreposição puxa) traz a composição de lá: gás queimado depois de uma queima, mistura crua depois de uma falha
+    const r = this.cfg.bank[c], dm = m * this.dt;
+    if (dm > 0) {
+      const x = clamp(this.mq[c] / Math.max(this.m[c], 1e-9), 0, 1);
+      this.mq[c] -= dm * x; if (this.mq[c] < 0) this.mq[c] = 0;
+      this.xEsc[r] += (x - this.xEsc[r]) * Math.min(1, dm / this.mPorta);
+      this.cru[r] *= 1 - Math.min(1, dm / (4 * this.mPorta)); // (a mistura crua é empurrada adiante pelo gás das câmaras seguintes)
+    } else if (dm < 0) this.mq[c] -= dm * this.xEsc[r];
     // (sonda: Mach do jato no primeiro terço da rampa de abertura)
     if (a < j.abre + (j.fecha - j.abre) * j.ra / 3 && m > 0) {
       const pr = p / (P0 + 2 * run.in0);
@@ -210,7 +265,27 @@ export class RotativoDSP extends EngineDSP {
   admissaoRot(c: number, a: number, pMan: number, p: number, T: number) {
     const j = this.jAd;
     if (a <= j.abre || a >= j.fecha) return 0;
-    return flow(this.AinMaxRpm * this.cylIn[c] * areaJanela(a, j), pMan, T_MAN, p, T);
+    const m = flow(this.AinMaxRpm * this.cylIn[c] * areaJanela(a, j), pMan, T_MAN, p, T);
+    // composição: o que a câmara devolve ao duto de admissão na sobreposição fica no duto do rotor e volta para a câmara
+    // seguinte que aspirar por ele (o duto é varrido pelo ar novo conforme a vazão passa)
+    // (o duto de cada rotor troca com o plenum comum: uma parte `kPlen` do que volta vai para o plenum e chega às câmaras
+    // dos outros rotores. É o que põe as câmaras no mesmo passo: no 13B de plenum único as rajadas saem inteiras, todas as
+    // câmaras queimam umas quatro voltas e falham três; no 787B, de cornetas individuais, cada câmara segue o seu passo)
+    const r = this.cfg.bank[c], dm = m * this.dt, mDuto = (pMan * this.vAdm) / (RGAS * T_MAN), mPlen = mDuto * (this.cfg.kVPlen ?? 2) * this.rotores;
+    if (dm > 0) {
+      const q = Math.min(this.admQ[r], (dm * this.admQ[r]) / mDuto);
+      this.admQ[r] -= q; this.mq[c] += q; this.arQ[c] += q;
+      // (o duto se enche de novo com o gás do plenum, que o ar da borboleta vai lavando)
+      const qp = Math.min(this.plenQ, (dm * this.plenQ) / mPlen);
+      this.plenQ -= qp; this.admQ[r] += qp;
+    } else if (dm < 0) {
+      const q = -dm * clamp(this.mq[c] / Math.max(this.m[c], 1e-9), 0, 1);
+      this.mq[c] -= q; if (this.mq[c] < 0) this.mq[c] = 0;
+      this.arQ[c] -= q;
+      const qd = Math.min((1 - this.kPlen) * q, mDuto - this.admQ[r]);
+      this.admQ[r] += qd; this.plenQ = Math.min(this.plenQ + q - qd, mPlen);
+    }
+    return m;
   }
 
   /** densidade do pulso na abertura (gancho do densC): a referência do Ronco, 1 650 K, com teto 1,8 (o do Ronco, 1,3,
@@ -223,9 +298,10 @@ export class RotativoDSP extends EngineDSP {
 
   /**
    * gancho 13: pós-queima presa ao evento. O calor guardado (hcQ) queima depois da abertura do escape com envoltória de
-   * subida 2 ms e queda 12 ms (integral 1). Fonte de volume: ṁ_eq = (γ−1)/γ·Q̇/(R·T) → p = Z·ṁ_eq, quase toda turbulenta
-   * (ruído de combustão, 250 Hz–4 kHz, modulado pela envoltória: o "chiado quente" de cada pulso, não um estalo).
-   * É distribuída (1.4): uma parte queima no primário (fonte no tubo do rotor) e o resto adiante, onde o gás cru ainda
+   * subida 2 ms e queda 12 ms (integral 1). Fonte de volume: ṁ_eq = (γ−1)/γ·Q̇/(R·T) → p = Z·ṁ_eq: a expansão do gás que
+   * queima, igual em todo ciclo (reforça a frente do pulso: é tom), com a flutuação turbulenta da chama por cima
+   * (`hcTurb`, ruído de combustão de 400 Hz a 3 kHz preso à envoltória).
+   * É distribuída (1.4): metade queima no primário (fonte no tubo do rotor) e uma parte adiante, onde o gás cru ainda
    * quente se mistura (`PosQueimaBoca`, um nó da rede que injeta no ponto quente: depois do downpipe e do catalisador,
    * antes do pré-silencioso e do abafador).
    */
@@ -237,10 +313,11 @@ export class RotativoDSP extends EngineDSP {
     const env = (Math.exp(-t / 0.012) - Math.exp(-t / 0.002)) / 0.01;
     const mEq = (0.2857 * h * env) / (RGAS * 1100);
     this.hcBoca += mEq;
-    return Zr * mEq * this.kHC * this.kPrim * this.ruidoHC(0);
+    // (a parte que veio da mistura crua de uma falha queima bem mais turbulenta que o HC de uma queima normal)
+    return Zr * mEq * this.kHC * this.kPrim * (1 + (this.hcTurb + (this.kTurbCru * this.hcC[c]) / h) * this.ruidoHC(0));
   }
 
-  /** ruído de combustão turbulenta: branco → passa-alta de 1ª ordem em 250 Hz → passa-baixa de 1ª ordem em 4 kHz (2 estados por canal) */
+  /** ruído de combustão turbulenta: branco → passa-alta de 1ª ordem em 400 Hz → passa-baixa de 1ª ordem em 3 kHz (2 estados por canal) */
   ruidoHC(k: number) {
     const w = this.hcN.bi(), s = this.hcS;
     s[2 * k] += this.hcKh * (w - s[2 * k]);
@@ -255,16 +332,31 @@ export class RotativoDSP extends EngineDSP {
     // vedações de ápice e laterais raspando na carcaça: chiado granulado contínuo (2–6 kHz), que funde os tiques das bordas
     // das janelas (o Wankel em lenta não tem os cliques contáveis do trem de válvulas)
     this.vedLP += 0.5 * (this.hcN.bi() - this.vedLP);
-    m += this.vedF.run(this.vedLP) * 0.006 * (0.25 + rf) * (this.gastas ? 1.8 : 1);
+    m += this.vedF.run(this.vedLP) * 0.006 * this.kVed * (0.25 + rf) * (this.gastas ? 1.8 : 1);
     if (this.seq && this.seqW > 0.05) {
       // (o secundário gira a ~0,8 da rotação do primário: segunda linha de apito; ×2 porque a mecânica pesa metade do turbo de fora)
       const f = 0.8 * (500 + 6200 * this.turboW);
       this.phT2 += TAU * f * this.dt; if (this.phT2 > TAU) this.phT2 -= TAU;
       const lvl = this.turboW * this.turboW * this.seqW * (0.2 + 0.8 * clamp(this.pMan / (P0 * (1 + this.boost)), 0, 1));
-      m += Math.sin(this.phT2) * 0.04 * lvl;
+      m += Math.sin(this.phT2) * 0.04 * lvl * this.kApito;
     }
     void omega;
     return m;
+  }
+
+  /** o chiado do turbo (o filtro `turboHiss` do Ronco) segue o mesmo `kApito` do apito: na cabine, onde o agudo do escape
+   *  não chega, ele sozinho enchia 2,5–6 kHz com ruído liso (98% da banda em plena carga) */
+  somDoTurbo() {
+    const t = this.turboHiss;
+    if (!t || !this.thB) return;
+    t.b0 = this.thB[0] * this.kApito; t.b1 = this.thB[1] * this.kApito; t.b2 = this.thB[2] * this.kApito;
+  }
+
+  /** apito do turbo (o tom do Ronco, `sen + 0,25·sen 2`), atenuado por `kApito`: no Ronco ele sai como um tom puro de até
+   *  6,7 kHz, 34–46 dB acima do piso em plena carga (medido no FD com o kit ouvido; a gravação de bordo não tem tom
+   *  nenhum ali). O turbo é um detalhe por cima do motor: de fábrica fica a 30% (−10 dB); o controle "Apito do turbo" sobe */
+  apitoRot(lvl: number) {
+    return (Math.sin(this.phT) + 0.25 * Math.sin(2 * this.phT + 0.7)) * 0.02 * lvl * this.kApito;
   }
 
   /** gancho 17: parede do coletor; o gás do Wankel sai a 900–1 000 °C em carga (lenta 400–500) */
@@ -283,25 +375,31 @@ export class RotativoDSP extends EngineDSP {
     // janelas secundária e auxiliar (13B-REW, Renesis): borboletas no coletor, abrindo pela rotação (degrau de 300 rpm)
     const a0 = this.apv[0], a1 = this.apv[1];
     this.AinMaxRpm = this.AinPrim + (a0 ? this.AinSec * smooth(a0 - 150, a0 + 150, rpm) : this.AinSec) + (a1 ? this.AinAux * smooth(a1 - 150, a1 + 150, rpm) : 0);
-    // falhas (1.4, decisão 9): a sobreposição devolve gás queimado à admissão e manda mistura ao escape; cresce com o
-    // vácuo e quando o giro cai (mais tempo de sobreposição por ciclo): é isso que faz a lenta periférica caçar
-    const vac = clamp((0.6 - this.pMan / P0) / 0.4, 0, 1);
     // queima em °e: no vácuo da lenta o rotativo carrega mais gás queimado de um ciclo para o outro (o rebaixo do flanco
     // e a câmara que passa direto do escape à admissão): a chama anda mais devagar que no pistão com o mesmo vácuo
+    const vac = clamp((0.6 - this.pMan / P0) / 0.4, 0, 1);
     this.kBurn = this.kBurn0 * (1 + 1.65 * vac);
-    const lento = clamp(1 - (rpm - this.idle) / 1500, 0, 1);
-    const ovk = clamp((this.ov - 40) / 90, 0, 1.2);
-    const queda = clamp(this.idle / Math.max(rpm, 300), 0.5, 2.5);
-    const kq = this.cfg?.kQueda ?? 4;
-    // (e com o escape esfriando: o gás que volta à câmara pela sobreposição reacende menos a mistura nova; a parede do
-    // coletor esquenta em ~4 s e esfria em ~20 s, então as falhas e a rotação se perseguem devagar: é a caça da lenta)
-    const frio = 1 - smooth(this.cfg?.tCacaA ?? 530, this.cfg?.tCacaB ?? 600, this.exhT);
-    let f = ovk * (this.cfg?.falhaBase ?? 0.05) * (1 + 1.5 * vac) * lento * Math.pow(queda, kq) * (1 + (this.cfg?.kCaca ?? 2) * frio * this.warm);
+    // Falhas (1.4, decisão 9). A sobreposição das janelas devolve gás queimado à carga seguinte; o que decide se a mistura
+    // acende é a fração de gás queimado que ficou presa na câmara (`xRes`, medida no fechamento da admissão a partir da
+    // composição que o laço acompanha em cada câmara, na região da janela de escape e no duto de admissão). Com as janelas
+    // de fábrica ela fica em 0,2–0,35 e a mistura acende sempre. Com bridge ou periférica passa de 0,5 depois de uma
+    // queima: essa carga não acende, a câmara manda mistura crua ao escape, o que volta na vez seguinte é mistura e ela
+    // acende de novo. Cada câmara alterna queima e falha com período de dois ciclos dela (6 voltas do eixo): é o ritmo do
+    // "brap" (rpm/360: 5,2 Hz no 787B a 1 890 rpm, 4,8 Hz num RX-7 preparado a 1 730, medidos nas gravações). Não é sorteio:
+    // o limiar é estreito (`xFalha0`–`xFalha1`) e o ritmo sai da física; o sorteio fica para as velas trailing desligadas
+    // e as vedações gastas a frio
+    let f = 0;
     if (!this.trailingOn && this.velas >= 2) f += 0.02;
     if (this.gastas) f += 0.03 * (1 - this.warm);
-    this.falhaRot = this.state === 'run' ? clamp(f, 0, 0.6) : 0;
-    // estouro de uma câmara que falhou: a mistura crua chega ao escape quente (1.4)
-    this.prRot = Math.min(0.9, (this.ov > 90 ? 0.7 : 0.04 * (1 + Math.max(0, this.ov) / 60)) * (this.reator ? 0.5 : 1));
+    this.falhaBase = this.state === 'run' ? clamp(f, 0, 0.6) : 0;
+    // (só com sobreposição de competição: até ~40°e, as janelas de rua e as Sachs, a mistura acende sempre, como antes)
+    // (e a tolerância à diluição sobe com o giro: a turbulência da carga cresce com a rotação e a chama aguenta mais gás
+    // queimado; o 787B segurado a 7 700 rpm em ponto morto tem a ignição limpa na gravação, sem rajadas)
+    const comp = clamp((this.ov - 40) / 40, 0, 1), dx = 0.1 * clamp((rpm - this.idle) / Math.max(1, this.redline - this.idle), 0, 1);
+    for (let c = 0; c < this.N; c++) this.falhaRot[c] = this.state === 'run' ? clamp(this.falhaBase + comp * smooth(this.xF0 + dx, this.xF1 + dx, this.xRes[c]), 0, 0.97) : 0;
+    // estouro solto de uma câmara que falhou (o mecanismo do Ronco): raro. A mistura crua da falha fica no primário e é
+    // acesa pela próxima câmara que queimar (`cru`, em `janelasRot`): é ela que dá o estalo de cada rajada, preso ao pulso
+    this.prRot = (this.ov > 60 ? 0.004 : 0.04 * (1 + Math.max(0, this.ov) / 60)) * (this.reator ? 0.5 : 1);
     // turbo sequencial (2.3)
     if (this.seq) {
       const run = this.state === 'run';
@@ -317,44 +415,68 @@ export class RotativoDSP extends EngineDSP {
         this.transT += dtc; if (this.transT > TT) this.transT = -1;
       }
     }
+    // escoamento médio do escape (média de ~50 ms) dividido pelas bocas: a resistência da ponteira e a folga até Mach 1
+    this.mEscMed += (this.mEscAc / 16 - this.mEscMed) * (1 - Math.exp(-dtc / 0.05)); this.mEscAc = 0;
+    for (let i = 0; i < this.bocasR.length; i++) this.bocasR[i].fluxo(this.mEscMed / this.bocasR.length);
     // estouros por segundo (janela de ~1 s) e a fumaça azul do óleo na partida (só visual)
     this.tEst += dtc;
     if (this.tEst >= 0.5) { this.estourosS += (this.nEstouros / this.tEst - this.estourosS) * 0.5; this.nEstouros = 0; this.tEst = 0; }
     this.fumaca = this.state === 'run' ? Math.max(0, 1 - (this.runT || 0) / 20) * (0.5 + 0.5 * (1 - this.warm)) : 0;
   }
 
+  /** janelas de competição: a lenta é acertada no batente da borboleta, quase aberta (o coletor perto da pressão de fora é
+   *  o que deixa a mistura acender). O ar de lenta de equilíbrio vem da calibração; sem ele o controle levava ~25 s para
+   *  chegar lá e o motor passava esse tempo 400 rpm abaixo da lenta */
+  arDeLenta() { if (this.ov > 60 && this.iacLenta > this.iacI) { this.iacI = this.iacLenta; this.iac = this.iacLenta; } }
+
   freshStart() {
     super.freshStart();
-    this.transT = -1; this.seqW = 0; this.boostBase = 0; this.hcQ.fill(0);
+    this.arDeLenta();
+    this.transT = -1; this.seqW = 0; this.boostBase = 0; this.hcQ.fill(0); this.mq.fill(0); this.arQ.fill(0); this.xRes.fill(0); this.admQ.fill(0); this.cru.fill(0); this.xEsc.fill(1); this.plenQ = 0;
   }
 
   // ------------------------------------------------------------------ escape (2.1)
   buildExhaust(cfg) {
     const fs = this.fs, N = this.N, Rn = Math.max(1, cfg.rotores || 1), e: EscapeRotativo = cfg.escape || ESCAPE_REF;
     const lines: Line[] = [], nodes: any[] = [], rads: Radiator[] = [], panPhi: number[] = [];
-    const L = (len: number, Y: number, loss: number, damp = 1) => { const l = new Line(fs, Math.max(0.02, len), Y, loss, damp); l.kNL = 0.6; lines.push(l); return l; };
+    const kNL0 = cfg.kNL ?? 0.6;
+    const L = (len: number, Y: number, loss: number, damp = 1) => { const l = new Line(fs, Math.max(0.02, len), Y, loss, damp); l.kNL = kNL0; lines.push(l); return l; };
     const Dp = e.Dp || 50;
     const Yd = (mm: number) => (mm / Dp) ** 2;               // admitância relativa ao primário
     const dw = (mm: number) => clamp(63.5 / mm, 0.4, 2.5);   // amortecimento: tubo fino atrita mais
     const runs: Line[] = [];
-    for (let r = 0; r < Rn; r++) { const l = L(e.Lp * (1 + (cfg.difPrimario ?? 0) * r), 1, 12000); l.runner = true; runs.push(l); }
+    // Primários: é neles que o pulso da janela, ainda com 0,3–0,6 bar em carga, afia a frente. A parte de pressão alta
+    // viaja mais rápido: Δc/c = (γ+1)/(2γ)·p/p₀ = 0,88·p/p₀ (o Ronco usa 0,6 em todo tubo; aqui o valor do gás nos primários,
+    // onde a onda é forte, e 0,6 no resto). Com a janela periférica abrindo em 33°e a frente chega ao coletor quase em
+    // choque: é o "rasgado" tonal do rotativo em carga (linhas até vários kHz), não ruído
+    for (let r = 0; r < Rn; r++) { const l = L(e.Lp * (1 + (cfg.difPrimario ?? 0) * r), 1, 12000); l.runner = true; l.kNL = cfg.kNLprim ?? 0.88; runs.push(l); }
     this.brkW = new Float64Array(N).fill(1);
     const bankJ: any[] = new Array(Rn).fill(null);
-    let A2out = 1, Dout = 63.5;
-    const radiar = (line: Line, s: { D: number; phi: number }, R = 0.93, fc?: number) => {
-      const d = clamp(s.D / 63.5, 0.3, 2.4), A2 = d * d, c = Math.cos(s.phi * DEG);
-      const rd = new Radiator(fs, line, 0.62 + 0.34 * c, 0.62 - 0.34 * c, fc ?? 1500 / d, A2, 400 / (TAU * 0.03175 * d));
-      rd.R = R; nodes.push(rd); rads.push(rd); panPhi.push(s.phi); A2out = A2; Dout = s.D;
+    let A2out = 1;
+    // boca: a ponta aberta do Ronco com a ponteira como orifício (`BocaRot`). A ponteira (`escape.ponteira`, de fábrica a
+    // boca do preset) é uma peça própria, como a `tipD` do Ronco depois da revisão do Fusca: o Ø da saída muda o tubo e a
+    // irradiação do tom; a ponteira, a velocidade do jato e, quando mais fina que o tubo, a contrapressão
+    // (`Dref` = a seção de antes da saída, contra a qual a saída fina é uma restrição: o downpipe na série e no duplo, a
+    // própria boca no megafone, o maior entre a saída e o primário no 2 em 1)
+    // Irradiação de monopolo: abaixo de ka ≈ 1 a pressão ao longe é ∝ d(vazão)/dt, e a mesma vazão irradia igual por um
+    // tubo fino ou grosso. A onda de pressão que carrega essa vazão é ∝ vazão/área, e o Radiator emite
+    // (jω/ω_ka)·u·ganho com ω_ka ∝ 1/d: para a vazão irradiar igual, o ganho é ∝ d. (O Ronco usa d², que dá d³ no grave: o
+    // tubo fino perdia 33 dB de tom no Ø mínimo e o que sobrava era o ruído; com d, o tubo fino tira o que a própria
+    // restrição tira e sobe o canto de ka = 1: som mais magro e mais baixo, mas ainda motor)
+    const radiar = (line: Line, s: { D: number; phi: number }, Dref: number, R = 0.93, fc?: number) => {
+      const d = clamp(s.D / 63.5, 0.3, 2.4), c = Math.cos(s.phi * DEG);
+      const rd = new BocaRot(fs, line, 0.62 + 0.34 * c, 0.62 - 0.34 * c, fc ?? 1500 / d, d, 400 / (TAU * 0.03175 * d), s.D, e.ponteira ?? s.D, Dref, cfg.tetoJato ?? 0.1);
+      rd.R = R; nodes.push(rd); rads.push(rd); panPhi.push(s.phi); A2out = d * d;
     };
     // ponto quente: junção de 2 portas onde a parte distribuída da pós-queima entra (depois do downpipe e do
     // catalisador, antes do pré-silencioso e do abafador: é onde o gás cru ainda quente se mistura e queima)
     const quentes: { j: Junction; Z: number }[] = [];
     const bocasF: { j: Junction; Z: number }[] = [];
-    const boca = (line: Line, s: { D: number; phi: number }, R = 0.93, fc?: number) => {
+    const boca = (line: Line, s: { D: number; phi: number }, Dref: number, R = 0.93, fc?: number) => {
       const tb = L(0.06, line.Y, 9000, dw(s.D)); tb.kNL = line.kNL;
       const j = new Junction([port(line, 1), port(tb, 0)]); nodes.push(j);
       bocasF.push({ j, Z: SOUND_SPEED / ((Math.PI / 4) * (s.D / 1000) ** 2) });
-      radiar(tb, s, R, fc);
+      radiar(tb, s, Dref, R, fc);
     };
     const quente = (line: Line, D: number) => {
       const nx = L(0.06, line.Y, 9000, dw(D)); nx.kNL = line.kNL;
@@ -374,9 +496,8 @@ export class RotativoDSP extends EngineDSP {
         const tail = L(0.3 * s.L, Yd(s.D), 9000, dw(s.D));
         tail.kNL = cfg.muffler === 'stock' ? 0.05 : cfg.muffler === 'classic' ? 0.15 : 0.6;
         nodes.push(new TwoPort(fs, port(feeds[k], 1), port(tail, 0), cfg.muffler || 'stock'));
-        boca(tail, s);
+        boca(tail, s, Dde);
       });
-      void Dde;
     };
     if (e.tipo === 'megafone') {
       // 787B: primários individuais iguais → coletor único → megafone em 3 degraus (admitância ×1,6 cada) → boca larga
@@ -387,12 +508,12 @@ export class RotativoDSP extends EngineDSP {
       let prev = quente(col, 90), Y = col.Y;
       for (let k = 0; k < 3; k++) {
         Y *= 1.6;
-        const seg = L(m.L / 3, Y, 10000, 0.6); seg.kNL = 0.4;
+        const seg = L(m.L / 3, Y, 10000, 0.6); seg.kNL = cfg.kNLmeg ?? 0.88; // (megafone sem abafador: a onda segue afiando até a boca)
         nodes.push(new Junction([port(prev, 1), port(seg, 0)]));
         prev = seg;
       }
       // boca larga: reflexão −0,6 abaixo de ~300 Hz (a do Ronco é −0,93): perde grave e irradia o médio com eficiência
-      boca(prev, { D: m.Dboca, phi: e.saidas[0]?.phi ?? 5 }, 0.6, 300);
+      boca(prev, { D: m.Dboca, phi: e.saidas[0]?.phi ?? 5 }, m.Dboca, 0.6, 300);
     } else if (e.tipo === 'duplo') {
       // Ro80, Cosmo 110S: um downpipe por rotor → Y → silencioso dianteiro ('classic') → tubo → traseiro (abafador do preset)
       const dp = e.downpipe || { L: 1.5, D: 50 };
@@ -414,7 +535,7 @@ export class RotativoDSP extends EngineDSP {
       const tail = L(Math.max(0.1, s0.L), Yd(s0.D), 9000, dw(s0.D));
       tail.kNL = cfg.muffler === 'stock' ? 0.05 : cfg.muffler === 'classic' ? 0.15 : 0.6;
       nodes.push(new TwoPort(fs, port(quente(col, s0.D), 1), port(tail, 0), cfg.muffler || 'stock'));
-      boca(tail, s0);
+      boca(tail, s0, Math.max(s0.D, Dp));
     } else {
       // série (RX-7, RX-8, Cosmo 20B, RX-3): coletor [reator] → [turbo] → downpipe → [cat] → [pré-silencioso] → tubo → abafador → saídas
       const dp = e.downpipe || { L: 1.0, D: 63.5 };
@@ -453,16 +574,14 @@ export class RotativoDSP extends EngineDSP {
     });
     this.jetF = rads.map(() => [new Biquad().bp(fs, 450, 0.5), new Biquad().bp(fs, 1400, 0.6)]);
     this.jetEnv = rads.map(() => 0);
-    // ponteira do ruído de jato (o `tipA` do Ronco): uma peça própria (`escape.ponteira`, como a `tipD` do Ronco depois da
-    // revisão do Fusca), com a área relativa a 2,5" e os limites do Ronco (0,5–1,6). Antes ela seguia o Ø da saída com
-    // limite 0,4: no Ø mínimo (25 mm) o jato subia 39× (∝ 1/área²) enquanto o tubo fino tirava ~30 dB do tom, e o jato
-    // virava 80–90% do nível abaixo de 1 kHz ("só som de ar"). O tubo fino já baixa a vazão na boca (o abafador é uma
-    // fonte de pressão): a velocidade do gás que o jato lê não cresce de novo com 1/área
-    const td = clamp((e.ponteira ?? Dout) / 63.5, 0.5, 1.6); this.tipA = td * td;
+    // (o chiado do jato do laço do Ronco lê `rd.u`/tipA: a `BocaRot` já entrega a velocidade na ponteira, com a razão de
+    // áreas ponteira/tubo, a contrapressão e o teto sônico: aqui tipA = 1)
+    this.tipA = 1; this.bocasR = rads as BocaRot[]; this.mEscAc = 0; this.mEscMed = 0;
   }
 
   buildFilters(cfg) {
     super.buildFilters(cfg);
+    this.thB = [this.turboHiss.b0, this.turboHiss.b1, this.turboHiss.b2]; this.somDoTurbo();
     this.vedF = new Biquad().bp(this.fs, 3500, 0.6); this.vedLP = 0;
     this.hcKh = onePole(this.fs, this.cfg?.hcFh ?? 400); this.hcKl = onePole(this.fs, this.cfg?.hcFl ?? 3000); this.hcS.fill(0);
   }
@@ -508,14 +627,17 @@ export class RotativoDSP extends EngineDSP {
     const gWot = Math.min(target / Math.max(ref.rms, 1e-6), 0.9 / Math.max(ref.pk, 1e-6));
     const ti = this.sonda(cfg, this.idle, fab || true);
     ti.runT = 60; ti.thrTarget = 0; ti.thr = 0; ti.params.master = 0.02; ti.dash = 0;
-    let acc2 = 0, cnt2 = 0;
-    for (let i = 0; i < 1.2 * fs; i += B) {
+    // (a sonda acerta o ar de lenta até o torque líquido zerar; esse laço oscila uns 0,8 s em volta do equilíbrio, com o
+    // coletor indo de 0,33 a 0,54 bar e o nível variando 4 dB. A medida era uma janela de 0,4 s: conforme onde ela caía
+    // na oscilação, o reforço da lenta saía até 4 dB fora. Agora o laço é mais manso e a média cobre 2 s)
+    let acc2 = 0, cnt2 = 0, iacS = 0, iacN = 0;
+    for (let i = 0; i < 3.2 * fs; i += B) {
       ti.process(L, R, B);
-      ti.dash = 0; ti.iacI = clamp(ti.iacI - 5e-4 * ti.tqMean * (B / fs), 0, 0.05);
-      if (i > 0.8 * fs) for (let k = 0; k < B; k++) { acc2 += L[k] * L[k] + R[k] * R[k]; cnt2 += 2; }
+      ti.dash = 0; ti.iacI = clamp(ti.iacI - 2.5e-4 * ti.tqMean * (B / fs), 0, 0.05);
+      if (i > 1.2 * fs) { for (let k = 0; k < B; k++) { acc2 += L[k] * L[k] + R[k] * R[k]; cnt2 += 2; } iacS += ti.iac; iacN++; }
     }
     const rmsIdle = Math.sqrt(acc2 / Math.max(1, cnt2)) / 0.01;
-    this.iacLenta = ti.iac; // (o ar de lenta em equilíbrio)
+    this.iacLenta = iacS / Math.max(1, iacN); // (o ar de lenta em equilíbrio)
     const gain = clamp(gWot, 0.05, 40);
     return { gain, idle: clamp((0.09 * prop.rms) / Math.max(rmsIdle, 1e-6), 1, 8) };
   }
@@ -552,8 +674,9 @@ export class RotativoDSP extends EngineDSP {
     t.tEscape = this.exhT; t.fHC = this.fHCatual; t.estouros = this.estourosS; t.boostSec = this.seq ? this.seqW : 0;
     t.pAbertura = this.pEO[0]; t.tAbertura = this.TEO[0]; t.machAbertura = this.MjEO[0]; t.densMax = this.densMax;
     t.queima1090 = 0.496 * (42 + 26 * rf) * slowB * this.kBurn;
-    t.falha = this.falhaRot; t.fumaca = this.fumaca; t.vedacoes = this.gastas ? 'gastas' : 'novas';
-    t.traco = Array.from(this.traco, (x) => Math.round(x / 100) / 10); // bar, 64 pontos do ciclo da câmara 0
+    t.falha = this.falhaBase; t.residual = this.xRes.reduce((a, b) => a + b, 0) / Math.max(1, this.N); t.fumaca = this.fumaca; t.vedacoes = this.gastas ? 'gastas' : 'novas';
+    // (o traço guarda Pa; 1 bar = 1e5 Pa. Dividia por 1 000 e chamava de bar: o mostrador dava 804 "bar" na lenta)
+    t.traco = Array.from(this.traco, (x) => Math.round(x / 1e4) / 10); // bar com uma casa, 64 pontos do ciclo da câmara 0
     t.pPico = Math.max(...t.traco);
   }
 }

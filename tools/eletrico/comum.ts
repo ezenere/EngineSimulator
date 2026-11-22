@@ -11,6 +11,7 @@ import type { Ambiente, Trajetoria, Ouvinte } from '../../src/scene/tipos';
 import { ambientePassagem } from '../../src/scene/ambientes';
 import { PonderacaoA } from '../../src/scene/filtros';
 import { PA_FS } from '../../src/scene/constantes';
+import { semear } from '../desvios';
 
 export const SR = 48000;
 const cache = new Map<string, CfgEletrico>();
@@ -27,8 +28,9 @@ export function cfg(id: string | PresetEletrico, mod: Partial<PresetEletrico> = 
   if (!c) { c = prepararMotorEletrico({ ...p, ...mod } as PresetEletrico, SR); cache.set(chave, c); }
   return c;
 }
-export function motor(id: string | PresetEletrico, mod: Partial<PresetEletrico> = {}) { const m = new MotorEletrico(SR); m.configurar(cfg(id, mod), SR); return m; }
-export function portador(id: string | PresetEletrico, mod: Partial<PresetEletrico> = {}, trem: Partial<ConfigTrem> = {}) { return montarPortadorEletrico(cfg(id, mod), SR, trem); }
+/** motor e portador montados com a semente atual de tools/desvios.ts nos RNG (0 = a de fábrica; a calibração fica com ela) */
+export function motor(id: string | PresetEletrico, mod: Partial<PresetEletrico> = {}) { const m = new MotorEletrico(SR); m.configurar(cfg(id, mod), SR); return semear(m); }
+export function portador(id: string | PresetEletrico, mod: Partial<PresetEletrico> = {}, trem: Partial<ConfigTrem> = {}) { return semear(montarPortadorEletrico(cfg(id, mod), SR, trem)); }
 
 export type Evento = [number, (t: number) => void];
 

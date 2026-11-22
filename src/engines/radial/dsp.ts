@@ -291,7 +291,12 @@ export class RadialDSP extends EngineDSP {
     const tipo = this.partidaTipo, T0 = arranqueBase(this);
     // inércia: a energia do volante vai acabando em ~9 s (o motor gira a 60–100 rpm); a ar e a manivela: sem motor
     if (tipo === 'inercia') return 1.1 * T0 * Math.max(0, 1 - this.tGiro / 9) * Math.max(0, 1 - rpm / 250);
-    if (tipo === 'direta') return T0 * Math.max(0, 1 - rpm / 220);
+    // elétrico direto: além do atrito do motor inteiro (arranqueBase), ele vence o pico de compressão de UM cilindro com
+    // 30% de folga. O pico, medido com o giro travado a 30 rpm sem queima, é ≈ 0,11·p0·V_cil·cr^1,3 nos radiais pequenos
+    // (Verner 3V 71 N·m, Rotec R2800 63, Verner 5S 109). Com 3,39 L em 5 cilindros o arranque de antes (123 N·m) não
+    // passava da compressão: o Verner 5S balançava entre 10 e 56 rpm e nunca chegava aos 60 em que o EngineDSP queima
+    // (AUDITORIA F-RAD-02). Nos motores grandes o termo do atrito continua mandando.
+    if (tipo === 'direta') return Math.max(T0, 1.3 * 0.11 * P0 * this.Vd * Math.pow(this.CR, 1.3)) * Math.max(0, 1 - rpm / 220);
     return 0;
   }
 

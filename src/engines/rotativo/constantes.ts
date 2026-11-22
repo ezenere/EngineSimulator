@@ -39,12 +39,25 @@ export const ADMISSAO: Record<TipoAdmissao, Janela & { sec?: number; aux?: numbe
 };
 
 /**
- * Escape (tabela 1.3). Periférico: EO 195 (75° antes do PMI), EC 588; rampa de abertura 0,12 (≈ 47°e: 40 mm de janela a
- * 0,61 mm/°e), área 15 cm² = 0,17·boreEq². Lateral (Renesis, 2 janelas por rotor): EO ≈ 220, EC ≈ 537, rampa 2× mais
- * lenta, 2 × 7 cm². Sachs: EO ≈ 200, EC ≈ 580. X-Engine: EO 170 (só 10° antes do PMI: expansão prolongada), EC 380.
+ * Rampa de uma janela periférica, pela cinemática. A janela fica aberta para uma câmara desde que a vedação de ápice da
+ * frente passa pela primeira borda até a de trás passar pela última: 360°e (a distância entre as duas vedações) mais a
+ * altura da janela em °e. Então a altura da janela é (fecha − abre − 360)°e, e é esse o tempo que a vedação leva para
+ * descobri-la inteira (e, na outra ponta, para cobri-la): rampa = (duração − 360)/duração, na abertura e no fechamento.
+ * No 13B, 393 − 360 = 33°e (20 mm de janela a 0,61 mm/°e): a 8 000 rpm a janela abre em 0,7 ms. A tabela 1.3 trazia
+ * 47°e na abertura e 59°e no fechamento, que somados não fecham com a duração; a janela "abre de uma vez" e é daí que
+ * vêm os harmônicos altos do pulso.
+ */
+const rampaPeriferica = (abre: number, fecha: number) => (fecha - abre - 360) / (fecha - abre);
+
+/**
+ * Escape (tabela 1.3). Periférico: EO 195 (75° antes do PMI), EC 588, rampa pela cinemática (33°e), área 15 cm² =
+ * 0,17·boreEq². Lateral (Renesis, 2 janelas por rotor, descobertas pela face lateral do rotor): EO ≈ 220, EC ≈ 537, rampa
+ * lenta (≈ 80°e), 2 × 7 cm². Sachs: EO ≈ 200, EC ≈ 580. X-Engine: EO 170 (só 10° antes do PMI: expansão
+ * prolongada), EC 380. (Os eventos da Sachs são estimativas, "a conferir": a altura da janela não sai deles com
+ * confiança, então a rampa dela fica a da tabela, 46°e, e não a da cinemática.)
  */
 export const ESCAPE: Record<TipoEscape | 'sachs', Janela> = {
-  periferico: { abre: 195, fecha: 588, ra: 0.12, rf: 0.15, area: 0.17 },
+  periferico: { abre: 195, fecha: 588, ra: rampaPeriferica(195, 588), rf: rampaPeriferica(195, 588), area: 0.17 },
   sachs: { abre: 200, fecha: 580, ra: 0.12, rf: 0.15, area: 0.17 },
   lateral: { abre: 220, fecha: 537, ra: 0.25, rf: 0.2, area: 0.158 },
   x: { abre: 170, fecha: 380, ra: 0.2, rf: 0.2, area: 0.12 },

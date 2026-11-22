@@ -61,20 +61,29 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
   {
     id: 'k4s', nome: 'PRR K4s', familia: 'locomotiva', tag: 'Pacific 4-6-2 · 1914–28', rodeiro: '4-6-2',
     cilindros: { n: 2, diametro: pol(27), curso: pol(28) }, dRoda: pol(80), pNominal: psi(205), superaquecido: true, evaporacaoMax: 6.0,
-    massa: 141, massaAderente: 92, tender: { massa: 95, eixos: 4, comprimento: 16 }, vMax: 150,
+    // composição de 83 ft 6 in (25,45 m) sobre os engates (Wikipedia, PRR K4); estava com 18,5 + 16 = 34,5 m (AUDITORIA
+    // F-VAP-04). A divisão entre locomotiva e tênder é ≈ (sem fonte: a de antes, na escala do total), e as fontes da
+    // locomotiva vão na mesma escala
+    massa: 141, massaAderente: 92, tender: { massa: 95, eixos: 4, comprimento: 11.8 }, vMax: 150,
     escape: { dBico: 0.15, lDescarga: 0.8, vCaixa: 5, lChamine: 1.6, dChamine: 0.5 },
-    apito: { tubos: [520], tipo: 'simples' }, sino: { f: 650, batidasPorS: 2.0 }, bombaAr: BOMBA1, folga: 0.3,
-    geometria: { comprimento: 18.5, largura: 3.1, altura: 4.7, xCilindros: 6.9, xChamine: 6.4, xDomo: 2.2, xCabine: -6.6, zTopo: 4.5 },
+    // apito de 3 notas das de passageiros da PRR (a K4s entre elas; o "banshee" de uma nota era das de carga): tríade
+    // menor Mi–Sol–Si (AUDITORIA F-VAP-07; fontes de sociedade histórica e fórum). A oitava é ≈: E4–G4–B4
+    apito: { tubos: [329.6, 392.0, 493.9], tipo: 'chime' }, sino: { f: 650, batidasPorS: 2.0 }, bombaAr: BOMBA1, folga: 0.3,
+    geometria: { comprimento: 13.65, largura: 3.1, altura: 4.7, xCilindros: 5.09, xChamine: 4.72, xDomo: 1.62, xCabine: -4.87, zTopo: 4.5 },
     lwChuff: 124, semente: 0x4b45, portadores: ['locomotiva', 'nenhum'],
   },
   {
     id: 'a4', nome: 'LNER A4 Mallard', familia: 'locomotiva', tag: 'Pacific 3 cil. · 1938', rodeiro: '4-6-2',
     cilindros: { n: 3, diametro: pol(18.5), curso: pol(26), angulo: [0, 120, 240] }, dRoda: pol(80), pNominal: psi(250), superaquecido: true, evaporacaoMax: 5.5,
+    // 71 ft ⅜ in (21,65 m) com o tênder (Wikipedia, LNER A4): os 21,5 m de antes eram o total posto só na locomotiva
+    // (AUDITORIA F-VAP-04). O tênder fica com os 9 m da ficha (≈) e a locomotiva com o resto; fontes na escala nova
     massa: 103, massaAderente: 67, tender: { massa: 64, eixos: 4, comprimento: 9 }, vMax: 160,
     // chaminé dupla Kylchap (2 bicos de 0,12, 2 chaminés 0,45 × 1,5): bico equivalente de 0,17 e uma chaminé
     escape: { dBico: 0.17, lDescarga: 0.7, vCaixa: 4.5, lChamine: 1.5, dChamine: 0.45 },
-    apito: { tubos: [311, 370, 466], tipo: 'chime' }, bombaAr: BOMBA1, folga: 0.2,
-    geometria: { comprimento: 21.5, largura: 2.8, altura: 4.0, xCilindros: 8, xChamine: 7.4, xDomo: 3.0, xCabine: -6.0, zTopo: 3.9 },
+    // sem bomba de ar: a A4 freia a vácuo (só as 60007, 60009 e 60019 preservadas receberam freio a ar; a Mallard não).
+    // Parada, o que soaria é o ejetor de vácuo, que o VaporDSP não tem (AUDITORIA F-VAP-08)
+    apito: { tubos: [311, 370, 466], tipo: 'chime' }, folga: 0.2,
+    geometria: { comprimento: 12.65, largura: 2.8, altura: 4.0, xCilindros: 4.71, xChamine: 4.35, xDomo: 1.77, xCabine: -3.53, zTopo: 3.9 },
     lwChuff: 124, semente: 0xa4a4, portadores: ['locomotiva', 'nenhum'],
   },
   {
@@ -89,20 +98,26 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
   {
     id: 'up844', nome: 'UP 844', familia: 'locomotiva', tag: 'Northern 4-8-4 · 1944', rodeiro: '4-8-4',
     cilindros: { n: 2, diametro: pol(25), curso: pol(32) }, dRoda: pol(80), pNominal: psi(300), superaquecido: true, evaporacaoMax: 7.0,
-    massa: 220, massaAderente: 120, tender: { massa: 196, eixos: 7, comprimento: 20 }, vMax: 130,
+    // 114 ft 2⅝ in (34,81 m) com o tênder (Wikipedia, UP FEF); estava com 21 + 20 = 41 m (AUDITORIA F-VAP-04). O tênder de
+    // 14 rodas fica com o comprimento do do Big Boy, 14,48 m (≈, a mesma família "centipede"), e a locomotiva com o resto
+    massa: 220, massaAderente: 120, tender: { massa: 196, eixos: 7, comprimento: 14.48 }, vMax: 130,
     escape: { dBico: 0.16, lDescarga: 0.9, vCaixa: 6, lChamine: 1.7, dChamine: 0.55 },
     // medido em Kosse: 281 · 344 · 408/420 (os dois tubos quase iguais batem a 13 Hz), e o 3º par ≈ 494
     apito: { tubos: [281, 344, 407, 420, 494], tipo: 'chime' }, sino: { f: 600, batidasPorS: 1.0 }, bombaAr: BOMBA2, folga: 0.3,
-    geometria: { comprimento: 21, largura: 3.2, altura: 4.9, xCilindros: 8.2, xChamine: 7.6, xDomo: 2.5, xCabine: -7.5, zTopo: 4.75 },
+    geometria: { comprimento: 20.33, largura: 3.2, altura: 4.9, xCilindros: 7.94, xChamine: 7.36, xDomo: 2.42, xCabine: -7.26, zTopo: 4.75 },
     lwChuff: 128, semente: 0x844, portadores: ['locomotiva', 'nenhum'],
   },
   {
     id: 'bigboy', nome: 'UP 4014 Big Boy', familia: 'locomotiva', tag: 'articulada 4-8-8-4 · 1941', rodeiro: '4-8-8-4',
     cilindros: { n: 2, diametro: pol(23.75), curso: pol(32) }, motores: 2, derivaFase: 0.01, dRoda: pol(68), pNominal: psi(300), superaquecido: true, evaporacaoMax: 12.0,
-    massa: 350, massaAderente: 245, tender: { massa: 198, eixos: 7, comprimento: 21 }, vMax: 110,
+    // locomotiva de 85 ft 3⅖ in (25,99 m) e 132 ft 9¼ in (40,47 m) com o tênder (Wikipedia, UP Big Boy): tênder de 14,48 m;
+    // estava com 26,5 + 21 = 47,5 m (AUDITORIA F-VAP-04)
+    massa: 350, massaAderente: 245, tender: { massa: 198, eixos: 7, comprimento: 14.48 }, vMax: 110,
     escape: { dBico: 0.18, lDescarga: 1.0, vCaixa: 8, lChamine: 1.8, dChamine: 0.6 },
-    apito: { tubos: [294, 349, 392, 440, 523, 587], tipo: 'chime' }, sino: { f: 606, batidasPorS: 2.24 }, bombaAr: BOMBA2, folga: 0.3,
-    geometria: { comprimento: 26.5, largura: 3.3, altura: 4.95, xCilindros: 10.5, xChamine: 9.6, xDomo: 3, xCabine: -10, zTopo: 4.8 },
+    // o apito da classe é o Hancock de sino longo de 3 notas ("steamboat"), o mesmo da 844 (Wikipedia, UP Big Boy):
+    // estava com 6 tubos (AUDITORIA F-VAP-06); vão as frequências medidas na 844 (o 3º par 494 é ≈ lá também)
+    apito: { tubos: [281, 344, 407, 420, 494], tipo: 'chime' }, sino: { f: 606, batidasPorS: 2.24 }, bombaAr: BOMBA2, folga: 0.3,
+    geometria: { comprimento: 25.99, largura: 3.3, altura: 4.95, xCilindros: 10.3, xChamine: 9.42, xDomo: 2.94, xCabine: -9.81, zTopo: 4.8 },
     lwChuff: 130, semente: 0x4014, portadores: ['locomotiva', 'nenhum'],
   },
   {
@@ -113,10 +128,15 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
     dRoda: pol(58), pNominal: psi(300), superaquecido: true, evaporacaoMax: 9.0,
     // 611 520 lb (277 t) em ordem de marcha, 548 500 lb (249 t) sobre as motrizes (o resto nos eixos guia e de arrasto);
     // tênder de 22 000 galões: 378 600 lb (172 t)
-    massa: 277, massaAderente: 249, tender: { massa: 172, eixos: 6, comprimento: 16 }, vMax: 80,
+    // 114 ft 10½ in (35,01 m) sobre os engates (Wikipedia, N&W 2156); estava com 25 + 16 = 41 m (AUDITORIA F-VAP-04). A
+    // divisão entre locomotiva e tênder é ≈ (a de antes, na escala do total); fontes na escala nova
+    massa: 277, massaAderente: 249, tender: { massa: 172, eixos: 6, comprimento: 13.66 }, vMax: 80,
     escape: { dBico: 0.17, lDescarga: 0.9, vCaixa: 7, lChamine: 1.6, dChamine: 0.55 },
-    apito: { tubos: [196, 233, 294], tipo: 'chime' }, sino: { f: 640, batidasPorS: 2.0 }, bombaAr: BOMBA2, folga: 0.3,
-    geometria: { comprimento: 25, largura: 3.3, altura: 4.9, xCilindros: 10, xChamine: 9, xDomo: 2.5, xCabine: -9.5, zTopo: 4.75 },
+    // o "hooter" das de carga da N&W (classes A, Y, K-1, M, S, Z) é um apito de sino longo de UMA nota; o de 3 notas era das
+    // de passageiros J e K-2 (AUDITORIA F-VAP-05, fóruns e gravação). A frequência não tem fonte: fica a nota mais grave
+    // do acorde de antes, 196 Hz (≈)
+    apito: { tubos: [196], tipo: 'simples' }, sino: { f: 640, batidasPorS: 2.0 }, bombaAr: BOMBA2, folga: 0.3,
+    geometria: { comprimento: 21.35, largura: 3.3, altura: 4.9, xCilindros: 8.54, xChamine: 7.69, xDomo: 2.14, xCabine: -8.11, zTopo: 4.75 },
     lwChuff: 128, semente: 0x76b, portadores: ['locomotiva', 'nenhum'],
   },
   {
