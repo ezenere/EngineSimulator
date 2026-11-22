@@ -27,6 +27,7 @@ import os
 import subprocess
 import sys
 
+sys.dont_write_bytecode = True  # (o eletrico-vida.py é carregado daqui: sem tools/__pycache__ no repositório)
 AQUI = os.path.dirname(os.path.abspath(__file__))
 RAIZ = os.path.dirname(AQUI)
 sys.path.insert(0, os.path.join(AQUI, 'ouvido'))

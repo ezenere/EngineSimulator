@@ -235,6 +235,8 @@ try {
   await preset(2, 'taurus');
   confere((await ev(`!document.getElementById('teclado').hidden`)), 'Taurus: teclado do do-re-mi visível');
   // os auxiliares: controles no Avançado e som com a locomotiva parada (sopradores, compressor, transformador)
+  // (a seção pode ter recolhido na troca de preset)
+  if (!(await ev(`!!document.getElementById('avRess')`))) await clicar('#avancado');
   const aux = await lerAte(() => ev(`['avVent', 'avComp', 'avArCond', 'avTrafo', 'avRede'].filter((i) => !document.getElementById(i))`), (f) => f.length === 0, 3000);
   confere(aux.length === 0, 'Taurus: sopradores, compressor, ar-condicionado, transformador e rede no Avançado', aux.join(', '));
   await espera(2500);
