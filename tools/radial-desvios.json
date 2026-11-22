@@ -432,13 +432,13 @@
   "verner5: lenta quente, picos por segundo (> 16 dB)": {
     "grupo": "estalos-b",
     "medido": [
-      15.64,
-      6.455
+      15.36,
+      7.091
     ],
     "unidade": "/s",
     "folga": "±10 % (≥ 0.5)",
     "alvo": "≤ 3/s, e ≤ 0,3/s acima de 16 dB",
-    "motivo": "AUDITORIA T-RAD-06: a lenta quente pela página, com o detector do pops.py (picos da envoltória 1–6 kHz mais de 10 dB sobre a mediana de 0,3 s). As gravações de radiais têm 0 a 6 picos por segundo, nenhum acima de 16 dB a não ser no Rotec (5,9/s, 0,17/s fortes, curtose 6). Estaques de 35 mm: 15,6 picos/s, 6,5 acima de 16 dB, curtose 31. Para a etapa de som (prioridade 1 do Radial, item B4 da AUDITORIA).",
+    "motivo": "AUDITORIA T-RAD-06: a lenta quente pela página, com o detector do pops.py (picos da envoltória 1–6 kHz mais de 10 dB sobre a mediana de 0,3 s). As gravações de radiais têm 0 a 6 picos por segundo, nenhum acima de 16 dB a não ser no Rotec (5,9/s, 0,17/s fortes, curtose 6). Estaques de 35 mm: 15,4 picos/s, 7,1 acima de 16 dB, curtose 34 (com a ficha do fabricante, 3,39 L, AUDITORIA F-RAD-02; com a de antes, 2,3 L: 15,6, 6,5 e 31). Para a etapa de som (prioridade 1 do Radial, item B4 da AUDITORIA).",
     "nota_folga": "folga alargada: a mediana de 3 sementes muda mais que ±1 dB / ±5 % entre as bases 0, 1000 e 2000"
   },
   "m14pf: lenta quente, picos por segundo (> 16 dB)": {
@@ -541,7 +541,7 @@
   },
   "m14p lenta a 12 m de lado: harmônicos 2–5 da BPF contra a ignição": {
     "grupo": "linhas-b",
-    "medido": -15.0,
+    "medido": -15,
     "unidade": "dB",
     "folga": "±3 dB",
     "motivo": "A2 (AUDITORIA T-RAD-02): passa por menos de 5 % da tolerância e cai fora com outras sementes (−15,0 na base 0, −17,5 na 1000 e −14,7 na 2000, alvo −10 ± 5: a hélice de 2 pás do Yak na lenta fica fraca de lado); fica declarada à beira, com teto.",

@@ -133,8 +133,11 @@ export const PRESETS_RADIAL: PresetRadial[] & { families: FamiliaRadial[] } = Ob
     displacement: 1.6, cr: 8.0, idle: 760, rpmMax: 2500, power: 31, J: 0.05, reducao: 1, helice: { B: 2, D: 1.7, J: 1.0, passoFixo: true, nMax: 2500 },
     carburador: 'boia', partida: 'direta', escape: { tipo: 'tubos', Lt: 0.45, Ot: 35 }, breakout: 'leaky',
     nivelEscape: 124, ...aviao, aeronave: { massa: 380, comprimento: 5.6, envergadura: 9.1 } },
-  { ...R5, id: 'verner5', family: 'pequenos', name: 'Verner Scarlett 5S', tag: 'Savage, Kitfox · 5 cil. · 2,3 L · 103 hp',
-    displacement: 2.3, cr: 8.0, idle: 720, rpmMax: 2600, power: 77, J: 0.08, reducao: 1, helice: { B: 2, D: 1.9, J: 1.2, passoFixo: true, nMax: 2600 },
+  // Verner Scarlett 5S (vernermotor.com): 3 390 cm³ (92 × 102 mm), 83 hp (61 kW) a 2 300 rpm, taxa 7,8, acionamento
+  // direto, hélice de até 2,00 m. Estava com 2,3 L e 103 hp a 2 600 (a potência contínua do 7U, de 7 cilindros; AUDITORIA
+  // F-RAD-02). Com a cilindrada certa o arranque elétrico precisou vencer a compressão de cada cilindro (dsp.ts, torqueRadial)
+  { ...R5, id: 'verner5', family: 'pequenos', name: 'Verner Scarlett 5S', tag: 'Savage, Kitfox · 5 cil. · 3,4 L · 83 hp',
+    displacement: 3.39, cr: 7.8, idle: 720, rpmMax: 2300, power: 61, J: 0.08, reducao: 1, helice: { B: 2, D: 1.9, J: 1.2, passoFixo: true, nMax: 2300 },
     carburador: 'boia', partida: 'direta', escape: { tipo: 'tubos', Lt: 0.45, Ot: 35 }, breakout: 'leaky',
     nivelEscape: 124, ...aviao, aeronave: { massa: 550, comprimento: 6.6, envergadura: 9.4 } },
   // ---- Terra
@@ -164,8 +167,11 @@ export const PRESETS_RADIAL: PresetRadial[] & { families: FamiliaRadial[] } = Ob
     carburador: 'boia', superalimentador: { relacao: 10, pas: 12, boost: 0.2 }, partida: 'direta',
     escape: { tipo: 'anel', Danel: 1.1, Oanel: 76, Lp: 0.18, saidas: [{ L: 0.5, O: 76, phi: 135 }, { L: 0.5, O: 76, phi: 225 }] }, breakout: 'old',
     nivelEscape: 142, portadores: ['rotor', 'nenhum'],
-    rotor: { B: 3, R: 8.075, Nr: 245, sigma: 0.048, cd0: 0.01, J_rot: 2400, Bc: 2, Rc: 1.32, ic: 1440 / 245, icx: 9.18, massa: 3000,
-      engrenagens: [{ z: 47, rpm: 2250 }, { z: 11, rpm: 245 * 9 }], posRotor: [0, 0, 4.0], posCauda: [-10, 0, 2.5], posCaixa: [0, 0, 3.2], posMotor: [2.2, 0, 1.4],
+    // rotor na rotação de voo: a caixa principal reduz 11,3155:1 (Sikorsky Archives), 199 rpm com o R-1340 a 2 250 (estava
+    // em 245, o topo da faixa segura de 170–245 rpm; AUDITORIA F-RAD-04). A cauda fica em 1 440 rpm (≈, sem fonte) e os
+    // dentes da caixa (47 e 11, o 2º estágio a 9·Nr) também são ≈
+    rotor: { B: 3, R: 8.075, Nr: 199, sigma: 0.048, cd0: 0.01, J_rot: 2400, Bc: 2, Rc: 1.32, ic: 1440 / 199, icx: 11.3155, massa: 3000,
+      engrenagens: [{ z: 47, rpm: 2250 }, { z: 11, rpm: 199 * 9 }], posRotor: [0, 0, 4.0], posCauda: [-10, 0, 2.5], posCaixa: [0, 0, 3.2], posMotor: [2.2, 0, 1.4],
       corpo: { comprimento: 12.9, largura: 2.4, altura: 4.1 } },
     veiculo: { massa: 3000, comprimento: 12.9, largura: 2.4, altura: 4.1 } },
 ] as PresetRadial[], { families: FAMILIAS_RADIAL });
