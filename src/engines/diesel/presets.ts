@@ -52,7 +52,7 @@ export type PresetDiesel = PresetRonco & {
   turboChiado?: number; // dB no sopro de banda larga do turbo (o padrão, 0 dB, é quase nada: constantes.ts → K_SOPRO)
   ressonancia?: number; // quanto o bloco ressoa depois de cada pancada (multiplica o fator de qualidade dos modos; padrão 1)
   desigualdade?: number; // quanto os cilindros soam diferentes entre si para quem ouve (multiplica a dispersão dos caminhos; padrão 1)
-  cofre?: number; // dB das reflexões do cofre sobre o som direto da mecânica (padrão −7: constantes.ts → COFRE)
+  cofre?: number; // dB das reflexões do cofre sobre o som direto da mecânica (padrão −10: constantes.ts → COFRE)
   jato?: number; // dB no chiado do jato livre na boca do escape (padrão 0: constantes.ts → K_JATO)
   ponteira?: number; // polegadas: diâmetro da boca de saída, de que depende o jato (padrão: o diâmetro do escape)
   mecanica?: number; // dB sobre a mecânica referida ao knock do próprio motor (acerto contra as gravações) // velas: espera = (1 s + 8 s·frio)·glowK (moderno 0,3)
@@ -106,7 +106,7 @@ const leve = (comprimento: number, diametro = 2.5, dpf = true): EscapeDiesel => 
 export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.assign([
   // ------------------------------------------------------------- picapes e carros
   {
-    id: 'hilux28', family: 'leve', name: 'Toyota Hilux 2.8', tag: '1GD-FTV · I4 common-rail · 2016',
+    id: 'hilux28', family: 'leve', name: 'Toyota Hilux 2.8', tag: '1GD-FTV · I4 common-rail · 2020',
     ...I4, ...CARRO, classe: 'leve', tempos: 4, displacement: 2.755, diametro: 92, curso: 103.6, cr: 15.6,
     idle: 780, redline: 4400, rpmMax: 4400, rpmPotencia: 3400, power: 150, torque: 500, inertia: 1.6,
     injecao: 'common-rail', piloto: true, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
@@ -128,7 +128,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
   {
     id: 'ram67', family: 'leve', name: 'Ram 2500 6.7 Cummins', tag: 'ISB 6.7 · I6 common-rail · 2013',
     ...I6, ...CARRO, classe: 'leve', tempos: 4, displacement: 6.69, diametro: 107, curso: 124, cr: 17.3,
-    idle: 750, redline: 3200, rpmMax: 3200, rpmPotencia: 2800, power: 276, torque: 1152, inertia: 1.3,
+    idle: 750, redline: 3200, rpmMax: 3200, rpmPotencia: 2800, power: 276, torque: 1085, inertia: 1.3,
     injecao: 'common-rail', piloto: true, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.9, turboTipo: 'vgt', turboRpmMax: 130000, turboPas: 7, turboApito: -12, turboLenta: 0.24, turboTau: [1.0, 1.8],
     freioMotor: 'vgt', escape: leve(4.6, 4), muffler: 'stock', pipeLen: 4.6, pipeD: 4, glow: true, glowK: 0.3, mecanica: 10,
@@ -142,11 +142,11 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     injecao: 'common-rail', piloto: true, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.9, turboTipo: 'vgt', turboRpmMax: 140000, turboPas: 7, turboApito: -22, turboLenta: 0.3, turboTau: [1.0, 1.8],
     freioMotor: 'vgt', escape: leve(4.8, 4), muffler: 'stock', pipeLen: 4.8, pipeD: 4, glow: true, mecanica: 10, glowK: 0.3,
-    gears: 10, transmission: 'auto', shiftTime: 0.45, ratios: [4.54, 2.86, 2.06, 1.72, 1.38, 1.14, 1.0, 0.85, 0.68, 0.63], finalDrive: 3.42, wheelR: 0.4, mass: 3600, drag: 0.88,
+    gears: 10, transmission: 'auto', shiftTime: 0.45, ratios: [4.54, 2.87, 2.06, 1.72, 1.48, 1.26, 1.0, 0.85, 0.69, 0.63], finalDrive: 3.42, wheelR: 0.4, mass: 3600, drag: 0.88,
     portadores: ['carro', 'nenhum'],
   },
   {
-    id: 'psd73', family: 'leve', name: 'Ford F-250 7.3 Power Stroke', tag: 'Navistar T444E · V8 HEUI · 1999',
+    id: 'psd73', family: 'leve', name: 'Ford F-250 7.3 Power Stroke', tag: 'Navistar T444E · V8 HEUI · 2001',
     ...V8, ...CARRO, ordemReal: '1-2-7-3-4-5-6-8', classe: 'leve', tempos: 4, displacement: 7.3, diametro: 104.4, curso: 106.2, cr: 17.5,
     idle: 680, redline: 3300, rpmMax: 3300, rpmPotencia: 2600, power: 186, torque: 678, inertia: 1.3,
     injecao: 'heui', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.15,
@@ -189,7 +189,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
   },
   // ------------------------------------------------------------- caminhões e ônibus
   {
-    id: 'scaniav8', family: 'pesado', name: 'Scania R500 V8', tag: 'DC16.03 PDE · V8 injetor-bomba · Euro 3',
+    id: 'scaniav8', family: 'pesado', name: 'Scania R500 V8', tag: 'DC16 04 PDE · V8 injetor-bomba · Euro 3',
     ...V8, ...CARRO, ordemReal: '1-5-4-2-6-3-7-8', classe: 'pesado', tempos: 4, displacement: 15.6, diametro: 127, curso: 154, cr: 17.0,
     idle: 500, redline: 2100, rpmMax: 2100, rpmPotencia: 1900, power: 368, torque: 2400, inertia: 1, J: 3.6,
     injecao: 'unitaria', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
@@ -202,7 +202,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
   },
   {
     id: 'volvod13', family: 'pesado', name: 'Volvo FH D13', tag: 'D13A 480 · I6 injetor-bomba · VEB',
-    ...I6, ...CARRO, classe: 'pesado', tempos: 4, displacement: 12.8, diametro: 131, curso: 158, cr: 17.0,
+    ...I6, ...CARRO, classe: 'pesado', tempos: 4, displacement: 12.8, diametro: 131, curso: 158, cr: 18.1,
     idle: 600, redline: 2100, rpmMax: 2100, rpmPotencia: 1800, power: 353, torque: 2400, inertia: 1, J: 3.2,
     injecao: 'unitaria', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.7, turboTipo: 'wastegate', turboRpmMax: 95000, turboPas: 7, turboApito: -13, turboTau: [1.5, 2.5],
@@ -228,7 +228,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
   {
     id: 'onibusisl', family: 'pesado', name: 'Ônibus urbano Cummins ISL9', tag: 'ISL9 280 · I6 common-rail · motor traseiro',
     ...I6, ...CARRO, classe: 'pesado', tempos: 4, displacement: 8.9, diametro: 114, curso: 144.5, cr: 16.6, engine: 'rear',
-    idle: 650, redline: 2300, rpmMax: 2300, rpmPotencia: 2100, power: 206, torque: 1017, inertia: 1, J: 2.4,
+    idle: 650, redline: 2300, rpmMax: 2300, rpmPotencia: 2100, power: 209, torque: 1220, inertia: 1, J: 2.4,
     injecao: 'common-rail', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.6, turboTipo: 'vgt', turboRpmMax: 95000, turboPas: 7, turboApito: -13, turboTau: [1.5, 2.5],
     freioMotor: 'vgt', escape: { turbina: true, dpf: true, abafador: 'abafador-caminhao', comprimento: 6, diametro: 5, chamine: null, tempGas: 500 },
@@ -240,7 +240,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
   {
     id: 'dd6v92', family: 'pesado', name: 'Detroit Diesel 6V92TA (MCI MC-9)', tag: '6V92TA · V6 2 tempos · Roots + turbo',
     layout: 'v', cylinders: 6, crank: 'dd6v', bankAngle: 63.5, order: 'pms', header: 'short', routing: 'single', intake: 'airbox', cam: 0, engine: 'rear',
-    classe: 'pesado', tempos: 2, displacement: 9.05, diametro: 123.8, curso: 127, cr: 17.0,
+    classe: 'pesado', tempos: 2, displacement: 9.05, diametro: 123, curso: 127, cr: 17.0,
     idle: 550, redline: 2100, rpmMax: 2100, rpmPotencia: 2100, power: 224, torque: 1180, inertia: 1, J: 2.6,
     injecao: 'unitaria', piloto: false, idi: false, eletronico: false, governador: 'todas-as-rotacoes', droop: 0.07, limiteFumaca: 1.1,
     aspiration: 'turbo', boost: 1.2, turboTipo: 'fixo', turboRpmMax: 90000, turboPas: 7, turboApito: -16, turboTau: [1.5, 2.5],
@@ -248,7 +248,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     freioMotor: 'nenhum', escape: { turbina: true, dpf: false, abafador: 'abafador-caminhao', comprimento: 3.0, diametro: 4, chamine: null, tempGas: 500 },
     janelas: { evo: 95, ipo: 130, ipc: 230, evc: 225 },
     muffler: 'stock', pipeLen: 3, pipeD: 4, glow: false, mecanica: 38,
-    gears: 4, transmission: 'auto', shiftTime: 0.9, driveMode: 'eco', ratios: [3.69, 2.01, 1.36, 1.0], finalDrive: 4.11, wheelR: 0.5, mass: 16000, drag: 3.0,
+    gears: 4, transmission: 'auto', shiftTime: 0.9, driveMode: 'eco', ratios: [3.69, 2.02, 1.38, 1.0], finalDrive: 4.11, wheelR: 0.5, mass: 16000, drag: 3.0,
     portadores: ['carro', 'nenhum'],
   },
   // ------------------------------------------------------------- geradores

@@ -18,22 +18,22 @@ Regra do produto: por enquanto só se ouve cada motor nos portadores onde ele fo
 
 - Vite + TypeScript + React. React só na interface; o áudio não passa por ele.
 - Site continua estático: `npm run build` gera `dist/` que vai para `ezenere.com/data/engine/`. Caminhos relativos (`base: './'`).
-- Páginas (multi-page do Vite): `index.html` = **menu** de tipos de motor; `ronco.html`, `turbina.html` e, nas etapas seguintes, `radial.html`, `rotativo.html`, `diesel.html`, `vapor.html`, `eletrico.html`.
+- Páginas (multi-page do Vite): `index.html` = **menu** de tipos de motor; `ronco.html`, `turbina.html` e, nas etapas seguintes, `radial.html`, `rotativo.html`, `diesel.html`, `vapor.html`, `eletrico.html`. *(Hoje todas existem, mais `passagem.html`.)*
 - DSP em TypeScript, em módulos ES, compilado pelo Vite num bundle próprio para o AudioWorklet (acaba o truque de `toString()`). O mesmo código roda em Node (via `tsx`) para renderizar WAV offline.
 - `tsconfig` pode começar com `strict: false` e tipos frouxos no DSP migrado; o que importa é o som não mudar.
 - Pacotes internos (pastas em `src/`): `acoustics/` (RNG, Biquad, tubos, junções, radiador, propagação), `engines/<familia>/` (DSP + presets + geometria), `carriers/`, `scene/`, `ui/` (componentes React compartilhados: slider, chips, campo, seção, navegação de famílias e presets, mostradores), `pages/`.
 
 ## Regras de verificação
 
-- **Migração não muda o som.** O DSP tem RNG com semente, então a renderização offline é determinística: a versão migrada tem de produzir WAV **idêntico amostra a amostra** (ou, se alguma reordenação de ponto flutuante for inevitável, erro < −90 dBFS) ao do código legado em `git show master:src/dsp.js` para os cenários `idle`, `rev`, `wot` e `sweep` de pelo menos 6 presets de cada página, e `start`/`takeoff`/`flyby` nos jatos. Ferramentas de referência (harness Node, análise de bandas) estão em `/tmp/claude-1000/-home-ezenere-Documents-Projects-Engine/e31418c8-04d3-4470-8423-a94efb88e841/scratchpad/tools/` (`render.js`, `jetrender.js`, `analyze.py`, `limtest.js`, `idletest.js`); copie o que for útil para `tools/` no repositório, em TypeScript.
+- **Migração não muda o som.** O DSP tem RNG com semente, então a renderização offline é determinística: a versão migrada tem de produzir WAV **idêntico amostra a amostra** (ou, se alguma reordenação de ponto flutuante for inevitável, erro < −90 dBFS) ao do código legado em `git show master:src/dsp.js` para os cenários `idle`, `rev`, `wot` e `sweep` de pelo menos 6 presets de cada página, e `start`/`takeoff`/`flyby` nos jatos. Ferramentas de referência (harness Node, análise de bandas) estão em `/tmp/claude-1000/-home-ezenere-Documents-Projects-Engine/e31418c8-04d3-4470-8423-a94efb88e841/scratchpad/tools/` (`render.js`, `jetrender.js`, `analyze.py`, `limtest.js`, `idletest.js`); copie o que for útil para `tools/` no repositório, em TypeScript. *(Estado em 18/11/2026: a prova é `npm run paridade:ronco`, `paridade:turbina` e `paridade:acoustics`, e a referência passou do nome `master` para o commit fixo `02c185f`, `REF_LEGADO` em `tools/legado.ts`, porque o legado saiu da árvore de trabalho. A pasta do scratchpad não existe mais: `render.js` e `jetrender.js` viraram `tools/render.ts`; `limtest.js` e `idletest.js` não foram copiados.)*
 - **Paridade de interface:** todo controle que existe hoje em `src/app.js` e `src/jet-app.js` continua existindo (lista explícita no relatório da etapa).
-- Depois de qualquer mudança em motor, calibração ou lenta: rodar o teste de lenta (68 veículos, 20 °C e −5 °C, zero apagamentos) e o teste de corte de giro.
+- Depois de qualquer mudança em motor, calibração ou lenta: rodar o teste de lenta (68 veículos, 20 °C e −5 °C, zero apagamentos) e o teste de corte de giro. *(Estado em 18/11/2026: cada família tem `npm run lenta:<família>`. Os dois harnesses antigos do Ronco nunca entraram no repositório; a auditoria escreveu `npm run lenta:ronco` no lugar deles: os 68 carros a 20 °C e a −5 °C, corte de giro e troca de carro. `npm run verificar` roda todos. Ver `docs/AUDITORIA.md`.)*
 - Som novo (etapas 2 em diante) é validado contra gravações do Wikimedia Commons com tabelas de bandas (dB relativos à banda 150–400 Hz), como em `docs/TECNICO.md` → Validação.
 
 ## Etapas
 
-1. **Base** — scaffold Vite/TS/React; `index.html` menu; README; migração do Ronco e da Turbina sem mudar o som; `acoustics/` e `ui/` compartilhados; camada de cena com Passagem universal, modo de testes, gimbal do ouvinte e cena 3D (three.js); camada de portador com carro/câmbio (existente), hélice (migrada da Turbina), rotor, gerador, locomotiva e trem de N vagões. Primeiro caso de validação da Passagem: trem-bala de 10 vagões a 350 km/h num túnel (vãos a 3,9 Hz, onda de pressão, reverberação do túnel), ainda sem motor próprio.
-2. **Diesel** — 4T de picape a caminhão, 2T de locomotiva (EMD 710), geradores; ignição por compressão (atraso + queima pré-misturada), injeção, controle por combustível, ciclo de 2 tempos.
+1. **Base** *(feita; ver `TECNICO.md` → Estrutura, Build, Cena e portadores, Página Passagem)* — scaffold Vite/TS/React; `index.html` menu; README; migração do Ronco e da Turbina sem mudar o som; `acoustics/` e `ui/` compartilhados; camada de cena com Passagem universal, modo de testes, gimbal do ouvinte e cena 3D (three.js); camada de portador com carro/câmbio (existente), hélice (migrada da Turbina), rotor, gerador, locomotiva e trem de N vagões. Primeiro caso de validação da Passagem: trem-bala de 10 vagões a 350 km/h num túnel (vãos a 3,9 Hz, onda de pressão, reverberação do túnel), ainda sem motor próprio.
+2. **Diesel** — 4T de picape a caminhão, 2T de locomotiva (EMD 710), geradores; ignição por compressão (atraso + queima pré-misturada), injeção, controle por combustível, ciclo de 2 tempos. *Feita: `diesel.html`, `src/engines/diesel/` e o adaptador `MotorDiesel`; três passadas de som; ver `TECNICO.md` → Diesel.*
 3. **Radial** — geometria de fileiras ímpares, hélice; aviões, M4 Sherman, Monaco-Trossi, Megola, helicópteros antigos. *Feita: `radial.html` e a família Aviação no Ronco; ver `TECNICO.md` → Radial e aviação a pistão.*
 4. **Rotativos** — Wankel (13B, Renesis, 20B, 787B, Ro80, Norton, Mistral), X-Engine e palhetas marcados como aproximação. *Feita: `rotativo.html`; ver `TECNICO.md` → Rotativos.*
 5. **Vapor** — DSP novo: sopro do escape por volta de roda, regulador e corte, vazamentos, bomba de ar, bielas, apito; locomotivas, estacionários, Stanley, barco. *Feita: `vapor.html`, `VaporDSP` e os portadores locomotiva a vapor, trator, barco e `CarroDireto`; ver `TECNICO.md` → Vapor.*
@@ -79,3 +79,30 @@ Divisão do trabalho: o mecanismo de médios e o limite do jato no **motor-base*
 6. **Mecanismo físico, não ganho** (princípios do `REVISAO-DE-SOM.md`): cada correção nomeia a peça ou o fenômeno. Atenuar é atenuar. Todo campo de preset tem controle no painel.
 7. **Portões intactos:** `paridade:ronco`, `paridade:turbina`, `paridade:acoustics` idênticos; `teste:*` e `lenta:*` da família sem falhas (alvos e desvios atualizados com justificativa); `typecheck`, `build`, `navegador:*`.
 8. **Quem decide é o ouvido do dono.** O relatório de cada agente termina com "o que ouvir": preset, condição, o que deve ter mudado.
+
+### Depois das auditorias (22/11/2026)
+
+As duas auditorias estão mescladas: `docs/AUDITORIA-UI.md` (87 defeitos, 86 corrigidos) e `docs/AUDITORIA.md` (296 achados; a tabela "Pendências, por prioridade" tem os blocos A a F com arquivo e o que fazer). O portão único é `npm run verificar` (`verificar:rapido` para o dia a dia).
+
+**Decisões do coordenador sobre a lista "o que o dono precisa decidir"** (reversíveis; o dono pode mudar qualquer uma):
+
+1. Desvios com teto: **sim**. As listas `DESVIOS` viram um retrato do valor aceito com folga (piorou além da folga, falha; voltou a passar, avisa).
+2. Sementes: **mediana de 3** nas medidas de contagem, transiente e CV.
+3. CPU e coleta de lixo saem dos `teste:*` para `cpu:*`.
+4. Referência das locomotivas diesel: refazer a partir do acervo novo (`referencias/diesel/`), depois que a passada de som do Diesel entrar.
+5. Sherman, RX-7 FD e Metropolis: vale a ficha real; o alvo do teste é corrigido junto.
+6. Valores "≈": ficam marcados como aproximação, sem inventar número.
+7. A alocação no laço de áudio, a unificação das quatro páginas a pistão e a FFT única das ferramentas ficam para depois da etapa de som (mexem nos mesmos arquivos).
+
+**Quem faz o quê** (um dono por pasta, para as mesclagens não conflitarem):
+
+| Agente | Modelo | Território | Itens |
+|---|---|---|---|
+| Diesel | Fable | `src/engines/diesel/**`, ramos `cc` do `dsp.ts`, `tools/diesel-*` | som (B1), C6; depois, bloco A do Diesel com Opus |
+| Rotativos | Fable | `src/engines/rotativo/**`, ramos `rot`, `tools/rotativo-*` | som (B3), C7, D2; depois, A3 com Opus |
+| Base | Fable | caminho da gasolina e compartilhado de `src/engines/ronco/**` | médios, jato da ponteira; depois, C1 a C4 com Opus |
+| Passagem e portadores | Opus | `src/scene/**`, `src/carriers/**`, `src/pages/passagem/**`, `src/engines/turbina/**`, `tools/cena/**` | B7 a B11, C5, C11, E1 a E3, F3, bloco A da Cena |
+| Radial, Vapor e Elétrico | Opus | presets e `tools/` dessas três famílias, `avas.ts` | bloco A dessas famílias, A4, A5, A9, C8 a C10, D1, D3, estouro do AVAS, E4 |
+| Interface e documentação | Opus | `src/pages/**` (fora da Passagem), `src/ui/**`, `tools/*-navegador.mjs`, `docs/` | pendências I1 a I10 da auditoria visual, E5, E6, F4, F6, onda e espectro no Vapor |
+
+O retoque de som do Radial, do Vapor e do Elétrico (B4, B5, o grave do B6) vem depois, medido com o kit, quando os testes dessas famílias já tiverem teto.

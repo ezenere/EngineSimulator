@@ -3,12 +3,13 @@
 // O integrador do controle de lenta fica congelado: com o pedal abaixo de 5% ele continuaria fechando o ar (o giro
 // travado está acima da lenta) e o coletor iria caindo ao longo da renderização.
 //   node render.js <preset> <rpm> <saida.f32> ['{"campo":valor}'] [segundos]
-//   DSP=/caminho/dsp.js node render.js ...   (outra versão do DSP, ex.: git show HEAD:src/dsp.js > /tmp/dsp.head.js)
+//   DSP=legado node render.js ...   (o DSP de antes da reestruturação, para comparar; ou DSP=/caminho/dsp.js ou .ts
+//                                    de outra versão: ver use() em harness.js)
 //   PARAMS='{"ambSound":false}' node render.js ...   (parâmetros de escuta e mixagem, ex.: sem som de ambiente)
 //   THR=1 node render.js ...   (pedal fixo em vez do que zera o torque, ex.: plena carga)
 const H = require('./harness.js'); const fs = require('fs');
 const [id, rpm, out, patch, dur] = [process.argv[2], +process.argv[3], process.argv[4], JSON.parse(process.argv[5] || '{}'), +(process.argv[6] || 10)];
-if (process.env.DSP) H.use(require('path').resolve(process.env.DSP));
+if (process.env.DSP) H.use(process.env.DSP === 'legado' ? 'legado' : require('path').resolve(process.env.DSP));
 const cfg = H.config(id, patch), params = JSON.parse(process.env.PARAMS || '{}');
 function mk(thr) { const d = new H.EngineDSP(H.FS); d.setConfig(cfg); Object.assign(d.params, params); d.tempMode = 'fixed'; d.tempSet = 90; d.coolant = 90; d.exhT = 450;
   d.state = 'run'; d.lockOmega = true; d.KI = 0; d.runT = 60; d.omega = rpm * 2 * Math.PI / 60; d.rpmAvg = rpm; d.thrTarget = thr; d.thr = thr; return d; }
