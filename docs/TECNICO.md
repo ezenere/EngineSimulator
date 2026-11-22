@@ -1,6 +1,6 @@
-# Como o Ronco e a Turbina funcionam
+# Como os simuladores funcionam
 
-Este documento explica a física e o processamento de áudio por trás dos dois simuladores. É para quem quer entender por que cada som sai do jeito que sai, ou mexer no código. Nada aqui é gravação nem amostra: todo o som é sintetizado amostra a amostra, a 48 kHz, a partir de modelos físicos simplificados.
+Este documento explica a física e o processamento de áudio por trás dos simuladores: Ronco, Turbina, Diesel, Radial, Rotativos, Elétrico, Vapor e a página Passagem (cena e portadores). É para quem quer entender por que cada som sai do jeito que sai, ou mexer no código. Nada aqui é gravação nem amostra: todo o som é sintetizado amostra a amostra, a 48 kHz, a partir de modelos físicos simplificados.
 
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Build: Vite, TypeScript e React](#build-vite-typescript-e-react)
@@ -9,6 +9,7 @@ Este documento explica a física e o processamento de áudio por trás dos dois 
 - [Turbina: motor a jato](#turbina-motor-a-jato)
 - [Cena e portadores](#cena-e-portadores)
 - [Página Passagem e modo de testes](#página-passagem-e-modo-de-testes)
+- [Adaptadores de motor](#adaptadores-de-motor)
 - [Diesel: ignição por compressão](#diesel-ignição-por-compressão)
 - [Radial e aviação a pistão](#radial-e-aviação-a-pistão)
 - [Rotativos](#rotativos)
@@ -18,13 +19,13 @@ Este documento explica a física e o processamento de áudio por trás dos dois 
 - [Limitações conhecidas](#limitações-conhecidas)
 - [Como adicionar um carro ou avião](#como-adicionar-um-carro-ou-avião)
 
-Para revisar o som de um veículo contra uma gravação real, siga o método de [`REVISAO-DE-SOM.md`](REVISAO-DE-SOM.md) (ferramentas em `tools/analise-som/`).
+Para revisar o som de um veículo contra uma gravação real, siga o método de [`REVISAO-DE-SOM.md`](REVISAO-DE-SOM.md) (ferramentas em `tools/analise-som/`). O que a auditoria de 18/11/2026 achou de incorreto e de incompleto, com o estado de cada item, está em [`AUDITORIA.md`](AUDITORIA.md).
 
 ---
 
 ## Estrutura do projeto
 
-O site é compilado com Vite (TypeScript + React) e publicado como páginas estáticas. Durante a reestruturação (branch `reestruturacao`) o código legado continua no lugar e é a referência do som; as páginas novas vão recebendo o que for migrado.
+O site é compilado com Vite (TypeScript + React) e publicado como páginas estáticas. O código legado (`src/dsp.js`, `src/geometry.js`, `src/presets.js`, `src/app.js`, `src/jet-dsp.js`, `src/jet-presets.js`, `src/jet-app.js`, `jato.html`, `style.css`, `jet.css`) saiu da árvore de trabalho no fim da reestruturação. Ele continua sendo a referência do som do Ronco e da Turbina, lido do histórico do git no commit fixo `02c185f` (`REF_LEGADO` em `tools/legado.ts`), que é o último de `master` com esses arquivos.
 
 | Arquivo ou pasta | O que faz |
 |---|---|
@@ -34,38 +35,35 @@ O site é compilado com Vite (TypeScript + React) e publicado como páginas est�
 | `turbina.html`, `src/pages/turbina/` | Página da Turbina, migrada de `jato.html` + `jet-app.js`: `controle.ts` (estado e mensagens para o DSP, fora do React), `Painel.tsx` (controles), `Turbina.tsx` (barra, presets, manete, instrumentos, laço de desenho), `desenho.ts` (EICAS, fan, osciloscópio, mapa e leituras em canvas) |
 | `src/engines/turbina/` | DSP da Turbina em TypeScript: `dsp.ts` (`JetDSP`), `presets.ts` (os aviões, tipo `PresetTurbina`), `constantes.ts` (tabela de seno, diretividade, volta da passagem); o worklet é `src/worklet/processador-turbina.ts` (`turbina-engine`) |
 | `tools/turbina-paridade.ts`, `tools/turbina-testa-navegador.mjs` | Prova de som idêntico ao legado (todos os aviões) e teste da página no Chromium e no Firefox headless |
-| `src/pages/comum/` | Casca comum das páginas durante a migração |
-| `src/ui/` | Componentes React compartilhados (`Slider`, `ChipGroup`, `Field`, `Section`, `FamilyNav`, `PresetNav`, `Barra`) e os estilos (`estilo.css`, ex-`style.css`; `turbina.css`, ex-`jet.css`) |
+| `src/pages/comum/` | `Aviacao.tsx`: os controles e as leituras de aviação (magnetos, mistura, partida, hélice, rotor) usados pelo Ronco, pelo Radial e pelos Rotativos. `Casca.tsx` e `ProvaDoWorklet.tsx` são a casca e a prova do worklet da etapa de base; nenhuma página os usa mais |
+| `src/ui/` | Componentes React compartilhados (`Slider`, `ChipGroup`, `Field`, `Section`, `FamilyNav`, `PresetNav`, `Barra`, `BotaoIgnicao`, `Manete`) e os estilos (`estilo.css`, ex-`style.css`; `turbina.css`, ex-`jet.css`; `manete.css`) |
 | `src/ui/audio/` | `AudioShell` (contexto React) e `CadeiaDeAudio`: AudioContext, carga do worklet e a cadeia compressor → EQ → seco/molhado → ambiente → analisador; ambientes e respostas ao impulso; perfis de Ronco e Turbina |
 | `src/acoustics/` | Blocos de acústica compartilhados: `RNG`, `Biquad`/`BiquadComPiso`, guias de onda (`Line`, `Junction`, `TwoPort`, `Radiator`, `Cutout`, `ClosedEnd`), escoamento compressível, constantes físicas |
 | `src/worklet/` | Pipeline do AudioWorklet: `registrar.ts` (envolve um DSP num `AudioWorkletProcessor`), `tipos.ts` (contrato do DSP), `processador-*.ts` (pontos de entrada) e o DSP de prova `tom.ts` |
 | `tools/ronco-paridade.ts`, `tools/ronco-navegador.mjs` | Prova de que o Ronco migrado soa igual ao legado (dados, WAV e bundle do worklet) e teste da página no Chromium e no Firefox headless |
+| `tools/legado.ts` | A referência do legado para as paridades: o commit fixo (`REF_LEGADO`), a leitura dos arquivos por `git show` e as correções de ficha declaradas (`CORRECOES_RONCO`, `CORRECOES_TURBINA`), aplicadas ao legado antes de comparar |
 | `tools/render.ts`, `tools/compare-wav.ts`, `tools/acoustics-paridade.ts` | Renderização offline para WAV, comparação amostra a amostra e conferência bit a bit do `acoustics/` contra o legado |
-| `tools/analise-som/` | Banco de testes em Node e análise em Python para comparar o som com gravações reais (ver `docs/REVISAO-DE-SOM.md`) |
+| `tools/analise-som/` | Banco de testes em Node e análise em Python para comparar o som com gravações reais (ver `docs/REVISAO-DE-SOM.md`); o `harness.js` carrega o DSP em TypeScript |
+| `diesel.html`, `src/pages/diesel/`, `src/engines/diesel/` | Diesel (`DieselDSP`, que estende o `EngineDSP`: injeção, atraso de ignição, queima, governadores, 2 tempos, turbo, freio-motor, `MotorDiesel`; ver [Diesel](#diesel-ignição-por-compressão)); worklet `src/worklet/processador-diesel.ts`; testes em `tools/diesel-*.ts` e `tools/diesel-navegador.mjs` |
 | `src/scene/`, `src/carriers/`, `tools/cena/` | Camadas cena e portador (Passagem, trem e demais portadores) e a validação offline delas (ver [Cena e portadores](#cena-e-portadores)) |
 | `radial.html`, `src/pages/radial/`, `src/engines/radial/`, `src/engines/ronco/aviacao.ts`, `src/pages/comum/Aviacao.tsx` | Radial (`RadialDSP`, geometria da biela-mestra, escape radial, partida de aviação, `MotorRadial`) e a família Aviação do Ronco (ver [Radial e aviação a pistão](#radial-e-aviação-a-pistão)); testes em `tools/radial-*.ts` e `tools/radial-navegador.mjs` |
 | `rotativo.html`, `src/pages/rotativo/`, `src/engines/rotativo/` | Rotativos (`RotativoDSP` do Wankel e do X-Engine, `PalhetasDSP`, `RotativosDSP` da página, geometria trocoidal, janelas, pré-silencioso em `escape.ts`, `MotorRotativo`; ver [Rotativos](#rotativos)); worklet `src/worklet/processador-rotativo.ts`; testes em `tools/rotativo-*.ts` e `tools/rotativo-navegador.mjs` |
 | `eletrico.html`, `src/pages/eletrico/`, `src/engines/eletrico/`, `src/carriers/carro-eletrico.ts`, `multirrotor.ts` | Elétrico (`EletricoDSP`: banco de linhas, máquina, inversor, mecânica, AVAS, `MotorEletrico`), o carro elétrico, o trem com motor, a bancada e o drone (ver [Elétrico](#elétrico-síntese-espectral)); testes em `tools/eletrico/` e `tools/eletrico-navegador.mjs` |
 | `vapor.html`, `src/pages/vapor/`, `src/engines/vapor/`, `src/carriers/{locomotiva-vapor,trator,barco,carro-direto,portadores-vapor}.ts` | Vapor (`VaporDSP`, um DSP novo que implementa `Motor` direto: cilindros de dupla ação, rede bico → caixa de fumaça → chaminé, apito de guia de onda, sino, auxiliares, caldeira) e os portadores dele: a composição locomotiva + tênder + vagões, trator, barco de rodas de pás, `CarroDireto` do Stanley e o Corliss no `Gerador` (ver [Vapor](#vapor)); testes em `tools/vapor-*.ts` e `tools/vapor-navegador.mjs` |
 | `passagem.html`, `src/pages/passagem/`, `public/3d/` | Página Passagem / modo de testes: ouvinte no gimbal, cena three.js, mostradores; texturas com `LICENSES.md` (ver [Página Passagem e modo de testes](#página-passagem-e-modo-de-testes)); teste em `tools/passagem-navegador.mjs` |
-| **Legado** (até a migração): | |
-| `src/geometry.js` | Geometria do motor: virabrequins, ordem de ignição, intervalos, balanceamento (migrado para `src/engines/ronco/geometria.ts`) |
-| `src/presets.js` | Os carros e motos (migrado para `src/engines/ronco/presets.ts`) |
-| `src/dsp.js` | Toda a síntese do Ronco: termodinâmica, escapamento, câmbio, temperatura, ouvinte (migrado para `src/engines/ronco/dsp.ts`) |
-| `src/app.js`, `style.css` | Interface do Ronco: painel, mostradores, teclado, acústica do ambiente (a página `index.html` que a carregava virou o menu; migrado para `src/pages/ronco/`) |
-| `jato.html`, `jet.css` | Página da Turbina legada (abre no `npm run dev`, mas não entra no `dist/`; já migrada, fica como referência até o fim da etapa) |
-| `src/jet-presets.js` | Os aviões (migrados para `src/engines/turbina/presets.ts`) |
-| `src/jet-dsp.js` | Toda a síntese da Turbina (migrada para `src/engines/turbina/dsp.ts`) |
-| `src/jet-app.js` | Interface da Turbina (migrada para `src/pages/turbina/`) |
+| `tools/wav.ts` | Leitura e gravação de WAV (float 32 e PCM 16) usada pelas ferramentas |
+| `docs/` | Este documento, o plano (`PLANO.md`), os projetos de cada etapa (`CENA.md`, `DIESEL.md`, `RADIAL.md`, `ROTATIVO.md`, `VAPOR.md`, `ELETRICO.md`: são o que se pretendia; o que foi feito está aqui), o método de revisão de som (`REVISAO-DE-SOM.md`), os créditos (`CREDITOS.md`) e a auditoria (`AUDITORIA.md`) |
 
-Os arquivos `*-dsp.js` legados ficam dentro de uma função-fábrica (`EngineDSPFactory`, `JetDSPFactory`) para poderem ser convertidos em texto com `toString()` e injetados num AudioWorklet. A mesma classe roda no Node, o que permite testar o som sem navegador. No código novo o truque acaba: o DSP é um módulo TypeScript comum, compilado num bundle próprio para o worklet (abaixo).
+**De onde veio cada parte** (os nomes do legado aparecem nos comentários do código): `src/geometry.js` → `src/engines/ronco/geometria.ts`; `src/presets.js` → `src/engines/ronco/presets.ts`; `src/dsp.js` → `src/engines/ronco/dsp.ts` e `src/acoustics/`; `src/app.js` e `style.css` → `src/pages/ronco/` e `src/ui/`; `src/jet-presets.js` → `src/engines/turbina/presets.ts`; `src/jet-dsp.js` → `src/engines/turbina/dsp.ts`; `src/jet-app.js`, `jato.html` e `jet.css` → `src/pages/turbina/` e `src/ui/turbina.css`. Para ler um deles: `git show 02c185f:src/dsp.js`.
+
+Os arquivos `*-dsp.js` legados ficavam dentro de uma função-fábrica (`EngineDSPFactory`, `JetDSPFactory`) para poderem ser convertidos em texto com `toString()` e injetados num AudioWorklet. No código atual o truque acabou: o DSP é um módulo TypeScript comum, compilado num bundle próprio para o worklet (abaixo), e a mesma classe roda no Node, o que permite testar o som sem navegador.
 
 ## Build: Vite, TypeScript e React
 
 - `npm run dev` serve o projeto com recarga automática; `npm run build` confere os tipos (`tsc` com `tsconfig.json`, código do navegador, e `tsconfig.node.json`, ferramentas e DSP, sem tipos do DOM) e gera `dist/`; `npm run preview` serve o `dist/`.
 - **Multi-página:** as entradas estão em `vite.config.mts` (`build.rolldownOptions.input`: `index.html`, `ronco.html`, `turbina.html`, `passagem.html`, `diesel.html`, `radial.html`, `rotativo.html`, `eletrico.html`, `vapor.html`). Uma página nova é um HTML na raiz com `<script type="module" src="./src/pages/<nome>/main.tsx">` e uma linha a mais nessa lista.
 - **`base: './'`:** todos os caminhos do `dist/` são relativos, então o site funciona em `ezenere.com/data/engine/` (ou qualquer subpasta) sem reconfigurar. Foi testado servindo o `dist/` em `/data/engine/`. Abrir o HTML pelo `file://` não funciona (módulos ES exigem http).
-- **Por que não `"type": "module"` no `package.json`:** as ferramentas antigas em `tools/analise-som/` e os arquivos legados de `src/` são CommonJS (`require`, `module.exports`) e deixariam de carregar. A configuração do Vite é `.mts` para ser ESM mesmo assim. O `tsx` roda os `.ts` de `tools/` como CommonJS; eles usam `createRequire(import.meta.url)` e `import.meta.url`, que funcionam nos dois modos.
+- **Por que não `"type": "module"` no `package.json`:** as ferramentas em `tools/analise-som/` (`harness.js`, `render.js`, `regressao.js`) e os arquivos legados que as paridades extraem do git são CommonJS (`require`, `module.exports`) e deixariam de carregar. A configuração do Vite é `.mts` para ser ESM mesmo assim. O `tsx` roda os `.ts` de `tools/` como CommonJS; eles usam `createRequire(import.meta.url)` e `import.meta.url`, que funcionam nos dois modos.
 - **TypeScript:** `strict: false`, e os campos das classes copiadas do legado são declarados com `declare` (não geram código; a classe compilada fica igual à original). TypeScript 7, React 19, Vite 8 (Rolldown).
 
 ### AudioWorklet em TypeScript
@@ -84,7 +82,7 @@ await ctx.audioWorklet.addModule(urlTom);
 - **Regra do DSP:** não usa nada do navegador nem o `sampleRate` global; recebe a taxa no construtor. Só `src/worklet/registrar.ts` toca nos globais do worklet:
 
   ```ts
-  // src/worklet/processador-ronco.ts (na migração)
+  // src/worklet/processador-ronco.ts
   registrarProcessador('ronco-engine', (fs) => new EngineDSP(fs));
   ```
 
@@ -98,14 +96,16 @@ await ctx.audioWorklet.addModule(urlTom);
 
 ### Ferramentas de verificação
 
-- `npx tsx tools/render.ts ronco <presets|all> <idle|cold|rev|wot|sweep> <pasta> [ouvinte]` e `npx tsx tools/render.ts turbina <presets|all> <start|takeoff|flyby> <pasta> [ouvinte]` renderizam para WAV float 32 (`--pcm16` para 16 bits) e JSON de telemetria. `DSP=<arquivo>` troca o DSP: um legado CommonJS (ex.: `git show master:src/dsp.js > /tmp/dsp.master.js`) ou um módulo TS que exporte `EngineDSP`/`JetDSP`. `PRESETS=` e `GEOMETRY=` fazem o mesmo para presets e geometria. Os cenários e o laço (eventos no início de cada bloco de 128 amostras, telemetria depois do bloco) são os de `render.js`/`jetrender.js`; com `--pcm16` a saída é idêntica à desses harnesses (WAV conferido nos 68 carros em `rev`; WAV e JSON, byte a byte, em Mustang, Fusca e F1 V8 em `wot` e 737 e F-16 em `flyby`). Os acessórios padrão são o `STOCK` completo do `loadPreset()` de `app.js`.
+- `npx tsx tools/render.ts ronco <presets|all> <idle|cold|rev|wot|sweep> <pasta> [ouvinte]` e `npx tsx tools/render.ts turbina <presets|all> <start|takeoff|flyby> <pasta> [ouvinte]` renderizam para WAV float 32 (`--pcm16` para 16 bits) e JSON de telemetria, por padrão com o DSP, os presets e a geometria em TypeScript de `src/engines/`. `DSP=<arquivo>` troca o DSP: um legado CommonJS (ex.: `git show 02c185f:src/dsp.js > dsp.legado.js`) ou um módulo TS que exporte `EngineDSP`/`JetDSP`. `PRESETS=` e `GEOMETRY=` fazem o mesmo para presets e geometria. Os cenários e o laço (eventos no início de cada bloco de 128 amostras, telemetria depois do bloco) são os de `render.js`/`jetrender.js`; com `--pcm16` a saída é idêntica à desses harnesses (WAV conferido nos 68 carros em `rev`; WAV e JSON, byte a byte, em Mustang, Fusca e F1 V8 em `wot` e 737 e F-16 em `flyby`). Os acessórios padrão são o `STOCK` completo do `loadPreset()` de `app.js`.
 - `npx tsx tools/compare-wav.ts <a> <b> [--limite -90]` compara dois WAVs (ou duas pastas, por nome): diz se são idênticos e dá o erro máximo e RMS em dBFS e onde está a primeira diferença. Sai com código 0 se idênticos (ou abaixo do limite).
-- `npx tsx tools/acoustics-paridade.ts` recompila as fábricas legadas com um `return` que expõe as classes internas e passa as mesmas entradas pelos blocos de `src/acoustics/` e pelos legados, comparando bit a bit (RNG, utilitários, Biquad de cada tipo, Ψ e vazão, rede de guias de onda com cada abafador).
-- **Paridade do Ronco:** `npx tsx tools/ronco-paridade.ts` compara os presets e a geometria em TypeScript com os de `master`, campo a campo, e renderiza com o DSP legado (o `src/dsp.js` de `master`, com a geometria e os presets de lá) e com o migrado: `idle`, `rev`, `wot` e `sweep` em 22 presets variados, `idle` e `rev` nos 68, `rev` com cada ouvinte e `cold` em alguns (200 cenários, ~1 min com 24 em paralelo). Tudo tem de sair idêntico, amostra a amostra e na telemetria. `--rapido` roda só 44 cenários, `--ref <commit>` troca a referência e `--dist` (depois de `npm run build`) confere também o `processador-ronco-*.js` do `dist/`, com a calibração feita como na página. Sai com código ≠ 0 se algo diferir. A página se testa com `node tools/ronco-navegador.mjs <url>/ronco.html [chromium|firefox]`: liga, acelera, troca marcha, carro, ambiente e ouvinte, mexe no painel e confere telemetria, som e console (`RESERVA=1` testa a reserva no `ScriptProcessorNode`).
+- `npx tsx tools/acoustics-paridade.ts` (`npm run paridade:acoustics`) lê as fábricas legadas do git (`tools/legado.ts`), recompila-as com um `return` que expõe as classes internas e passa as mesmas entradas pelos blocos de `src/acoustics/` e pelos legados, comparando bit a bit (RNG, utilitários, Biquad de cada tipo, Ψ e vazão, rede de guias de onda com cada abafador).
+- **Referência do legado e correções de ficha** (`tools/legado.ts`): as paridades leem o legado de `git show 02c185f:…` (`REF_LEGADO`; com o nome `master` a referência sumiria quando a reestruturação fosse mesclada). Os presets do Ronco e da Turbina têm de continuar iguais aos legados campo a campo; uma correção de ficha (nome, massa, relações…) só passa se estiver declarada em `CORRECOES_RONCO`/`CORRECOES_TURBINA`, e aí a paridade aplica a mesma correção ao preset legado antes de comparar e de renderizar: o som continua provado idêntico com a mesma ficha dos dois lados. Um preset **novo** no Ronco ou na Turbina (um `id` que não existe no legado) fica fora da paridade: o teste avisa quais são e compara só os 68 e os 34 que vieram do legado.
+- **Paridade do Ronco:** `npx tsx tools/ronco-paridade.ts` (`npm run paridade:ronco`) compara os presets e a geometria em TypeScript com os legados, campo a campo, e renderiza com o DSP legado (o `src/dsp.js` do commit de referência, com a geometria e os presets de lá) e com o migrado: `idle`, `rev`, `wot` e `sweep` em 22 presets variados, `idle` e `rev` nos 68, `rev` com cada ouvinte e `cold` em alguns (200 cenários, ~1 min com 24 em paralelo). Tudo tem de sair idêntico, amostra a amostra e na telemetria. `--rapido` roda só 44 cenários, `--ref <commit>` troca a referência e `--dist` (depois de `npm run build`) confere também o `processador-ronco-*.js` do `dist/`, com a calibração feita como na página. Sai com código ≠ 0 se algo diferir. A página se testa com `node tools/ronco-navegador.mjs <url>/ronco.html [chromium|firefox]`: liga, acelera, troca marcha, carro, ambiente e ouvinte, mexe no painel e confere telemetria, som e console (`RESERVA=1` testa a reserva no `ScriptProcessorNode`). O roteiro exige a url; `npm run navegador:ronco` serve o `dist/` sozinho (`tools/servir-dist.mjs`) e a passa.
+- **Tudo de uma vez:** `npm run verificar` roda, em ordem e com resumo, as paridades, os `teste:*` e `lenta:*` de cada família, `typecheck` e `build`; `npm run verificar:rapido` roda só a parte curta (paridades em amostra, as famílias rápidas e o build); `-- --navegador` acrescenta os roteiros de navegador e `-- --so <trecho>` escolhe passos (`tools/verificar.mjs`; um passo de cada vez, porque várias medidas são de tempo de CPU). `npm run auditoria:fichas` imprime, para todas as famílias, a velocidade em cada marcha no corte, a rotação a 100 km/h, a relação peso/potência e o que foge do plausível; `npm run teste:passagem` monta todos os presets da Passagem fora do navegador e mede nível, NaN e saturação; `npm run lenta:ronco` é o teste de lenta e de corte de giro dos 68 carros; `npm run auditoria:som` tabula, nas sete famílias, o nível de lenta e de carga de cada preset, o quanto o limitador de saída trabalha, o custo de CPU, os extremos de cada controle do painel, 44,1 e 96 kHz, a troca rápida de preset e a coleta de lixo (relatório, não portão).
 
 ### Paridade da Turbina
 
-`npx tsx tools/turbina-paridade.ts [ids] [--legado <ref>] [--sem-render]` (alguns minutos com os 34 aviões) tira `src/jet-dsp.js` e `src/jet-presets.js` de `git show master:` (ou de `<ref>`), confere os presets objeto a objeto, roda `tools/render.ts` com `DSP=`/`PRESETS=` do legado e do migrado em `start`, `takeoff` e `flyby` e compara com `tools/compare-wav.ts` (e os JSON byte a byte), e depois põe os dois DSPs lado a lado em cenários extras: estrondo sônico, rasante supersônico, a bordo com reversor, solo com `tune` e corte, reconfiguração, 44,1 kHz e bloco de 1024, nos 4 canais e em cada mensagem de telemetria. Sai com código ≠ 0 se algo não for idêntico. A página é testada com `node tools/turbina-testa-navegador.mjs <url>/turbina.html [--firefox] [--reserva]` (partida, manete, pós-combustão, reversor, passagem com estrondo, troca de avião e de ambiente, mensagens para o worklet, console).
+`npx tsx tools/turbina-paridade.ts [ids] [--legado <ref>] [--sem-render]` (`npm run paridade:turbina`; alguns minutos com os 34 aviões, 13 min medidos com a máquina ocupada: os renders são em série) tira `src/jet-dsp.js` e `src/jet-presets.js` de `git show 02c185f:` (o `REF_LEGADO` de `tools/legado.ts`, ou `<ref>`), aplica as correções de ficha declaradas, confere os presets objeto a objeto, roda `tools/render.ts` com `DSP=`/`PRESETS=` do legado e do migrado em `start`, `takeoff` e `flyby` e compara com `tools/compare-wav.ts` (e os JSON byte a byte), e depois põe os dois DSPs lado a lado em cenários extras: estrondo sônico, rasante supersônico, a bordo com reversor, solo com `tune` e corte, reconfiguração, 44,1 kHz e bloco de 1024, nos 4 canais e em cada mensagem de telemetria. Sai com código ≠ 0 se algo não for idêntico. A página é testada com `node tools/turbina-testa-navegador.mjs <url>/turbina.html [--firefox] [--reserva]` (partida, manete, pós-combustão, reversor, passagem com estrondo, troca de avião e de ambiente, mensagens para o worklet, console); `npm run navegador:turbina` serve o `dist/` e passa a url.
 
 ## Caminho do áudio no navegador
 
@@ -117,7 +117,7 @@ AudioWorklet (DSP, 4 canais)
                               DynamicsCompressor → EQ de 3 bandas → ganho → Analyser → saída
 ```
 
-- No legado, o DSP tenta carregar como AudioWorklet por URL `blob:` e depois `data:` (a segunda forma era necessária ao abrir pelo `file://`, onde a origem é nula); se nenhuma funcionar, cai para `ScriptProcessorNode` na thread principal. No código novo o worklet é um arquivo do build (ver [AudioWorklet em TypeScript](#audioworklet-em-typescript)), com a mesma reserva.
+- No legado, o DSP tentava carregar como AudioWorklet por URL `blob:` e depois `data:` (a segunda forma era necessária ao abrir pelo `file://`, onde a origem é nula); se nenhuma funcionar, cai para `ScriptProcessorNode` na thread principal. No código novo o worklet é um arquivo do build (ver [AudioWorklet em TypeScript](#audioworklet-em-typescript)), com a mesma reserva.
 - Cada ambiente (céu aberto, túnel, hangar…) tem uma resposta ao impulso gerada na hora. Ela soma uma cauda difusa, com decaimento exponencial que escurece com o tempo, a ecos discretos com atraso, ganho e espalhamento próprios: prédios, arquibancada, paredões do vale. Um som de fundo fraco (vento, trânsito, ventilação, arquibancada) é gerado dentro do DSP. A ventilação do túnel e da garagem é ruído de banda estreita na passagem das pás (100 e 120 Hz, Q ≈ 7) e no dobro (Q ≈ 9), independente em cada ouvido; era um seno parado, que soava como tom de teste por baixo de tudo e ficava uns 8 dB mais alto. "Som de fundo do ambiente" desliga esse fundo e mantém a acústica do lugar.
 - **Calibração de volume.** Ao montar um motor, a thread principal renderiza numa cópia do DSP, com escape e acessórios de referência e motor quente, 0,5 s em carga máxima a 55% da faixa vermelha e 1,2 s em marcha lenta. O ganho fixo é o que leva a carga ao alvo; a lenta ganha um **reforço próprio** (o que falta para ela ficar 21 dB abaixo da carga, como nos motores reais), aplicado por rotação: inteiro na lenta e sumindo até metade da faixa vermelha. Na sonda de lenta o giro é travado, então a válvula de ar é ajustada até o torque médio zerar, que é onde a lenta de verdade se equilibra (sem isso a sonda ficava 4 dB mais alta que a lenta real). O turbo é calibrado com 40% da pressão máxima. Abafador, válvula, diâmetro e temperatura continuam mudando o volume de verdade, porque ficam fora dessa normalização. Na mesma passada mede-se a potência que o modelo entrega (três pontos em carga total) para a escala de torque descrita na dinâmica.
 - **Modo arcade** ("Volume do motor"): um nivelador cujo detector lê o escape na fonte, antes do ouvinte, para a distância na rua e a cabine continuarem valendo. RMS de ~50 ms; abaixo do nível de carga total da calibração ele sobe o ganho na razão 1:2, até +10 dB, e acima não mexe: a lenta sobe metade do que falta, sem igualar ao giro alto. O ganho desce em ~15 ms e sobe em ~300 ms, para não "bombear" no corte de giro, e um detector de pico (ataque na hora, soltura de ~140 ms) impede que o reforço leve um estouro além do teto. Diferença entre lenta e carga total: Camaro 18 → 10 dB, Fusca 13 → 7, F1 V8 23 → 13. (Uma primeira versão, 1:5 até +16 dB, deixava a lenta quase no nível do giro alto.)
@@ -472,7 +472,7 @@ Camadas novas da etapa 1 (projeto em `docs/CENA.md`): o **portador** carrega o m
 | `src/carriers/trem.ts`, `ruido.ts` | Trem de N vagões e os geradores de ruído calibrados em L_W dB(A) |
 | `src/carriers/helice.ts`, `rotor.ts`, `gerador.ts`, `locomotiva.ts`, `carro.ts`, `aviao.ts`, `base.ts`, `compat.ts`, `teste.ts` | Demais portadores (tabelas, cargas, governadores, fontes), o carro e o avião dos motores adaptados, tabela motor × portador, portador e motor de bancada para os testes |
 | `src/engines/ronco/motor.ts`, `diesel/motor.ts`, `turbina/motor.ts`, `src/scene/estrondo.ts` | Adaptadores `Motor` dos DSPs existentes e o estrondo da Cena (ver [Adaptadores de motor](#adaptadores-de-motor)) |
-| `tools/cena/` | `render-passagem.ts` (WAV + telemetria), `analise.ts`, `medidas.ts`, `portadores.ts`, `motores.ts` (motores adaptados), `legado.ts` (referências de `master`), `cpu.ts`, `valida.ts` |
+| `tools/cena/` | `render-passagem.ts` (WAV + telemetria), `analise.ts`, `medidas.ts`, `portadores.ts`, `motores.ts` (motores adaptados), `legado.ts` (referências do legado, commit `02c185f`), `cpu.ts`, `valida.ts` |
 
 ### Propagação
 
@@ -509,7 +509,7 @@ Camadas novas da etapa 1 (projeto em `docs/CENA.md`): o **portador** carrega o m
 
 ### Validação (`npx tsx tools/cena/valida.ts`)
 
-`npm run teste:cena` (= `npx tsx tools/cena/valida.ts`) roda 105 medidas, compara com os alvos do CENA.md (dois deles atualizados pelas gravações, com a justificativa em `medidas.ts`) e sai com código ≠ 0 se algum falhar sem desvio documentado. Resultado atual: **92 ok, 13 desvios documentados, 0 falhas**: as 92 da Cena e do trem (83 ok, 9 desvios, como antes, mais os dois do agudo) e os grupos `motores` e `niveis-motores` (os motores adaptados: 2 desvios do avião a 1500 m e 3 de nível absoluto, ver [Adaptadores de motor](#adaptadores-de-motor)). Antes do ajuste contra as gravações: 73 ok, 16 desvios. Medidas por ouvido (a soma mono de um sinal binaural cancela onde o ITD dá meia volta de fase: 770 Hz).
+`npm run teste:cena` (= `npx tsx tools/cena/valida.ts`) roda 105 medidas, compara com os alvos do CENA.md (dois deles atualizados pelas gravações, com a justificativa em `medidas.ts`) e sai com código ≠ 0 se algum falhar sem desvio documentado. Resultado atual (18/11/2026): **93 ok, 12 desvios documentados, 0 falhas**: 8 desvios da Cena e do trem (ar a 1500 m, modulação e pulsos de vão no túnel, σ do nariz, os dois L_AFmax, lei de velocidade do aero, alocação no laço) e 4 dos grupos `motores` e `niveis-motores` (os motores adaptados: 2 do avião a 1500 m e 2 de nível absoluto, a EMD e o ATR; a lenta da Hilux voltou para dentro do alvo depois da 2ª passada do Diesel; ver [Adaptadores de motor](#adaptadores-de-motor)). As duas medidas de CPU e a de alocação dependem da carga da máquina: com outros testes rodando ao mesmo tempo a de CPU por bloco já passou de 50% e virou falha. O teste leva ~2 min. Antes do ajuste contra as gravações: 73 ok, 16 desvios. Medidas por ouvido (a soma mono de um sinal binaural cancela onde o ITD dá meia volta de fase: 770 Hz).
 
 | Grandeza (trem 10×25 m, 350 km/h, 3 m) | Alvo | Medido |
 |---|---|---|
@@ -542,7 +542,7 @@ Camadas novas da etapa 1 (projeto em `docs/CENA.md`): o **portador** carrega o m
 
 **Desvios e por quê.** (1) *Ar a 1500 m:* com dois polos a diferença entre 500 Hz e 4 kHz não passa de 36 dB em nenhum corte; a ISO pede 46,7. O critério "não pode piorar" do avião (≤ −20 dB) é atendido (−21,7). (2) *σ do nariz:* 51 ms sai de L_nariz = 15 m; o padrão de 4.6 é 12 m (41 ms). (3) *Modulação no túnel, pulsos de vão e crista:* com o orçamento ajustado contra as gravações ([abaixo](#trem-contra-gravações-reais)) o balanço e a modulação a céu aberto batem; no túnel o campo reverberante enche os vales (2,0 dB); os pulsos de vão em 50–200 Hz e a crista de 5 dB (L_AFmax − L_Aeq,tp) também não aparecem nas gravações (0,7–1,8 dB). (4) *Leis de velocidade:* a potência segue 30/60·log v à letra e a Cena soma a convecção de 2.1, +1 dB entre 160 e 300 km/h; as leis de 4.6 são de níveis medidos, que já incluem esse efeito. (5) *Alocação:* ver acima. (6) *Bandas do carro e do avião pela Cena:* medidas com os motores adaptados ([Adaptadores de motor](#não-pode-piorar-cena-211-pela-cena-com-o-motor-adaptado)).
 
-**Referências do legado** (`tools/cena/referencias/legado.json`, de `master` por `git show`; `npx tsx tools/cena/legado.ts gravar` regrava, `valida.ts legado` confere): carro a 6 m (Camaro SS, 3000 rpm travado, 30 m/s): Doppler 217,7/182,6 Hz (teoria 219,2/183,9), bandas abeam, curva nível × x a cada 0,25 s, 1/3 de oitava de 400 Hz a 2,5 kHz; 737 a 1500 m e 300 km/h: bandas no ponto mais próximo e 10 s antes, 4 kHz a −21,6 dB de 500 Hz; F-16 a Mach 1,5 e 200 m: cone em 3,373 s (teoria 3,373), Δp 2270 Pa, T 79 ms. O `supersonico.ts` reproduz o instante do cone (3,3733 s) e Δp/T.
+**Referências do legado** (`tools/cena/referencias/legado.json`, do commit `02c185f` por `git show`; `npx tsx tools/cena/legado.ts gravar` regrava, `valida.ts legado` confere): carro a 6 m (Camaro SS, 3000 rpm travado, 30 m/s): Doppler 217,7/182,6 Hz (teoria 219,2/183,9), bandas abeam, curva nível × x a cada 0,25 s, 1/3 de oitava de 400 Hz a 2,5 kHz; 737 a 1500 m e 300 km/h: bandas no ponto mais próximo e 10 s antes, 4 kHz a −21,6 dB de 500 Hz; F-16 a Mach 1,5 e 200 m: cone em 3,373 s (teoria 3,373), Δp 2270 Pa, T 79 ms. O `supersonico.ts` reproduz o instante do cone (3,3733 s) e Δp/T.
 
 **Pendente (TODO):** os da lista em [Adaptadores de motor](#pendente-todo). Feitos depois: ponte calibrada, crossfade do lado do ouvinte (duas faces), reverberação na página e cena 3D; resolvedor supersônico no propagador, hélice idêntica e vias estruturais das fontes `dentro` (com os adaptadores de motor); o agudo da passagem.
 
@@ -662,7 +662,7 @@ As respostas ao impulso não eram o problema: `gerarRespostaPorBanda` usa a band
 
 ## Página Passagem e modo de testes
 
-`passagem.html` e `src/pages/passagem/` formam a interface da Cena nova (CENA.md 3). Um portador passa pelo ouvinte: o trem de N vagões, o helicóptero (sem motor), o carro (Ronco ou Diesel), o avião de hélice (turboélice), o gerador e a locomotiva (Diesel) e o avião a jato (Turbina), com os motores pelos [adaptadores](#adaptadores-de-motor). O ouvinte fica parado junto à via ou num gimbal 3D em torno do corpo, e há uma cena three.js. O padrão é o das outras páginas: estado e mensagens fora do React, painel com os componentes de `src/ui/`, mostradores em canvas e um único `requestAnimationFrame`.
+`passagem.html` e `src/pages/passagem/` formam a interface da Cena nova (CENA.md 3). Um portador passa pelo ouvinte: o trem de N vagões (sem motor ou com a tração elétrica), o helicóptero (pistão de aviação, radial, rotativo ou sem motor), o carro (Ronco, Diesel, radial, rotativo, elétrico ou o Stanley a vapor), o avião de hélice (turboélice, radial, pistão de aviação ou rotativo), o gerador (Diesel, X-Engine ou o Corliss), a locomotiva (Diesel ou a vapor), o avião a jato (Turbina), o trator e o barco a vapor e o drone, com os motores pelos [adaptadores](#adaptadores-de-motor). São 10 portadores e 29 presets de passagem (`PORTADORES` e `PRESETS_PASSAGEM` em `presets.ts`). O ouvinte fica parado junto à via ou num gimbal 3D em torno do corpo, e há uma cena three.js. O padrão é o das outras páginas: estado e mensagens fora do React, painel com os componentes de `src/ui/`, mostradores em canvas e um único `requestAnimationFrame`.
 
 | Arquivo | O que faz |
 |---|---|
@@ -687,7 +687,7 @@ As respostas ao impulso não eram o problema: `gerarRespostaPorBanda` usa a band
 
 | Mensagem | Conteúdo | Quando |
 |---|---|---|
-| `portador` | `trem`, `rotor`, `carro`, `helice`, `gerador`, `locomotiva` ou `aviao`, com a configuração; com motor, `motor: { familia, cfg }` (calibrado na página) e o `comando` inicial | Mudança estrutural: N, passo, vão, nariz…, troca de motor ou de preset |
+| `portador` | `trem`, `rotor`, `carro`, `helice`, `gerador`, `locomotiva`, `aviao`, `trator`, `barco` ou `drone`, com a configuração; com motor, `motor: { familia, cfg }` (calibrado na página) e o `comando` inicial | Mudança estrutural: N, passo, vão, nariz…, troca de motor ou de preset |
 | `cena` | Ambiente, trajetória e ouvinte | A cada mudança; o worklet faz rampas de 20 ms |
 | `comando` | Velocidade fixa, coletivo, pedal, marcha, notch, degrau de carga | Ao disparar, parar e mudar a velocidade ou o comando do motor |
 | `params` | `master` e `posicao` | `posicao` chama `CenaPassagem.reposicionar` |
@@ -702,17 +702,18 @@ Arrasto e sliders contínuos marcam a cena como pendente. `enviarPendentes()` ma
 - **Teclas:** <kbd>Espaço</kbd> dispara ou para, <kbd>R</kbd> alterna repetir, <kbd>G</kbd> alterna o gimbal e <kbd>C</kbd> troca a câmera, com a cena em foco.
 
 **Portadores e compatibilidade.**
-- Os portadores aparecem pela tabela `COMPAT` (CENA 1.6, mais o `aviao`).
-- Um portador fica habilitado quando alguma família de motor dele tem adaptador (`MOTORES_PRONTOS` = `ADAPTADORES` de `compat.ts`: nenhum, pistão, diesel, turboélice, turbina) e foi usada nele de verdade (`USO_REAL`), e o `CenaDSP` sabe montá-lo (`PORTADORES_NO_DSP`: trem, rotor, carro, hélice, gerador, locomotiva, avião).
-- O rotor continua sem motor: o pistão de aviação (Lycoming do R44) é da etapa 3, e a Turbina não tem turboeixo.
+- Os portadores aparecem pela tabela `COMPAT` (CENA 1.6, mais o `aviao`, o `trator`, o `barco` e o `drone`).
+- Um portador fica habilitado quando alguma família de motor dele tem adaptador (`MOTORES_PRONTOS` = `ADAPTADORES` de `compat.ts`: nenhum, pistão, diesel, turboélice, turbina, radial, rotativo, elétrico e vapor) e foi usada nele de verdade (`USO_REAL`), e o `CenaDSP` sabe montá-lo (`PORTADORES_NO_DSP`: trem, rotor, carro, hélice, gerador, locomotiva, avião, trator, barco e drone). Hoje os dez estão habilitados.
+- O rotor leva o pistão de aviação do Ronco (R22, R44, Bell 47, Schweizer 300), o radial do S-55 ou o AE50R do Camcopter, ou fica sem motor (Nr imposto). A Turbina não tem turboeixo.
 - **Motor:** a seção "Motor" do painel escolhe o preset da família, sem duplicar os painéis completos (escape, admissão, mixagem ficam na página do motor):
-  - os 68 do Ronco;
+  - os 68 do Ronco no carro, e os 10 de aviação na hélice e no rotor;
   - os diesel do uso (carro, gerador, locomotiva);
+  - os radiais, os rotativos (menos o motor de palhetas), os a vapor e os elétricos, cada um nos portadores do campo `portadores` (ou `portador.tipo`) do preset;
   - os turboélices;
   - os jatos.
 
   Ela também dá o comando do portador: acelerador e marcha da passagem no carro, manete, notch, degrau de carga. No carro, a família (pistão ou diesel) se troca nos chips "Motor".
-- **Calibração na thread principal:** `prepararMotorRonco` / `prepararMotorDiesel` (calibração do Ronco e sonda do nível absoluto, ~1 s), guardada por preset. A página monta o mesmo portador que o worklet para ter a geometria e as fontes.
+- **Calibração na thread principal:** `prepararMotorRonco`, `prepararMotorDiesel`, `prepararMotorRadial`, `prepararMotorRotativo`, `prepararMotorEletrico` e `prepararMotorVapor` (calibração e sonda do nível absoluto, ~1–2 s), guardada por preset. A página monta o mesmo portador que o worklet para ter a geometria e as fontes.
 - **Mensagem:** `{ type: 'portador', tipo, config, motor: { familia, cfg }, comando }`.
 - **Presets com motor:**
   - "Carro na rua a 6 m" (Camaro SS, 3ª, pé no fundo, 108 km/h);
@@ -723,8 +724,8 @@ Arrasto e sliders contínuos marcam a cena como pendente. `enviarPendentes()` ma
   - "Jato a 1500 m" (737);
   - "Caça supersônico a 200 m" (F-16 a Mach 1,5, com o estrondo).
 
-  E, sem motor, "Helicóptero R44 sobrevoando".
-- **Padrões por portador** (`PADROES`, CENA 3.1): carro em volta de 800 m com curvas de 60 m; locomotiva em volta de 2000 m e raio de 400 m; hélice e avião em reta de 6000 m a 150 m. Os presets de passagem andam numa reta.
+  Esses foram os da etapa dos adaptadores. Depois entraram: "Helicóptero R44 sobrevoando" com o O-540; Corsair, Yak-52, P-47, Sherman e Cessna 172 (radial e aviação); RX-7 na rua, 787B em Hunaudières e RQ-7 Shadow (rotativos); Pacific a 100 km/h, Big Boy arrancando e Maria Fumaça na estação (vapor); Tesla na rua, Taurus partindo, metrô chegando na estação, N700 no túnel e drone pairando (elétrico). Sem motor ficam quatro trens (trem-bala a céu aberto e no viaduto, convencional na estação, regional no corte).
+- **Padrões por portador** (`PADROES`, CENA 3.1): carro em volta de 800 m com curvas de 60 m; locomotiva em volta de 2000 m e raio de 400 m; hélice, helicóptero e avião em reta de 6000 m a 150 m; trator em reta de 600 m a 6 km/h; barco a 20 m da margem; drone a 10 m de altura. Os presets de passagem andam numa reta.
 
 **Ouvinte.**
 - **Parado junto à via:** posição ao longo da via, altura do ouvido e distância à lateral.
@@ -738,7 +739,7 @@ Arrasto e sliders contínuos marcam a cena como pendente. `enviarPendentes()` ma
   | Câmera atrás | atrás da cauda |
   | Cabine | ponto dentro do primeiro vagão; o local automático vira `cabine` |
   | Sobre o pantógrafo / sobre o rotor | 1 m acima, a 89° |
-  | Escape, ponteira, cofre | desabilitados: o trem não tem escape nem fonte `dentro` |
+  | Escape, ponteira, cofre | desabilitados no trem sem motor (não tem escape nem fonte `dentro`) |
 
 - **Filtro do local:** os de 3.3, aplicados pela Cena (`RegrasLocal`).
   - **Fora:** diretividade × sombra × propagação, mais ITD/ILD.
@@ -980,24 +981,24 @@ A sonda roda na thread principal, junto com a calibração (página: `prepararMo
 | Caso | Alvo e fonte | Medido |
 |---|---|---|
 | carro a 6 m em carga: Camaro SS, 3ª, pé no fundo, 108 km/h (3996 rpm), L_AFmax | 85–90 dB(A) (alvo da validação) | 89,1 dB(A) |
-| Hilux 2.8 em lenta (782 rpm), parada, a 1 m atrás da ponteira, L_Aeq | ~70 dB(A) (alvo da validação) | 66,7 dB(A) (**desvio**; a 7,5 m da lateral: 45,0) |
+| Hilux 2.8 em lenta (778 rpm), parada, a 1 m atrás da ponteira, L_Aeq | ~70 ± 3 dB(A) (alvo da validação) | 68,8 dB(A) (a 7,5 m da lateral: 46,8); era 66,7 (desvio) antes da 2ª passada do Diesel |
 | EMD SD70ACe em N8 (883 rpm), parada, a 15 m, L_Aeq | ~95 dB(A): 40 CFR 201.12 (locomotivas paradas fabricadas depois de 1979, plena potência: 87 dB(A) a 30 m) mais 6 dB | 88,8 dB(A) (**desvio**) |
 | ATR 72 em decolagem (manete 1, 60 m/s) a 100 m de altura, L_AFmax | ~85 dB(A): certificação de ruído do ATR 72 (ICAO Anexo 16, ~84 EPNdB no ponto lateral a 450 m) | 95,0 dB(A) (**desvio**) |
 
 **Desvios dos níveis:**
-- **Hilux:** a picape segue a convenção do carro. A referência de 95 dB, que acerta o Camaro, põe a lenta dela 3 dB abaixo; com os 100 do CENA ficaria em 71,7, e o carro em 94. Os dois alvos pedem referências diferentes para gasolina e diesel leve, e isso espera gravações calibradas.
+- **Hilux (já não é desvio):** a picape segue a convenção do carro. Com a referência de 95 dB, que acerta o Camaro, a lenta dela ficava 3 dB abaixo do alvo (66,7); depois que o pulso do escape do diesel passou a `∝ √T` (2ª passada) ela mede 68,8, dentro dos ±3.
 - **EMD:** o escape está no `L_W` de 128 dB(A), 103 dB(A) a 5 m (conferido canal a canal). A 15 m, a chaminé 0,5 m acima do teto fica rasante à borda da caixa, e a sombra (Maekawa) tira ~4 dB: sem ela, 92,6. O resto é a distância real da chaminé (17 m) e a brita, que reflete pouco acima de 800 Hz. A 40 CFR mede a 30 m, onde o ângulo sobre a borda é mais aberto.
 - **ATR:** o nível é o do JetDSP. A hélice é 9·(M/0,75)⁴ Pa a 30 m, 113 dB por motor na decolagem, ~10 dB acima do que a certificação sugere. O 737 do mesmo modelo dá 112,5 dB a 30 m por barramento, também alto. Corrigir a escala da Turbina muda o mostrador de dB da página Turbina: fica para a revisão de níveis dela.
 
 ### Pendente (TODO)
 
 - Fontes da Turbina separadas por fonte, com a diretividade de cada uma (o gimbal de perto de um jato).
-- Turboeixo: não há preset com `arch: 'turboeixo'` na Turbina, e o rotor fica sem motor.
+- Turboeixo: não há preset com `arch: 'turboeixo'` na Turbina; o rotor só tem os motores a pistão, radial e rotativo (ou nenhum).
 - Escala absoluta da Turbina (o ATR sai ~10 dB alto).
-- Referência própria para o diesel leve no carro (Hilux 3 dB baixa com a referência do Ronco).
+- Referência própria para o diesel leve no carro, com gravações calibradas (a lenta da Hilux hoje cai no alvo com a referência do Ronco: 68,8 contra ~70 dB(A)).
 - Ponteiras nos lados reais, se gravações laterais confirmarem a 2ª ordem do V8.
 - Pneus e aero do carro (4.1, desligados por padrão).
-- Casca do gerador com carenagem: a lei da massa sobre as fontes `dentro` em `fora`, que a Cena ainda não aplica.
+- Casca do gerador com carenagem: a lei da massa sobre as fontes `dentro` em `fora`, que a Cena ainda não aplica (o campo `carenagem` de `src/carriers/gerador.ts` existe e não é lido em lugar nenhum).
 
 ## Diesel: ignição por compressão
 
@@ -1021,17 +1022,17 @@ O projeto está em [`DIESEL.md`](DIESEL.md); aqui fica o que foi feito, como e o
 
 - **min-max** (eletrônico): pedal manda combustível, PI isócrono de lenta (integrador até 0,6), governador de máxima em rampa de 120 rpm; **todas-as-rotações** (mecânico): droop estático `1/droop` (0,15 na lenta) realizado com ganho rápido baixo e um atraso de 0,5 s; **isócrono** no gerador, na locomotiva e na bancada, alvo em rampa (100 rpm/s na locomotiva). Sobrevelocidade: corta acima de 112%, volta abaixo de 105%.
 - **Ganhos normalizados por motor** (desvio do DIESEL.md): os do documento (Kp 6, Ki 1,5/s na lenta) davam caça de ±12% a 2,4 Hz na Hilux. Aqui `P = Kt/(J·ω)` é a aceleração relativa por unidade de combustível e `Kp = ω_c/P` (lenta 9 rad/s, gerador 2,7, locomotiva 2,5, bancada 8; no EMD em N8 isso dá Kp ≈ 6). A rotação medida é a média do ω no último intervalo de ignição.
-- **Portadores internos ("bancada")**: carro (o câmbio do Ronco), gerador (P = degrau·kWe/η, rampa de 0,1 s, AVR com queda por subfrequência abaixo de 97%), locomotiva (tabela de notches; o regulador de carga segue a rotação já alcançada e alivia se o combustível satura), dinamômetro (torque em fração do nominal). A carga entra como pressão média de freio somada ao atrito. `acoplar(carga)` e `{ type: 'diesel', combustivel }` estão prontos para os portadores de `carriers/` (marcados `TODO(integração carriers/)`).
+- **Portadores internos ("bancada")**: carro (o câmbio do Ronco), gerador (P = degrau·kWe/η, rampa de 0,1 s, AVR com queda por subfrequência abaixo de 97%), locomotiva (tabela de notches; o regulador de carga segue a rotação já alcançada e alivia se o combustível satura), dinamômetro (torque em fração do nominal). A carga entra como pressão média de freio somada ao atrito. `acoplar(carga)` e `{ type: 'diesel', combustivel }` são o que o `MotorDiesel` (`src/engines/diesel/motor.ts`) usa para os portadores de `carriers/` (os comentários `TODO(integração carriers/)` que sobraram no `dsp.ts` são anteriores a ele).
 - **Atrito diesel**: +0,57 bar sobre o do Ronco (o ×1,6 do DIESEL.md no polinômio inteiro dava 4,4 bar na rotação máxima). **Motor de partida** de redução (torque de travamento ~2,5× o atrito frio, gira a 150–250 rpm; o do Ronco girava um 15 L a 30–60 rpm). **Velas**: espera `(1 + 8·frio)·glowK` s antes de girar, com o relé estalando.
 - **Turbo**: rotação pela energia do escape `√(rpm·combustível)`, τ do preset, mínimo 0,15 no VGT, engrenado do EMD `max(livre, rpm·18,3)`, wastegate com chiado; apito `z·N/60` (2º harmônico, queda acima de 16 kHz), chiado modulado pelos pulsos do escape. **Freio-motor**: borboleta (3 bar, atenua a boca e o jato), VGT (2,5 bar, turbo acelera), Jake (janela de −8° a +40° em volta do PMS de compressão, 0,35·AexMax, cilindros 2/4/6; o sopro gira a turbina), VEB. (A janela 350–390° do DIESEL.md cai no PMS de troca de gases, onde não há ar comprimido: foi entendida como "em volta do PMS de compressão".)
 
 ### Ferramentas e portões
 
-- `npm run teste:diesel` (`tools/diesel-valida.ts`): lenta, governadores, pressões (tabela 2.5), bandas por família (Apêndice A, tabela 4.4), fumaça, freio-motor, potência, veículo e NaN, em paralelo; sai ≠ 0 em falha nova; os desvios conhecidos (abaixo) aparecem como "desvio". `npm run troca:diesel` (`tools/diesel-troca.ts`): troca de preset com o motor ligado na ordem de mensagens da página, volta à lenta. `npm run lenta:diesel`: 16 presets × 20 °C e −5 °C, partida de verdade, aceleradas aos 8 s e 13 s (notch 4 na locomotiva, degrau de 50% no gerador), zero apagamentos, rotação final ±3% do alvo do governador (±8% nos mecânicos com a água fria). `npm run governador:diesel`. `tools/diesel-bandas.ts` é a porta de `analyze2.py` (conferida nas gravações: Hilux 1GD, Cat C15 e EMD 710 dão os números do Apêndice A). `tools/diesel-render.ts <preset> <cenário> <pasta> [ouvinte] [--resumo]`, `tools/diesel-medir.ts`. `npm run navegador:diesel` serve o `dist/` em `/data/engine/` e testa a página no Chromium e no Firefox (`… dist firefox`).
+- `npm run teste:diesel` (`tools/diesel-valida.ts`): lenta, governadores, pressões (tabela 2.5), bandas por família (Apêndice A, tabela 4.4), fumaça, freio-motor, potência, veículo e NaN, em paralelo; sai ≠ 0 em falha nova; os desvios conhecidos (abaixo) aparecem como "desvio". Leva ~20 min (1190 s medidos em 18/11/2026; é de longe o teste mais demorado da suíte, e o grupo `nan` roda num processo só). `npm run troca:diesel` (`tools/diesel-troca.ts`): troca de preset com o motor ligado na ordem de mensagens da página, volta à lenta. `npm run lenta:diesel`: 16 presets × 20 °C e −5 °C, partida de verdade, aceleradas aos 8 s e 13 s (notch 4 na locomotiva, degrau de 50% no gerador), zero apagamentos, rotação final ±3% do alvo do governador (±8% nos mecânicos com a água fria). `npm run governador:diesel` (rodado sozinho sai com código 1: duas das medidas dele só contam como "desvio" dentro do `teste:diesel`, que tem a lista `DESVIOS`). `tools/diesel-bandas.ts` é a porta de `analyze2.py` (conferida nas gravações: Hilux 1GD, Cat C15 e EMD 710 dão os números do Apêndice A). `tools/diesel-render.ts <preset> <cenário> <pasta> [ouvinte] [--resumo]`, `tools/diesel-medir.ts`. `npm run navegador:diesel` serve o `dist/` em `/data/engine/` e testa a página no Chromium e no Firefox (`… dist firefox`).
 
 ### Segunda passada (som, combustão e câmbio)
 
-Alvo principal: o conjunto **real3** (`scratchpad/real3/diesel/`, 25 gravações com banda ≥ 15 kHz, grave presente e rotação conferida; tabela por classe em `RESUMO.md`). Só razões entre bandas (vários vídeos têm controle automático de ganho). As tabelas do DIESEL.md (Apêndice A, vídeos do YouTube, vários lo-fi) ficam como referência interna. `tools/diesel-bandas.ts` ganhou a banda 30–60 Hz e o **CV do knock** da mesma definição do RESUMO (altura da envoltória 1–4 kHz por intervalo de ignição, `std(Δa)/(√2·média)`, mediana de janelas de 3 s; conferido: Cat C15 lenta 0,15, Amarok 0,22, iguais ao RESUMO); `diesel-valida.ts` ganhou o grupo `real3` (9 classes × 6 bandas, centroide e CV, mais os tons de turbo), `cambio` e `troca`.
+Alvo principal: o conjunto **real3** (25 gravações com banda ≥ 15 kHz, grave presente e rotação conferida; tabela por classe em `RESUMO.md`). Ele ficava em `scratchpad/real3/diesel/`, uma pasta temporária fora do repositório que não existe mais: os números do real3 que os testes usam estão copiados em `tools/diesel-valida.ts` e não podem ser refeitos sem baixar as gravações de novo (o acervo novo fica em `referencias/`, ver `PLANO.md`). Só razões entre bandas (vários vídeos têm controle automático de ganho). As tabelas do DIESEL.md (Apêndice A, vídeos do YouTube, vários lo-fi) ficam como referência interna. `tools/diesel-bandas.ts` ganhou a banda 30–60 Hz e o **CV do knock** da mesma definição do RESUMO (altura da envoltória 1–4 kHz por intervalo de ignição, `std(Δa)/(√2·média)`, mediana de janelas de 3 s; conferido: Cat C15 lenta 0,15, Amarok 0,22, iguais ao RESUMO); `diesel-valida.ts` ganhou o grupo `real3` (9 classes × 6 bandas, centroide e CV, mais os tons de turbo), `cambio` e `troca`.
 
 O que mudou, pela física:
 
@@ -1205,7 +1206,7 @@ As funções de aviação moram em `src/engines/ronco/aviacao.ts` (`instalarAvia
 
 ### Ferramentas e portões
 
-`npm run teste:radial` (`tools/radial-valida.ts`, 12 grupos em paralelo e o de CPU sozinho no fim, ~2–3 min), `npm run lenta:radial` (26 presets × 20 °C e −5 °C, partida de verdade, acelerada aos 12 s, rotação final aos 35–40 s: 52/52; a janela era 25–30 s e o Verner 5S, que pega aos 7 s, só passava porque os estouros exagerados freavam o motor pela contrapressão), `npx tsx tools/radial-estouros.ts [ids]` (estouros e falhas por regime), `npm run geometria:radial`, `npm run navegador:radial` (Chromium e Firefox, `dist/`). `tools/radial-bandas.ts` é a porta de `medir2.py` (conferida: Yak-52 e DC-3 dão os números do Apêndice A); `tools/radial-cena.ts` monta o preset no portador e ouve parado de lado pela Cena (propagação, solo, hélice). CPU: R-4360 subindo de giro, 26–28% do tempo real em Node (62 tubos, 32 nós), contra o portão de 60%.
+`npm run teste:radial` (`tools/radial-valida.ts`, 12 grupos: 11 em paralelo e o de CPU sozinho no fim, ~2–3 min), `npm run lenta:radial` (26 presets, os 16 radiais com lenta e os 10 de aviação; a Megola fica de fora; × 20 °C e −5 °C, partida de verdade, acelerada aos 12 s, rotação final aos 35–40 s: 52/52; a janela era 25–30 s e o Verner 5S, que pega aos 7 s, só passava porque os estouros exagerados freavam o motor pela contrapressão), `npx tsx tools/radial-estouros.ts [ids]` (estouros e falhas por regime), `npm run geometria:radial`, `npm run navegador:radial` (Chromium e Firefox, `dist/`). `tools/radial-bandas.ts` é a porta de `medir2.py` (conferida: Yak-52 e DC-3 dão os números do Apêndice A); `tools/radial-cena.ts` monta o preset no portador e ouve parado de lado pela Cena (propagação, solo, hélice). CPU: R-4360 subindo de giro, 26–28% do tempo real em Node (62 tubos, 32 nós), contra o portão de 60%.
 
 ### Alvo × medido (`npm run teste:radial`: 141 medidas, 110 ok, 31 desvios documentados, 0 falhas)
 
@@ -1218,7 +1219,7 @@ As funções de aviação moram em `src/engines/ronco/aviacao.ts` (`instalarAvia
 | bandas lenta 9 cil. a 12 m (Yak-52) | +4 / −6 / −15 / −14 | +9,7 / −8,8 / −12,8 / −13,7 (**desvio** no grave) |
 | bandas lenta 9 cil. a 4 m (T-6G) | +12 / −1 / +2 / 0 | 0 / −0,7 / +2,9 / +2,5 (**desvio** no grave) |
 | bandas lenta 18 cil. estaques a 8 m (Corsair) | −4 / −5 / −9 / −14,5 | +1,1 / −10,6 / −12,6 / −12,6 (**desvio**) |
-| bandas lenta 7 cil. a 4 m (Rotec) | +3 / −8 / −4 / −6 | +10,2 / +0,7 / +3,1 / +1,7 (**desvio**) |
+| bandas lenta 7 cil. a 4 m (Rotec) | +3 / −8 / −4 / −6 | −1,3 / +1,0 / +3,3 / +1,8 (**desvio**; com o redutor 3:2 da ficha corrigida na auditoria: antes, com a hélice direta, o grave dava +10,2) |
 | bandas decolagem Yak (75 m), T-6 (50 m), Corsair (150 m) | ver 4.1 | grave da BPF 3–11 dB acima, agudo 4–10 dB abaixo (**desvio**) |
 | centroides (lenta DC-3, Yak, P-47, Corsair; decolagem T-6) | ±30% | 360 / 351 / 365 / 375 / 794 Hz |
 | R-2800 estaques na lenta: 4,5ª contra a 9ª · P-47: 9ª contra a 4,5ª | ≥ −3 · ≥ 0 dB | +2,6 · +24,5 dB |
@@ -1244,7 +1245,7 @@ As funções de aviação moram em `src/engines/ronco/aviacao.ts` (`instalarAvia
 | Cessna 172: lenta quente a 20 e −5 °C · decolagem a 35 m/s | 650 ± 20 rpm · BPF ≈ 90 Hz, M 0,80, f_ign/BPF 1 | 646 / 646 · 88,5 Hz, 0,79, 1,001 |
 | R44 (O-540 + rotor): Nr · droop (0,5 → 0,75 em 1 s) · recuperação | 408 ± 2% · 2–3% · ≤ 1,5 s | 408,0 · 0,7% (**desvio**) · 1,1 s |
 | R-4360, 10 s subindo de giro em Node | ≤ 60% | 28% |
-| lenta de todos os radiais e dos 10 de aviação a 20 e −5 °C | zero apagamentos, ±3% | 52/52 |
+| lenta de 16 radiais (sem a Megola) e dos 10 de aviação a 20 e −5 °C | zero apagamentos, ±3% | 52/52 |
 
 ### Desvios conhecidos
 
@@ -1318,7 +1319,7 @@ O resto é a subclasse: `tune` (janelas, velas, áreas em boreEq², CR com o tet
 
 ### Ferramentas e portões
 
-`npm run teste:rotativo` (`tools/rotativo-valida.ts`, 16 grupos em paralelo, ~100 s), `npm run lenta:rotativo` (16 presets × 20 °C e −5 °C, partida de verdade, acelerada aos 12 s), `npm run navegador:rotativo` (Chromium e Firefox, `dist/`). `tools/rotativo-bandas.ts` é a porta de `medir_w.py`/`pops.py` (FFT, Welch e mediana do radial; Hilbert, autocorrelação da envoltória, pente de 4 harmônicos, CVciclo, p90/p10, estalos): conferida nas gravações, dá os números do Apêndice A (RX-7 Commons 16–20 s: +1,6 / −0,9 / −10,9 / −10,5 / −16,5, 541 Hz, ign +18,8 / +17,2 / +23,9, CVc 0,23, p90/p10 6,8, 0,5 estalo/s; RX-8 a 5 000: vagar 11,6%, 787B a 7 700: 0,5%, 787B lenta: 15,1 estalos/s contra 15,8). `tools/rotativo-cena.ts` monta o preset no portador e ouve pela Cena. CPU: o R26B a 7 700 rpm em Node, 14% do tempo real (portão 45%).
+`npm run teste:rotativo` (`tools/rotativo-valida.ts`, 16 grupos: 15 em paralelo e o de CPU sozinho no fim, ~110 s), `npm run lenta:rotativo` (16 presets × 20 °C e −5 °C, partida de verdade, acelerada aos 12 s), `npm run navegador:rotativo` (Chromium e Firefox, `dist/`). `tools/rotativo-bandas.ts` é a porta de `medir_w.py`/`pops.py` (FFT, Welch e mediana do radial; Hilbert, autocorrelação da envoltória, pente de 4 harmônicos, CVciclo, p90/p10, estalos): conferida nas gravações, dá os números do Apêndice A (RX-7 Commons 16–20 s: +1,6 / −0,9 / −10,9 / −10,5 / −16,5, 541 Hz, ign +18,8 / +17,2 / +23,9, CVc 0,23, p90/p10 6,8, 0,5 estalo/s; RX-8 a 5 000: vagar 11,6%, 787B a 7 700: 0,5%, 787B lenta: 15,1 estalos/s contra 15,8). `tools/rotativo-cena.ts` monta o preset no portador e ouve pela Cena. CPU: o R26B a 7 700 rpm em Node, 14% do tempo real (portão 45%).
 
 Para a rodada de som (fora dos portões, usam o kit `tools/ouvido` e as gravações de `referencias/rotativo`, fora do git): `tools/rotativo-fontes.ts` (render na condição da gravação e o conjunto do orçamento por fonte com a mesma semente), `tools/rotativo-regua.py` + `rotativo-regua.json` (os casos casados e a tabela dos critérios), `tools/rotativo-varredura.sh` (Ø da saída e ponteira do mínimo ao máximo), `tools/rotativo-pulso.ts` (onde nascem e onde se perdem os harmônicos da ignição), `tools/rotativo-padrao.ts` (a sequência queimou/falhou da lenta), `tools/rotativo-periodico.ts` (a periodicidade com os ruídos desligados, lição da F1) e `tools/rotativo-espectro.py` (espectrogramas lado a lado de aceleradas).
 ### Alvo × medido (`npm run teste:rotativo`: 151 medidas: 135 ok, 16 desvios documentados, 0 falhas)
@@ -1700,7 +1701,7 @@ O projeto está em [`ELETRICO.md`](ELETRICO.md); aqui fica o que foi feito, como
 
 ### Ferramentas e portões
 
-`npm run teste:eletrico` (`tools/eletrico/valida.ts`, 13 grupos, ~2 min), `npm run lenta:eletrico` (os 18 presets em quatro estados: 18/18), `npm run navegador:eletrico` (Chromium, Firefox e a reserva). Portões da etapa: `paridade:ronco`, `paridade:turbina` e `paridade:acoustics` idênticos; `teste:cena` com as mesmas 105 medidas e os mesmos estados de antes (93 ok, 12 desvios: só o CPU e as coletas do laço variam de rodada para rodada); `teste:diesel`, `teste:radial`, `lenta:diesel`, `lenta:radial`, `typecheck`, `build` e os `navegador:*` de todas as páginas no `dist/`.
+`npm run teste:eletrico` (`tools/eletrico/valida.ts`, 13 grupos em série, ~35 s), `npm run lenta:eletrico` (os 18 presets em quatro estados: 18/18), `npm run navegador:eletrico` (Chromium, Firefox e a reserva). Portões da etapa: `paridade:ronco`, `paridade:turbina` e `paridade:acoustics` idênticos; `teste:cena` com as mesmas 105 medidas e os mesmos estados de antes (93 ok, 12 desvios: só o CPU e as coletas do laço variam de rodada para rodada); `teste:diesel`, `teste:radial`, `lenta:diesel`, `lenta:radial`, `typecheck`, `build` e os `navegador:*` de todas as páginas no `dist/`.
 
 ### Alvo × medido (`npm run teste:eletrico`: 94 medidas, 92 ok, 2 desvios documentados, 0 falhas)
 
@@ -1841,8 +1842,8 @@ As 14 fichas da seção 5: K4s, A4, D51, 844, Big Boy, Y6b, Shay, Maria Fumaça,
 
 ### Ferramentas e portões
 
-- `npm run gravacoes:vapor` (`tools/vapor-gravacoes.ts`, passo 1): a porta em TypeScript dos scripts do projetista (`tools/vapor-analise.ts`) contra o Apêndice A. O Butterworth/filtfilt bate com o scipy em 12 algarismos. Resultado: 135 ok e 6 desvios, que são notas do Apêndice que o próprio `apito.py` não acha com os parâmetros do texto.
-- `npm run teste:vapor` (`tools/vapor-valida.ts`): 14 grupos em paralelo, ~25 s.
+- `npm run gravacoes:vapor` (`tools/vapor-gravacoes.ts`, passo 1): a porta em TypeScript dos scripts do projetista (`tools/vapor-analise.ts`) contra o Apêndice A. O Butterworth/filtfilt bate com o scipy em 12 algarismos. Resultado na etapa: 135 ok e 6 desvios, que são notas do Apêndice que o próprio `apito.py` não acha com os parâmetros do texto. **Precisa das gravações**, que ficam fora do git: sem `-- --pasta <pasta dos WAV>` ele procura numa pasta temporária da etapa que não existe mais e termina com erro (`ENOENT`, código 1); por isso não entra no `verificar`.
+- `npm run teste:vapor` (`tools/vapor-valida.ts`): 14 grupos (13 em paralelo e o de CPU sozinho no fim), 30–60 s.
 - `npm run lenta:vapor` (`tools/vapor-lenta.ts`): os 14 presets no portador de uso real. Confere parado sem escape, arrancada no molhado com patinação, chuffs/s exatos em cruzeiro, drifting e ausência de NaN: 14/14.
 - `npm run navegador:vapor`: Chromium e Firefox, servindo o `dist/`.
 
@@ -1928,7 +1929,7 @@ O motivo de cada um está no `DESVIOS` de `tools/vapor-valida.ts`. Por grupo:
 
 ## Validação
 
-O que foi medido nas simulações offline (Node) durante o desenvolvimento:
+O que foi medido nas simulações offline (Node) durante o desenvolvimento do Ronco e da Turbina (as medidas das outras famílias estão na seção de cada uma). Os números abaixo saíram de harnesses da época que não entraram no repositório (o teste de lenta dos 68 veículos a 20 °C e −5 °C, o de corte de giro, a auditoria de câmbio); o que existe hoje para o Ronco é a paridade com o legado, `npm run lenta:ronco` (`tools/ronco-lenta.ts`, escrito na auditoria de 18/11/2026 no lugar dos harnesses perdidos: os 68 carros a 20 °C e a −5 °C, partida, lenta, acelerada, corte de giro em ponto morto e troca de carro com o motor rodando; ~3 min), `npm run auditoria:fichas` (câmbio de todas as famílias) e `node tools/analise-som/regressao.js` (todos os presets: partida a frio, lenta, acelerada, em marcha e arcade; acusa NaN, motor apagando, lenta fora do lugar e saturação):
 
 - **Nível × rotação em carga total** (sem a compensação de loudness): cresce de forma monotônica uns 20 a 23 dB entre 15% e 95% da faixa vermelha (V8 cross-plane, V8 flat-plane, 4 em linha, boxer 6, turbos). Antes da irradiação de monopolo o nível saturava em ~40% do giro e caía perto do corte.
 - **Balanço espectral contra gravações reais** (Wikimedia Commons; bandas em dB relativas à banda de 150–400 Hz, canal mono):
@@ -1978,6 +1979,8 @@ O que foi medido nas simulações offline (Node) durante o desenvolvimento:
 - O ruído de jato é um modelo estatístico, não uma simulação de turbulência: na Turbina, bandas de Strouhal que andam com a velocidade do jato; na ponteira do Ronco, duas bandas fixas moduladas pela velocidade de cada pulso.
 - Na Turbina, o avião não decola nem acelera na pista. A velocidade na passagem é escolhida pelo usuário.
 - Onde a ficha técnica não é pública, usei um valor típico: número de palhetas do estator, pás da turbina, comprimento exato dos tubos.
+- Esta lista é a do Ronco e da Turbina. As limitações das outras famílias estão nas seções "Desvios conhecidos" e "Pendente (TODO)" de cada uma, acima, e o que a auditoria achou de incorreto ou incompleto no conjunto está em [`AUDITORIA.md`](AUDITORIA.md).
+- Os testes de cada família (`teste:*`) aceitam como "desvio documentado" medidas fora do alvo: zero falhas não quer dizer que o som bate com as gravações (das bandas medidas contra gravação no Radial e no Rotativo, quase todas estão na lista de desvios).
 
 ## Como adicionar um carro ou avião
 
@@ -2003,6 +2006,22 @@ O que foi medido nas simulações offline (Node) durante o desenvolvimento:
 | `tipD` | Diâmetro da ponteira (pol.), só a saída: muda a velocidade do gás em cada pulso e o sopro do jato, não a acústica do escape (padrão: `pipeD`) |
 | `engine`, `cooling` | Posição do motor (`'front'`, `'mid'`, `'rear'`; motos `'mid'` por padrão) e arrefecimento (`'water'`, `'air'`) |
 
-A ordem de ignição precisa ser válida para o virabrequim. Ela é verificada por `EngineGeometry.build(preset).valid`.
+A ordem de ignição precisa ser válida para o virabrequim. Ela é verificada por `build(preset).valid` (`src/engines/ronco/geometria.ts`).
 
 **Avião:** acrescente uma linha em `src/engines/turbina/presets.ts` usando as bases `FAN`, `GTF`, `JET`, `MIL`, `TP` ou `PT6` e o auxiliar `plane(...)`. O significado de cada campo está comentado no topo do arquivo.
+
+**Ronco e Turbina têm a paridade no caminho.** `npm run paridade:ronco` e `paridade:turbina` comparam a lista de presets com a do legado (68 carros e motos, 34 aviões), campo a campo e na mesma ordem. Corrigir um campo de um preset que já existe pede uma linha em `CORRECOES_RONCO` ou `CORRECOES_TURBINA` (`tools/legado.ts`), com o motivo. Um preset novo (um `id` que não existe no legado) fica fora da paridade: ela avisa quais são e segue. Rode `npm run lenta:ronco <id>` no carro novo (partida a 20 °C e a −5 °C, lenta, corte de giro) e `npm run auditoria:fichas` para conferir o câmbio. A família **Aviação** do Ronco (`PRESETS_AVIACAO`, no mesmo arquivo, com os campos `aviation`, `helice` ou `rotor`, `portadores` e `nivelEscape`) fica fora da paridade, justamente por isso.
+
+**Outras famílias.** Cada uma tem a lista em `src/engines/<família>/presets.ts`, um objeto por veículo, com o tipo e os campos comentados no topo do arquivo:
+
+| Família | Lista | Tipo e padrões | Onde o veículo pode ser ouvido |
+|---|---|---|---|
+| Diesel | `PRESETS` | `PresetDiesel` (os campos do Ronco mais os do diesel), `PADRAO_DIESEL` | `portadores`: `'carro'`, `'gerador'`, `'locomotiva'`, `'nenhum'` (bancada) |
+| Radial | `PRESETS_RADIAL` | `PresetRadial`, `PADRAO_RADIAL` | `portadores`: `'helice'`, `'rotor'`, `'carro'`, `'nenhum'` |
+| Rotativos | `PRESETS_ROTATIVO` | `PresetRotativo`, `PADRAO_ROTATIVO` (o motor de palhetas tem `tipo: 'palhetas'`) | `portadores`: `'carro'`, `'helice'`, `'rotor'`, `'gerador'`, `'ferramenta'`, `'nenhum'` |
+| Vapor | `PRESETS_VAPOR` | `PresetVapor` (medidas em unidades SI; `pol()`, `psi()` e `mm()` convertem) | `portadores`: `'locomotiva'`, `'gerador'`, `'carro'`, `'trator'`, `'barco'`, `'nenhum'` |
+| Elétrico | `PRESETS_ELETRICO` | `PresetEletrico` (definido em `dsp.ts`); o que é estimado vai listado em `aprox` | `portador.tipo`: `'carro'`, `'trem'`, `'drone'`, `'bancada'` |
+
+Depois de acrescentar, rode `npm run teste:<família>` e `npm run lenta:<família>`: a lenta e a partida percorrem todos os presets; as medidas de potência e de bandas usam listas de ids escritas no teste, então um preset novo só entra nelas se for acrescentado lá.
+
+**Preset de passagem:** uma linha em `PRESETS_PASSAGEM` (`src/pages/passagem/presets.ts`, tipo `PresetPassagem`): portador, família e preset do motor, ambiente, velocidade, distância lateral, altitude e o comando (pedal, marcha, notch, degrau de carga, comando do vapor). A combinação motor × portador tem de estar em `COMPAT` e em `USO_REAL` (`src/carriers/compat.ts`), e o preset do motor tem de listar o portador.

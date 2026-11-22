@@ -9,6 +9,7 @@
 //  - fração periódica 1–6 kHz (energia nas linhas harmônicas da ignição, Welch 16384, ±1 bin).
 //
 //   npx tsx tools/radial-bandas.ts "nome:arquivo.wav:t0:t1:N:fileiras:f_ign:B:i" ...   (B = 0 sem hélice; i = rpm motor/hélice)
+import { lerWavMono } from './wav';
 import fs from 'node:fs';
 
 export const BANDAS: [number, number][] = [[60, 150], [150, 400], [400, 1000], [1000, 2500], [2500, 6000], [6000, 12000]];
@@ -146,27 +147,8 @@ export function medir(seg0: ArrayLike<number>, sr: number, op: { N: number; file
   };
 }
 
-export function lerWavMono(arq: string): { x: Float64Array; sr: number } {
-  const b = fs.readFileSync(arq);
-  let p = 12, sr = 48000, ch = 1, bits = 16, fmt = 1, dados: Buffer | null = null;
-  while (p + 8 <= b.length) {
-    const id = b.toString('ascii', p, p + 4), n = b.readUInt32LE(p + 4);
-    if (id === 'fmt ') { fmt = b.readUInt16LE(p + 8); ch = b.readUInt16LE(p + 10); sr = b.readUInt32LE(p + 12); bits = b.readUInt16LE(p + 22); }
-    if (id === 'data') { dados = b.subarray(p + 8, p + 8 + n); break; }
-    p += 8 + n + (n & 1);
-  }
-  if (!dados) throw new Error('WAV sem dados');
-  const bps = bits / 8, n = Math.floor(dados.length / (bps * ch)), x = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    let s = 0;
-    for (let c = 0; c < ch; c++) {
-      const o = (i * ch + c) * bps;
-      s += fmt === 3 ? dados.readFloatLE(o) : bits === 16 ? dados.readInt16LE(o) / 32768 : dados.readInt32LE(o) / 2147483648;
-    }
-    x[i] = s / ch;
-  }
-  return { x, sr };
-}
+// leitura de WAV mono (média dos canais): a de tools/wav.ts, a única que lê todos os formatos direito
+export { lerWavMono };
 
 export const linhaTabela = (nome: string, r: Medida) => {
   const v = (x: number, d = 1) => (Number.isFinite(x) ? x.toFixed(d) : 'nan');

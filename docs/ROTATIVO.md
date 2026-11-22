@@ -1,5 +1,17 @@
 # Rotativos: projeto da etapa 4
 
+> **O que mudou na implementação** (auditoria de 18/11/2026). Este documento é o projeto; o que está no código é o que o [`TECNICO.md`](TECNICO.md#rotativos) descreve, na seção "Decisões e desvios do ROTATIVO.md tomados na implementação". Os principais:
+>
+> - **Pós-queima (1.4).** É distribuída em três pontos (primário, ponto quente, boca) com a envoltória presa ao evento; depois da revisão do "som de ar" a parte da boca caiu de 0,7 para 0,45 e o espalhamento de 15 para 9 ms. A fração de HC segue o vácuo do coletor, não a distância à lenta.
+> - **Atrito e queima.** O atrito usa 2× a cilindrada nominal; a queima fica mais lenta com o vácuo (`kBurn × (1 + 1,65·vácuo)`).
+> - **Calibração.** É feita com o escape de fábrica do preset, não com a série de referência que o documento pedia.
+> - **X-Engine (4).** IC a 620° (o texto traz ≈ 560); o XTS-210, diesel no real, roda a centelha com CR 18 (aproximação declarada).
+> - **Fichas (6.2).** RX-7 FD com a 5ª de 0,761 (a ficha diz 0,806); 787B com o mapa `burble` (não `popbang`); geradores do X-Engine com alternador leve. O alvo de 2 750 rpm do RX-8 a 100 km/h não fecha com a própria ficha (dá 3 011).
+> - **Ponteira.** O jato da ponteira (`escape.ponteira`) é separado do Ø da saída.
+> - **Compatibilidade (6.3).** O rotativo entrou também no rotor (AE50R no Camcopter) e no gerador (X-Engine); a tabela 1.6 do `CENA.md` não foi atualizada.
+> - **Apêndice B.** O volume da câmara do 13B dá 654,7 cm³ (o apêndice escreve 654,3).
+> - **Alvos de 3.1 a 3.3.** As seis comparações de bandas com gravações estão na lista de desvios; as medidas de meia-ordem do teste não medem nada (devolvem −∞). Ver `AUDITORIA.md`.
+
 Documento de projeto da etapa 4 (ver `PLANO.md`). Define como o motor Wankel estende o `EngineDSP` do Ronco sem mudar o som a gasolina (câmara trocoidal em vez de cilindro, janelas em vez de válvulas, 3 câmaras por rotor, ciclo de 1 080° do eixo excêntrico), o escape dos rotativos (pré-silencioso, turbo sequencial, megafone do 787B, lateral × periférico), os alvos medidos nas gravações, o X-Engine da LiquidPiston e o motor de palhetas (ambos marcados **aproximação**), os presets com ficha, a página `rotativo.html` e o plano de implementação com medidas. A implementação segue este texto à letra; o que estiver marcado **decisão** não se renegocia dentro da etapa sem anotar no relatório. Unidades: SI; **ângulos em graus do eixo excêntrico** (°e), contados como no `dsp.ts` (0° = PMS de ignição da câmara; ciclo da câmara de 1 080°e no Wankel, 720° no X-Engine). As linhas citadas (`dsp.ts:NNN`) são as de `src/engines/ronco/dsp.ts` no commit `d313d2f`.
 
 - [0. Decisões](#0-decisões)

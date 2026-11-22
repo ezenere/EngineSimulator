@@ -13,9 +13,11 @@ export const COMPAT: Record<TipoPortador, readonly FamiliaMotor[]> = {
   locomotiva: ['diesel', 'vapor'],
   trem: ['eletrico', 'nenhum'],
   aviao: ['turbina'],
-  // (vapor, VAPOR.md 4.4: trator a vapor e barco; o diesel marítimo fica para depois, sem preset)
+  // (vapor, VAPOR.md 4.4: trator a vapor e barco. O diesel marítimo saiu da tabela: `Barco` trata o motor como
+  // `VaporDSP` (carriers/barco.ts: `impor`, `wTrem`), então um diesel passava em `validarCompat` e quebrava no
+  // primeiro bloco. Volta quando o barco aceitar um `Motor` qualquer e houver preset de diesel marítimo.)
   trator: ['vapor'],
-  barco: ['vapor', 'diesel'],
+  barco: ['vapor'],
   nenhum: ['pistao', 'turbina', 'turboelice', 'turboeixo', 'diesel', 'radial', 'rotativo', 'vapor', 'eletrico'],
   // Elétrico (ELETRICO.md 4.3): o multirrotor
   drone: ['eletrico'],
@@ -24,7 +26,12 @@ export const COMPAT: Record<TipoPortador, readonly FamiliaMotor[]> = {
 /**
  * O que existe hoje (adaptadores de motor, docs/TECNICO.md): famílias com adaptador `Motor` e, por portador, os
  * motores de verdade que a Passagem monta. A Turbina não tem turboeixo (nenhum preset com `arch: 'turboeixo'`); o rotor
- * leva o pistão de aviação do Ronco (R22, R44, Bell 47, S300) ou o radial do S-55 (etapa 3), ou fica sem motor (`nenhum`).
+ * leva o pistão de aviação do Ronco (R22, R44, Bell 47, S300), o radial do S-55 (etapa 3) ou o Wankel do Camcopter S-100
+ * (AE50R, etapa 4), ou fica sem motor (`nenhum`).
+ *
+ * `USO_REAL` é a regra do produto (PLANO.md): só se ouve cada motor nos portadores onde ele foi usado de verdade. É um
+ * subconjunto de `COMPAT` (tools/passagem-presets.ts confere). Quem decide quais PRESETS de uma família entram em cada
+ * portador é o campo `portadores` do preset (`presetsDoMotor` em src/pages/passagem/presets.ts).
  */
 export const ADAPTADORES: readonly FamiliaMotor[] = ['nenhum', 'pistao', 'diesel', 'turboelice', 'turbina', 'radial', 'rotativo',
   'eletrico', // Elétrico (etapa 6): MotorEletrico, src/engines/eletrico/motor.ts
@@ -44,8 +51,11 @@ export const USO_REAL: Record<TipoPortador, readonly FamiliaMotor[]> = {
   aviao: ['turbina'],
   trator: ['vapor'],
   barco: ['vapor'],
-  nenhum: [
-    'eletrico'], // Elétrico: bancada (furadeira, liquidificador, motor industrial)
+  // sem portador = a bancada (CENA.md 1.6: coluna "nenhum (bancada)", ✓ para todas as famílias). É como a página de cada
+  // família toca o motor (eixo livre ou dinamômetro) e o que os presets declaram em `portadores: [..., 'nenhum']`; no
+  // Elétrico é o `portador.tipo: 'bancada'` da furadeira, do liquidificador e do motor industrial. A Passagem não lista
+  // este portador (nada passa), então esta linha não habilita nada nela.
+  nenhum: ['pistao', 'turbina', 'turboelice', 'diesel', 'radial', 'rotativo', 'vapor', 'eletrico'],
   drone: ['eletrico'], // Elétrico: Mavic
 };
 

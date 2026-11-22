@@ -1,5 +1,16 @@
 # Radial: projeto da etapa 3
 
+> **O que mudou na implementação** (auditoria de 18/11/2026). Este documento é o projeto; o que está no código é o que o [`TECNICO.md`](TECNICO.md#radial-e-aviação-a-pistão) descreve. Os pontos em que os dois diferem (a lista completa está em "Desvios conhecidos" de lá):
+>
+> - **Geometria (1.1, 1.2).** A ordem do 3 cilindros é `1-3-2` (a `1-2-3` da tabela dispara a 120-120-480°); os intervalos do 9 cilindros variam ±7,2° (o texto diz ±5°).
+> - **Mistura e magnetos (2.2, 3.6).** `qMix` tem o fator pobre (a fórmula do texto dava 1 com 0,55); um magneto só atrasa a queima ×1,6, não ×1,2.
+> - **Partida (3.4).** Arranque direto com 3,2× o atrito frio (a fórmula 8·L + 60 N·m não vence o atrito acima de ~30 L); ar de partida com 0,3 da vazão e janela de 3–100°. Os estouros da partida foram cortados: chance de 1,5% + 6%·e^(−t/8 s) e `k` 0,25, contra os 35%, τ 20 s e `k` 0,9 daqui, que davam 20–30 estouros.
+> - **Hélice (3.3).** O passo mínimo absorve 90% da potência na rotação máxima (com os 25% do texto o R-2800 disparava). O portador ganhou `nMin`, `beta0`, `onLenta`, `kapK`, `largoK` e a tabela `HELICES_PISTAO`.
+> - **Aviação no Ronco (6).** A família fica em `PRESETS_AVIACAO`/`FAMILIA_AVIACAO`, fora de `FAMILIES`, porque a paridade confere os 68 presets e as 9 famílias contra o legado. O comando de potência é a manete da Turbina, não o pedal.
+> - **Monaco-Trossi, Megola, Sherman (decisão 13).** O Trossi roda em 4 tempos (aproximação), a Megola não tem lenta e fica fora do `lenta:radial`, o Sherman não tem o ruído da esteira; o Ford Trimotor com 3 instâncias não foi feito.
+> - **Alvos de 4.1.** Das comparações de bandas com gravações quase todas estão na lista de desvios (grave da lenta de perto, agudo dos estaques, decolagem). A faixa de 12 dB entre os aviões a 12 m não cabe nos `nivelEscape` deste próprio documento (medido: 38 dB).
+> - **R44 (6).** O droop do governador do rotor sai 0,7%, contra os 2–3% daqui.
+
 Documento de projeto da etapa 3 (ver `PLANO.md`). Define a geometria do motor radial (fileira única com biela-mestra, dupla fileira, quatro fileiras helicoidais), o escape radial, a dinâmica (rotação baixa, redução da hélice, inércia alta, partida com "tosses"), a hélice e o rotor como portadores, os alvos medidos nas gravações, os presets com ficha, a família "aviação" do Ronco, a página `radial.html` e o plano de implementação com medidas. A implementação segue este texto à letra; o que estiver marcado **decisão** não se renegocia dentro da etapa sem anotar no relatório. Unidades: SI; ângulos em graus de virabrequim (°), ciclo de 720° (4 tempos). As linhas citadas (`dsp.ts:NNN`) são as de `src/engines/ronco/dsp.ts` no commit `b00325d`; as do `geometria.ts` idem.
 
 - [0. Decisões](#0-decisões)

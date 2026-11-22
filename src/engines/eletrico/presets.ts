@@ -64,7 +64,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     portador: { tipo: 'carro', massa: 1580, CdA: 0.28 * 2.27, Crr: 0.011, rw: 0.316 },
   },
   {
-    id: 'dolphin', name: 'BYD Dolphin', tag: 'PMSM 8 polos · SiC aleatória', family: 'carros', nome: 'BYD Dolphin', familia: 'eletrico',
+    id: 'dolphin', name: 'BYD Dolphin Plus', tag: 'PMSM 8 polos · SiC aleatória', family: 'carros', nome: 'BYD Dolphin Plus (150 kW)', familia: 'eletrico',
     maquina: 'pmsm', p: 4, Zs: 48, Tn: 310, Pmax: 150000, rpmBase: 4620, rpmMax: 16000, J: 0.035,
     inversor: { tipo: 'sic', fc: 10000, modo: 'aleatoria', delta: 0.1 },
     reducao: { estagios: [{ Zp: 19, Zc: 61 }, { Zp: 20, Zc: 66 }], eta: 0.97 }, ventilacao: null, carcaca: 'carro',
@@ -83,7 +83,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     niveis: { motor: 88, inversor: 60, reducao: 94, ventilador: 0 }, Tregen: 0.5,
     fontes: { motor: dentro([-1.2, 0, 0.3]), inversor: dentro([-0.9, 0, 0.4]), reducao: dentro([-1.5, 0, 0.3]) }, vMaxKmh: 322,
     aprox: ['p', 'Zs', 'reducao (4,0, 1 estágio)', 'fc', 'Tn'],
-    portador: { tipo: 'carro', massa: 854, CdA: 1.05, Crr: 0.012, rw: 0.335 },
+    portador: { tipo: 'carro', massa: 840, CdA: 1.05, Crr: 0.012, rw: 0.335 },
   },
   // ------------------------------------------------------------------ trens e metrôs
   {
@@ -111,16 +111,17 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
   },
   {
     id: 'vectron', name: 'Siemens Vectron AC', tag: 'IGBT 1 kHz · auto', family: 'trens', nome: 'Siemens Vectron AC', familia: 'eletrico',
-    maquina: 'inducao', p: 2, Zs: 48, Zr: 40, Tn: 12000, Pmax: 1600000, rpmBase: 1280, rpmMax: 3500, J: 25, escorregamentoNominal: 0.02,
+    // roda de 1 250 mm nova (truque SF 4 da Siemens; a de 1 150 mm é a do Taurus): T_n = 300 kN·0,625/(3,70·0,97·4) e base = P/T_n
+    maquina: 'inducao', p: 2, Zs: 48, Zr: 40, Tn: 13050, Pmax: 1600000, rpmBase: 1170, rpmMax: 3500, J: 25, escorregamentoNominal: 0.02,
     inversor: { tipo: 'igbt', fc: 1000, modo: 'auto', sincrona: IGBT_TREM },
     reducao: { estagios: [{ Zp: 27, Zc: 100 }], eta: 0.97 }, ventilacao: { forcada: true, B: 9, rpm: 2950 }, carcaca: 'trem',
     niveis: { motor: 100, inversor: 92, reducao: 96, ventilador: 95 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 2, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 200,
     aprox: ['Zs', 'Zr', 'reducao (3,7)', 'fc', 'lista síncrona'],
     portador: {
-      tipo: 'trem', carrosMotores: [1], motoresPorTruque: 2, rw: 0.575, massaTotal: 490000,
+      tipo: 'trem', carrosMotores: [1], motoresPorTruque: 2, rw: 0.625, massaTotal: 490000,
       davis: { A: 8000, B: 100, C: 8 },
-      config: { N: 8, Lc: 25, vao: 0.8, lNariz: 2, lCauda: 1, cpNariz: 0.3, largura: 3.0, altura: 4.3, zPiso: 0.5, pantografos: [1], carenagem: false, diametroRoda: 1.15 },
+      config: { N: 8, Lc: 25, vao: 0.8, lNariz: 2, lCauda: 1, cpNariz: 0.3, largura: 3.0, altura: 4.3, zPiso: 0.5, pantografos: [1], carenagem: false, diametroRoda: 1.25 },
     },
   },
   {
@@ -145,7 +146,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     reducao: { estagios: [{ Zp: 16, Zc: 101 }], eta: 0.96 }, ventilacao: null, carcaca: 'trem',
     auxLinhas: [[542, 0], [656, -12]], auxRuido: 6,
     niveis: { motor: 98, inversor: 92, reducao: 98, ventilador: 0, aux: 85 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
-    fontes: FONTES_TREM, vMaxKmh: 100,
+    fontes: FONTES_TREM, vMaxKmh: 90,
     aprox: ['reducao (6,3)', 'fc', 'Tn'],
     portador: {
       tipo: 'trem', carrosMotores: [2, 3, 6, 7], motoresPorTruque: 2, rw: 0.43, massaTotal: 360000, carroAux: 1,
@@ -154,7 +155,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     },
   },
   {
-    id: 'cptm9000', name: 'CPTM Série 9000', tag: 'CAF · IGBT 2,3 kHz', family: 'trens', nome: 'CPTM Série 9000 (CAF)', familia: 'eletrico',
+    id: 'cptm9000', name: 'CPTM Série 9000', tag: 'Alstom · IGBT 2,3 kHz', family: 'trens', nome: 'CPTM Série 9000 (Alstom)', familia: 'eletrico',
     maquina: 'inducao', p: 2, Zs: 44, Tn: 1700, Pmax: 200000, rpmBase: 1120, rpmMax: 4100, J: 4, escorregamentoNominal: 0.02,
     inversor: { tipo: 'igbt', fc: 2300, modo: 'auto', sincrona: IGBT_TREM },
     // ordens medidas 1 : 1,44 : 2,45 (3.2): engrenamento Z_p 18, ranhuras 44 (44/18 = 2,44) e a linha de 1,44·18 = 25,9·f_rot,
@@ -162,7 +163,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     reducao: { estagios: [{ Zp: 18, Zc: 117 }], eta: 0.96 }, ventilacao: null, carcaca: 'trem',
     linhasExtras: [[25.92, -3]],
     niveis: { motor: 98, inversor: 92, reducao: 98, ventilador: 0 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
-    fontes: FONTES_TREM, vMaxKmh: 100,
+    fontes: FONTES_TREM, vMaxKmh: 90,
     aprox: ['Zp 18 e Zs 44 (das razões medidas)', 'reducao (6,5)', 'fc'],
     portador: {
       tipo: 'trem', carrosMotores: [2, 3, 6, 7], motoresPorTruque: 2, rw: 0.43, massaTotal: 360000,
@@ -171,7 +172,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     },
   },
   {
-    id: 'metropolis', name: 'Alstom Metropolis', tag: 'Frota I · Onix · troca de marcha', family: 'trens', nome: 'Alstom Metropolis (Frota I, Metrô SP)', familia: 'eletrico',
+    id: 'metropolis', name: 'Alstom Metropolis', tag: 'Frota G · Onix · troca de marcha', family: 'trens', nome: 'Alstom Metropolis (Frota G, Metrô SP)', familia: 'eletrico',
     maquina: 'inducao', p: 2, Zs: 48, Tn: 1110, Pmax: 150000, rpmBase: 1290, rpmMax: 4000, J: 3, escorregamentoNominal: 0.02,
     inversor: { tipo: 'igbt', fc: 1250, modo: 'auto', sincrona: [15, 9, 5, 3, 1] },
     reducao: { estagios: [{ Zp: 15, Zc: 102 }], eta: 0.96 }, ventilacao: null, carcaca: 'trem',
