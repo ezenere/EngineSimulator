@@ -1281,13 +1281,14 @@ O projeto está em [`ROTATIVO.md`](ROTATIVO.md); aqui fica o que foi feito, como
 | 2 | `setConfig` | `Vd` = `V_cam` de R/e/b e `bore` = ∛(4·V_cam/π) (13B: 94,1 mm) |
 | 3 | `setConfig`, laço | o ângulo da câmara, a centelha (arma de `cyc/2` a `3·cyc/4`), a Wiebe e o `theta` em `cyc` |
 | 4, 5 | `burn`, `hwr` | queima × `kBurn` (1,5·kVelas, mais o vácuo); perda de calor × 1,6 (câmara alongada) |
-| 6, 7, 8 | centelha | falhas da sobreposição (`falhaRot`), a fração fHC do calor guardada para o escape (`rotQueima`), estouro de qualquer falha (`prRot`) |
+| 6, 7, 8 | centelha | falha por câmara (`falhaRot[c]`: a diluição pela sobreposição, ver a rodada de som), a fração fHC do calor guardada para o escape (`rotQueima`), estouro de uma falha (`prRot`) |
 | 9 | válvulas | os tiques do ápice nas bordas das janelas e nas velas; o ar zera no IO (`rotJanelas`) |
 | 11 | volume | `V = V_min + (V_cam/2)·(1 − cos(kVol·α))`, `kVol` 2/3 (Wankel) ou 1 (X-Engine) |
 | 12, 14 | escape, admissão | janelas trapezoidais (`rotEscape`, `rotAdmissao`), admissão secundária/auxiliar pela rotação |
 | — | densidade do pulso | `rotDens`: a referência do Ronco (1 650 K) com teto 1,8 (o 1,3 do Ronco achataria o gás do Wankel em plena carga) |
 | 13 | primário | um tubo por rotor: zerado uma vez por amostra (`runRot`) e as 3 câmaras somam; mais a pós-queima presa ao evento (`posQueima`) |
 | 15, 16 | `vib`, `mech` | só a ordem 1 residual (0,1); a engrenagem fixa (34 dentes), o chiado das vedações e o 2º turbo do sequencial (`mechRot`) |
+| — | turbo | `rotApito`: o apito do Ronco atenuado por `kApito` (o ramo `rot` em volta da linha do apito) |
 | 17, 19 | `tBurn`, telemetria | parede do coletor `min(1 050, 250 + 800·√(rpm/rpmMax)·(p/p₀)^0,6)`; câmara, janelas, velas, gás, fHC, estouros, secundário, traço p–α |
 
 `git diff --stat` do `dsp.ts` do Ronco contra a base da etapa (`615dbce`): 41 linhas a mais, 18 trocadas (59 < 70). `npm run paridade:ronco` (200 cenários) e `--dist` idênticos; `v16 rev` e `muscle wot` sem perda de tempo (1,9 s e 2,2 s, contra 2,4 s e 3,3 s antes, máquina ocupada). Nenhum outro arquivo do Ronco mudou.
@@ -1296,19 +1297,19 @@ O resto é a subclasse: `tune` (janelas, velas, áreas em boreEq², CR com o tet
 
 ### Decisões e desvios do ROTATIVO.md tomados na implementação
 
-- **Pós-queima distribuída em três pontos.** O fHC sai da câmara na abertura e volta como fonte de volume `ṁ = (γ−1)/γ·Q̇/(R·T)` com envoltória de 2/12 ms presa ao evento, quase toda ruído de combustão (600 Hz–3 kHz), × `kHC` = 0,85: 0,1 no primário do rotor, 0,2 no "ponto quente" (depois do downpipe e do catalisador, antes do pré-silencioso) e 0,45 na boca, onde o gás cru encontra o ar; o resto sai cru ou queima sem ruído no catalisador. No ponto quente e na boca a envoltória de cada evento passa por um polo de `hcEspalha` ms (9 por padrão, controle "Espalhamento da pós-queima"): o gás chega espalhado pela mistura no caminho. Só pelo primário, o turbo, o pré-silencioso e o abafador do FD tiravam 35 dB do agudo e a lenta ficava com o espectro de um pistão (−24 / −44 em 1–2,5k / 2,5–6k). (Revisão do "som de ar", ver abaixo: a boca era 0,7 e o espalhamento 15 ms.)
+- **Pós-queima só onde o gás está quente** (revista na rodada de som de 11/2026; antes eram três pontos, com 45% na boca). O fHC sai da câmara na abertura e volta como fonte de volume `ṁ = (γ−1)/γ·Q̇/(R·T)` com envoltória de 2/12 ms presa ao evento, × `kHC` = 0,85: metade no primário do rotor (`kPrim` 0,5), um quinto no ponto quente depois do downpipe (`kQuente` 0,2, com a envoltória espalhada por `hcEspalha` = 9 ms); o resto sai cru ou é oxidado sem ruído no catalisador. É a **expansão** do gás que queima: a parte lisa, igual em todo ciclo, reforça o pulso e é tom; só a flutuação turbulenta da chama (`hcTurb` 0,2 ≈ 10% rms) é ruído, e nasce dentro do tubo. Na boca não queima nada de fábrica (`kBoca` 0, controle "Chama na boca").
 - **fHC pelo vácuo**, não pela distância à rotação de lenta: `0,08·leve·slowB/2,4 + 0,015`, `leve` = (0,85 − p/p₀)/0,55. A lenta (8%) e a plena carga (1,5%) ficam iguais; a carga leve em giro alto ganha a pós-queima (o HC do Wankel vem do apagamento da chama nas vedações, que piora com a carga leve).
 - **Atrito com 2× a cilindrada nominal**: o Ronco faz T = pme·V/(4π) com V o volume varrido em 720°; o Wankel varre 2·rotores·V_cam em 720°. Sem isso a lenta pedia pouco ar e a câmara chegava à abertura a 1,1–1,4 bar (alvo 1,5–2,5).
 - **Queima mais lenta no vácuo**: `kBurn × (1 + 1,65·vácuo)` (o gás queimado que passa de um ciclo para o outro pelo rebaixo do flanco); dá os 95–110°e de 10–90% na lenta.
 - **Dispersão por flanco 2,5× a do Ronco e por rotor ±4%/±6% × 3**, mais a variação explosão a explosão ×3,5 (CVciclo 0,22 na lenta, como a gravação; com a do pistão saía 0,07). O 787B: flanco ×1, primários iguais (o 0,4% de diferença de comprimento entre os primários de um 4 em 1 punha a ordem 1 a +20 dB).
-- **Caça da lenta periférica**: as falhas da sobreposição crescem com o vácuo, com a rotação caindo ((lenta/rpm)⁴) e com a parede do coletor esfriando (530–600 °C; a parede esquenta em 4 s e esfria em 20 s); o controle de lenta do Ronco fica (decisão 9: ganhos mantidos). Resultado: 1 570–2 140 rpm sem apagar, inclusive a −5 °C (o fator do escape frio só vale com o motor quente).
-- **Calibração com o escape de fábrica do preset** (a doc pedia a série de referência): com topologias tão diferentes (megafone sem abafador × dois silenciosos), a série de referência deixava a lenta 4–10 dB fora dos 21 dB abaixo da carga e 37 dB de faixa entre os carros. Agora a plena carga de fábrica de cada preset vai ao alvo e o reforço de lenta é medido com o mesmo escape; o que o usuário muda (tirar o pré-silencioso, trocar o abafador) muda o volume em relação à fábrica. Sem preset de fábrica, a série de referência. A potência é medida com o escape do próprio preset e com a média do torque em 0,3 s.
+- **Lenta das janelas de competição pela diluição** (revista na rodada de som; antes um sorteio que crescia com o vácuo, a rotação caindo e a parede do coletor esfriando). O laço acompanha a fração de gás queimado em cada câmara, na região da janela de escape de cada rotor e no duto de admissão (com o plenum comum); a carga com mais de ~0,44–0,48 de gás queimado não acende. Com bridge e periférica cada câmara alterna queima e falha: o "brap" a rpm/360. Ver a rodada de som abaixo.
+- **Calibração com o escape de fábrica do preset** (a doc pedia a série de referência; a sonda da lenta agora faz a média de 2 s, depois de 1,2 s: a janela de 0,4 s caía em pontos diferentes da oscilação do laço do ar de lenta e o reforço saía até 4 dB fora): com topologias tão diferentes (megafone sem abafador × dois silenciosos), a série de referência deixava a lenta 4–10 dB fora dos 21 dB abaixo da carga e 37 dB de faixa entre os carros. Agora a plena carga de fábrica de cada preset vai ao alvo e o reforço de lenta é medido com o mesmo escape; o que o usuário muda (tirar o pré-silencioso, trocar o abafador) muda o volume em relação à fábrica. Sem preset de fábrica, a série de referência. A potência é medida com o escape do próprio preset e com a média do torque em 0,3 s.
 - **X-Engine**: IC 620 (80° depois do PMI; o documento traz ≈ 560 das patentes) para a expansão prolongada dar 1,3–1,6 bar na abertura; borboleta ×1,6 (o fechamento tardio devolve carga ao coletor). O XTS-210 é diesel no real: aqui centelha com CR 18 (teto 24), etiqueta "aproximação (ciclo SI)".
 - **Aviação** pelos ganchos `av` do Ronco (`instalarAviacao`: magnetos, mistura, a carga de bancada da hélice ou do rotor e o som da hélice na página). Borboleta ×1,5 (×3 com hélice de passo fixo: o AR741 não segurava a lenta contra a hélice direta).
 - **Palhetas**: `PalhetasDSP` (5.3) com o ar na entrada por um polo de 0,2 s, T₀ = 4·P/ω_livre, rotação livre corrigida pelo atrito, hospedeiro do arranque como carga com as compressões na frequência de ignição dele (Cat C15 simplificado: J 6 kg·m², 250 N·m de compressão).
 - **Fichas**: o FD com a 5ª de 0,761 (a 0,806 da ficha dava 2 774 rpm a 100 km/h, contra os 2 600 do próprio documento); o 787B com o mapa `burble` (o `popbang` dava 10–11 estouros/s, contra 3,5–7 medidos); os geradores do X-Engine com o alternador leve (0,002 e 0,08 kg·m²; com os 20 kg·m² do grupo de 500 kVA o motor de 70 cm³ não saía do arranque).
 - **Apêndice B**: 3√3·15·105·80 mm³ = 654,7 cm³ (o apêndice escreve 654,3; 12A 572,9, 10A 491,0): dentro do ±0,5% do alvo.
-- **Ponteira do jato separada do Ø da saída** (`escape.ponteira`, controle "Ponteira (jato)", de fábrica a boca do preset), com os limites do Ronco (0,5–1,6 de 2,5"), como a `tipD` do Ronco depois da revisão do Fusca. O Ø da saída muda o tubo e a irradiação do tom; a ponteira, só o ruído de jato.
+- **Boca com ponteira** (`BocaRot` em `escape.ts`; revista na rodada de som). A ponteira (`escape.ponteira`, controle "Ponteira (jato)", de fábrica a boca do preset) segue separada do Ø da saída, mas deixou de só multiplicar o chiado: a saída mais fina que o resto do escape é um **orifício** (resistência `M₀·(1/σ² − 1)` pelo escoamento médio mais o termo do próprio pulso), que devolve o que não passa como contrapressão; o jato lê a velocidade na ponteira (área do tubo ÷ área da ponteira), satura na do som junto com o escoamento médio e tem teto contra o pulso irradiado. A irradiação é a de monopolo (ganho ∝ d, não d²).
 - **`COMPAT`, `ADAPTADORES`, `USO_REAL`**: o rotativo entrou em rotor e gerador (as duas palavras que o documento pedia para relatar; a tarefa da etapa as incluiu) e nas listas de uso real (carro, hélice, rotor, gerador). `src/scene/dsp-cena.ts` monta o `MotorRotativo`; a Passagem ganhou o RX-7 na rua, o 787B em Hunaudières e o RQ-7 Shadow.
 
 ### Portadores e Cena
@@ -1317,8 +1318,12 @@ O resto é a subclasse: `tune` (janelas, velas, áreas em boreEq², CR com o tet
 
 ### Ferramentas e portões
 
-`npm run teste:rotativo` (`tools/rotativo-valida.ts`, 15 grupos em paralelo, ~30 s), `npm run lenta:rotativo` (16 presets × 20 °C e −5 °C, partida de verdade, acelerada aos 12 s), `npm run navegador:rotativo` (Chromium e Firefox, `dist/`). `tools/rotativo-bandas.ts` é a porta de `medir_w.py`/`pops.py` (FFT, Welch e mediana do radial; Hilbert, autocorrelação da envoltória, pente de 4 harmônicos, CVciclo, p90/p10, estalos): conferida nas gravações, dá os números do Apêndice A (RX-7 Commons 16–20 s: +1,6 / −0,9 / −10,9 / −10,5 / −16,5, 541 Hz, ign +18,8 / +17,2 / +23,9, CVc 0,23, p90/p10 6,8, 0,5 estalo/s; RX-8 a 5 000: vagar 11,6%, 787B a 7 700: 0,5%, 787B lenta: 15,1 estalos/s contra 15,8). `tools/rotativo-cena.ts` monta o preset no portador e ouve pela Cena. CPU: o R26B a 7 700 rpm em Node, 10% do tempo real (portão 45%).
-### Alvo × medido (`npm run teste:rotativo`: 133 medidas: 105 ok, 28 desvios documentados, 0 falhas)
+`npm run teste:rotativo` (`tools/rotativo-valida.ts`, 16 grupos em paralelo, ~100 s), `npm run lenta:rotativo` (16 presets × 20 °C e −5 °C, partida de verdade, acelerada aos 12 s), `npm run navegador:rotativo` (Chromium e Firefox, `dist/`). `tools/rotativo-bandas.ts` é a porta de `medir_w.py`/`pops.py` (FFT, Welch e mediana do radial; Hilbert, autocorrelação da envoltória, pente de 4 harmônicos, CVciclo, p90/p10, estalos): conferida nas gravações, dá os números do Apêndice A (RX-7 Commons 16–20 s: +1,6 / −0,9 / −10,9 / −10,5 / −16,5, 541 Hz, ign +18,8 / +17,2 / +23,9, CVc 0,23, p90/p10 6,8, 0,5 estalo/s; RX-8 a 5 000: vagar 11,6%, 787B a 7 700: 0,5%, 787B lenta: 15,1 estalos/s contra 15,8). `tools/rotativo-cena.ts` monta o preset no portador e ouve pela Cena. CPU: o R26B a 7 700 rpm em Node, 14% do tempo real (portão 45%).
+
+Para a rodada de som (fora dos portões, usam o kit `tools/ouvido` e as gravações de `referencias/rotativo`, fora do git): `tools/rotativo-fontes.ts` (render na condição da gravação e o conjunto do orçamento por fonte com a mesma semente), `tools/rotativo-regua.py` + `rotativo-regua.json` (os casos casados e a tabela dos critérios), `tools/rotativo-varredura.sh` (Ø da saída e ponteira do mínimo ao máximo), `tools/rotativo-pulso.ts` (onde nascem e onde se perdem os harmônicos da ignição), `tools/rotativo-padrao.ts` (a sequência queimou/falhou da lenta), `tools/rotativo-periodico.ts` (a periodicidade com os ruídos desligados, lição da F1) e `tools/rotativo-espectro.py` (espectrogramas lado a lado de aceleradas).
+### Alvo × medido (`npm run teste:rotativo`: 151 medidas: 135 ok, 16 desvios documentados, 0 falhas)
+
+Desde a rodada de som de novembro de 2026 o agudo (1–2,5 kHz e 2,5–6 kHz) é conferido com a gravação como **teto** (o viés do dono: mais motor, menos ar; mais limpo que a gravação passa) e o grupo `ar` mede os critérios da rodada sem gravação.
 
 | Grupo | Medida | Alvo | Medido |
 |---|---|---|---|
@@ -1336,82 +1341,100 @@ O resto é a subclasse: `tune` (janelas, velas, áreas em boreEq², CR com o tet
 | geometria | fases de 2 rotor(es): intervalo de ignição | 180°e exatos | 180°e · fire 0 360 720 180 540 900 |
 | geometria | fases de 3 rotor(es): intervalo de ignição | 120°e exatos | 120°e · fire 0 360 720 120 480 840 240 600 960 |
 | geometria | fases de 4 rotor(es): intervalo de ignição | 90°e exatos | 90°e · fire 0 360 720 90 450 810 180 540 900 270 630 990 |
-| geometria | f_ign no render, ae50r a 4000 rpm | 66,67 Hz ± 0,5% (1 por volta) | 66,65 Hz (-0,03%) |
-| geometria | f_ign no render, rx8hp a 5000 rpm | 166,67 Hz ± 0,5% (2 por volta) | 166,97 Hz (+0,18%) |
+| geometria | f_ign no render, ae50r a 4000 rpm | 66,67 Hz ± 0,5% (1 por volta) | 66,64 Hz (-0,04%) |
+| geometria | f_ign no render, rx8hp a 5000 rpm | 166,67 Hz ± 0,5% (2 por volta) | 166,96 Hz (+0,18%) |
 | geometria | f_ign no render, cosmo20b a 4000 rpm | 200,00 Hz ± 0,5% (3 por volta) | 199,99 Hz (-0,01%) |
-| geometria | f_ign no render, r26b a 6000 rpm | 400,00 Hz ± 0,5% (4 por volta) | 399,43 Hz (-0,14%) |
-| geometria | f_ign no render, xmini a 12000 rpm | 300,00 Hz ± 0,5% (1,5 por volta) | 300,05 Hz (+0,02%) |
-| ciclo | rx7fd lenta 750 rpm quente: pressão na abertura do escape | 1,5–2,5 bar | 2,09 bar |
-| ciclo | rx7fd lenta: 10–90% da queima | 95–110°e | 96°e |
-| ciclo | rx7fd (turbo 0,7 bar) plena carga: pressão na abertura | ≈ 4 bar (aspirado); turbo mais | 9,47 bar · boost 0,70 bar |
+| geometria | f_ign no render, r26b a 6000 rpm | 400,00 Hz ± 0,5% (4 por volta) | 399,91 Hz (-0,02%) |
+| geometria | f_ign no render, xmini a 12000 rpm | 300,00 Hz ± 0,5% (1,5 por volta) | 300,08 Hz (+0,03%) |
+| ciclo | rx7fd lenta 750 rpm quente: pressão na abertura do escape | 1,5–2,5 bar | 2,04 bar |
+| ciclo | rx7fd lenta: 10–90% da queima | ≈ 100°e (90–110) | 94°e |
+| ciclo | rx7fd (turbo 0,7 bar) plena carga: pressão na abertura | ≈ 4 bar (aspirado); turbo mais | 9,42 bar · boost 0,70 bar |
 | ciclo | rx7fd (turbo 0,7 bar) plena carga: Mach do jato no 1º terço da rampa | Mach 1 | 1,00 |
 | ciclo | rx7fd (turbo 0,7 bar) plena carga: 10–90% da queima | 50–60°e (plena carga a 55%: 48°e pela fórmula) | 48°e |
 | ciclo | rx7fd (turbo 0,7 bar) plena carga: parede do coletor (tEscape) depois de 12 s | 900–1 000 °C | 1008 °C |
-| ciclo | rx7fd (turbo 0,7 bar) plena carga: gás na abertura e o fator de densidade | fator < teto 1,8 (o 1,3 do Ronco achataria) | 1684 K · máx. 1,32 |
-| ciclo | rx8hp (aspirado) plena carga: pressão na abertura | ≈ 4 bar (aspirado); turbo mais | 3,96 bar · boost 0,00 bar |
+| ciclo | rx7fd (turbo 0,7 bar) plena carga: gás na abertura e o fator de densidade | fator < teto 1,8 (o 1,3 do Ronco achataria) | 1678 K · máx. 1,32 |
+| ciclo | rx8hp (aspirado) plena carga: pressão na abertura | ≈ 4 bar (aspirado); turbo mais | 3,95 bar · boost 0,00 bar |
 | ciclo | rx8hp (aspirado) plena carga: Mach do jato no 1º terço da rampa | Mach 1 | 1,00 |
 | ciclo | rx8hp (aspirado) plena carga: 10–90% da queima | 50–60°e (plena carga a 55%: 48°e pela fórmula) | 48°e |
-| ciclo | rx8hp (aspirado) plena carga: gás na abertura e o fator de densidade | fator < teto 1,8 (o 1,3 do Ronco achataria) | 1341 K · máx. 1,04 |
+| ciclo | rx8hp (aspirado) plena carga: gás na abertura e o fator de densidade | fator < teto 1,8 (o 1,3 do Ronco achataria) | 1340 K · máx. 1,04 |
 | ciclo | rx8hp a 80% de rpmMax plena carga: pressão na abertura | ≈ 4 bar (aspirado); turbo mais | 3,87 bar · boost 0,00 bar |
 | ciclo | rx8hp a 80% de rpmMax plena carga: Mach do jato no 1º terço da rampa | Mach 1 | 1,00 |
 | ciclo | rx8hp a 80% de rpmMax plena carga: 10–90% da queima | 50–60°e (plena carga a 55%: 48°e pela fórmula) | 54°e |
 | ciclo | rx8hp a 80% de rpmMax plena carga: parede do coletor (tEscape) depois de 12 s | 900–1 000 °C | 936 °C |
-| ciclo | rx8hp a 80% de rpmMax plena carga: gás na abertura e o fator de densidade | fator < teto 1,8 (o 1,3 do Ronco achataria) | 1301 K · máx. 1,00 |
-| ciclo | rx7fd lenta: parede do coletor (tEscape) | 400–500 °C | 433 °C |
-| bandas | bandas lenta 2 rotores original 750 rpm (rx7fd, ext) | +2,0 / -1,0 / -11,0 / -10,5 ±4 | +2,8 / -5,5 / -17,0 / -13,9 (6–12k -18,9: física) (**desvio**) |
-| bandas | centroide lenta 2 rotores original 750 rpm (rx7fd, ext) | 480–550 Hz ±30% | 299 Hz (**desvio**) |
-| bandas | rx7fd lenta sem a pós-queima (fHC desligada): 1–2,5 kHz cai | ≥ 6 dB | 8,8 dB |
-| bandas | rx7fd lenta, pré-silencioso retirado: 1–2,5 kHz e 2,5–6 kHz sobem (absoluto) | ≥ 6 dB | +1,4 / +0,1 dB (**desvio**) |
-| bandas | rx7fd lenta, pré-silencioso retirado: 2·ign sobe | ≥ 4 dB | -0,6 dB (linha sobre a mediana) (**desvio**) |
-| bandas | rx7fd lenta: ruído de jato da ponta em 150 Hz–1 kHz (Ø de fábrica / Ø 25 mm com a ponteira de fábrica) | ≤ 10% / ≤ 10% | 0,0% / 0,1% |
-| bandas | bandas 5 000 rpm sustentados, Renesis (rx8hp, ext) | -8,0 / -10,0 / -11,0 / -10,5 ±4 | -14,2 / -10,2 / -21,1 / -18,2 (6–12k -23,4: física) (**desvio**) |
-| bandas | centroide 5 000 rpm sustentados, Renesis (rx8hp, ext) | 520–520 Hz ±30% | 279 Hz (**desvio**) |
-| bandas | bandas 7 700 rpm em neutro, 4 rotores megafone (r26b) | -6,5 / +20,0 / +19,0 / +6,7 ±4 | -9,2 / +10,3 / +1,6 / -2,9 (6–12k -10,8: física) (**desvio**) |
-| bandas | centroide 7 700 rpm em neutro, 4 rotores megafone (r26b) | 930–930 Hz ±30% | 704 Hz |
-| bandas | bandas lenta 4 rotores periférica (r26b) | +3,5 / -7,5 / -15,5 / -16,0 ±4 | -5,7 / -3,0 / -6,0 / -5,9 (6–12k -16,7: física) (**desvio**) |
-| bandas | centroide lenta 4 rotores periférica (r26b) | 230–380 Hz ±30% | 985 Hz (**desvio**) |
-| bandas | bandas lenta 2 rotores moto 1 900 rpm (norton) | +9,5 / -2,5 / -4,5 / -12,5 ±4 | -7,3 / -4,9 / -15,9 / -22,0 (6–12k -24,5: física) (**desvio**) |
-| bandas | centroide lenta 2 rotores moto 1 900 rpm (norton) | 250–480 Hz ±30% | 363 Hz |
-| bandas | bandas lenta fria carburada 1 600 rpm (ro80) | -2,0 / -10,0 / -12,0 / -20,0 ±4 | +2,5 / -8,6 / -10,0 / -5,5 (6–12k -10,3: física) (**desvio**) |
-| bandas | centroide lenta fria carburada 1 600 rpm (ro80) | 320–320 Hz ±30% | 718 Hz (**desvio**) |
-| bandas | lenta: Wankel (rx7fd) contra pistão (ek9, Civic Type R) em 1–2,5 kHz e 2,5–6 kHz (rel. 150–400) | +8 … +12 / +15 … +20 dB | +3,4 / +23,8 dB (**desvio**) |
-| linhas | rx7fd lenta: harmônicos 1–3 da ignição | dentro de 6 dB (gravação +19 / +17 / +24) | +9,9 / +17,7 / +15,7 (**desvio**) |
+| ciclo | rx8hp a 80% de rpmMax plena carga: gás na abertura e o fator de densidade | fator < teto 1,8 (o 1,3 do Ronco achataria) | 1302 K · máx. 0,99 |
+| ciclo | rx7fd lenta: parede do coletor (tEscape) | 400–500 °C | 434 °C |
+| bandas | bandas lenta 2 rotores de rua 750 rpm (rx7fc, ext) contra o FC3S casado | +8,9 / -17,2 ±7; agudo ≤ -35,2 / -41,0 +4 (teto) | +4,6 / -12,6 / -36,7 / -40,5 |
+| bandas | rx7fd lenta: 1–2,5 kHz e 2,5–6 kHz (rel. 150–400) | ≤ −27 / ≤ −33 dB (teto do FC3S + 8) | -27,7 / -47,0 dB |
+| bandas | rx7fd lenta, pré-silencioso retirado: 1–2,5 kHz e 2,5–6 kHz sobem (absoluto) | ≥ 6 dB | +6,5 / +10,3 dB |
+| bandas | rx7fd lenta, pré-silencioso retirado: 2·ign sobe | ≥ 4 dB | -1,1 dB (linha sobre a mediana) (**desvio**) |
+| bandas | rx7fd lenta: ruído de jato da ponta em 150 Hz–1 kHz (Ø de fábrica / Ø 25 mm com a ponteira de fábrica) | ≤ 10% / ≤ 10% | 0,0% / 0,0% |
+| bandas | bandas 5 000 rpm sustentados, Renesis (rx8hp, ext) contra o RX-8 do Commons | -8,0 / -10,0 ±7; agudo ≤ -11,0 / -10,5 +4 (teto) | -13,7 / -10,2 / -29,1 / -35,6 |
+| bandas | bandas 7 700 rpm em neutro, 4 rotores megafone (r26b) | -6,5 / +20,0 / +19,0 / +6,7 ±4 | -8,9 / +12,9 / +2,7 / -3,8 (6–12k -23,2: física) (**desvio**) |
+| bandas | centroide 7 700 rpm em neutro, 4 rotores megafone (r26b) | 930–930 Hz ±30% | 627 Hz (**desvio**) |
+| bandas | bandas lenta 4 rotores periférica (r26b) | +3,5 / -7,5 ±7; agudo ≤ -15,5 / -16,0 +4 (teto) | -4,3 / -7,6 / -14,9 / -16,3 (**desvio**) |
+| bandas | bandas lenta 2 rotores moto 1 900 rpm (norton) | +9,5 / -2,5 ±7; agudo ≤ -4,5 / -12,5 +4 (teto) | -7,6 / -4,2 / -16,9 / -38,8 (**desvio**) |
+| bandas | bandas lenta fria carburada 1 600 rpm (ro80) | -2,0 / -10,0 ±7; agudo ≤ -12,0 / -20,0 +4 (teto) | +1,5 / -7,0 / -22,0 / -31,4 |
+| ar | rx7fc lenta: jato, chiado de admissão, vedações e chiado do turbo desligados juntos | muda o nível ponderado A em < 1,5 dB | +0,01 dB |
+| ar | rx7fc 3 000 rpm em ponto morto: jato, chiado de admissão, vedações e chiado do turbo desligados juntos | muda o nível ponderado A em < 1,5 dB | +0,01 dB |
+| ar | rx7fd lenta: jato, chiado de admissão, vedações e chiado do turbo desligados juntos | muda o nível ponderado A em < 1,5 dB | +0,00 dB |
+| ar | rx7fd 3 000 rpm em ponto morto: jato, chiado de admissão, vedações e chiado do turbo desligados juntos | muda o nível ponderado A em < 1,5 dB | +0,00 dB |
+| ar | rx8hp lenta: jato, chiado de admissão, vedações e chiado do turbo desligados juntos | muda o nível ponderado A em < 1,5 dB | +0,02 dB |
+| ar | rx8hp 3 000 rpm em ponto morto: jato, chiado de admissão, vedações e chiado do turbo desligados juntos | muda o nível ponderado A em < 1,5 dB | +0,03 dB |
+| ar | cosmo20b lenta: jato, chiado de admissão, vedações e chiado do turbo desligados juntos | muda o nível ponderado A em < 1,5 dB | +0,00 dB |
+| ar | cosmo20b 3 000 rpm em ponto morto: jato, chiado de admissão, vedações e chiado do turbo desligados juntos | muda o nível ponderado A em < 1,5 dB | +0,00 dB |
+| ar | r26b lenta: jato, chiado de admissão, vedações e chiado do turbo desligados juntos | muda o nível ponderado A em < 1,5 dB | +0,00 dB |
+| ar | r26b 3 000 rpm em ponto morto: jato, chiado de admissão, vedações e chiado do turbo desligados juntos | muda o nível ponderado A em < 1,5 dB | +0,00 dB |
+| ar | rx7fc lenta, ponteira 20 mm: chiado do jato no nível ponderado A | ≤ 35% (em posição nenhuma é a fonte dominante) | 2% |
+| ar | rx7fc lenta, saída 20 mm: chiado do jato no nível ponderado A | ≤ 35% (em posição nenhuma é a fonte dominante) | 0% |
+| ar | rx7fc lenta, saída e ponteira 20 mm: chiado do jato no nível ponderado A | ≤ 35% (em posição nenhuma é a fonte dominante) | 0% |
+| ar | rx7fc 3 000 rpm em ponto morto, ponteira 20 mm: chiado do jato no nível ponderado A | ≤ 35% (em posição nenhuma é a fonte dominante) | 1% |
+| ar | rx7fc 3 000 rpm em ponto morto, saída 20 mm: chiado do jato no nível ponderado A | ≤ 35% (em posição nenhuma é a fonte dominante) | 0% |
+| ar | rx7fc 3 000 rpm em ponto morto, saída e ponteira 20 mm: chiado do jato no nível ponderado A | ≤ 35% (em posição nenhuma é a fonte dominante) | 0% |
+| ar | rx7fc 5 000 rpm em plena carga, ponteira 20 mm: chiado do jato no nível ponderado A | ≤ 35% (em posição nenhuma é a fonte dominante) | 0% |
+| ar | rx7fc 5 000 rpm em plena carga, saída 20 mm: chiado do jato no nível ponderado A | ≤ 35% (em posição nenhuma é a fonte dominante) | 0% |
+| ar | rx7fc 5 000 rpm em plena carga, saída e ponteira 20 mm: chiado do jato no nível ponderado A | ≤ 35% (em posição nenhuma é a fonte dominante) | 0% |
+| ar | rx7fc, ponteira no mínimo (20 mm num escape de 70): o pulso, sem o chiado, na lenta / em plena carga a 5 000 rpm | cai nos dois, e pelo menos 6 dB a mais em carga (a contrapressão amolece o pulso com o escoamento) | -7,7 / -18,1 dB |
+| linhas | rx7fd lenta: harmônicos 1–3 da ignição | dentro de 6 dB (gravação +19 / +17 / +24) | +11,3 / +16,8 / +14,2 |
 | linhas | rx7fd lenta: linha de meia-ordem (rpm/120) | ≤ +3 dB (o Wankel não tem) | -Infinity dB |
-| linhas | rx8hp 5 000 rpm: ignição sobre a mediana | +27 ± 4 dB | +26,2 dB |
-| linhas | rx8hp 5 000 rpm: ordem 1 contra a ignição | −15 ± 5 dB | -19,6 dB |
-| linhas | rx8hp 5 000 rpm: ordens 2/3 e 5/3 contra a ignição | −16 ± 5 dB | -21,7 / -24,5 dB (**desvio**) |
-| linhas | r26b 7 700 rpm: ignição sobre a mediana | ≥ +22 dB | +29,4 dB |
-| linhas | r26b 7 700 rpm: ordem 1 contra a ignição | −10 ± 4 dB | -13,2 dB |
-| linhas | r26b 7 700 rpm: 2·ign contra a ignição | −6 dB (±4) | -5,1 dB |
-| lenta | lenta original quente (rx7fd): vagar | 1,5–3% | 2,3% |
+| linhas | rx8hp 5 000 rpm: ignição sobre a mediana | +27 ± 4 dB | +26,9 dB |
+| linhas | rx8hp 5 000 rpm: ordem 1 contra a ignição | −15 ± 5 dB | -19,0 dB |
+| linhas | rx8hp 5 000 rpm: ordens 2/3 e 5/3 contra a ignição | −16 ± 5 dB | -20,9 / -23,7 dB (**desvio**) |
+| linhas | r26b 7 700 rpm: ignição sobre a mediana | ≥ +22 dB | +31,1 dB |
+| linhas | r26b 7 700 rpm: ordem 1 contra a ignição | ≤ −10 dB (na gravação casada a banda de 60–150 Hz inteira fica 27 dB abaixo da ignição) | -20,3 dB |
+| linhas | r26b 7 700 rpm: 2·ign contra a ignição | −6 dB (±4) | -8,2 dB |
+| lenta | lenta original quente (rx7fd): vagar | ≤ 3% | 0,9% |
 | lenta | lenta original quente (rx7fd): CVciclo | 0,20–0,30 | 0,22 |
-| lenta | lenta original quente (rx7fd): estalos/s | ≤ 1,5 | 2,4 (**desvio**) |
-| lenta | lenta original quente (rx7fd): p90/p10 de 1–6 kHz (pós-queima presa ao evento) | 7–13 dB | 12,3 dB |
-| lenta | lenta original quente (rx7fd): desvio/média da envoltória de 1–6 kHz (pós-queima presa ao evento) | ≥ 0,5 | 0,51 |
-| lenta | lenta periférica (r26b): faixa da caça | 1 600–2 200 rpm, sem apagar | 1454–2161 rpm |
-| lenta | lenta periférica (r26b): vagar em 12 s (o método das gravações) | ≥ 20% | 5,6% (pela telemetria, janelas de 1 s: 6,9%) (**desvio**) |
-| lenta | lenta periférica (r26b): CVciclo | ≥ 0,40 | 1,06 |
-| lenta | lenta periférica (r26b): estalos/s | 10–16 | 13,5 (estouros criados: 14,0/s) |
+| lenta | lenta original quente (rx7fd): estalos/s além das próprias explosões | ≤ 1,5 (o detector conta até um pico por ignição) | 0,0 (25,0 picos/s; ignição 25,0/s) |
+| lenta | lenta original quente (rx7fd): p90/p10 de 1–6 kHz (o agudo preso ao pulso) | ≥ 7 dB (a gravação é piso de pulso) | 29,2 dB |
+| lenta | lenta original quente (rx7fd): desvio/média da envoltória de 1–6 kHz (o agudo preso ao pulso) | ≥ 0,5 | 1,85 |
+| lenta | lenta periférica (r26b): faixa da caça | 1 600–2 200 rpm, sem apagar | 1689–2070 rpm |
+| lenta | lenta periférica (r26b): vagar em 12 s (o método das gravações) | ≥ 20% | 3,7% (pela telemetria, janelas de 1 s: 3,5%) (**desvio**) |
+| lenta | lenta periférica (r26b): CVciclo | ≥ 0,40 | 0,59 |
+| lenta | lenta periférica (r26b): estalos/s | 5–16 (as rajadas do "brap" a ~5 Hz, com um a três picos cada) | 16,0 (estouros soltos criados: 0,2/s) |
+| lenta | lenta periférica (r26b): fração das explosões que queimam | 35–70% (rajadas, não falhas soltas) | 53% |
+| lenta | lenta periférica (r26b): ritmo do "brap" (autocorrelação da sequência queimou/falhou a 3 e a 6 voltas do eixo) | ≤ −0,5 a 3 voltas e ≥ +0,4 a 6 (rpm/360: 5,2 Hz na gravação) | -0,86 / +0,72 |
 | lenta | lenta periférica (r26b): a caça vem da sobreposição | sem sobreposição a lenta para | (ver lenta de street port) |
-| lenta | street port (rx7fd, sobreposição 28°e): lenta estável | vagar ≤ 3% | 1,0% · 752 rpm |
-| estouros | desaceleração rx8hp ('burble'): estouros/s | 4–6 | 3,0 criados · 1,0 detectados (altura 14,5 dB) a 4097 rpm (**desvio**) |
-| estouros | desaceleração r26b ('burble', periférico): estouros/s (detectados) | 3,5–7 | 5,0 detectados (altura 26,6 dB; 4,5 criados) a 3589 rpm |
+| lenta | street port (rx7fd, sobreposição 28°e): lenta estável | vagar ≤ 3% | 1,0% · 751 rpm |
+| lenta | bridge port (rx7fc, sobreposição 98°e, lenta a 1 950): em rajadas, sem apagar | 40–75% das explosões queimam; 1 450–2 350 rpm | 60% · 1805–2090 rpm |
+| lenta | janelas de fábrica (rx7fc): a mistura acende sempre | ≥ 99% das explosões | 99,0% |
+| estouros | desaceleração rx8hp ('burble'): estouros/s | 4–6 | 2,0 criados · 18,5 detectados (altura 12,5 dB) a 4075 rpm (**desvio**) |
+| estouros | desaceleração r26b ('burble', periférico): estouros/s (criados, média de 3 sorteios) | 3,5–7,5 | 5,3 criados (5,0 / 4,5 / 6,5) · 10,0 detectados (altura 29,4 dB) a 3721 rpm |
 | turbo | rx7fd sweep: queda do boost na troca do turbo (4 500 ± 100 rpm) | 0,1–0,2 bar por 0,2–0,4 s | 0,17 bar · 0,24 s (em 4502 rpm) |
 | turbo | rx7fd sweep: boost de 3 000 a 8 000 rpm (fora do soluço) | 0,65–0,75 bar | 0,67–0,70 bar |
 | turbo | rx8hp: degraus das janelas secundária e auxiliar | 3 750 e 6 250 ± 50 rpm | 3800 e 6300 rpm (AinMax ×1,00 → ×1,68 → ×2,24) |
 | mecanica | vibração na lenta: rx8hp contra ek9 (Ronco) | 10–15 dB abaixo | -6,9 dB (**desvio**) |
 | mecanica | vibração na lenta: rx8hp contra mx5 (Ronco) | 10–15 dB abaixo | -7,3 dB (**desvio**) |
-| mecanica | tiques das vedações em lenta (rx8hp no cofre, sem pós-queima): p90/p10 de 2–6 kHz | ≤ 12 dB (fundidos, sem cliques contáveis) | 6,3 dB |
+| mecanica | tiques das vedações em lenta (rx8hp no cofre, sem pós-queima): p90/p10 de 2–6 kHz | ≤ 12 dB (fundidos, sem cliques contáveis) | 6,6 dB |
 | mecanica | rx8hp no cofre: meia-ordem (rpm/120) | ≤ +3 dB | -Infinity dB |
-| portadores | ar741 em voo, plena (40 m/s): passagem de pá | ≈ 260 Hz (7 800 rpm) | 250,2 Hz (7506 rpm) |
-| portadores | ar741: Mach na ponta | 0,88 (a 7 800 rpm) | 0,856 |
+| portadores | ar741 em voo, plena (40 m/s): passagem de pá | ≈ 260 Hz (7 800 rpm) | 252,4 Hz (7574 rpm) |
+| portadores | ar741: Mach na ponta | 0,88 (a 7 800 rpm) | 0,863 |
 | portadores | ar741: f_ign/BPF (1 rotor, 2 pás, direto) | 0,5 | 0,500 |
 | portadores | ae50r com o rotor (S-100): Nr no pairado | 1 070 ± 2% | 1070 rpm (no fim 1070) |
-| portadores | ae50r: droop ao puxar o coletivo (0,45 → 0,6 em 1 s) | ≤ 3% | 0,23% |
+| portadores | ae50r: droop ao puxar o coletivo (0,45 → 0,6 em 1 s) | ≤ 3% | 0,25% |
 | portadores | mistral: subida de 1 200 a ~7 500 rpm (manete em 4 s) | 4–6 s | 3,1 s (**desvio**) |
-| portadores | mistral: governador da hélice | 2 930 ± 2% | 2876 rpm |
-| portadores | xts210 no gerador (inversor, 6 000 rpm nominal), 50% de carga | ±3% da nominal | 5996 rpm · carga 0,50 |
-| portadores | 787B passagem a 340 km/h (15 m): razão da ignição chegando/indo | 1,555 ± 5% (teoria 1,556 com M 0,275) | 1,548 (735 / 475 Hz; 8083 rpm) |
+| portadores | mistral: governador da hélice | 2 930 ± 2% | 2872 rpm |
+| portadores | xts210 no gerador (inversor, 6 000 rpm nominal), 50% de carga | ±3% da nominal | 6000 rpm · carga 0,50 |
+| portadores | 787B passagem a 340 km/h (15 m): razão da ignição chegando/indo | 1,555 ± 5% (teoria 1,556 com M 0,275) | 1,549 (735 / 475 Hz; 8084 rpm) |
 | xengine | xmini a 12 000 rpm: f_ign (1,5 por volta, 3 câmaras, ciclo de 720°) | 300 Hz ± 0,5% | 300,00 Hz · cyc 720 · 3 câmaras |
 | xengine | xmini plena carga: pressão na abertura (expansão prolongada) | 1,3–1,6 bar | 1,52 bar |
 | xengine | xmini: sem NaN | nenhum | nenhum |
@@ -1428,13 +1451,13 @@ O resto é a subclasse: `tune` (janelas, velas, áreas em boreEq², CR com o tet
 | potencia | potência rx3 | 81 kW ± 5% | 81,7 kW a 100% de rpmMax |
 | potencia | potência rx8hp | 170 kW ± 5% | 170,6 kW a 100% de rpmMax |
 | potencia | potência rx8std | 141 kW ± 5% | 143,9 kW a 100% de rpmMax |
-| potencia | potência cosmo20b | 206 kW ± 5% | 209,7 kW a 100% de rpmMax |
-| potencia | potência r26b | 522 kW ± 5% | 523,1 kW a 100% de rpmMax |
+| potencia | potência cosmo20b | 206 kW ± 5% | 209,6 kW a 100% de rpmMax |
+| potencia | potência r26b | 522 kW ± 5% | 523,0 kW a 100% de rpmMax |
 | potencia | potência ro80 | 85 kW ± 5% | 84,2 kW a 100% de rpmMax |
-| potencia | potência norton | 70 kW ± 5% | 70,3 kW a 100% de rpmMax |
+| potencia | potência norton | 70 kW ± 5% | 70,0 kW a 100% de rpmMax |
 | potencia | potência cosmo110s | 81 kW ± 5% | 82,0 kW a 100% de rpmMax |
-| potencia | potência mistral | 149 kW ± 5% | 150,8 kW a 100% de rpmMax |
-| potencia | potência ae110 | 82 kW ± 5% | 84,8 kW a 100% de rpmMax |
+| potencia | potência mistral | 149 kW ± 5% | 150,9 kW a 100% de rpmMax |
+| potencia | potência ae110 | 82 kW ± 5% | 85,4 kW a 100% de rpmMax |
 | potencia | potência ae50r | 41 kW ± 5% | 38,8 kW a 100% de rpmMax (**desvio**) |
 | potencia | potência ar741 | 28 kW ± 5% | 28,2 kW a 100% de rpmMax |
 | potencia | potência xmini | 3 kW ± 5% | 3,1 kW a 100% de rpmMax |
@@ -1443,51 +1466,41 @@ O resto é a subclasse: `tune` (janelas, velas, áreas em boreEq², CR com o tet
 | veiculo | rx8hp a 100 km/h em 6ª (relações da ficha) | 2 750 ± 100 rpm | 3011 rpm (**desvio**) |
 | veiculo | r26b em 5ª a 8 500 rpm | 340 ± 10 km/h | 339 km/h |
 | veiculo | ro80 0–100 km/h | 12–15 s | 12,2 s |
-| niveis | rx7fd: lenta → plena carga a 55% (página) | +18 a +25 dB | +18,6 dB |
+| niveis | rx7fd: lenta → plena carga a 55% (página) | +18 a +25 dB | +20,0 dB |
 | niveis | rx7fc: lenta → plena carga a 55% (página) | +18 a +25 dB | +22,3 dB |
-| niveis | rx3: lenta → plena carga a 55% (página) | +18 a +25 dB | +21,8 dB |
-| niveis | rx8hp: lenta → plena carga a 55% (página) | +18 a +25 dB | +18,4 dB |
-| niveis | rx8std: lenta → plena carga a 55% (página) | +18 a +25 dB | +17,9 dB (**desvio**) |
-| niveis | cosmo20b: lenta → plena carga a 55% (página) | +18 a +25 dB | +20,0 dB |
-| niveis | r26b: lenta → plena carga a 55% (página) | +18 a +25 dB | +6,2 dB (**desvio**) |
-| niveis | ro80: lenta → plena carga a 55% (página) | +18 a +25 dB | +16,8 dB (**desvio**) |
-| niveis | norton: lenta → plena carga a 55% (página) | +18 a +25 dB | +17,8 dB (**desvio**) |
-| niveis | cosmo110s: lenta → plena carga a 55% (página) | +18 a +25 dB | +19,9 dB |
-| niveis | os carros e a moto na lenta: faixa de nível | ≤ 12 dB | 24,6 dB (rx7fd -46,2, rx7fc -44,4, rx3 -56,6, rx8hp -41,6, rx8std -41,3, cosmo20b -40,9, r26b -32,0, ro80 -41,6, norton -50,6, cosmo110s -49,6) (**desvio**) |
-| cpu | r26b rev (12 câmaras, 4 primários, megafone), 10 s em Node | ≤ 45% do tempo real | 10,6% (10 tubos, 8 nós) |
+| niveis | rx3: lenta → plena carga a 55% (página) | +18 a +25 dB | +18,7 dB |
+| niveis | rx8hp: lenta → plena carga a 55% (página) | +18 a +25 dB | +20,0 dB |
+| niveis | rx8std: lenta → plena carga a 55% (página) | +18 a +25 dB | +21,1 dB |
+| niveis | cosmo20b: lenta → plena carga a 55% (página) | +18 a +25 dB | +17,9 dB (**desvio**) |
+| niveis | r26b: lenta → plena carga a 55% (página) | +18 a +25 dB | +19,4 dB |
+| niveis | ro80: lenta → plena carga a 55% (página) | +18 a +25 dB | +14,8 dB (**desvio**) |
+| niveis | norton: lenta → plena carga a 55% (página) | +18 a +25 dB | +21,2 dB |
+| niveis | cosmo110s: lenta → plena carga a 55% (página) | +18 a +25 dB | +19,0 dB |
+| niveis | os carros e a moto na lenta: faixa de nível | ≤ 12 dB | 14,2 dB (rx7fd -48,5, rx7fc -45,8, rx3 -53,7, rx8hp -43,2, rx8std -44,5, cosmo20b -40,3, r26b -48,1, ro80 -39,5, norton -52,0, cosmo110s -47,5) (**desvio**) |
+| cpu | r26b rev (12 câmaras, 4 primários, megafone), 10 s em Node | ≤ 45% do tempo real | 11,3% (10 tubos, 8 nós) |
 
 ### Desvios conhecidos (com o motivo físico; `DESVIOS` em `tools/rotativo-valida.ts`)
 
-- **bandas lenta 2 rotores original 750 rpm (rx7fd, ext).** O grave e o 2,5–6k batem; o 400–1k fica 4,5 dB abaixo (−5,5 contra −1) e o 1–2,5k 6 dB abaixo (−17 contra −11). O 400–1k: a janela periférica abre em rampa de 47°e (10 ms a 750 rpm) e o pulso de cada câmara sobe devagar; a gravação (série harmônica limpa até 234 Hz e as ressonâncias do escape) pede um pulso mais íngreme que o trapézio da tabela 1.3. O 1–2,5k: a pós-queima na boca foi atenuada 3,8 dB e presa ao evento (o "som de ar alto em lenta" que o ouvido apontou), e ela era ~90% dessa banda.
-- **centroide lenta 2 rotores original 750 rpm (rx7fd, ext).** Consequência do agudo atenuado da boca e do 400–1k abaixo da gravação: 299 Hz contra 336 Hz no limite de baixo.
-- **rx7fd lenta, pré-silencioso retirado: 1–2,5 kHz e 2,5–6 kHz sobem (absoluto).** No modelo o agudo da lenta vem quase todo da pós-queima distribuída (decisão 5): a parte que queima na boca, onde o gás cru encontra o ar, não passa pelo pré-silencioso. Retirá-lo sobe 150–400 Hz em ~8 dB (a câmara de Helmholtz) e 400–1k em ~4 dB, e o agudo absoluto em 0–1,5 dB. A gravação do carro sem pré-silencioso (TJ Hunt) é, aliás, mais escura nas relativas (−31/−37), com o microfone afastado; o alvo de +6 dB é do texto, não de uma gravação.
-- **rx7fd lenta, pré-silencioso retirado: 2·ign sobe.** A 750 rpm a 2·ign está em 50 Hz, abaixo da câmara de Helmholtz do pré-silencioso (150–300 Hz, tabela 2,2): ele não toca nela. Vale a 5 000 rpm (2·ign 333 Hz).
-- **bandas 5 000 rpm sustentados, Renesis (rx8hp, ext).** O 400–1k bate (−10,1 contra −10), o 1–2,5k e o 2,5–6k ficam 8–10 dB abaixo e o grave 6 dB abaixo: o RX-8 tem o abafador original (−40 dB acima de 2 kHz no Ronco) e a janela lateral de rampa lenta; o agudo que sobra é a pós-queima da carga leve na boca, atenuada 3,8 dB na revisão do "som de ar" (antes, 3–7 dB abaixo). A gravação Commons ("engine and exhaust sound") não diz onde estava o microfone (o cofre aberto daria esse agudo) e o operador oscila a rotação (vagar 11,6%, CVciclo 0,51).
-- **centroide 5 000 rpm sustentados, Renesis (rx8hp, ext).** Consequência do agudo baixo (ver as bandas do RX-8 a 5 000 rpm); com a boca atenuada, 279 Hz.
-- **bandas 7 700 rpm em neutro, 4 rotores megafone (r26b).** O grave bate; 400–1k fica 10 dB e 1–2,5k 17 dB abaixo do vídeo (6VCl, a 5 m): a gravação concentra a energia na ignição (516 Hz) e nos dois primeiros harmônicos a +19–20 dB rel. 150–400; no modelo o megafone em degraus e as frentes da onda dão os harmônicos (ign +29, 2·ign −9 da ign), mas o 150–400 (ordens 1–3 do eixo) fica mais forte que na gravação. Vídeo do YouTube (alvo interno, não entra na tabela pública).
-- **bandas lenta 4 rotores periférica (r26b).** A lenta periférica do modelo fica 9–11 dB mais brilhante e o grave da ignição (127 Hz) 9 dB abaixo. O agudo são os estalos das falhas da sobreposição (13,5/s, como os 15,8/s do vídeo) e não a pós-queima: desligá-la muda o nível do agudo em menos de 1 dB e só enche o vão entre os estalos (p10 da envoltória de 1–2,5 kHz −27 dB sem ela, −15 com ela). O vídeo do YouTube tem o chiado da câmera em 6–12 kHz; alvo interno.
-- **centroide lenta 4 rotores periférica (r26b).** Consequência do agudo dos estalos na lenta periférica (ver as bandas).
-- **bandas lenta 2 rotores moto 1 900 rpm (norton).** O grave fica 17 dB abaixo do vídeo (Fx7, ~2 m, celular): a gravação tem a ordem 3 e a ignição de 63 Hz fortíssimas no grave (+12 dB rel. 150–400) que o 2 em 1 curto da moto no modelo não dá; o agudo fica 6–10 dB abaixo. Vídeo do YouTube com o microfone muito perto (alvo interno).
-- **bandas lenta fria carburada 1 600 rpm (ro80).** O modelo fica 7–18 dB mais brilhante acima de 1 kHz: a gravação (1JOt) não tem nada acima de 6 kHz (codec) e é a partida a frio com o motor ainda engasgando; no modelo o carburado frio tem a fHC alta (vácuo) e o "classic" dianteiro deixa o agudo passar. Alvo interno.
-- **centroide lenta fria carburada 1 600 rpm (ro80).** Consequência do agudo da pós-queima no carburado frio (ver as bandas do Ro80).
-- **lenta: Wankel (rx7fd) contra pistão (ek9, Civic Type R) em 1–2,5 kHz e 2,5–6 kHz (rel. 150–400).** O sentido bate (o Wankel bem mais forte acima de 1 kHz), mas a escala não: o pistão de referência do Ronco (o Civic Type R a 1 000 rpm) é bem mais escuro em 2,5–6 kHz que o Fiat Bravo da gravação (−47 contra −35/−40), então a diferença no 2,5–6k sai 24 dB, contra 15–20. No 1–2,5k ela fica em +3,4 dB (alvo +8 a +12): a pós-queima na boca, que era ~90% dessa banda na lenta do FD, foi atenuada 3,8 dB na revisão do "som de ar".
-- **rx7fd lenta: harmônicos 1–3 da ignição.** 1,8 dB fora (ign +9,9 contra 2·ign +17,7): a variação explosão a explosão (CVciclo 0,22, como a gravação) espalha a fundamental de 25 Hz; o 3·ign forte da gravação (+24) aparece como +15,7.
-- **rx8hp 5 000 rpm: ordens 2/3 e 5/3 contra a ignição.** As ordens de flanco ficam 1–3 dB além da tolerância (−22/−25 contra −16 ± 5) com a dispersão por flanco de 2,5× a do Ronco; mais que isso deixava a lenta irregular demais. Na gravação o operador oscila a rotação (vagar 11,6%), o que também alarga as linhas.
-- **lenta periférica (r26b): vagar em 12 s (o método das gravações).** A caça existe e é da física (1 690–2 140 rpm, sobreposição de 130°e, falhas que crescem com a rotação caindo e com o escape esfriando, a parede do coletor a 4/20 s), mas a 5–8% de vagar: os 25–35% do vídeo vêm em parte do método (a autocorrelação da envoltória salta de oitava numa lenta tão irregular, e o trecho do vídeo vai de 1 580 a 2 200 rpm, ±16%). Mais falhas faziam o motor apagar na partida a −5 °C.
-- **desaceleração rx8hp ('burble'): estouros/s.** O mecanismo do Ronco conta os eventos por segundo como um 4 tempos (N·rpm/120); com 3 câmaras por rotor e o ciclo de 1 080°e são N·rpm/180, então a taxa por segundo do mapa sai 2/3 da do pistão: 3,0/s contra 4–6. Corrigir isso pede um termo no dsp.ts do Ronco (a taxa × cyc/720), que levaria o 787B a ~11/s (fora dos 3,5–7 dele): ficou como está.
+- **rx7fd lenta, pré-silencioso retirado: 2·ign sobe.** A 750 rpm a 2·ign está em 50 Hz, abaixo da câmara de Helmholtz do pré-silencioso (150–300 Hz, tabela 2.2): ele não toca nela. Vale a 5 000 rpm (2·ign 333 Hz). O agudo, que antes não se mexia (a pós-queima na boca não passava por ele), agora sobe +6,5 / +10,3 dB em 1–2,5k / 2,5–6k ao retirá-lo.
+- **bandas 7 700 rpm em neutro, 4 rotores megafone (r26b).** Em carga leve o pulso é fraco (a câmara chega à abertura a ~1,6 bar) e os harmônicos 2 a 4 da ignição ficam 5–9 dB abaixo do vídeo (6VCl, a 5 m): 400–1k 7 dB e 1–2,5k 16 dB abaixo do alvo relativo a 150–400 (metade disso é o 150–400, ordens 2 e 3 do eixo, mais forte que na gravação). Em plena carga a janela de 33°e e o afiamento nos primários já dão o dente de serra (1–2,5k a −3 dB e 2,5–6k a −11 dB da banda da ignição; as passagens em Le Mans dão −2 a −3 e −7 a −14). O timbre tonal do kit ouvido neste caso é 0,8 tolerância; o que falta é médio de carga leve: ver "Pendente".
+- **centroide 7 700 rpm em neutro, 4 rotores megafone (r26b).** Consequência dos harmônicos 2 a 4 da ignição fracos em carga leve (ver as bandas): 627 Hz, 4% abaixo do limite de 651 Hz. Sem o ruído que a pós-queima na boca punha em 2,5–12 kHz o centroide perdeu o que o segurava artificialmente (era 704 Hz).
+- **bandas lenta 4 rotores periférica (r26b).** O agudo agora fica no teto da gravação (−14,9 / −16,3 contra −15,5 / −16,0) e o 400–1k bate (−7,6 contra −7,5); o grave da ignição (127 Hz, banda de 60–150) fica 7,8 dB abaixo, 0,8 dB além da tolerância: metade das explosões falha (o "brap") e a energia da ignição se espalha pelas linhas do padrão de 6 voltas.
+- **bandas lenta 2 rotores moto 1 900 rpm (norton).** O grave fica 18 dB abaixo do vídeo (Fx7, ~2 m, celular): a gravação tem a ordem 1 e a ignição de 61,5 Hz fortíssimas (+9,5 dB rel. 150–400) que o 2 em 1 curto da moto no modelo não dá. O agudo passa pelo teto. Vídeo do YouTube com o microfone muito perto (alvo interno).
+- **rx8hp 5 000 rpm: ordens 2/3 e 5/3 contra a ignição.** As ordens de flanco ficam até 3 dB além da tolerância (−21/−24 contra −16 ± 5) com a dispersão por flanco de 2,5× a do Ronco; mais que isso deixava a lenta irregular demais. Na gravação o operador oscila a rotação (vagar 11,6%), o que também alarga as linhas.
+- **lenta periférica (r26b): vagar em 12 s (o método das gravações).** A lenta agora é o "brap": rajadas a rpm/360 (5,2 Hz), 1 690–2 070 rpm, sem apagar; a rotação média vagueia 3–4% em janelas de 1 s. Os 25–35% do vídeo vêm do método (a autocorrelação da envoltória salta de oitava numa lenta em rajadas) e de o trecho ir de 1 580 a 2 200 rpm em 12 s (±16%): uma deriva lenta que o controle de lenta do modelo não tem.
+- **desaceleração rx8hp ('burble'): estouros/s.** O mecanismo do Ronco conta os eventos por segundo como um 4 tempos (N·rpm/120); com 3 câmaras por rotor e o ciclo de 1 080°e são N·rpm/180, então a taxa por segundo do mapa sai 2/3 da do pistão, e o sorteio de 2 s varia ±1,5/s: 1,5–3/s contra 4–6. Corrigir pede um termo no dsp.ts do Ronco (a taxa × cyc/720). (Os "detectados" contam também as próprias explosões, agora que o agudo é preso ao pulso.)
 - **vibração na lenta: rx8hp contra ek9 (Ronco).** Sem a inércia alternativa sobra a oscilação do torque (`ripple`, que o documento manda deixar igual) na ordem 2: 7 dB abaixo do 4 cilindros, contra 10–15. As câmaras de 654 cm³ dão pulsos de torque grandes; o rotor sem massa alternativa só tira a parte da inércia.
 - **vibração na lenta: rx8hp contra mx5 (Ronco).** Ver a vibração contra o ek9.
 - **mistral: subida de 1 200 a ~7 500 rpm (manete em 4 s).** A hélice de passo variável fica no passo mínimo até 60% da rotação-alvo (a regra do portador Helice) e o 13B leve sobe junto com a manete: 3,1 s. O alvo de 4–6 s supõe a manete mais lenta ou o passo saindo antes do mínimo.
 - **potência ae50r.** 0,4 dB fora (38,8 contra 41 kW ± 5%): a escala de torque usa o atrito médio da sonda; no monorrotor de 294 cm³ a 7 750 rpm o atrito pesa e a potência na rotação máxima sai 5,4% abaixo.
 - **rx8hp a 100 km/h em 6ª (relações da ficha).** O alvo do documento não bate com a própria ficha: 3,760/…/0,843, diferencial 4,444 e pneu 225/45R18 (0,33 m) dão 3 011 rpm a 100 km/h (a conta: 100/3,6/(2π·0,33)·60·0,843·4,444). O RX-8 real gira ~3 000 em 6ª a 100 km/h.
-- **r26b: lenta → plena carga a 55% (página).** A lenta periférica do 787B é alta (1 900 rpm, 21% de rpmMax, coletor quase sem vácuo por causa das janelas enormes) e soa só 7,6 dB abaixo da plena carga a 55%: o reforço de lenta da calibração não diminui o volume (fica em 1). É o 787B em lenta: alto.
-- **ro80: lenta → plena carga a 55% (página).** 1,7 dB fora: o carburado com dois silenciosos na lenta fria fica perto do teto do reforço de lenta (×8).
-- **norton: lenta → plena carga a 55% (página).** 0,1 dB fora.
-- **rx8std: lenta → plena carga a 55% (página).** 0,1 dB fora: a lenta perdeu o agudo da boca (atenuado 3,8 dB), o reforço de lenta da calibração mede o nível total.
-- **lenta original quente (rx7fd): estalos/s.** O detector (picos isolados da envoltória de 1–6 kHz mais de 10 dB sobre a mediana móvel de 0,3 s) conta o chiado de pós-queima de 1 em cada 10 pulsos, agora que ele está preso ao evento (espalhamento de 9 ms). A gravação do RX-7 (Opus, microfone desconhecido) tem o agudo quase liso (0,5/s, p90/p10 6,8 dB); com o espalhamento antigo de 15 ms o modelo dava 0,6/s, mas emendava os pulsos num chiado contínuo que o ouvido ouviu como "ar". 9 ms é o menor que deixa o p90/p10 dentro dos 7–13 dB e já passa o desvio/média ≥ 0,5 do ROTATIVO 8.1; com 0 ms seriam 25/s.
-- **os carros e a moto na lenta: faixa de nível.** A calibração equilibra a plena carga de fábrica de cada preset, e a lenta fica 21 dB abaixo dela onde o reforço alcança; ficam fora o 787B (lenta alta, ver acima), o RX-3 (reator térmico e dois silenciosos, reforço no teto ×8) e a Norton (2 em 1 com abafador esportivo): 23 dB de faixa. Sem eles, 8 dB.
+- **cosmo20b: lenta → plena carga a 55% (página).** 0,1 dB fora: a lenta do 3 rotores sai, sem reforço nenhum da calibração (o reforço não atenua: fica em 1), 17,9 dB abaixo da plena carga a 55%, que o biturbo e o abafador original deixam baixa.
+- **ro80: lenta → plena carga a 55% (página).** 3 dB fora (+14,8): pela mesma razão do Cosmo 20B, o reforço de lenta fica em 1 e a lenta do carburado com dois silenciosos sai só 15 dB abaixo da plena carga, que é baixa (85 kW).
+- **os carros e a moto na lenta: faixa de nível.** A calibração equilibra a plena carga de fábrica de cada preset, e a lenta fica ~21 dB abaixo dela onde o reforço alcança. Ficam nas pontas o Ro80 e o Cosmo 20B (lenta natural alta, o reforço não atenua) e o RX-3 (reator térmico e dois silenciosos, reforço no teto ×8): 14 dB de faixa (eram 25 antes da rodada de som: o 787B, que na lenta era só estouros, saiu da ponta de cima). Sem os três, 5 dB.
 
 ### Revisão do "som de ar" (novembro de 2026)
+
+*Primeira passada, mantida como história. O dono ouviu e reprovou ("apenas ar"): ela atenuou a pós-queima na boca em 3,8 dB e a prendeu ao evento, mas a fonte continuou lá, 20–38 dB acima das gravações casadas. A seção seguinte desfaz a causa.*
 
 **Queixa:** "tem som de ar, a mesma coisa que acontecia no Fusca"; "com o Ø da saída no mínimo é só som de ar"; "o som de ar fica bem alto em lenta". **Método** (`REVISAO-DE-SOM.md`): cada fonte de ruído desligada de cada vez, na lenta quente e a 3 000 rpm sustentados em ponto morto (AR741 a 4 000, X Mini a 6 000), no Ø de fábrica, no mínimo (25 mm) e no máximo (130 mm), com a mesma configuração calibrada; o jato da ponta (que só soma na saída) medido pela diferença exata com ele desligado; bandas em dB rel. 150–400 Hz, p10 da envoltória por banda (relativo à média), índice de modulação da envoltória na ignição, p90/p10 e desvio/média de 1–6 kHz, contra a lenta do RX-7 (Commons 16–20 s) e o RX-8 a ~2 700 rpm (Commons 0–6 s).
 
@@ -1534,17 +1547,111 @@ O resto é a subclasse: `tune` (janelas, velas, áreas em boreEq², CR com o tet
 
 O X Mini (Ø 20 mm, abaixo do limite 0,5 do Ronco) é o único preset cujo jato mudou no Ø de fábrica: −7,7 dB.
 
+### Rodada de som: motor, não ar (novembro de 2026)
+
+**Queixa do dono:** "o diesel e o rotativo dos Mazda eram os piores: ele meio que deixava o som parecendo que era apenas ar"; "se deixa o Ø da saída no mínimo, é só som de ar"; e a regra de gosto, acima da fidelidade à gravação: "pro simulador ele tem que soar mais motor e menos som de ar do motor". **Método:** o kit `tools/ouvido` contra gravações casadas de `referencias/rotativo` (rotação conferida pela dobra em N períodos e pelo pente), o orçamento de ruído por fonte com a mesma semente (`tools/rotativo-fontes.ts`) e a varredura dos controles de Ø e ponteira (`tools/rotativo-varredura.sh`). Painéis em [`docs/ouvido/rotativo/`](ouvido/rotativo/); o caso está contado em `REVISAO-DE-SOM.md`.
+
+**Diagnóstico (antes, `6805819`): fração do nível ponderado A por fonte.**
+
+| Condição | pós-queima na boca | estouros das falhas | jato da ponteira | o que a régua via |
+|---|---|---|---|---|
+| RX-7 FC, lenta | **56%** (99–100% de 1 a 12 kHz) | · | · | 1–2,5k e 2,5–6k **21 e 31 dB acima** da gravação casada (FC3S, da traseira) |
+| RX-8, lenta | **53%** (86–100% de 1 a 12 kHz) | · | · | 11 e 21 dB acima |
+| 20B, lenta | **66%** | 4% | · | 26 e 38 dB acima |
+| RX-7 FC, ~3 550 rpm em ponto morto | 22% (96–100% de 1 a 12 kHz) | · | · | 2,5–6k 16 dB acima |
+| 13B bridgeport, lenta | 5% (pós-queima toda: 29%) | **78%** | · | `ar` 4,1; curtose de 1–6 kHz 169 contra 3,5 |
+| 787B, lenta | · | **98%** | · | total 4,35; cada falha um estouro solto (15/s) |
+| 787B, 7 700 rpm em ponto morto | 7% (70% de 2,5–6k, 98% de 6–12k) | · | · | névoa onde a gravação tem linhas |
+| RX-7 FD, plena carga na cabine | · | · | · | apito do turbo, tom puro em 6,7 kHz, 46 dB sobre o piso; chiado do turbo 93% de 2,5–6k |
+
+A pós-queima na boca era ruído puro (branco de 400 Hz a 3 kHz) injetado a 6 cm da ponta: não passava por turbo, catalisador, pré-silencioso nem abafador, e por isso o pré-silencioso "não fazia efeito". Ela existia para bater com a gravação do RX-7 do Commons (−1 / −11 / −10,5 dB em 400–1k / 1–2,5k / 2,5–6k rel. 150–400, microfone desconhecido); a gravação casada do FC3S, da traseira, dá −17 / −35 / −41, e a do 20B −18 / −35 / −44. O defeito `ar` do kit, que compara a **fração** de leito de cada banda, dava 1,3 na lenta do FC e 0,0–0,1 no RX-8 e no 20B com o piso de ruído 11–38 dB acima do da gravação: por isso a régua desta rodada confere também o **nível** do leito contra o da gravação (`tools/rotativo-regua.py`).
+
+**Varredura de Ø da saída e ponteira (RX-7 FC; % do nível ponderado A; antes → depois).**
+
+| | fábrica (70 / 70 mm) | saída 20 mm | ponteira 20 mm | as duas em 20 mm | as duas em 130 mm |
+|---|---|---|---|---|---|
+| lenta: jato | · → · | · → · | 15% → 2% | 41% → · | · → · |
+| lenta: pós-queima na boca | 56% → · | **99%** → · | 47% → · | 60% → · | 3% → · |
+| 3 000 rpm em ponto morto: jato | · → · | · → · | 16% → 1% | **70%** → · | · → · |
+| 3 000 rpm: pós-queima na boca | 18% → · | **94%** → · | 15% → · | 33% → · | 1% → · |
+| 5 000 rpm em plena carga: jato | 1% → 1% | 14% → · | **75%** → · | **99%** → · | · → · |
+| 5 000 rpm: fração estocástica do som | 4% → 2% | 37% → 1% | 76% → 1% | 100% → 1% | 1% → 1% |
+
+("·" = menos de 0,5%.) O chiado do jato crescia com 1/área² sem limite (+24 dB com a ponteira no mínimo): era o "papel rasgando". E com o Ø da saída no mínimo o tom caía 33 dB (irradiação ∝ d³) enquanto a pós-queima na boca, fonte de volume, subia.
+
+**O que mudou, por mecanismo.**
+
+1. **Pós-queima só onde o gás está quente** (`dsp.ts`: `tune`, `posQueimaRot`, `PosQueimaBoca`). Depois de 3–6 m de tubo o gás chega à boca a 200–300 °C: não queima nada lá (`kBoca` 0; controle "Chama na boca" para o escape curto e aberto). O HC queima logo depois da janela, no primário (`kPrim` 0,5) e no ponto quente (`kQuente` 0,2), como **expansão presa ao evento**: a parte lisa reforça o pulso (tom), e só a flutuação turbulenta (`hcTurb`, ~10% rms; controle "Chiado da pós-queima") é ruído, dentro do tubo. Com isso o pré-silencioso passou a fazer efeito: retirá-lo na lenta do FD sobe 1–2,5k em 6,5 dB e 2,5–6k em 10,3 dB (antes +1,4 / +0,1).
+2. **Boca com ponteira** (`escape.ts`: `BocaRot`). A saída mais fina que a seção de referência (o downpipe) é um orifício: Δp = ½ρv²(1/σ² − 1). Para a onda isso é uma resistência `M₀·(1/σ² − 1)` (o escoamento médio, M₀ ≈ 0,004 na lenta e ≈ 0,14 em plena carga) mais o termo do próprio pulso; a vazão pulsante cai e o que não sai volta como contrapressão. A ponteira de 20 mm num escape de 70 tira 7,7 dB do pulso na lenta e 18,1 dB em plena carga a 5 000 rpm: ela **amolece** o pulso em vez de acelerá-lo sem limite. O chiado do jato lê a velocidade na ponteira (área do tubo ÷ área da ponteira; a ponteira mais larga é difusor), só a parte pulsante, saturada na velocidade do som junto com o escoamento médio, e com teto de 10% da envoltória do pulso irradiado pela mesma boca (`tetoJato`). A irradiação passou à de monopolo (ganho ∝ d: a mesma vazão irradia igual por tubo fino ou grosso; com d² o grave ia com d³).
+3. **Janela periférica pela cinemática** (`constantes.ts`: `rampaPeriferica`). A janela fica aberta 360°e (a distância entre as vedações de ápice) mais a própria altura: 393 − 360 = 33°e no 13B (20 mm a 0,61 mm/°e). É esse o tempo de abertura e de fechamento; a tabela 1.3 trazia 47 e 59°e, que não fecham com a duração. E nos primários a onda afia com o coeficiente do gás, (γ+1)/(2γ) = 0,88·p/p₀ (era o 0,6 do Ronco em todo tubo). No 787B em plena carga a 8 160 rpm os harmônicos 2 a 6 da ignição na saída foram de −8 / −19 / −20 / −23 / −29 dB para −5 / −10 / −11 / −14 / −20 dB: 1–2,5 kHz a −3 dB e 2,5–6 kHz a −11 dB da banda da ignição (as três gravações de fora do 787B dão −1 a −3 e −7 a −14; um dente de serra daria −4 e −9). São linhas, não ruído (HNR +15 e +7 dB). A periodicidade com os ruídos desligados fica ≥ 0,993 em todos os presets (`tools/rotativo-periodico.ts`). A Sachs (eventos estimados, "a conferir") fica com a rampa da tabela.
+4. **O "brap" pela diluição** (`dsp.ts`: `escapeRot`, `admissaoRot`, `janelasRot`, `control`). O laço acompanha a fração de gás queimado em cada câmara, na região da janela de escape de cada rotor e no duto de admissão (que troca com o plenum comum). No fechamento da admissão fica a fração presa na carga (`xRes`): 0,23 no Renesis, 0,33 no 13B de fábrica, 0,38 com street port, mais de 0,5 com bridge ou periférica depois de uma queima. Acima de 0,44–0,48 a mistura não acende (só com sobreposição de competição; o limiar sobe 0,10 até a rotação máxima, a tolerância à diluição cresce com a turbulência). A câmara que falha manda mistura crua ao escape; o que volta na vez seguinte é mistura, e ela acende: cada câmara alterna queima e falha com período de dois ciclos, **6 voltas do eixo**. É o ritmo medido nas gravações: 5,2 Hz no 787B a 1 890 rpm, 4,8 Hz no RX-7 preparado a 1 730, 5,5 Hz no bridgeport a 1 980 (rpm/360; a linha mais forte do bridgeport, 71,5 Hz, é a ignição de 66 Hz mais 5,5). No 787B a sequência queimou/falhou tem autocorrelação −0,85 a 3 voltas e +0,71 a 6; no bridge de plenum comum as câmaras entram no passo e saem rajadas inteiras (8 queimas, 6 falhas: 7 voltas, ~4,5 Hz). A carga crua de uma falha queima 1,5% ao entrar no tubo quente, como chama turbulenta (`kChama`: o ronco rouco da rajada), e 5% do que ficou no primário é aceso pela próxima queima (`kCru`); o estouro solto do Ronco ficou raro (0,2/s, eram 15/s). Saiu o sorteio de falhas (`falhaBase`, `kQueda`, `kCaca`); o ar de lenta de equilíbrio da calibração entra já na partida (`arDeLenta`).
+5. **Turbo e fundo do lado baixo.** O apito e o sopro do turbo a 30% (`kApito`, controle "Som do turbo"; o tom de 6,7 kHz era 34–46 dB sobre o piso em plena carga) e o chiado contínuo das vedações à metade (`kVed`, controle "Chiado das vedações").
+6. **Calibração da lenta.** A sonda media 0,4 s de um laço de ar de lenta que oscila em ~0,8 s (coletor de 0,33 a 0,54 bar, 4 dB de nível): o reforço da lenta dependia de onde a janela caía. Agora média de 2 s.
+
+`src/engines/ronco/dsp.ts`: dois ramos `rot` (a falha passa a ser por câmara, `this.falhaRot[c]`; o apito do turbo, `if (this.rot) tur += this.rotApito(lvl); else` a linha original) e a declaração de `rotApito`. `paridade:ronco` idêntico.
+
+**Resultado (gravação casada; antes → depois).** `ar`, tom a menos e pulso a menos são os defeitos de um lado só do kit (limites da régua dos aprovados: 0,6 / 2,4 / 1,3); total ≤ 2,2.
+
+| caso | rpm real / sim | ar | tom a menos | pulso a menos | total | nível re âncora em 400–1k · 1–2,5k · 2,5–6k (dB): gravação / antes / depois |
+|---|---|---|---|---|---|---|
+| fc-lenta | 746 / 749 | 1,30 → 0,00 | 0,00 → 0,18 | 0,82 → 0,15 | 1,62 → 2,06 | -17,2 / -10,3 / -12,6 · -35,2 / -13,8 / -36,8 · -41,0 / -10,0 / -40,5 |
+| fc-3550 | 3543 / 3545 | 0,38 → 0,00 | 0,00 → 0,00 | 1,17 → 0,62 | 2,66 → 3,38 | -8,5 / +1,5 / +2,5 · -12,3 / -12,3 / -19,2 · -24,2 / -8,6 / -30,7 |
+| bridge-lenta | 1982 / 1884 | 4,11 → 0,59 | 2,58 → 1,32 | 0,64 → 0,12 | 3,62 → 2,76 | -9,9 / -0,2 / -2,8 · -16,9 / -5,8 / -19,6 · -20,2 / -8,6 / -30,1 |
+| fd-carga-cabine | 4837 / 4846 | 3,66 → 3,58 | 1,97 → 1,80 | 1,91 → 1,92 | 2,65 → 2,67 | -1,2 / -8,8 / -7,4 · -11,3 / -28,4 / -30,1 · -23,7 / -41,6 / -48,1 |
+| fd-carga-ext | 4837 / 4846 | 0,00 → 0,00 | 0,47 → 0,34 | 0,00 → 0,00 | 2,58 → 2,66 | -1,2 / +0,1 / +2,3 · -11,3 / -5,3 / -4,6 · -23,7 / -12,8 / -9,9 |
+| rx8-lenta-esportivo | 923 / 917 | 0,00 → 0,00 | 1,40 → 0,03 | 0,15 → 0,00 | 1,67 → 4,17 | -9,8 / -3,0 / -3,0 · -21,3 / -10,1 / -19,0 · -27,9 / -7,1 / -39,1 |
+| 20b-lenta | 878 / 879 | 0,13 → 0,00 | 0,00 → 0,00 | 0,62 → 0,00 | 2,26 → 2,22 | -17,6 / -5,4 / -8,0 · -34,9 / -8,6 / -33,7 · -43,7 / -5,4 / -42,6 |
+| 787b-lenta | 1888 / 1901 | 0,00 → 0,00 | 1,18 → 0,25 | 0,54 → 0,94 | 4,35 → 1,59 | -10,5 / -3,1 / -7,8 · -20,0 / -6,1 / -16,8 · -14,1 / -6,0 / -18,4 |
+| 787b-7700 | 7703 / 7708 | 0,20 → 0,00 | 0,20 → 0,02 | 1,26 → 0,58 | 1,70 → 2,17 | +0,0 / -0,0 / -0,0 · -1,2 / -7,7 / -10,1 · -13,6 / -15,0 / -20,6 |
+| 787b-bordo | 8172 / 8160 | 0,00 → 0,00 | 0,75 → 1,10 | 0,28 → 0,35 | 2,37 → 2,53 | -0,2 / -0,0 / -0,0 · -8,3 / -18,3 / -14,2 · -8,9 / -55,2 / -49,3 |
+| 787b-bordo-ext | 8172 / 8160 | 0,00 → 0,00 | 0,78 → 1,24 | 0,26 → 0,00 | 2,04 → 2,75 | -0,2 / +0,0 / +0,0 · -8,3 / -7,1 / -2,7 · -8,9 / -19,0 / -11,3 |
+| norton-lenta | 1842 / 1805 | 1,36 → 0,00 | 2,25 → 0,77 | 0,35 → 0,22 | 3,20 → 3,66 | -2,3 / -4,8 / -4,1 · -2,8 / -15,6 / -16,8 · -12,7 / -21,9 / -38,7 |
+| ro80-lenta | 1110 / 1067 | 0,00 → 0,00 | 0,00 → 0,00 | 0,98 → 0,44 | 2,45 → 2,51 | +5,9 / -9,2 / -8,4 · -0,7 / -14,8 / -18,8 · -14,2 / -17,8 / -24,7 |
+
+| caso | leito de ruído re âncora em 400–1k · 1–2,5k · 2,5–6k (dB): gravação / antes / depois | HNR em 400–1k · 1–2,5k · 2,5–6k (dB): gravação / antes / depois | linhas re âncora em 400–1k · 1–2,5k (dB): gravação / antes / depois |
+|---|---|---|---|
+| fc-lenta | -26,0 / -21,8 / -41,5 · -40,8 / -18,0 / -49,3 · -44,6 / -14,0 / -49,8 | +1 / +2 / -0 · -18 / -25 / -19 · -25 / -25 / -25 | -19,6 / -12,6 / -15,8 · -51,8 / -38,7 / -52,4 |
+| fc-3550 | -9,2 / -15,1 / -18,5 · -12,6 / -13,1 / -40,3 · -25,5 / -9,2 / -39,1 | -7 / +14 / +16 · -16 / -15 / +11 · -22 / -25 / -12 | -16,5 / +1,4 / +2,5 · -28,8 / -27,0 / -19,5 |
+| bridge-lenta | -12,9 / -0,3 / -8,0 · -19,1 / -5,8 / -24,2 · -24,2 / -8,2 / -32,1 | -10 / -25 / -9 · -25 / -25 / -25 · -25 / -25 / -25 | -20,0 / -25,2 / -13,8 · -41,9 / -30,6 / -44,6 |
+| fd-carga-cabine | -10,8 / -38,3 / -37,1 · -19,9 / -49,0 / -47,6 · -32,4 / -41,5 / -48,2 | +14 / +20 / +20 · +7 / +11 / +13 · +5 / -11 / -9 | -1,3 / -8,8 / -7,4 · -13,1 / -28,7 / -30,3 |
+| fd-carga-ext | -10,8 / -29,4 / -27,1 · -19,9 / -32,7 / -31,0 · -32,4 / -30,4 / -42,1 | +14 / +18 / +18 · +7 / +10 / +15 · +5 / +4 / +9 | -1,3 / +0,0 / +2,2 · -13,1 / -5,7 / -4,7 |
+| rx8-lenta-esportivo | -17,5 / -17,4 / -34,1 · -23,5 / -14,8 / -43,6 · -28,4 / -11,1 / -49,3 | +5 / +2 / +4 · -3 / -16 / -3 · -25 / -25 / -18 | -11,0 / -5,2 / -4,7 · -26,2 / -26,0 / -24,2 |
+| 20b-lenta | -23,1 / -14,7 / -30,4 · -37,5 / -11,1 / -43,7 · -44,9 / -7,8 / -50,9 | -1 / +4 / +6 · -21 / -25 / -1 · -25 / -25 / -25 | -21,8 / -7,0 / -9,1 · -56,4 / -33,5 / -37,1 |
+| 787b-lenta | -12,0 / -5,9 / -9,5 · -21,2 / -9,0 / -20,8 · -14,8 / -8,7 / -23,3 | -25 / -17 / -17 · -25 / -25 / -25 · -25 / -25 / -25 | -34,6 / -20,1 / -25,6 · -44,8 / -30,7 / -44,0 |
+| 787b-7700 | -6,9 / -18,0 / -21,4 · -4,3 / -19,7 / -30,5 · -16,4 / -16,8 / -36,5 | +9 / +17 / +20 · +1 / +11 / +17 · -3 / -5 / +11 | -0,4 / -0,1 / -0,1 · -3,9 / -8,0 / -10,2 |
+| 787b-bordo | -6,0 / -21,3 / -22,9 · -10,9 / -35,3 / -32,0 · -10,1 / -62,9 / -58,1 | +6 / +19 / +21 · +3 / +14 / +15 · -3 / +1 / +3 | -1,1 / -0,1 / -0,0 · -10,3 / -18,5 / -14,3 |
+| 787b-bordo-ext | -6,0 / -20,2 / -18,7 · -10,9 / -26,0 / -25,5 · -10,1 / -25,8 / -29,9 | +6 / +19 / +17 · +3 / +15 / +15 · -3 / +3 / +7 | -1,1 / -0,0 / -0,1 · -10,3 / -7,3 / -2,8 |
+| norton-lenta | -5,5 / -6,0 / -8,6 · -4,1 / -16,7 / -21,4 · -13,7 / -22,7 / -42,1 | +0 / -10 / -0 · -13 / -19 / -6 · -23 / -20 / -17 | -6,7 / -14,9 / -7,4 · -16,5 / -33,9 / -24,3 |
+| ro80-lenta | +5,4 / -18,9 / -12,7 · -1,2 / -18,5 / -24,4 · -14,8 / -18,6 / -26,5 | -25 / -3 / -2 · -20 / -25 / -13 · -25 / -25 / -25 | -19,2 / -14,1 / -12,6 · -21,9 / -39,6 / -32,1 |
+
+**Como ler.** Os defeitos de um lado só (o que o simulado tem de pior que a gravação) caem para dentro dos limites em todos os casos de fora do carro. O total simétrico **sobe** em vários (lenta do RX-8 1,67 → 4,17, FC a 3 550 rpm 2,66 → 3,38): ele pune o simulado por ser mais limpo e mais preso ao pulso que a gravação (no RX-8, 73% da faixa de 1–6 kHz da gravação é um leito liso, o ruído do microfone a −58 dBFS; a envoltória do simulado tem p90/p10 de 24 dB contra 4). É o desvio que o viés do dono manda aceitar: a gravação é teto de ruído, não alvo. Ficam fora por outro motivo:
+
+- **RX-7 FD na cabine** (`ar` 3,6): a banda de 2,5–6 kHz do simulado está vazia (−48 dB rel. 150–400, a gravação tem −24 com linhas) e o pouco que há nela é o sopro do turbo; em nível, o leito fica 16 dB **abaixo** do da gravação. O que falta é tom: o filtro de cabine do Ronco (compartilhado) corta 17–24 dB acima de 1 kHz.
+- **13B bridgeport** (leito de 400–1k 5 dB acima; total 2,76): o padrão de rajadas do simulado se repete a cada 7 voltas e não a cada 6, então parte dele conta como "não periódico"; e faltam 10 dB de 2,5–6 kHz dentro das rajadas.
+- **Norton** (total 3,66): o agudo liso e forte da gravação a 2 m (−3 / −13 dB em 1–2,5k / 2,5–6k) não existe no modelo (−17 / −39): é a mecânica do motor refrigerado a ar, não o escape. Os defeitos de um lado só melhoraram (`ar` 1,36 → 0; tom a menos 2,25 → 0,77) com a variação entre explosões do preset em 1,5× (CV do grave 0,35; a gravação tem 0,18 e o preset dava 0,58).
+
+**Médios: o que é do rotativo e o que falta de genérico.** Em plena carga as linhas de 400 Hz a 2,5 kHz já passam das gravações de bordo no ouvinte de fora (FD: +2,2 / −4,7 dB rel. 150–400 contra −1,3 / −13,1 na cabine; 787B: −2,8 contra −10,3). O que sobra:
+
+- **Cabine** (compartilhado): FD a 4 850 rpm em carga, linhas 6 dB abaixo em 400–1k e 17 dB abaixo em 1–2,5k; 787B a bordo 4 dB abaixo em 1–2,5k e 40 dB em 2,5–6k.
+- **Carga leve em giro alto** (do rotativo): o 787B segurado a 7 700 rpm tem os harmônicos 2 a 4 da ignição 6 dB abaixo da gravação (linhas de 1–2,5k a −10,2 contra −3,9) e 2,5–6k 7 dB abaixo; a câmara chega à abertura a 1,6 bar e o pulso é quase só o deslocamento. O megafone do modelo (três degraus de 0,17 m) também não tem os modos de um megafone de verdade, que a 7 700 rpm caem em cima dos harmônicos da ignição.
+- **Lenta** (genérico): nas lentas de rua o simulado tem 5–10 dB **a mais** que as gravações em 400–1k (FC −12,6 contra −17,2; 20B −8,0 contra −17,6): aqui não faltam médios.
+
+**Sem gravação casada** (medidos só pelo orçamento e pelos portões): X Mini e XTS-210, AE50R, AR741, MidWest, Mistral, RX-3, Cosmo 110S e RX-8 de 4 janelas (neles o jato da ponta passou a ler a razão de áreas ponteira/tubo no lugar da área absoluta: nos tubos finos, onde ele era 64–99% do agudo, cai 8–24 dB); e o motor de palhetas (outro sintetizador, que esta rodada não tocou; as duas gravações de retífica do acervo ficaram por comparar). O Eunos Cosmo em carga só tem gravação de cabine sem som periódico (fração periódica 0,07: vento e rolagem), que não serve de alvo.
+
 ### Pendente (TODO)
 
-- Pulso da janela periférica mais íngreme que o trapézio da tabela 1.3 (o 400–1k da lenta do RX-7 e o 1–2,5k do 787B a 7 700 rpm ficam abaixo das gravações).
-- O pré-silencioso tirando o agudo da lenta: com a pós-queima na boca (que ele não toca) retirá-lo só sobe o grave da câmara de Helmholtz; falta decidir, com uma gravação do mesmo carro com e sem ele no mesmo microfone, quanto da pós-queima queima antes e quanto na ponta.
-- Estouros por segundo do mecanismo do Ronco com o ciclo de 1 080°e (a taxa por evento conta N·rpm/120; o Wankel tem N·rpm/180): um termo `× cyc/720` no `dsp.ts` do Ronco, com o 787B noutro mapa.
+- Médios em carga leve e giro alto no megafone (787B a 7 700 rpm em ponto morto): pulso mais forte na abertura com pouca carga e os modos do megafone (um tubo cônico, que o DSP não tem).
+- O "brap" do bridge de plenum comum se repete a cada 7 voltas (8 queimas, 6 falhas); as gravações dão 6. No 787B, de dutos individuais, o período já é de 6 voltas, mas a rajada é menos funda que a do vídeo (modulação a 5 Hz de −12 dB contra −5).
+- Cabine: o filtro de cabine do Ronco tira o tom acima de 1 kHz (FD e 787B a bordo); é do motor-base.
+- Irradiação: no Ronco o ganho da boca cresce com d² (d³ no grave); o rotativo passou a d (monopolo). Vale conferir no motor-base.
+- Norton e os demais Sachs: eventos das janelas "a conferir" (a duração de admissão da tabela, 330°e, não fecha com uma janela periférica, que fica aberta pelo menos 360°e); o agudo mecânico do motor refrigerado a ar que a gravação mostra.
+- RX-8: falta uma gravação de fora em giro alto (as do acervo são de cabine ou passagens); a lenta com o escape original do acervo é só ruído de gravação (−41 dBFS).
+- Estouros por segundo do mecanismo do Ronco com o ciclo de 1 080°e (a taxa por evento conta N·rpm/120; o Wankel tem N·rpm/180): um termo `× cyc/720` no `dsp.ts` do Ronco.
 - Velocidade do som fixa (520 m/s) nos tubos: o gás do Wankel é mais quente (≈ 560 m/s), limitação conhecida do Ronco.
 - Vibração: a oscilação do torque do Ronco (o documento manda deixar igual) deixa o Wankel 7 dB abaixo do 4 cilindros, contra 10–15.
-- Motor de palhetas: medir contra uma gravação Commons de ferramenta pneumática (o acervo não tem) e um hospedeiro de verdade no arranque (hoje uma carga com as compressões).
+- Motor de palhetas: comparar com as duas gravações de retífica pneumática do acervo e um hospedeiro de verdade no arranque (hoje uma carga com as compressões).
 - X-Engine: sem gravação; o XTS-210 diesel espera a flag `cc` combinada com o rotativo.
 - `CENA.md` 1.6: acrescentar as linhas do rotativo (rotor e gerador já estão em `COMPAT`).
-- "Som de ar", o que ficou: (a) o RX-8 e o Cosmo 20B seguem com o agudo da boca alto na lenta (1–2,5k −6,4 e −7,6 rel. 150–400, contra −17 do FD): o abafador original tira o tom e não a boca, e o Renesis (janela lateral, sem sobreposição) deveria mandar menos HC ao escape; falta uma gravação de lenta do RX-8. (b) No Ø mínimo da saída o tom cai ~33 dB (a irradiação ∝ d³ do Ronco: área do tubo e polo de irradiação; um monopolo seria ∝ d²) e a pós-queima na boca, uma fonte de volume, não: o agudo fica 9–16 dB acima do 150–400. (c) Nos monorrotores (AR741, AE50R) o jato da ponta é 84–99% do agudo, em pulsos (p10 −9 a −27 dB): sem gravação para conferir. (d) A 3 000 rpm (100 eventos/s) a envoltória de 2/12 ms já emenda os eventos; as gravações também são lisas nessa rotação. (e) O espalhamento de 9 ms é um meio-termo entre a gravação (lisa) e o ouvido; o controle vai de 0 a 20 ms para decidir de ouvido.
 
 ## Elétrico: síntese espectral
 
