@@ -79,4 +79,19 @@ export function mono(L: Float32Array, R: Float32Array, t0: number, t1: number) {
   return x;
 }
 
+/**
+ * Um ouvido só (o de maior potência no trecho): é o que se compara com a gravação de um microfone. Na página cada boca
+ * do escape chega aos dois ouvidos com até 0,6 ms de diferença (o que tira o som "de dentro da cabeça" no fone); somados
+ * em mono, os dois ouvidos formam um pente que tira 2 a 4 dB de 1–2,5 kHz nos motores com bocas dos dois lados (Rotec,
+ * Yak-52, Corsair). Isso é da medida, não do som: quem ouve, ouve cada ouvido.
+ */
+export function ouvido(L: Float32Array, R: Float32Array, t0: number, t1: number) {
+  const a = Math.round(t0 * SR), b = Math.min(L.length, Math.round(t1 * SR));
+  let eL = 0, eR = 0;
+  for (let i = a; i < b; i++) { eL += L[i] * L[i]; eR += R[i] * R[i]; }
+  const src = eR > eL ? R : L, x = new Float64Array(Math.max(0, b - a));
+  for (let i = 0; i < x.length; i++) x[i] = src[a + i];
+  return x;
+}
+
 export { PRESETS_RADIAL };

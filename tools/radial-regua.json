@@ -1,0 +1,331 @@
+{
+ "_": "Casos da régua do Radial (tools/radial-regua.py). As gravações ficam em referencias/radial/ do checkout principal, fora do git: fonte, trechos e rotação de cada uma no INDEX.md de lá. A rotação de cada trecho é a anotada no INDEX (pente da ignição, RADIAL.md Apêndice A) ou a de tools/ouvido/f0.py (dobra em N períodos e pente); 'nota' diz o que a gravação tem de diferente do preset. Pela página o giro é travado na rotação da gravação (o ar de lenta ou a manete que equilibra a hélice); pela Cena a lenta é livre com a rotação-alvo da gravação.",
+ "casos": [
+  {
+   "id": "rotec-lenta",
+   "titulo": "Rotec R2800 · lenta 1 198 rpm (3–5 m)",
+   "preset": "rotec2800",
+   "real": "rotec-r2800-lenta.wav",
+   "trecho": [
+    12,
+    24
+   ],
+   "rpm": 1198,
+   "folga": 0.12,
+   "render": [
+    "--rpm",
+    "1198"
+   ],
+   "renderCena": [
+    "--lenta",
+    "--idle",
+    "1198"
+   ],
+   "caminhos": [
+    "pagina",
+    "cena"
+   ],
+   "d": 4,
+   "nota": "Kitfox, vídeo do fabricante, AAC; microfone na esteira da hélice (fração periódica 0,13, giro ±10 %): o agudo da gravação é quase liso"
+  },
+  {
+   "id": "rotec-kitfox",
+   "titulo": "Rotec R2800 · lenta 1 147 rpm (perto)",
+   "preset": "rotec2800",
+   "real": "rotec-r2800-kitfox.wav",
+   "trecho": [
+    10,
+    30
+   ],
+   "rpm": 1147,
+   "folga": 0.12,
+   "render": [
+    "--rpm",
+    "1147"
+   ],
+   "caminhos": [
+    "pagina"
+   ],
+   "nota": "outro Kitfox, primeira partida; a 3ª harmônica da ignição (196–208 Hz) é a linha mais forte"
+  },
+  {
+   "id": "rotec-1490",
+   "titulo": "Rotec R2800 · 1 494 rpm (perto)",
+   "preset": "rotec2800",
+   "real": "rotec-r2800-kitfox.wav",
+   "trecho": [
+    32,
+    44
+   ],
+   "rpm": 1494,
+   "folga": 0.1,
+   "render": [
+    "--rpm",
+    "1494"
+   ],
+   "caminhos": [
+    "pagina"
+   ],
+   "nota": "segunda condição do Rotec: um pouco mais de giro, manete que equilibra a hélice de passo fixo"
+  },
+  {
+   "id": "t6g-lenta",
+   "titulo": "T-6G R-1340 · lenta 525 rpm (4 m, escape exposto)",
+   "preset": "r1340",
+   "real": "t6g-r1340-partida-lenta.wav",
+   "trecho": [
+    28,
+    34
+   ],
+   "rpm": 525,
+   "render": [
+    "--rpm",
+    "525"
+   ],
+   "renderCena": [
+    "--lenta",
+    "--idle",
+    "525",
+    "--campo",
+    {
+     "escape": {
+      "saidas": [
+       {
+        "L": 1.0,
+        "O": 76,
+        "phi": 270
+       }
+      ]
+     }
+    }
+   ],
+   "caminhos": [
+    "pagina",
+    "cena"
+   ],
+   "d": 4,
+   "nota": "motor ainda frio, 6 s de trecho. A rotação é 525 rpm (ciclo de 4,38 Hz pela dobra do f0.py, ignição em 39,4 Hz), não os 916 rpm do INDEX e do RADIAL.md: a linha mais forte, 70 Hz, é o 16º harmônico do ciclo (8ª ordem), e o agudo vem em uma rajada por ciclo. Pela Cena o ouvinte fica do lado esquerdo do avião: a saída do anel vai espelhada (phi 270) para ele ouvir o lado do escape, como o microfone da gravação"
+  },
+  {
+   "id": "corsair-lenta",
+   "titulo": "Corsair R-2800 · lenta 685 rpm (8 m)",
+   "preset": "r2800",
+   "real": "corsair-lenta-passagens-parada.wav",
+   "trecho": [
+    68,
+    82
+   ],
+   "rpm": 685,
+   "render": [
+    "--rpm",
+    "685"
+   ],
+   "renderCena": [
+    "--lenta",
+    "--idle",
+    "685"
+   ],
+   "caminhos": [
+    "pagina",
+    "cena"
+   ],
+   "d": 8,
+   "nota": "linha externa fixa em 152,3 Hz (+25 dB) dentro da banda âncora: os níveis relativos da gravação saem ~3 dB baixos"
+  },
+  {
+   "id": "p47-lenta",
+   "titulo": "P-47 R-2800 turbo · lenta 773 rpm (5 m)",
+   "preset": "r2800turbo",
+   "real": "p47-partida-lenta.wav",
+   "trecho": [
+    22,
+    36
+   ],
+   "rpm": 773,
+   "render": [
+    "--rpm",
+    "773"
+   ],
+   "renderCena": [
+    "--lenta",
+    "--idle",
+    "773"
+   ],
+   "caminhos": [
+    "pagina",
+    "cena"
+   ],
+   "d": 5,
+   "nota": "coletor único e turbina na cauda; tom fixo de 2,0 kHz em 37 % do trecho (não é do motor)"
+  },
+  {
+   "id": "yak-lenta",
+   "titulo": "Yak-52 M-14P · lenta acelerada 1 206 rpm (de fora, perto)",
+   "preset": "m14p",
+   "real": "yak52-partida-taxi-decolagem.wav",
+   "trecho": [
+    17,
+    36
+   ],
+   "rpm": 1206,
+   "render": [
+    "--rpm",
+    "1206"
+   ],
+   "renderCena": [
+    "--lenta",
+    "--idle",
+    "1206"
+   ],
+   "caminhos": [
+    "pagina",
+    "cena"
+   ],
+   "d": 8,
+   "nota": "gravação só de áudio; rotação pelo f0.py (linha de 90,5 Hz = 9º harmônico do ciclo); distância não anotada (≈ 8 m)"
+  },
+  {
+   "id": "dc3-lenta",
+   "titulo": "DC-3 R-1830 · lenta 876 rpm (10 m)",
+   "preset": "r1830",
+   "real": "dc3-r1830-partida-inercia.wav",
+   "trecho": [
+    36,
+    48
+   ],
+   "rpm": 876,
+   "render": [
+    "--rpm",
+    "876"
+   ],
+   "renderCena": [
+    "--lenta",
+    "--idle",
+    "876"
+   ],
+   "caminhos": [
+    "pagina",
+    "cena"
+   ],
+   "d": 10,
+   "nota": "dois motores (linhas de 101 e 105,5 Hz); passa-baixa da gravação em 12,5 kHz"
+  },
+  {
+   "id": "beaver-lenta",
+   "titulo": "Beaver R-985 · lenta 705 rpm (de fora, perto)",
+   "preset": "r985",
+   "real": "beaver-r985-partida.wav",
+   "trecho": [
+    20,
+    50
+   ],
+   "rpm": 705,
+   "render": [
+    "--rpm",
+    "705"
+   ],
+   "renderCena": [
+    "--lenta",
+    "--idle",
+    "705"
+   ],
+   "caminhos": [
+    "pagina",
+    "cena"
+   ],
+   "d": 6,
+   "nota": "DHC-2 Beaver, o mesmo R-985 do preset (que é o do Ford Trimotor, de passo fixo); rotação pelo f0.py (linha de 52,8 Hz = 9º harmônico do ciclo); tom fixo de 8,1 kHz que não é do motor; distância não anotada (≈ 6 m)"
+  },
+  {
+   "id": "t28-lenta",
+   "titulo": "T-28 R-1820 · lenta 842 rpm (perto)",
+   "preset": "r1820",
+   "real": "t28-r1820-partida-lenta.wav",
+   "trecho": [
+    60,
+    80
+   ],
+   "rpm": 842,
+   "render": [
+    "--rpm",
+    "842"
+   ],
+   "renderCena": [
+    "--lenta",
+    "--idle",
+    "842"
+   ],
+   "caminhos": [
+    "pagina",
+    "cena"
+   ],
+   "d": 5,
+   "nota": "gravação de perto, quase sem grave (30–100 Hz a −19 dB): a banda âncora pesa mais que o grave real; rotação do INDEX (pente da ignição, 63,2 Hz), não conferida pela dobra"
+  },
+  {
+   "id": "sherman-lenta",
+   "titulo": "Sherman R-975 · lenta 705 rpm contra o R-985 do Beaver (de fora, perto)",
+   "preset": "r975",
+   "real": "beaver-r985-partida.wav",
+   "trecho": [
+    20,
+    50
+   ],
+   "rpm": 705,
+   "render": [
+    "--rpm",
+    "705"
+   ],
+   "caminhos": [
+    "pagina"
+   ],
+   "nota": "não há gravação do Sherman no acervo: o R-985 do Beaver é um 9 cilindros de 16 L com anel coletor, mas com hélice e sem o compartimento do tanque; serve para os estalos e o leito, não para as bandas"
+  },
+  {
+   "id": "t6-decolagem",
+   "titulo": "T-6 R-1340 · decolagem 2 200 rpm (beira da pista)",
+   "preset": "r1340",
+   "real": "t6-decolagem-helice-supersonica.wav",
+   "trecho": [
+    12,
+    20
+   ],
+   "rpm": 2200,
+   "folga": 0.1,
+   "render": [
+    "--decolagem",
+    "--rpmAlvo",
+    "0.9"
+   ],
+   "caminhos": [
+    "pagina",
+    "cena"
+   ],
+   "d": 50,
+   "nota": "passagem com Doppler e 0,25 % de clipping; domina a hélice de ponta quase sônica (harmônicos 5–9 da passagem de pá)"
+  },
+  {
+   "id": "corsair-decolagem",
+   "titulo": "Corsair R-2800 · decolagem 2 273 rpm (pista)",
+   "preset": "r2800",
+   "real": "corsair-partida-decolagem-passagem.wav",
+   "trecho": [
+    60,
+    65
+   ],
+   "rpm": 2273,
+   "folga": 0.12,
+   "render": [
+    "--decolagem",
+    "--rpmAlvo",
+    "0.75"
+   ],
+   "caminhos": [
+    "pagina",
+    "cena"
+   ],
+   "d": 150,
+   "nota": "5 s de trecho, de longe; domina a ordem de fileira (4,5ª, 170 Hz)"
+  }
+ ]
+}

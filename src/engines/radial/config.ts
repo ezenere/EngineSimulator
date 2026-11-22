@@ -29,7 +29,7 @@ export function configCalibrada(spec: Partial<PresetRadial> & Record<string, any
   const cfg = montarConfig(spec);
   const probe = new RadialDSP(sr);
   probe.setConfig(cfg);
-  cfg.gain = probe.cfgGain; cfg.mkIdle = probe.mkIdle;
+  cfg.gain = probe.cfgGain; cfg.mkIdle = probe.mkIdle; cfg.margemDb = probe.margemDb || 0; // (margem da decolagem: dsp.ts, calibrate)
   if (probe.powerModel) { cfg.powerModel = probe.powerModel; cfg.tqPeakModel = probe.tqPeakModel; cfg.frPeakModel = probe.frPeakModel; }
   return cfg;
 }

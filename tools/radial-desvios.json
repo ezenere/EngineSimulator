@@ -2,49 +2,49 @@
   "bandas lenta 9 cil. grande, 12 m (Yak-52)": {
     "grupo": "bandas",
     "medido": [
-      9.701,
-      -8.764,
-      -12.83,
-      -13.69
+      9.556,
+      -8.949,
+      -13.91,
+      -15.38
     ],
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "+4.0 / -6.0 / -15.0 / -14.0 ± 4 dB",
-    "motivo": "O grave (60–150) fica 5–6 dB acima: a ignição de 73 Hz e o 2º harmônico caem na banda e o escape do modelo irradia o pulso inteiro; a gravação é de celular a poucos metros, com o grave cortado pelo microfone (o próprio Apêndice A marca o codec saturando). O médio e o agudo batem (±2 dB)."
+    "motivo": "O grave (60–150) fica 5–6 dB acima: a ignição de 73 Hz e o 2º harmônico caem na banda e o escape do modelo irradia o pulso inteiro; a gravação é de celular a poucos metros, com o grave cortado pelo microfone (o próprio Apêndice A marca o codec saturando). O médio e o agudo batem (±2 dB). [22/11/2026, etapa de som do Radial: o agudo desceu 1,1 e 1,7 dB (1–2,5k −13,9, 2,5–6k −15,4, ainda dentro de ±4 dB do alvo): o sopro das saídas do M-14P ficou no lado baixo (`sopro` −6 dB sobre os −8 dB dos coletores), porque com mais que isso o leito de ruído de 2,5–6 kHz passava do da gravação casada (`ar` do kit ouvido 1,0; agora 0,03 pela página). O que falha continua sendo só o grave.]"
   },
   "bandas lenta 9 cil. perto, 4 m (T-6G)": {
     "grupo": "bandas",
     "medido": [
-      0.003011,
-      -0.7483,
-      2.886,
-      2.52
+      0.07108,
+      -0.4184,
+      2.33,
+      0.565
     ],
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "+12.0 / -1.0 / +2.0 / +0.0 ± 4 dB",
-    "motivo": "O grave fica 12 dB abaixo: na gravação (OtN, motor frio a 916 rpm) a banda 60–150 tem a 2·BPF da hélice direta (61 Hz, +10 dB sobre a mediana) e a ignição a +17; no modelo a hélice na lenta é ∝ M⁴ (M 0,3) e não chega lá. O médio e o agudo batem (±3 dB) com o vazamento do anel de chapa fina."
+    "motivo": "O grave fica 12 dB abaixo; o médio e o agudo batem a ±1 dB (−0,4 / +2,3 / +0,6 contra −1 / +2 / 0). Etapa de som do Radial (22/11/2026): (1) a gravação está a 525 rpm, não a 916 (a dobra do f0.py dá o ciclo em 4,38 Hz e a ignição em 39,4 Hz; a linha mais forte, 70 Hz, é o 16º harmônico do ciclo, que o RADIAL.md tomou pela ignição), e este cenário continua rodando a 891 rpm; (2) o ouvinte da Cena fica do lado esquerdo do avião e a saída do anel do T-6 é do lado direito: o escape chega com a sombra de 9 dB da diretividade de lado, e é em parte por isso que o grave falta (o microfone da gravação estava do lado do escape). O agudo agora é a rajada das juntas do anel presa ao ciclo (uma ou duas juntas vazam mais), não um chiado contínuo: pela régua do kit (tools/radial-regua.py, a 525 rpm, do lado do escape) o p90/p10 de 1–6 kHz foi de 6,1 para 9,7–10,8 dB (gravação 15,5). Pendente: rodar este cenário a 525 rpm e do lado do escape."
   },
   "centroide lenta 9 cil. perto, 4 m (T-6G)": {
     "grupo": "bandas",
-    "medido": 2094,
+    "medido": 1725,
     "unidade": "Hz",
     "folga": "±5 %",
     "alvo": "1300 Hz ± 30%",
-    "motivo": "Consequência do grave baixo (ver as bandas do T-6G a 4 m): com o grave da gravação o centroide cai para ~1 300 Hz."
+    "motivo": "Consequência do grave baixo (ver as bandas do T-6G a 4 m): com o grave da gravação o centroide cai para ~1 300 Hz. Na etapa de som do Radial (22/11/2026) desceu de 2 094 para 1 725 Hz (o limite do alvo é 1 690): a rajada do anel ganhou o polo em 1,6 kHz (era 2,5 kHz, o do coletor de um carro)."
   },
   "bandas lenta 14 cil., 10 m (DC-3)": {
     "grupo": "bandas",
     "medido": [
-      0.923,
-      -7.233,
-      -11.45,
-      -12.72
+      0.9075,
+      -7.209,
+      -13.36,
+      -15.84
     ],
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "+5.0 / -7.5 / -11.0 / -12.5 ± 4 dB",
-    "motivo": "Só o grave fica 4,1 dB abaixo (0,1 dB fora da tolerância); o resto bate a ±0,5 dB. [Com outra semente passa (erro máximo 3,9 dB): à beira.]",
+    "motivo": "Só o grave fica 4,1 dB abaixo (0,1 dB fora da tolerância); o resto bate a ±0,5 dB. [Com outra semente passa (erro máximo 3,9 dB): à beira.] [22/11/2026, etapa de som do Radial: o agudo desceu de −11,4 / −12,7 para −13,4 / −15,8 (alvo −11 / −12,5, dentro de ±4 dB): o vazamento do anel do R-1830 ficou no lado baixo (o leito de ruído do simulado abaixo do da gravação em toda banda, regra do PLANO) e a rajada do anel tem o polo em 1,6 kHz. O erro máximo continua sendo o grave, 4,1 dB.]",
     "beira": true
   },
   "bandas lenta 18 cil. estaques por fileira, 8 m (Corsair)": {
@@ -60,48 +60,26 @@
     "alvo": "-4.0 / -5.0 / -9.0 / -14.5 ± 4 dB",
     "motivo": "Grave 5 dB acima e 400–1k 5,6 dB abaixo; a gravação (TLv) tem uma linha externa fixa em 152 Hz a +25 dB sobre a mediana (Apêndice A), que entra na banda de referência 150–400 e puxa as relativas para baixo."
   },
-  "bandas lenta 7 cil. pequeno, 4 m (Rotec)": {
-    "grupo": "bandas",
-    "medido": [
-      -1.307,
-      1.023,
-      3.323,
-      1.838
-    ],
-    "unidade": "dB",
-    "folga": "±1.5 dB",
-    "alvo": "+3.0 / -8.0 / -4.0 / -6.0 ± 4 dB",
-    "motivo": "Os estaques de 38 mm, curtos e sem nada depois, irradiam o pulso de cada cilindro com a derivada da vazão e o chiado de jato da boca estreita: o modelo fica 7–9 dB mais brilhante que a gravação, mesmo sem o vazamento do anel (que o Rotec não tem). Falta um modelo de boca de estaque curto (difração, ka < 1) melhor que o Radiator do Ronco.",
-    "nota_folga": "folga alargada: a mediana de 3 sementes muda mais que ±1 dB / ±5 % entre as bases 0, 1000 e 2000"
-  },
-  "centroide lenta 7 cil. pequeno, 4 m (Rotec)": {
-    "grupo": "bandas",
-    "medido": 1873,
-    "unidade": "Hz",
-    "folga": "±5 %",
-    "alvo": "1050 Hz ± 30%",
-    "motivo": "Consequência do agudo dos estaques (ver as bandas do Rotec)."
-  },
   "bandas decolagem 9 cil. redutor, 75 m (Yak-52)": {
     "grupo": "bandas",
     "medido": [
-      -2.817,
-      -9.448,
-      -15.18,
-      -15.43
+      -3.025,
+      -10.17,
+      -17,
+      -17.88
     ],
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "-2.0 / -13.0 / -10.5 / -10.0 ± 4 dB",
-    "motivo": "Grave +3 e agudo −4,3 dB (0,3 dB fora): a hélice de 2 pás a 62 Hz domina o grave; o ruído largo das pás (×10 em M ≥ 0,85, acerto da etapa) ainda fica abaixo do da gravação. [22/11/2026: regravado depois da lei de carga da hélice (Gutin com o torque absorvido, src/carriers/leis-helice.ts): o grave foi de +0,9 para −2,8 dB (alvo −2,0, melhorou); 1–6 kHz ficou 0,4 a 1,1 dB mais baixo.]"
+    "motivo": "Grave +3 e agudo −4,3 dB (0,3 dB fora): a hélice de 2 pás a 62 Hz domina o grave; o ruído largo das pás (×10 em M ≥ 0,85, acerto da etapa) ainda fica abaixo do da gravação. [22/11/2026: regravado depois da lei de carga da hélice (Gutin com o torque absorvido, src/carriers/leis-helice.ts): o grave foi de +0,9 para −2,8 dB (alvo −2,0, melhorou); 1–6 kHz ficou 0,4 a 1,1 dB mais baixo.] [22/11/2026, etapa de som do Radial: PIOROU 2 dB em 1–6 kHz (−15,2 / −15,4 → −17,0 / −17,9; alvo −10,5 / −10). O chiado de jato das bocas, que o Ronco somava depois da ponteira (∝ v² dividido pela área da ponteira), saiu, e o sopro das saídas do M-14P ficou no lado baixo por causa do leito da lenta (ver as bandas da lenta do Yak-52). Em decolagem a 75 m o agudo que a gravação tem é o da hélice (ruído largo das pás e harmônicos altos), que não é desta etapa.]"
   },
   "centroide decolagem 9 cil. redutor, 75 m (Yak-52)": {
     "grupo": "bandas",
-    "medido": 317.3,
+    "medido": 276.1,
     "unidade": "Hz",
     "folga": "±5 %",
     "alvo": "580 Hz ± 30%",
-    "motivo": "Consequência do grave da hélice (ver as bandas da decolagem do Yak)."
+    "motivo": "Consequência do grave da hélice (ver as bandas da decolagem do Yak). [22/11/2026, etapa de som do Radial: PIOROU de 317 para 276 Hz pelo mesmo motivo das bandas (o chiado de jato das bocas saiu; o agudo da decolagem a 75 m é da hélice).]"
   },
   "bandas decolagem 9 cil. direto, 50 m (T-6)": {
     "grupo": "bandas",
@@ -119,23 +97,23 @@
   "bandas decolagem 18 cil., 150 m (Corsair)": {
     "grupo": "bandas",
     "medido": [
-      -10.64,
-      -14.62,
-      -20.31,
-      -26.33
+      -9.254,
+      -13.84,
+      -17.43,
+      -22.93
     ],
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "-16.0 / -12.0 / -10.0 / -15.0 ± 4 dB",
-    "motivo": "A 150 m o ar (ISO 9613 da Cena) e o solo tiram o agudo; a gravação (jKa) tem o escape dos estaques muito mais forte em 1–6 kHz (a fileira de 4,5ª ordem, 170 Hz, a +19 dB). O grave da BPF (82 Hz) fica 9 dB acima. [22/11/2026: regravado depois da lei de carga da hélice (src/carriers/leis-helice.ts): o grave foi de −7,0 para −10,6 dB (alvo −16, melhorou); as outras bandas mudaram 0,4 a 0,6 dB.]"
+    "motivo": "A 150 m o ar (ISO 9613 da Cena) e o solo tiram o agudo; a gravação (jKa) tem o escape dos estaques muito mais forte em 1–6 kHz (a fileira de 4,5ª ordem, 170 Hz, a +19 dB). O grave da BPF (82 Hz) fica 9 dB acima. [22/11/2026: regravado depois da lei de carga da hélice (src/carriers/leis-helice.ts): o grave foi de −7,0 para −10,6 dB (alvo −16, melhorou); as outras bandas mudaram 0,4 a 0,6 dB.] [22/11/2026, etapa de som do Radial: melhorou: 1–2,5k de −20,3 para −17,4 e 2,5–6k de −26,3 para −22,9 dB (alvo −10 / −15), com o sopro turbulento das bocas dos estaques (boca.ts) no lugar do chiado de jato; o erro máximo foi de 11,3 para 7,9 dB. Continuam o grave da hélice 6,7 dB acima e 1–6 kHz 7–8 dB abaixo.]"
   },
   "centroide decolagem 18 cil., 150 m (Corsair)": {
     "grupo": "bandas",
-    "medido": 231.8,
+    "medido": 252.1,
     "unidade": "Hz",
     "folga": "±5 %",
     "alvo": "456 Hz ± 30%",
-    "motivo": "Consequência do grave da hélice e do agudo baixo a 150 m (ver as bandas)."
+    "motivo": "Consequência do grave da hélice e do agudo baixo a 150 m (ver as bandas). [22/11/2026, etapa de som do Radial: subiu de 232 para 252 Hz com o agudo das bocas.]"
   },
   "T-6 decolagem: harmônicos 5–9 da BPF entre si": {
     "grupo": "linhas-decolagem",
@@ -163,21 +141,13 @@
     "motivo": "A lenta do radial é alta (ar de lenta com a borboleta 1,6× do Ronco, para segurar a lenta contra a hélice) e o anel de chapa vazando pesa mais na lenta: +13,8 dB. Nas gravações o T-6 na lenta a 4 m já é tão brilhante quanto em carga.",
     "nota_folga": "folga alargada: a mediana de 3 sementes muda mais que ±1 dB / ±5 % entre as bases 0, 1000 e 2000"
   },
-  "r2800: lenta → plena carga a 55% (bocas a 5 m)": {
-    "grupo": "niveis",
-    "medido": 17.54,
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "+18 a +25 dB",
-    "motivo": "0,5 dB fora (+17,5 dB): ver o R-1340."
-  },
   "os 13 aviões na lenta a 12 m: faixa de nível": {
     "grupo": "niveis",
-    "medido": 39.33,
+    "medido": 28.89,
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "≤ 12 dB",
-    "motivo": "O alvo de 12 dB não cabe nos próprios níveis do RADIAL.md (3.7): Verner 124 dB e R-1820 145 dB de L_W em carga já são 21 dB; na lenta os pequenos ultraleves (Verner, Rotec, M-14PF de estaques) ficam 25–38 dB abaixo dos grandes radiais, como deve ser. [AUDITORIA, desvio 18: o M-14PF fica 16 dB abaixo do M-14P com o mesmo nivelEscape 140; os presets de escapes individuais saem baixos na lenta pela Cena, e o \"como deve ser\" não vale para esse par.]"
+    "motivo": "O alvo de 12 dB não cabe nos próprios níveis do RADIAL.md (3.7): Verner 124 dB e R-1820 145 dB de L_W em carga já são 21 dB; na lenta os pequenos ultraleves (Verner, Rotec, M-14PF de estaques) ficam 25–38 dB abaixo dos grandes radiais, como deve ser. [AUDITORIA, desvio 18: o M-14PF fica 16 dB abaixo do M-14P com o mesmo nivelEscape 140; os presets de escapes individuais saem baixos na lenta pela Cena, e o \"como deve ser\" não vale para esse par.] [22/11/2026, etapa de som do Radial: a faixa caiu de 39,3 para 28,9 dB: o M-14PF subiu de 68 para 77 dB e os Rotec e Verner ficaram em 69–72 (o som dos estaques na lenta deixou de ser o chiado de jato, que entrava no nível de referência da sonda e baixava o resto). O alvo de 12 dB continua não cabendo nos `nivelEscape` do projeto.]"
   },
   "vagar da lenta lenta 9 cil. perto, 4 m (T-6G)": {
     "grupo": "galope",
@@ -274,18 +244,6 @@
     "motivo": "A borboleta do Ronco responde em 30 ms e o governador do rotor (Kp 0,8·0,12 por %) segura o Nr: 0,7% de queda e volta em ~1 s. O droop de 2–3% do R44 real vem do correlacionador e do atraso do coletor, que o modelo não tem; com ganho menor o Nr demorava 3 s para voltar. [22/11/2026: foi de 0,58 % para 0,34 % com o rotor novo (tração ∝ Nr², potência induzida sem a dupla contagem do perfil, src/carriers/rotor.ts); continua longe dos 2–3 % do R44 real. Pendência: o governador segura demais.]",
     "nota_folga": "folga alargada: a mediana de 3 sementes muda mais que ±1 dB / ±5 % entre as bases 0, 1000 e 2000"
   },
-  "m14p: lenta quente, picos por segundo (> 16 dB)": {
-    "grupo": "estalos-a",
-    "medido": [
-      7.273,
-      0.3636
-    ],
-    "unidade": "/s",
-    "folga": "±15 % (≥ 1.2)",
-    "alvo": "≤ 3/s, e ≤ 0,3/s acima de 16 dB",
-    "motivo": "Nenhum estouro injetado: são as explosões fortes do galope (carburador de boia, dispersão ×2,6 do radial sobre a do carburador do Ronco) saindo como estalos no chiado do jato das duas saídas curtas (0,4 m, ∝ v²): sem o chiado (mistura \"Ar\" em 0) dá 2,3/s e curtose 4. A gravação do Yak-52 (Commons, codec saturando) tem 2,5/s; a do T-6G, também de boia, 10/s a 4 m, e o R-1340 do modelo fica em 0,7/s: com as duas gravações em sentidos opostos, o galope de boia não muda (e com menos dispersão o CVciclo do Yak e do T-6G cai abaixo de 0,30).",
-    "nota_folga": "folga alargada: os picos fortes por segundo (2º número) mudam até 1 por segundo entre as bases 0, 1000, 2000 e 3000 (mediana de 3 sementes cada)"
-  },
   "potência rotec2800": {
     "grupo": "potencia",
     "medido": 86.24,
@@ -298,122 +256,105 @@
   "bandas da página na lenta, 9 cil. grande (Yak-52)": {
     "grupo": "pagina",
     "medido": [
-      10.02,
-      -7.798,
-      -17.08,
-      -16.24
+      9.407,
+      -5.906,
+      -12.16,
+      -13.63
     ],
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "+4.0 / -6.0 / -15.0 / -14.0 ± 4 dB",
-    "motivo": "AUDITORIA T-RAD-05: pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo) a lenta não é a do caminho validado pela Cena (MotorRadial + Helice, na distância da gravação). Grave 6 dB acima, como pela Cena, e o agudo 2–4 dB mais escuro que pela Cena (1–2,5k −17,1 contra −12,8 dB). A distância da página não é a da gravação, então a comparação é aproximada, mas é o que se ouve em radial.html. Para a etapa de som: decidir qual dos dois caminhos é a referência e trazer o outro para ele."
-  },
-  "centroide da página na lenta, 9 cil. grande (Yak-52)": {
-    "grupo": "pagina",
-    "medido": 258,
-    "unidade": "Hz",
-    "folga": "±5 %",
-    "alvo": "370 Hz ± 30%",
-    "motivo": "AUDITORIA T-RAD-05: pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo) a lenta não é a do caminho validado pela Cena (MotorRadial + Helice, na distância da gravação). Consequência das bandas da página do Yak-52: 258 Hz contra 351 pela Cena. A distância da página não é a da gravação, então a comparação é aproximada, mas é o que se ouve em radial.html. Para a etapa de som: decidir qual dos dois caminhos é a referência e trazer o outro para ele."
+    "motivo": "Pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo, medido num ouvido só) contra o alvo da gravação. Desde a etapa de som a página e a Cena tocam o mesmo motor: de lado a 5 m, com a Cena sem solo, as bandas batem a ±1,5 dB (medida \"Cena (5 m, sem solo) menos página\", no mesmo grupo). O que sobra é a página não ter a reflexão do solo: com a grama a banda de referência (150–400 Hz) cai no vale da interferência e a Cena fica 3 a 5 dB mais brilhante em relação a ela, como as gravações. No Yak-52 só o grave fica fora (+9,4 contra +4 ± 4, como pela Cena: a ignição de 73 Hz cai na banda); o médio e o agudo passaram a bater (−5,9 / −12,2 / −13,6 contra −6 / −15 / −14)."
   },
   "bandas da página na lenta, 9 cil. perto (T-6G)": {
     "grupo": "pagina",
     "medido": [
-      1.976,
-      -7.047,
-      -8.812,
-      -8.83
+      1.748,
+      -5.501,
+      -5.717,
+      -7.191
     ],
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "+12.0 / -1.0 / +2.0 / +0.0 ± 4 dB",
-    "motivo": "AUDITORIA T-RAD-05: pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo) a lenta não é a do caminho validado pela Cena (MotorRadial + Helice, na distância da gravação). O T-6G fica 6 a 11 dB abaixo do alvo de perto acima de 400 Hz (pela Cena bate a ±3 dB) e o grave continua 10 dB abaixo: a página é escura e sem peso. A distância da página não é a da gravação, então a comparação é aproximada, mas é o que se ouve em radial.html. Para a etapa de som: decidir qual dos dois caminhos é a referência e trazer o outro para ele."
+    "motivo": "Pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo, medido num ouvido só) contra o alvo da gravação. Desde a etapa de som a página e a Cena tocam o mesmo motor: de lado a 5 m, com a Cena sem solo, as bandas batem a ±1,5 dB (medida \"Cena (5 m, sem solo) menos página\", no mesmo grupo). O que sobra é a página não ter a reflexão do solo: com a grama a banda de referência (150–400 Hz) cai no vale da interferência e a Cena fica 3 a 5 dB mais brilhante em relação a ela, como as gravações. No T-6G o ouvido medido é o do lado do escape (a saída do anel é do lado direito) e a rotação do cenário é 891 rpm (a gravação está a 525: ver as bandas do T-6G pela Cena): 400 Hz–6 kHz ficam 4,5 a 7,7 dB abaixo do alvo (eram 6 a 11) e o grave 10 dB abaixo. Pela régua do kit, a 525 rpm, a página fica em −2,6 / −2,0 / −3,5 contra −1,9 / +1,7 / −0,6 da gravação."
   },
   "centroide da página na lenta, 9 cil. perto (T-6G)": {
     "grupo": "pagina",
-    "medido": 518.8,
+    "medido": 667.6,
     "unidade": "Hz",
     "folga": "±8 %",
     "alvo": "1300 Hz ± 30%",
-    "motivo": "AUDITORIA T-RAD-05: pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo) a lenta não é a do caminho validado pela Cena (MotorRadial + Helice, na distância da gravação). Consequência das bandas da página do T-6G: 519 Hz contra 2 094 pela Cena (alvo 1 300). A distância da página não é a da gravação, então a comparação é aproximada, mas é o que se ouve em radial.html. Para a etapa de som: decidir qual dos dois caminhos é a referência e trazer o outro para ele.",
+    "motivo": "Pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo, medido num ouvido só) contra o alvo da gravação. Desde a etapa de som a página e a Cena tocam o mesmo motor: de lado a 5 m, com a Cena sem solo, as bandas batem a ±1,5 dB (medida \"Cena (5 m, sem solo) menos página\", no mesmo grupo). O que sobra é a página não ter a reflexão do solo: com a grama a banda de referência (150–400 Hz) cai no vale da interferência e a Cena fica 3 a 5 dB mais brilhante em relação a ela, como as gravações. Consequência das bandas da página do T-6G: 668 Hz (era 519; alvo 1 300 ± 30 %).",
     "nota_folga": "folga alargada: a mediana de 3 sementes muda mais que ±1 dB / ±5 % entre as bases 0, 1000 e 2000"
   },
   "bandas da página na lenta, 14 cil. (DC-3)": {
     "grupo": "pagina",
     "medido": [
-      -0.04713,
-      -4.643,
-      -15.29,
-      -15.89
+      -0.06468,
+      -4.467,
+      -11.99,
+      -13.61
     ],
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "+5.0 / -7.5 / -11.0 / -12.5 ± 4 dB",
-    "motivo": "AUDITORIA T-RAD-05: pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo) a lenta não é a do caminho validado pela Cena (MotorRadial + Helice, na distância da gravação). Grave 5 dB abaixo e 1–6 kHz 3–4 dB abaixo do alvo (pela Cena o agudo bate a ±0,5 dB). A distância da página não é a da gravação, então a comparação é aproximada, mas é o que se ouve em radial.html. Para a etapa de som: decidir qual dos dois caminhos é a referência e trazer o outro para ele."
+    "motivo": "Pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo, medido num ouvido só) contra o alvo da gravação. Desde a etapa de som a página e a Cena tocam o mesmo motor: de lado a 5 m, com a Cena sem solo, as bandas batem a ±1,5 dB (medida \"Cena (5 m, sem solo) menos página\", no mesmo grupo). O que sobra é a página não ter a reflexão do solo: com a grama a banda de referência (150–400 Hz) cai no vale da interferência e a Cena fica 3 a 5 dB mais brilhante em relação a ela, como as gravações. No DC-3 só o grave fica fora (−0,1 contra +5 ± 4); o médio e o agudo batem (−4,5 / −12,0 / −13,6 contra −7,5 / −11 / −12,5; eram −15,3 / −15,9)."
   },
   "bandas da página na lenta, 18 cil. coletor único + turbina (P-47)": {
     "grupo": "pagina",
     "medido": [
-      -0.8393,
-      -8.82,
-      -20.16,
-      -20.57
+      -0.8337,
+      -8.164,
+      -12.23,
+      -13.79
     ],
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "+5.0 / -6.5 / -12.0 / -10.0 ± 4 dB",
-    "motivo": "AUDITORIA T-RAD-05: pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo) a lenta não é a do caminho validado pela Cena (MotorRadial + Helice, na distância da gravação). O agudo do P-47 fica 8 a 11 dB abaixo do alvo (pela Cena, −12,2 e −13,0 contra −12 e −10, bate) e o grave 6 dB abaixo. A distância da página não é a da gravação, então a comparação é aproximada, mas é o que se ouve em radial.html. Para a etapa de som: decidir qual dos dois caminhos é a referência e trazer o outro para ele."
-  },
-  "centroide da página na lenta, 18 cil. coletor único + turbina (P-47)": {
-    "grupo": "pagina",
-    "medido": 254.9,
-    "unidade": "Hz",
-    "folga": "±5 %",
-    "alvo": "490 Hz ± 30%",
-    "motivo": "AUDITORIA T-RAD-05: pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo) a lenta não é a do caminho validado pela Cena (MotorRadial + Helice, na distância da gravação). Consequência das bandas da página do P-47: 255 Hz contra 365 pela Cena. A distância da página não é a da gravação, então a comparação é aproximada, mas é o que se ouve em radial.html. Para a etapa de som: decidir qual dos dois caminhos é a referência e trazer o outro para ele."
+    "motivo": "Pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo, medido num ouvido só) contra o alvo da gravação. Desde a etapa de som a página e a Cena tocam o mesmo motor: de lado a 5 m, com a Cena sem solo, as bandas batem a ±1,5 dB (medida \"Cena (5 m, sem solo) menos página\", no mesmo grupo). O que sobra é a página não ter a reflexão do solo: com a grama a banda de referência (150–400 Hz) cai no vale da interferência e a Cena fica 3 a 5 dB mais brilhante em relação a ela, como as gravações. No P-47 o grave fica 5,8 dB abaixo (−0,8 contra +5) e o agudo dentro de ±4 dB (−8,2 / −12,2 / −13,8 contra −6,5 / −12 / −10; eram −20,2 / −20,6)."
   },
   "bandas da página na lenta, 18 cil. estaques por fileira (Corsair)": {
     "grupo": "pagina",
     "medido": [
-      3.565,
-      -16.36,
-      -18.79,
-      -17.65
+      0.2412,
+      -15.1,
+      -15.66,
+      -16.27
     ],
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "-4.0 / -5.0 / -9.0 / -14.5 ± 4 dB",
-    "motivo": "AUDITORIA T-RAD-05: pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo) a lenta não é a do caminho validado pela Cena (MotorRadial + Helice, na distância da gravação). O meio e o agudo do Corsair ficam 10 dB abaixo do alvo (400–1k −16,4 contra −5) e o grave 8 dB acima: a lenta da página é um ronco grave sem os estaques. A distância da página não é a da gravação, então a comparação é aproximada, mas é o que se ouve em radial.html. Para a etapa de som: decidir qual dos dois caminhos é a referência e trazer o outro para ele."
+    "motivo": "Pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo, medido num ouvido só) contra o alvo da gravação. Desde a etapa de som a página e a Cena tocam o mesmo motor: de lado a 5 m, com a Cena sem solo, as bandas batem a ±1,5 dB (medida \"Cena (5 m, sem solo) menos página\", no mesmo grupo). O que sobra é a página não ter a reflexão do solo: com a grama a banda de referência (150–400 Hz) cai no vale da interferência e a Cena fica 3 a 5 dB mais brilhante em relação a ela, como as gravações. No Corsair o meio fica 10 dB abaixo do alvo (400–1k −15,1 contra −5) e 1–2,5k 6,7 dB abaixo; na gravação casada (TLv 68–82) essa faixa é quase toda leito de ruído (−5,4 dB de leito em 400–1k, linhas a −30 dB) e há uma linha externa de 152 Hz na banda de referência: pela regra do PLANO o simulado fica abaixo dela nesse componente."
   },
   "centroide da página na lenta, 18 cil. estaques por fileira (Corsair)": {
     "grupo": "pagina",
-    "medido": 190.9,
+    "medido": 259.3,
     "unidade": "Hz",
     "folga": "±5 %",
     "alvo": "400 Hz ± 30%",
-    "motivo": "AUDITORIA T-RAD-05: pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo) a lenta não é a do caminho validado pela Cena (MotorRadial + Helice, na distância da gravação). Consequência das bandas da página do Corsair: 191 Hz contra 375 pela Cena. A distância da página não é a da gravação, então a comparação é aproximada, mas é o que se ouve em radial.html. Para a etapa de som: decidir qual dos dois caminhos é a referência e trazer o outro para ele."
+    "motivo": "Pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo, medido num ouvido só) contra o alvo da gravação. Desde a etapa de som a página e a Cena tocam o mesmo motor: de lado a 5 m, com a Cena sem solo, as bandas batem a ±1,5 dB (medida \"Cena (5 m, sem solo) menos página\", no mesmo grupo). O que sobra é a página não ter a reflexão do solo: com a grama a banda de referência (150–400 Hz) cai no vale da interferência e a Cena fica 3 a 5 dB mais brilhante em relação a ela, como as gravações. Consequência das bandas da página do Corsair: 259 Hz (era 191; alvo 400 ± 30 %)."
   },
   "bandas da página na lenta, 7 cil. pequeno (Rotec)": {
     "grupo": "pagina",
     "medido": [
-      0.4922,
-      -2.08,
-      -1.941,
-      -1.146
+      1.271,
+      -8.698,
+      -9.303,
+      -8.633
     ],
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "+3.0 / -8.0 / -4.0 / -6.0 ± 4 dB",
-    "motivo": "AUDITORIA T-RAD-05: pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo) a lenta não é a do caminho validado pela Cena (MotorRadial + Helice, na distância da gravação). O Rotec fica 2 a 6 dB brilhante demais acima de 400 Hz (pela Cena, 7 a 9 dB): é o mesmo defeito dos estalos dos estaques curtos (T-RAD-06), um pouco menor na página. A distância da página não é a da gravação, então a comparação é aproximada, mas é o que se ouve em radial.html. Para a etapa de som: decidir qual dos dois caminhos é a referência e trazer o outro para ele."
+    "motivo": "Pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo, medido num ouvido só) contra o alvo da gravação. Desde a etapa de som a página e a Cena tocam o mesmo motor: de lado a 5 m, com a Cena sem solo, as bandas batem a ±1,5 dB (medida \"Cena (5 m, sem solo) menos página\", no mesmo grupo). O que sobra é a página não ter a reflexão do solo: com a grama a banda de referência (150–400 Hz) cai no vale da interferência e a Cena fica 3 a 5 dB mais brilhante em relação a ela, como as gravações. No Rotec a página passou de 2–6 dB brilhante demais para 1,3 dB fora do outro lado (−8,7 / −9,3 / −8,6 contra −8 / −4 / −6 ± 4): o sopro dos estaques fica de propósito abaixo da gravação (o leito de ruído do simulado abaixo do dela em toda banda), e pela Cena a 4 m, com o solo, as mesmas bandas passam (−6,4 / −6,7 / −6,1)."
   },
   "centroide da página na lenta, 7 cil. pequeno (Rotec)": {
     "grupo": "pagina",
-    "medido": 1365,
+    "medido": 554.4,
     "unidade": "Hz",
-    "folga": "±10 %",
+    "folga": "±8 %",
     "alvo": "1050 Hz ± 30%",
-    "motivo": "AUDITORIA T-RAD-05: pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo) a lenta não é a do caminho validado pela Cena (MotorRadial + Helice, na distância da gravação). O centroide do Rotec pela página fica na borda de cima do alvo (1 266 a 1 365 Hz conforme a semente, alvo ≤ 1 365): consequência do agudo dos estaques (ver as bandas da página do Rotec). A distância da página não é a da gravação, então a comparação é aproximada, mas é o que se ouve em radial.html. Para a etapa de som: decidir qual dos dois caminhos é a referência e trazer o outro para ele.",
-    "beira": true,
+    "motivo": "Pela página (radial.html: RadialDSP com a hélice do próprio DSP, ouvinte de fora a 5 m do cubo, medido num ouvido só) contra o alvo da gravação. Desde a etapa de som a página e a Cena tocam o mesmo motor: de lado a 5 m, com a Cena sem solo, as bandas batem a ±1,5 dB (medida \"Cena (5 m, sem solo) menos página\", no mesmo grupo). O que sobra é a página não ter a reflexão do solo: com a grama a banda de referência (150–400 Hz) cai no vale da interferência e a Cena fica 3 a 5 dB mais brilhante em relação a ela, como as gravações. Consequência das bandas da página do Rotec: 554 Hz (era 1 365, na borda de cima; alvo 1 050 ± 30 %); pela Cena a 4 m, 960 Hz.",
     "nota_folga": "folga alargada: a mediana de 3 sementes muda mais que ±1 dB / ±5 % entre as bases 0, 1000 e 2000"
   },
   "R-1830: CVciclo nos 3 s em que pega (de 0,5 s antes a 2,5 s depois)": {
@@ -426,77 +367,54 @@
     "nota_folga": "a mediana de 3 sementes vai de 0,50 a 0,61 entre as bases 0, 3000 e 4000",
     "beira": true
   },
-  "rotec2800: lenta quente, picos por segundo (> 16 dB)": {
-    "grupo": "estalos-b",
-    "medido": [
-      19,
-      16.55
-    ],
-    "unidade": "/s",
-    "folga": "±15 % (≥ 1.2)",
-    "alvo": "≤ 3/s, e ≤ 0,3/s acima de 16 dB",
-    "motivo": "AUDITORIA T-RAD-06: a lenta quente pela página, com o detector do pops.py (picos da envoltória 1–6 kHz mais de 10 dB sobre a mediana de 0,3 s). As gravações de radiais têm 0 a 6 picos por segundo, nenhum acima de 16 dB a não ser no Rotec (5,9/s, 0,17/s fortes, curtose 6). Os estaques de 38 mm, curtos e sem nada depois, soltam cada explosão como estalo no agudo: 19 picos/s, 16,6 acima de 16 dB, curtose 90. Falta o modelo de boca de estaque curto (difração, ka < 1). Para a etapa de som (prioridade 1 do Radial, item B4 da AUDITORIA).",
-    "nota_folga": "folga alargada: os picos fortes por segundo (2º número) mudam até 1 por segundo entre as bases 0, 1000, 2000 e 3000 (mediana de 3 sementes cada)"
-  },
-  "rotec3600: lenta quente, picos por segundo (> 16 dB)": {
-    "grupo": "estalos-b",
-    "medido": [
-      9.727,
-      2.273
-    ],
-    "unidade": "/s",
-    "folga": "±15 % (≥ 1.2)",
-    "alvo": "≤ 3/s, e ≤ 0,3/s acima de 16 dB",
-    "motivo": "AUDITORIA T-RAD-06: a lenta quente pela página, com o detector do pops.py (picos da envoltória 1–6 kHz mais de 10 dB sobre a mediana de 0,3 s). As gravações de radiais têm 0 a 6 picos por segundo, nenhum acima de 16 dB a não ser no Rotec (5,9/s, 0,17/s fortes, curtose 6). Mesmos estaques de 38 mm do R2800 com 9 cilindros: 9,7 picos/s, 2,3 acima de 16 dB, curtose 14. Para a etapa de som (prioridade 1 do Radial, item B4 da AUDITORIA).",
-    "nota_folga": "folga alargada: os picos fortes por segundo (2º número) mudam até 1 por segundo entre as bases 0, 1000, 2000 e 3000 (mediana de 3 sementes cada)"
-  },
   "verner3: lenta quente, picos por segundo (> 16 dB)": {
     "grupo": "estalos-b",
     "medido": [
-      11.64,
-      7.182
+      7.273,
+      1.636
     ],
     "unidade": "/s",
     "folga": "±15 % (≥ 1.2)",
     "alvo": "≤ 3/s, e ≤ 0,3/s acima de 16 dB",
-    "motivo": "AUDITORIA T-RAD-06: a lenta quente pela página, com o detector do pops.py (picos da envoltória 1–6 kHz mais de 10 dB sobre a mediana de 0,3 s). As gravações de radiais têm 0 a 6 picos por segundo, nenhum acima de 16 dB a não ser no Rotec (5,9/s, 0,17/s fortes, curtose 6). Estaques de 35 mm: 11,6 picos/s, 7,2 acima de 16 dB, curtose 64. Para a etapa de som (prioridade 1 do Radial, item B4 da AUDITORIA).",
+    "motivo": "A lenta quente pela página, com o detector do pops.py (picos da envoltória de 1–6 kHz mais de 10 dB sobre a mediana de 0,3 s); as gravações de radiais de 7 a 18 cilindros têm 0 a 7 picos por segundo. Etapa de som do Radial (22/11/2026): o estalo por explosão era o chiado de jato do Ronco na boca do estaque; com a boca de escape do radial (src/engines/radial/boca.ts: sopro turbulento colado à vazão, com corpo) o Verner 3V foi de 11,6 para 7,3 picos/s e de 7,2 para 1,6/s acima de 16 dB (curtose 64 → 10,5). Não chega a 3/s porque são 3 cilindros a 18 explosões por segundo: cada explosão é um pulso separado por 55 ms, e o detector conta pulso regular quando o intervalo passa de 25 ms. Não há gravação de 3 cilindros para dizer quanto é do motor.",
     "nota_folga": "folga alargada: os picos fortes por segundo (2º número) mudam até 1 por segundo entre as bases 0, 1000, 2000 e 3000 (mediana de 3 sementes cada)"
   },
   "verner5: lenta quente, picos por segundo (> 16 dB)": {
     "grupo": "estalos-b",
     "medido": [
-      15.36,
-      7.091
+      6.909,
+      0.6364
     ],
     "unidade": "/s",
     "folga": "±15 % (≥ 1.2)",
     "alvo": "≤ 3/s, e ≤ 0,3/s acima de 16 dB",
-    "motivo": "AUDITORIA T-RAD-06: a lenta quente pela página, com o detector do pops.py (picos da envoltória 1–6 kHz mais de 10 dB sobre a mediana de 0,3 s). As gravações de radiais têm 0 a 6 picos por segundo, nenhum acima de 16 dB a não ser no Rotec (5,9/s, 0,17/s fortes, curtose 6). Estaques de 35 mm: 15,4 picos/s, 7,1 acima de 16 dB, curtose 34 (com a ficha do fabricante, 3,39 L, AUDITORIA F-RAD-02; com a de antes, 2,3 L: 15,6, 6,5 e 31). Para a etapa de som (prioridade 1 do Radial, item B4 da AUDITORIA).",
+    "motivo": "A lenta quente pela página, com o detector do pops.py (picos da envoltória de 1–6 kHz mais de 10 dB sobre a mediana de 0,3 s); as gravações de radiais de 7 a 18 cilindros têm 0 a 7 picos por segundo. Etapa de som do Radial (22/11/2026): o estalo por explosão era o chiado de jato do Ronco na boca do estaque; com a boca de escape do radial (src/engines/radial/boca.ts: sopro turbulento colado à vazão, com corpo) o Verner 5S foi de 15,4 para 6,9 picos/s e de 7,1 para 0,6/s acima de 16 dB (curtose 31 → 9,8). Não chega a 3/s porque são 5 cilindros a 29 explosões por segundo (um pulso a cada 34 ms): o detector conta pulso regular quando o intervalo passa de 25 ms. Não há gravação de 5 cilindros para dizer quanto é do motor.",
     "nota_folga": "folga alargada: os picos fortes por segundo (2º número) mudam até 1 por segundo entre as bases 0, 1000, 2000 e 3000 (mediana de 3 sementes cada)"
   },
   "m14pf: lenta quente, picos por segundo (> 16 dB)": {
     "grupo": "estalos-b",
     "medido": [
-      10.27,
-      1.818
+      3.727,
+      0
     ],
     "unidade": "/s",
     "folga": "±15 % (≥ 1.2)",
     "alvo": "≤ 3/s, e ≤ 0,3/s acima de 16 dB",
-    "motivo": "AUDITORIA T-RAD-06: a lenta quente pela página, com o detector do pops.py (picos da envoltória 1–6 kHz mais de 10 dB sobre a mediana de 0,3 s). As gravações de radiais têm 0 a 6 picos por segundo, nenhum acima de 16 dB a não ser no Rotec (5,9/s, 0,17/s fortes, curtose 6). Escapes individuais de 0,35 m e 45 mm: 10,3 picos/s, 1,8 acima de 16 dB, curtose 13 (o M-14P, com o anel e as duas saídas, dá 7,3). Para a etapa de som (prioridade 1 do Radial, item B4 da AUDITORIA).",
+    "motivo": "A lenta quente pela página, com o detector do pops.py (picos da envoltória de 1–6 kHz mais de 10 dB sobre a mediana de 0,3 s); as gravações de radiais de 7 a 18 cilindros têm 0 a 7 picos por segundo. Etapa de som do Radial (22/11/2026): o estalo por explosão era o chiado de jato do Ronco na boca do estaque; com a boca de escape do radial (src/engines/radial/boca.ts: sopro turbulento colado à vazão, com corpo) o M-14PF foi de 10,3 para 3,7 picos/s, nenhum acima de 16 dB (curtose 14 → 6,7): 0,7/s acima do alvo de 3, dentro da faixa das gravações.",
     "nota_folga": "folga alargada: os picos fortes por segundo (2º número) mudam até 1 por segundo entre as bases 0, 1000, 2000 e 3000 (mediana de 3 sementes cada)"
   },
   "r975: lenta quente, picos por segundo (> 16 dB)": {
     "grupo": "estalos-b",
     "medido": [
-      15,
-      3.818
+      3.455,
+      0
     ],
     "unidade": "/s",
     "folga": "±15 % (≥ 1.2)",
     "alvo": "≤ 3/s, e ≤ 0,3/s acima de 16 dB",
-    "motivo": "AUDITORIA T-RAD-06: a lenta quente pela página, com o detector do pops.py (picos da envoltória 1–6 kHz mais de 10 dB sobre a mediana de 0,3 s). As gravações de radiais têm 0 a 6 picos por segundo, nenhum acima de 16 dB a não ser no Rotec (5,9/s, 0,17/s fortes, curtose 6). Os dois tubos laterais do Sherman: 15 picos/s, 3,8 acima de 16 dB, curtose 24. Não há gravação do Sherman no acervo: o alvo é o das gravações de radiais de avião. Para a etapa de som (prioridade 1 do Radial, item B4 da AUDITORIA).",
-    "nota_folga": "folga alargada: os picos fortes por segundo (2º número) mudam até 1 por segundo entre as bases 0, 1000, 2000 e 3000 (mediana de 3 sementes cada)"
+    "motivo": "A lenta quente pela página, com o detector do pops.py (picos da envoltória de 1–6 kHz mais de 10 dB sobre a mediana de 0,3 s); as gravações de radiais de 7 a 18 cilindros têm 0 a 7 picos por segundo. Etapa de som do Radial (22/11/2026): o estalo por explosão era o chiado de jato do Ronco na boca do estaque; com a boca de escape do radial (src/engines/radial/boca.ts: sopro turbulento colado à vazão, com corpo) e o sopro nas duas saídas do Sherman (`sopro` +3 dB), que enche o intervalo entre as rajadas do jato da válvula, o R-975 foi de 15,0 para 2,8–3,5 picos/s conforme a semente, nenhum acima de 16 dB (curtose 24 → 4,2): à beira do alvo de 3.",
+    "nota_folga": "folga alargada: os picos fortes por segundo (2º número) mudam até 1 por segundo entre as bases 0, 1000, 2000 e 3000 (mediana de 3 sementes cada)",
+    "beira": true
   },
   "c172: lenta quente, picos por segundo (> 16 dB)": {
     "grupo": "estalos-c",
@@ -572,12 +490,11 @@
   },
   "Rotec: 3·f_ign contra a fundamental (estaque de 0,6 m)": {
     "grupo": "linhas",
-    "medido": -2.4,
+    "medido": 7.792,
     "unidade": "dB",
-    "folga": "±2.5 dB",
+    "folga": "±3 dB",
     "alvo": "0 ± 4 dB",
-    "motivo": "1,1 dB fora: a ressonância de 1/4 de onda do estaque (217 Hz) aparece, mas a rotação de lenta do modelo é 1 030 rpm (a gravação, 1 200): a 3ª harmônica fica em 180 Hz, fora do pico do estaque. [AUDITORIA T-RAD-02 e T-RAD-09: a diferença é menor que a variação entre sementes, e o que falha é a condição do teste, que não chega à rotação pedida.] A2 (AUDITORIA T-RAD-02): passa por menos de 5 % da tolerância e cai fora com outras sementes (mediana de 3 sementes: −2,4 dB na base 0 e −4,5 nas bases 1000 e 2000, alvo 0 ± 4); fica declarada à beira, com teto.",
-    "beira": true
+    "motivo": "A medida é o pico de cada linha sobre a mediana local do espectro, e mudou por causa do piso, não das linhas: sem o chiado de jato (a etapa de som do Radial, 22/11/2026) o piso em volta de 210 Hz caiu ~10 dB e a 3ª harmônica passou de −2,4 para +7,8 dB sobre a fundamental nessa conta. Em nível absoluto, com o giro travado a 1 198 rpm, as duas linhas não mudaram: fundamental −15,6 dB e 3ª harmônica −15,4 dB da 2ª (antes −15,4 e −15,3). A gravação, onde o piso é o ruído do microfone na esteira da hélice, dá 0 ± 4 dB com a mesma conta. Pendente: medir a razão das linhas em nível absoluto (AUDITORIA T-RAD-09: o cenário também não chega aos 1 200 rpm)."
   },
   "m14p lenta a 12 m de lado: harmônicos 2–5 da BPF contra a ignição": {
     "grupo": "linhas-b",
@@ -658,6 +575,32 @@
     "folga": "±5 %",
     "alvo": "1100 Hz ± 30%",
     "motivo": "A2 (AUDITORIA T-RAD-02): passa por menos de 5 % da tolerância e cai fora com outras sementes (794 Hz, alvo 1 100 ± 30 % (≥ 770): o agudo da decolagem do T-6 já é desvio (bandas da decolagem)); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "rotec2800: lenta quente, picos por segundo (> 16 dB)": {
+    "grupo": "estalos-b",
+    "medido": [
+      3.18,
+      0.09
+    ],
+    "unidade": "/s",
+    "folga": "±15 % (≥ 1.2)",
+    "alvo": "≤ 3/s, e ≤ 0,3/s acima de 16 dB",
+    "motivo": "A lenta quente pela página, com o detector do pops.py (picos da envoltória de 1–6 kHz mais de 10 dB sobre a mediana de 0,3 s); as gravações de radiais de 7 a 18 cilindros têm 0 a 7 picos por segundo. Etapa de som do Radial (22/11/2026): o estalo por explosão era o chiado de jato do Ronco na boca do estaque; com a boca de escape do radial (src/engines/radial/boca.ts: sopro turbulento colado à vazão, com corpo) o Rotec R2800 foi de 19,0 para 3,0–3,5 picos/s conforme a semente e de 16,6 para 0–0,3/s acima de 16 dB (curtose 90 → 5,7–7,1; a gravação tem 5,9/s, 0,17/s e 6): à beira do alvo de 3.",
+    "nota_folga": "folga alargada: os picos fortes por segundo (2º número) mudam até 1 por segundo entre as bases 0, 1000, 2000 e 3000 (mediana de 3 sementes cada)",
+    "beira": true
+  },
+  "rotec3600: lenta quente, picos por segundo (> 16 dB)": {
+    "grupo": "estalos-b",
+    "medido": [
+      2.5,
+      0.0
+    ],
+    "unidade": "/s",
+    "folga": "±15 % (≥ 1.2)",
+    "alvo": "≤ 3/s, e ≤ 0,3/s acima de 16 dB",
+    "motivo": "A lenta quente pela página, com o detector do pops.py (picos da envoltória de 1–6 kHz mais de 10 dB sobre a mediana de 0,3 s); as gravações de radiais de 7 a 18 cilindros têm 0 a 7 picos por segundo. Etapa de som do Radial (22/11/2026): o estalo por explosão era o chiado de jato do Ronco na boca do estaque; com a boca de escape do radial (src/engines/radial/boca.ts: sopro turbulento colado à vazão, com corpo) o Rotec R3600 foi de 9,7 para 1,9–2,9 picos/s conforme a semente, nenhum acima de 16 dB (curtose 15 → 5): passa, à beira do alvo de 3.",
+    "nota_folga": "folga alargada: os picos fortes por segundo (2º número) mudam até 1 por segundo entre as bases 0, 1000, 2000 e 3000 (mediana de 3 sementes cada)",
     "beira": true
   }
 }
