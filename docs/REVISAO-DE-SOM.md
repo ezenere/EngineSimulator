@@ -491,7 +491,7 @@ cinco hipóteses em `TECNICO.md` → Médios):
 |---|---|---|---|
 | Fusca, 1410 rpm | −10,0 → −6,4 (real −5,2) | −23,9 → −8,2 (real −7,1) | −21,7 → −19,1 (real −9,7) |
 | Hellcat, lenta quente | −23,8 → −23,1 (real −25,2) | −34,8 → −29,3 (real −31,2) | −53,0 → −46,3 (real −45,2) |
-| Mustang frio, 1251 rpm | −19,5 → −20,2 (real −5,1) | −39,1 → −34,4 (real −18,8) | sem linha no real |
+| Mustang frio, 1251 rpm | −19,5 → −20,2 (real −5,1) | −39,1 → −36,6 (real −18,8) | sem linha no real |
 | Camaro, 2500 rpm em carga parcial | −11,2 → −11,5 | −34,3 → −25,5 | −54,3 → −43,0 |
 | Golf GTI, 2500 rpm em carga parcial | −20,2 → −18,1 | −35,6 → −24,9 | −51,1 → −42,2 |
 | S2000, plena carga a 6500 rpm | +8,5 → +7,4 | +7,1 → +9,9 | −7,4 → −7,3 |
@@ -507,6 +507,9 @@ cinco hipóteses em `TECNICO.md` → Médios):
   1–2,5 kHz. A física da parede (rígida abaixo da ressonância: 12 dB por oitava) dá o passa-alta ressonante.
 - **A primeira batida subia o agudo.** Com um modo em 2,8 kHz e sem corte, as linhas de 2,5–6 kHz subiam 20 dB na
   lenta. Corte em 1,7 kHz e impacto ∝ rotação^1,5: na lenta ela quase some.
+- **A régua pegou o que as linhas não mostravam.** Com a batida 80% mais forte a frio (pistão e tuchos com folga), as
+  linhas do Hellcat frio pareciam boas, e a modulação e os eventos saíam da faixa dos aprovados (2,5 e 2,6): em
+  1–6 kHz a gravação é um leito liso e o simulado virava um tique-tique. O reforço a frio saiu (1,9 e 1,3).
 - **Duas fontes coerentes se cancelam.** A carcaça responde em contrafase com a boca abaixo da ressonância da parede: no
   Fusca, cujo abafador já tira 7 dB em 300 Hz, ela cancelava 1,8 dB de 150–400 Hz. Só apareceu comparando o nível
   absoluto por banda, antes × depois (a normalização pela âncora escondia). Uma caixa pequena irradia mal o grave: entrou.
@@ -518,7 +521,7 @@ cinco hipóteses em `TECNICO.md` → Médios):
 
 **Pendente:**
 
-- **Mustang frio:** continua 15–16 dB abaixo em 400 Hz–2,5 kHz. O motor real está no aquecimento do catalisador, com a
+- **Mustang frio:** continua 15–18 dB abaixo em 400 Hz–2,5 kHz. O motor real está no aquecimento do catalisador, com a
   queima invadindo o escape; o pulso chega à ponteira com a frente muito mais íngreme. Falta essa queima no tubo.
 - **400 Hz–1 kHz** quase não mudou (±1 dB com abafador esportivo, +1 a +3 dB com o original e o antigo): a parede e o
   bloco respondem acima disso. O ganho está em 1–2,5 kHz (+2 a +7 dB em carga leve; +10 a +29 dB nos carros de
