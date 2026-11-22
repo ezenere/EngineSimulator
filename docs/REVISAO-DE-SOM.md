@@ -528,7 +528,7 @@ cinco hipóteses em `TECNICO.md` → Médios):
 | Hellcat, lenta quente | −23,8 → −23,1 (real −25,2) | −34,8 → −29,3 (real −31,2) | −53,0 → −46,3 (real −45,2) |
 | Mustang frio, 1251 rpm | −19,5 → −20,2 (real −5,1) | −39,1 → −36,6 (real −18,8) | sem linha no real |
 | Camaro, 2500 rpm em carga parcial | −11,2 → −11,5 | −34,3 → −25,5 | −54,3 → −43,0 |
-| Golf GTI, 2500 rpm em carga parcial | −20,2 → −18,1 | −35,6 → −24,9 | −51,1 → −42,2 |
+| Golf GTI, 2500 rpm em carga parcial | −20,2 → −16,0 | −35,6 → −23,2 | −51,1 → −42,3 |
 | S2000, plena carga a 6500 rpm | +8,5 → +7,4 | +7,1 → +9,9 | −7,4 → −7,3 |
 
 Na régua do kit ouvido (tabela aprovado → novo no `README` do kit; painéis em `docs/ouvido/ronco/`): o total do Fusca a
@@ -567,6 +567,12 @@ a gravação em 1–6 kHz.
   bloco respondem acima disso. O ganho está em 1–2,5 kHz (+2 a +7 dB em carga leve; +10 a +29 dB nos carros de
   abafador original). Ponderado A, os médios da carga leve continuam bem abaixo dos das gravações.
 - **Fórmula 1:** as gravações de bordo têm a ordem 2 (~600 Hz) onde o simulado tem a ignição. É a posição da câmera.
+- **Abafador original acima de 2,5 kHz e a cabine.** Com um pulso conhecido, o abafador original tira 12 dB em
+  1–2,5 kHz e 32 dB em 2,5–6 kHz em relação ao esportivo; gravações de fora de um escape original em giro alto têm
+  −5 a −7 e −11 a −15 dB do grave. A carcaça repõe 1–2,5 kHz (Golf em plena carga, −21,6 → −7,1); acima disso é o filtro
+  do abafador, que não foi mexido. Na cabine o caminho do escape tira 19 dB em 1 kHz e 47 dB em 2,5 kHz; a batida
+  repõe parte pela parede corta-fogo (Camaro em carga parcial, −44,5 → −21,8 em 1–2,5 kHz). O filtro de cabine ficou
+  como estava: falta uma gravação de bordo de um carro a pistão.
 - **Carga parcial e motor solto não têm gravação casada.** Tudo o que se diz deles aqui é contra o som de antes.
 
 ## Caso: papel rasgando
@@ -593,7 +599,7 @@ ruído e o defeito `ar` contra o mesmo carro nos diâmetros do preset.
 | A velocidade na ponteira satura no escoamento sônico | Perto do sônico o sopro para de crescer |
 | Ponteira mais fina que o tubo é um bocal (Bernoulli) | Sobe a contrapressão e amolece o pulso em vez de criar chiado |
 
-**Resultado:** o jato não é a fonte dominante em nenhum dos 108 pontos (máximo 3% na lenta, 3% em carga parcial, 18% em
+**Resultado:** o jato não é a fonte dominante em nenhum dos 108 pontos (máximo 3% na lenta, 2% em carga parcial, 10% em
 plena carga, este no Golf com os diâmetros de fábrica, onde eram 37%). Nos diâmetros dos presets o chiado é o de antes
 (a menos de 0,5 dB na lenta e em carga parcial). Estreitar continua mudando o som: com 1,5" o carro fica 3 a 14 dB mais
 baixo e mais anasalado;
