@@ -10,6 +10,10 @@ integral da potência da banda de um vale ao seguinte. O "surto" é o trecho em 
 mais lentos; sai a taxa antes e no surto, a energia por chuff do surto relativa à de antes (dB) e a potência média do
 surto relativa à de antes (dB). `--tabela` imprime chuff a chuff. O programa não ouve nada: confira no espectrograma
 (`tools/referencias/medir.py --espectrograma`) que os picos do surto são chuffs e não apito nem sino.
+
+Limite conhecido: numa gravação com chiado forte (purgadores abertos, guincho de roda) o detector acha picos de ruído a
+20–30 por segundo em todo o trecho. Aperte `--fmax` para perto da taxa esperada no surto (a 844 do acervo patina de ~2
+para ~7 chuffs/s: `--fmax 10`) e escolha o trecho pelo espectrograma; serve bem nos renders (`vapor-fontes.ts --patinagem`).
 """
 import argparse
 import os

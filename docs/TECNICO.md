@@ -2153,12 +2153,14 @@ O projeto está em [`VAPOR.md`](VAPOR.md); aqui fica o que foi feito, como e o q
   - uma `Line` por extremidade → `Junction` → tubo de descarga (`kNL` 0,3) → bico (orifício implícito) → caixa de fumaça (volume integrado de forma implícita) → chaminé → boca;
   - a boca é um `Radiator` com reflexão 0,97 no grave e corte em 0,9·f_ch: fecha o Helmholtz de 9–14 Hz e deixa a meia onda com Q 2,5–3;
   - o jato entra na base da chaminé como fonte de pressão `0,5·ṁ·U/A_ch` (passa-baixa de 2 polos no comprimento de mistura), com a turbulência de Lighthill por cima: é o "hoot" largo de cada chuff;
-  - por cima ainda: ruído de mistura por Strouhal (`0,2·U/D`, Q 0,5, ∝ ṁ·M³, envoltória de 2 kHz), choque acima de `p_bp/p_cx` = 1,9 e sopro da tiragem ∝ (ṁ·M)² médio;
+  - entre as passagens e o tubo de descarga há o coletor de escape, um volume (`escape.vColetor`) que cada descarga enche antes de esvaziar pelo bico;
+  - por cima ainda: ruído de mistura por Strouhal (`0,2·U/D`, Q 0,5, ∝ ṁ·M³, envoltória de 2 kHz), choque acima de `p_bp/p_cx` = 1,9, o jato na fresta do pórtico ao abrir (o ataque) e o sopro da tiragem, que segue a coluna de gás que cada chuff puxa (`ColunaDeGas`) e cai entre um e outro;
+  - a caixa de fumaça como cavidade (`CaixaRessonante`: 4 linhas de atraso realimentadas, tempo de queda `escape.tCauda`) devolve o ruído do jato depois da descarga: é a cauda de cada chuff. Ver [Rodada de som](#rodada-de-som-22112026-o-chuff-não-o-sopro);
   - o canal tem passa-alta de 4 polos em 20 Hz; o Helmholtz fica só na `pCaixa` da telemetria.
 
   As linhas usam a `SOUND_SPEED` 520 do pacote. Os comprimentos entram escalados por 520/c (c_v 480, c_q 450) e encurtados pelo atraso de fase dos filtros da boca, para a meia onda cair em `c_q/(2L)`.
 - **Caldeira com estado:** `dp/dt = (E − ṁ)·k_cal`, evaporação com 60 s de inércia térmica, foguista automático, segurança com histerese, injetor pelo nível de água. O regulador (1ª ordem de 0,4 s, lei de área de 1.1) alimenta o volume da caixa de válvulas; o reverser responde em 1,5 s. O compound (Y6b, barco) tem o receptor e a válvula de simplificação.
-- **Patinagem pela troca de J** (1.7). Aderido, `J = J_motor + carga.inercia`. Com o esforço acima de `μ·W_ad` a roda desacopla e fica só com `J_motor`, e o atrito de escorregamento empurra o trem; readere quando volta à velocidade dele. Nos dois motores (Big Boy, Y6b), ω e patinagem são próprios de cada um, com deriva de fase ε sorteada (1%).
+- **Patinagem pela troca de J** (1.7). Aderido, `J = J_motor + carga.inercia`. Com o esforço acima de `μ·W_ad` a roda desacopla e fica só com `J_motor`, e o atrito de escorregamento empurra o trem (na roda de aço em trilho ele cai com a velocidade de deslizamento, pela curva de Polach: 45% da aderência a 15 m/s; é o que faz a roda disparar); readere quando volta à velocidade dele. Nos dois motores (Big Boy, Y6b), ω e patinagem são próprios de cada um, com deriva de fase ε sorteada (1%).
 - **Apito como guia de onda realimentada** (`apito.ts`). Cada tubo é uma malha fechado-aberto: ida e volta 2L/c com inversão na boca, por isso só os harmônicos ímpares. O jato do anel entra como `g(p_s)·tanh`, com passa-baixa em 4·f. O limiar fica em p_s 0,1–0,15 (abaixo dele, o quilling). O aquecimento leva c_v de 0,90 a 1,0 (τ 13 s soprado), e o sopro fraco afina −60 cents.
   - A malha saturada não oscila na ressonância linear. Por isso cada tubo é afinado uma vez na construção: 0,3 s soprado, D corrigido pela nota medida.
   - Acordes reais: D51, C57, Big Boy com 6 tubos, 844 com o par de 407/420 Hz batendo a 13 Hz.
@@ -2170,7 +2172,7 @@ O projeto está em [`VAPOR.md`](VAPOR.md); aqui fica o que foi feito, como e o q
   - torneiras (sopros em fase com as admissões, água nas primeiras voltas);
   - vazamentos e pinga-pinga;
   - bielas (impacto de folga nas inversões de força, rolar 1/volta, dashpots do Corliss);
-  - soprador, queimador do Stanley, engrenagens (Shay, trator) e correias.
+  - soprador, ejetor de vácuo (as máquinas de freio a vácuo, no lugar da bomba de ar: A4), queimador do Stanley, engrenagens (Shay, trator) e correias.
 - **Governador de esferas** (estacionária, trator parado): PI sobre o corte (5–60%), com integração condicional. Abaixo do corte mínimo ele fecha o regulador, como a borboleta de Watt.
 - **Determinismo e CPU:** `RNG` com a semente do preset, render offline idêntico a cada execução. Por amostra, K4s e 844 custam 0,25 do Ronco; o Big Boy, 0,34 (desvio, ver abaixo).
 
@@ -2212,12 +2214,69 @@ As 14 fichas da seção 5: K4s, A4, D51, 844, Big Boy, Y6b, Shay, Maria Fumaça,
 - `npm run gravacoes:vapor` (`tools/vapor-gravacoes.ts`, passo 1): a porta em TypeScript dos scripts do projetista (`tools/vapor-analise.ts`) contra o Apêndice A. O Butterworth/filtfilt bate com o scipy em 12 algarismos. Resultado na etapa: 135 ok e 6 desvios, que são notas do Apêndice que o próprio `apito.py` não acha com os parâmetros do texto. **Precisa das gravações**, que ficam fora do git: sem `-- --pasta <pasta dos WAV>` ele procura numa pasta temporária da etapa que não existe mais e termina com erro (`ENOENT`, código 1); por isso não entra no `verificar`.
 - `npm run teste:vapor` (`tools/vapor-valida.ts`): 13 grupos em paralelo, 30–90 s. `npm run cpu:vapor` (`tools/vapor-cpu.ts`): CPU por amostra contra o Ronco, 3 passadas alternadas, tempo de CPU do processo (`process.cpuUsage()`), mediana: K4s 0,15, 844 0,15, Big Boy 0,21 (com o tempo de relógio e uma passada o Big Boy dava 0,34–0,40; a primeira passada ainda paga o JIT e sai perto de 0,3).
 - **Desvios com teto e sementes** (desde 22/11/2026, `tools/desvios.ts`, comum às famílias). Uma medida fora do alvo só passa se estiver no retrato `tools/vapor-desvios.json` (chave = nome exato da medida; `medido`, `folga`, `motivo`) e o valor de hoje ficar dentro da folga do gravado (±1 dB nas medidas em dB, ±5 % nas outras; alargada, com a razão em `nota_folga`, onde a mediana de 3 sementes muda mais que isso entre bases). Saiu da folga, para pior ou para melhor: falha até `--atualizar` (tudo o que mudou) ou `--atualizar=<nome>` (só a medida que a mudança explica). Medida do retrato que voltou a passar: aviso de desvio órfão. Medidas à beira (`beira: true`: passam por menos de 5 % da tolerância e caem fora com outras sementes) podem passar ou falhar dentro da folga. Contagens, transientes, vagar e CV são a mediana de 3 sementes do ruído (`semear` troca o estado dos RNG do DSP montado, depois da calibração, que fica com a semente de fábrica; `--semente N` muda a base, 0 é a de fábrica). Antes, o desvio era só um nome (a medida podia piorar à vontade) e o resultado valia para uma semente: com outras três, 11 medidas "ok" do Vapor viravam falha (AUDITORIA T-VAP-01, T-VAP-03). O pórtico de escape é medido (a área que o laço entrega à rede, interceptada em `rede.injetar`, contra o ângulo da manivela do `tap`: 19,9°), no lugar do `ok` fixo; os rótulos mostram o critério de verdade.
+- Som (rodada de 22/11/2026): `tools/vapor-fontes.ts` renderiza um preset numa condição (chuffs/s, corte, regulador; de perto, pela Cena andando junto ou numa passagem; parada; patinagem; lenta do trator e da estacionária) e, com `--cada`, grava o conjunto do orçamento de ruído (a mesma semente, uma fonte desligada por vez: `hoot`, `mistura`, `choque`, `portico`, `tiragem`, `cauda`, `vazamentos`, `torneiras`, `bielas`, auxiliares, `rolamento`); `tools/vapor-forma.ts` mede a forma do chuff de qualquer WAV com as funções da validação; `tools/vapor-ouvido.py` (casos em `tools/vapor-ouvido.json`) roda a régua do kit ouvido contra as gravações de `referencias/vapor/` (acerta a taxa de chuffs do trecho pela envoltória, compara, faz o orçamento e monta `resumo.md`); `tools/vapor-patinagem.py` mede taxa e energia por chuff ao longo de uma patinagem.
 - `npm run lenta:vapor` (`tools/vapor-lenta.ts`): os 14 presets no portador de uso real. Confere parado sem escape, arrancada no molhado com patinação, chuffs/s exatos em cruzeiro, drifting e ausência de NaN: 14/14.
 - `npm run navegador:vapor`: Chromium e Firefox, servindo o `dist/`.
 
-### Alvo × medido (`npm run teste:vapor`: 121 medidas; semente de fábrica 94 ok e 27 desvios com teto; retrato com 36 entradas, 12 à beira; 0 falhas com as sementes de base 0, 3000 e 4000 depois das fichas, e 0, 1000 e 2000 antes)
+### Rodada de som (22/11/2026): o chuff, não o sopro
 
-Os desvios estão em negrito. Os números da tabela são da semente de fábrica, de antes das medianas; os de hoje estão no retrato e na saída do teste. Com a mediana de 3 sementes o ataque a 9/s virou desvio (24 ms contra 37 ± 30 %: só passava com a semente do preset), o Shay e a CPU do Big Boy voltaram a passar, e doze medidas ficaram à beira (ataque a 4/s, decaimentos a 9 e 21,3/s, p/v a 21,3/s, massa por chuff, linha de 2/volta a 7/s, nível por chuff na arrancada, "pants" do Stanley, L_W do chuff, quilling, a 844 a 15 m). A volta do Corliss passou a ser o tempo de acomodação a ±1 % (a primeira passagem caía em 1 a 10 s ou em nunca conforme a semente): ele não se acomoda em 30 s, desvio estável. Depois das fichas de 22/11 (comprimentos reais das composições, F-VAP-04) a segurança a 10 m foi a 105,4 dB(A) e a 844 a 15 m a 89,9.
+Regra do dono, acima da fidelidade à gravação: "pro simulador ele tem que soar mais motor e menos som de ar do motor". Numa locomotiva o motor é o chuff: cada descarga do cilindro na chaminé, com ataque, corpo e cauda, e o que fica entre um e outro tem de respirar com o evento. Régua: `python3 -I tools/vapor-ouvido.py` (casos em `tools/vapor-ouvido.json`, render por fonte em `tools/vapor-fontes.ts`, forma do chuff em `tools/vapor-forma.ts`); painéis de antes e de depois em [`docs/ouvido/vapor/`](ouvido/vapor/), resultados completos em `referencias/_sim/vapor/antes/` e `depois/` (fora do git).
+
+**Como se mediu.** O chuff é uma rajada de ruído: não tem linhas, e o rastreador do kit (pente harmônico) não acha o ciclo. A taxa sai da envoltória (150–3000 Hz), o trecho da gravação é reamostrado na fase dessa linha para a taxa ficar constante (as locomotivas das gravações estão acelerando) e o kit recebe o ciclo exato dos dois lados; o ciclo é a volta de roda (4 chuffs). O simulado é renderizado na taxa da gravação, de perto (a soma dos canais a 7,5 m) ou pela Cena.
+
+**O que a medida mostrou** (K4s a 5,5 chuffs/s, corte 60%, de perto, contra a gravação "chuff lento de perto"):
+
+- **Quem enchia o vale era a tiragem**: um ruído de 200–1500 Hz ∝ o quadrado da quantidade de movimento média do jato, alisada em 0,5 Hz. Era 36% da potência ponderada A e 93% do vale de 1–6 kHz (97% em 400–1000 Hz), com p90/p10 próprio de 5 dB; a 25 m (844), 30% e 94%. Desligar a tiragem e os vazamentos mudava o nível ponderado A em 2,0 dB. Sem ela o vale ficava vazio (rede a −38 dB do pico, mistura a −80): o chuff do modelo não tinha cauda nenhuma, e a tiragem estava lá para tapar isso.
+- **O chuff era seco porque o som morria com o M³ do jato**: o ruído de mistura (∝ ṁ·M³) cai 10 dB em 33 ms e 40 dB em 75 ms depois do pico, mais depressa que o cilindro esvazia; e o ataque era a abertura do pórtico sem nada entre ele e o bico (28 ms contra 44 da gravação).
+- **O começo do chuff era escuro**: o agudo (o choque do bico) ficava no meio de cada chuff; nas gravações o chuff abre largo e o agudo cai primeiro. A medida "centroide do vale ÷ centroide do pico" (0,75 contra 1,05–1,35) é dominada pelos primeiros 30 ms do chuff seguinte, que entram na janela do vale.
+- **A rede perde vapor**: o amortecimento de onda das `Line` (exp(−0,09·L·1,5) por passagem, feito para ondas acústicas) age sobre a vazão média: de 10 kg/s no pórtico chegam 6 ao bico. Em cruzeiro (15/s, corte 25%) o bico nunca engasga (Mach 0,4–0,75), e era a tiragem lisa que segurava o nível. Com a vazão conservada e os bicos das fichas o chuff dobra de largura (135 ms contra 70 a 4/s); com o bico de catálogo da K4s (7", contra os 0,15 m da ficha) a forma volta à de hoje e as bandas no pico melhoram. Ficou como está (`AMORT_ESCAPE` em `rede.ts`, com a conta): mexer pede rever o bico das 14 fichas.
+
+**O que mudou** (cada item é uma peça ou um fenômeno; nada de equalização):
+
+| Mudança | Campo do preset / controle no painel | Onde | Por quê |
+|---|---|---|---|
+| Coletor de escape: volume entre os pórticos e o tubo de descarga (padrão 0,6 de um cilindro por par; King 0,3 m³) | `escape.vColetor` / "Coletor de escape" | `rede.ts` (`definirColetor`, junção com volume), `presets.ts` (`vColetorPadrao`) | Cada descarga primeiro enche o bloco de escape e depois ele esvazia pelo bico: o chuff abre menos seco e ganha corpo |
+| Jato na fresta do pórtico: ∝ ṁ·M³ com o Mach do jato expandido e só enquanto o pórtico é fresta | — (segue "Ar") | `rede.ts` (`RuidoPortico`, `machExpandido`), `dsp.ts` (laço do escape) | O "tch" do ataque: agudo, antes do pico do jato do bico; a 9:1 (corte longo) é forte, a 2:1 (corte curto) quase não existe |
+| Caixa de fumaça como cavidade: 4 linhas de atraso realimentadas, tempo de queda 0,8 s, −4 dB re o jato | `escape.tCauda`, `escape.nivelCauda` / "Cauda do chuff" | `rede.ts` (`CaixaRessonante`), `dsp.ts` | A cauda de cada chuff: o ruído do jato (e metade do tom da chaminé) que fica batendo na caixa e nos tubos de fogo e sai depois. Cai entre um chuff e outro; a 20/s vira o rugido |
+| Tiragem pela coluna de gás: τ·dq/dt = m − q², sopro ∝ q⁴ | `escape.tiragem` / "Tiragem" | `rede.ts` (`ColunaDeGas`), `dsp.ts` | O gás que o jato arrasta tem a inércia dos tubos de fogo: o sopro sobe com cada chuff e cai como 1/(1 + q₀t/τ)⁴. Padrão no lado baixo (7% da potência ponderada A) |
+| Escala do ruído do jato 1500 → 1200; choque 0,9 → 1,2× a mistura; desigualdade dos lados ±1,3 → ±1,0 dB | — | `dsp.ts` (`K_MISTURA`, `gChoque`, `DB_LADO`) | A cauda soma médio ao pico e alisa a linha de 4/volta: acertado de novo contra as mesmas medidas |
+| King: válvulas de fora por balancim a partir das de dentro | `cilindros.desajuste` (2°) / "Válvulas de fora" | `dsp.ts` (`eConj`, `atualizarEventos`) | Os dois escapes de cada batida dupla abrem no mesmo ângulo; antes a angularidade da biela os separava ~10° |
+| Patinagem: atrito de escorregamento pela curva de Polach (45% da aderência a 15 m/s), só roda de aço em trilho | — | `dsp.ts` (`dinamica`, `ATRITO_A/B`) | Quanto mais patina menos o trilho segura: a roda dispara, a máquina pede mais vapor do que o regulador entrega e a caixa de válvulas cai |
+| A4: ejetor de vácuo (98 dB(A), +8 dB por ~2 s ao soltar o freio) no lugar da bomba de ar | `ejetor` / "Ejetor de vácuo" | `auxiliares.ts` (`Ejetor`), `motor.ts` (sonda) | A A4 freia a vácuo: parada, ficava só com o soprador |
+
+**Antes × depois × gravação** (régua `vapor-ouvido.py`; "—" = sem gravação casada):
+
+| Caso | medida | gravação | antes | depois |
+|---|---|---|---|---|
+| K4s, 5,5 chuffs/s, corte 60%, de perto | centroide vale ÷ pico | 1,34 | 0,92 | 1,19 |
+| | ataque · largura · decaimento (ms) | 44 · 63 · 66 | 28 · 66 · 85 | 30 · 75 · 75 |
+| | pico/vale (dB): total; 150–400 · 400–1,5k · 1,5–6k | 13,4; 15 · 15 · 13 | 13,0; 17 · 13 · 13 | 14,5; 19 · 15 · 13 |
+| | `ar` · pulso a menos · tom a menos · total | | 0,65 · 0,56 · 0 · 1,72 | 0,03 · 0,15 · 0 · 1,62 |
+| | leito re 150–400 (dB): 400–1k · 1–2,5k · 2,5–6k | −3,5 · −6,4 · −11,8 | −2,7 · −2,8 · −12,5 | −5,2 · −6,0 · −12,3 |
+| | desligar tiragem e vazamentos (dB A) | | 1,99 | 0,32 |
+| UP 844, 6,3 chuffs/s, corte 45%, a 25 m (Cena) | centroide vale ÷ pico · pico/vale (dB) | 0,85 · 7,5 | 0,99 · 13,8 | 1,20 · 14,6 |
+| | `ar` · pulso a menos · total · contínuas (dB A) | | 0 · 0 · 1,91 · 1,52 | 0 · 0,06 · 1,74 · 0,19 |
+| Big Boy a 52 km/h (21 batidas/s), de perto | pico/vale (dB) · decaimento (ms) | 9,4 · 20 | 12,4 · 18 | 9,6 · 20 |
+| | `ar` · pulso a menos · total | | 0 · 0 · 2,35 | 0 · 0,11 · 1,94 |
+| K4s, 2,7 chuffs/s, corte 70%, de perto | pico/vale (dB) · `ar` · total | 15,6 | 25,5 · — · 3,01 | 25,8 · 0 · 2,56 |
+
+Na validação (`teste:vapor`, mediana de 3 sementes, base 0; antes → depois): centroide vale/pico 0,75 → 1,15 (alvo 1,05–1,35); ataque a 4/s 33 → 40 ms (47 ± 30%) e a 9/s 24 → 26 ms (24 a 28 conforme a base; 37 ± 30%, ainda à beira); decaimento a 1,4/s 55 → 74 ms (89 ± 30%), a 9/s 68 → 59 ms (52 ± 30%); pico/vale a 4/s 17,8 → 18,6 dB, a 9/s 10,2 → 11,7, a 21,3/s 12,0 → 9,5 (9 ± 3); banda 1–2,5k no pico +1,7 → +1,0 dB (−2 ± 3); 2,5–6k +0,1 → −1,0; 6–12k −10,2 → −11,7; centroide no pico 1 462 → 1 336 Hz. King, linha de 8/volta: −5,2 dB (2 voltas/s, corte 40%) → −12,8 dB na condição da gravação da 6024 (que tem −14). Patinagem com o regulador cheio: 13,8 → 19,7 chuffs/s, roda a 4,7× o trem, caixa de válvulas −35%, energia por chuff +5,6 → +3,0 a +4,6 dB; na arrancada com o regulador em 60%: de 4 para 10 chuffs/s, caixa de 8 para 5 bar, energia por chuff −2,4 a −3,4 dB. Pico na Passagem do Big Boy arrancando: +2,3 → +0,4 dBFS (51,7 → 41,7 Pa).
+
+**O que piorou, e por quê.** O nível por chuff em cruzeiro (corte 25%, 15/s) foi de −7,6 para −8,8 dB da referência, a K4s a 15 m de 85,8 para 84,4 dB(A) e o "Pacific a 100 km/h" da Passagem de 87,3 para 85,6 dB(A): o que segurava esses níveis era a tiragem lisa, o som de ar que saiu. A linha de 8/volta do Big Boy varia 6,8 dB em 60 s (era 7,6): a cauda enche o intervalo entre os pares.
+
+**Níveis absolutos: é convenção de medida, não nível de fonte.** A válvula de segurança (omni, L_W 140 dB(A)) fica a 12,6 m do ouvinte que está "a 10 m" (ela está no alto da caldeira, fora do través): campo livre 140 − 20·log 12,6 − 11 = 107,0 dB(A). O ouvido de perto lê 107,2; o de longe, na sombra da cabeça, 101,4; a média das potências dos dois, que é a conta dos testes (`tools/cena/analise.ts` → `leq`), 105,2 (−1,8 dB); a brita soma 0,2: 105,4, o valor do teste. A mesma conta fecha o apito a 30 m (145 − 29,5 − 11 − 2 de lado − 1,8 = 100,7; medido 100,3) e a 844 a 15 m (128 − 23,5 − 11 − 1 da chaminé a 5 m de altura − 1,8 = 90,7; medido 89,2 a 89,7). Um microfone no lugar do ouvinte leria a segurança em 107 (alvo 110 ± 3), o apito de lado em 102 (105 ± 3) e a 844 em 91,5 (95 ± 5): os três na faixa. A K4s a 15 m é outra coisa: L_W 124 dá 89,5 dB(A) em campo livre na condição de referência, abaixo dos 90–100 que a 4.6 escreve (a conta de lá, "128 → 100 a 15 m", erra 6,5 dB), e a 40 km/h com corte 40% a máquina está 3 dB abaixo da referência. Os `lwChuff` ficaram como estão.
+
+**Pendente.**
+
+- A perda de vazão da rede (acima): conservar a vazão e rever os bicos das fichas. É o que falta para o cruzeiro subir pelo mecanismo.
+- O ataque a 9/s (24–28 ms contra 37) e a 5,5/s (30 contra 44 da gravação): com a vazão conservada sai em 34–38 ms.
+- Em baixa velocidade o vale fica mais fundo que nas gravações (pico/vale 25 dB a 2,7/s contra 15,6; 38 dB a 1,4/s contra 18,5): nelas o que enche o vale é chiado (purgadores, vazamentos, o próprio gravador: leito de 31–52% de 400 Hz a 6 kHz), e esse ar ficou de fora de propósito. O controle "Cauda do chuff" alonga a cauda; as torneiras de purga, no automático, chiam nas 15 primeiras voltas.
+- Patinagem com o regulador todo aberto: a energia por chuff ainda sobe (+3 a +4,6 dB). No modelo o ruído de um jato engasgado cresce com o quadrado da vazão, e o chuff concentrado em 1/5 do tempo devolve o que a massa menor tira.
+- Aveling parado (mecanismo, lenta), Stanley (abafador), Corliss (governador), Y6b em drifting: não mexidos.
+
+### Alvo × medido (`npm run teste:vapor`: 123 medidas; semente de fábrica 98 ok e 25 desvios com teto; retrato com 30 entradas, 9 à beira; 0 falhas com as sementes de base 0, 1000 e 2000 depois da rodada de som)
+
+**Os números da tabela abaixo são de antes da rodada de som de 22/11/2026**; o que mudou está em "Rodada de som", acima, e os valores de hoje estão no retrato e na saída do teste. Os desvios estão em negrito. Os números da tabela são da semente de fábrica, de antes das medianas; os de hoje estão no retrato e na saída do teste. Com a mediana de 3 sementes o ataque a 9/s virou desvio (24 ms contra 37 ± 30 %: só passava com a semente do preset), o Shay e a CPU do Big Boy voltaram a passar, e doze medidas ficaram à beira (ataque a 4/s, decaimentos a 9 e 21,3/s, p/v a 21,3/s, massa por chuff, linha de 2/volta a 7/s, nível por chuff na arrancada, "pants" do Stanley, L_W do chuff, quilling, a 844 a 15 m). A volta do Corliss passou a ser o tempo de acomodação a ±1 % (a primeira passagem caía em 1 a 10 s ou em nunca conforme a semente): ele não se acomoda em 30 s, desvio estável. Depois das fichas de 22/11 (comprimentos reais das composições, F-VAP-04) a segurança a 10 m foi a 105,4 dB(A) e a 844 a 15 m a 89,9.
 
 | Medida | Alvo | Medido |
 |---|---|---|
@@ -2264,15 +2323,15 @@ O motivo de cada um está no `DESVIOS` de `tools/vapor-valida.ts`. Por grupo:
   - Composição a 100 km/h: a conta de 3.5 esquece o rolamento da própria locomotiva e do tênder.
 - **Caldeira:** na arrancada a pressão cai 0,8 bar em 30 s. Com o regulador em 0,6 a área é 25% da máxima, e o consumo fica em ~1·E_max.
 - **Forma e bandas:**
-  - De perto, o vale é a tiragem, mais escura que o pico (vale/pico 0,77). Uma tiragem mais larga dava o vale mais claro das gravações, mas estragava o decaimento e o escurecimento do corte curto.
+  - *(Resolvido na rodada de som: o vale era a tiragem lisa, mais escura que o pico; hoje é a cauda de cada chuff.)*
   - A 25 m o nulo do solo cai na banda de referência. A gravação do próprio 844 dá +4/+5 dB nessas bandas, como o modelo.
-  - A 1,4 chuff/s o decaimento segue o M³ do jato, não o esvaziamento.
+  - *(Resolvido na rodada de som: a 1,4 chuff/s o decaimento seguia o M³ do jato; com o coletor e a cauda dá 74–79 ms.)*
   - A 10 chuffs/s a linha de 2/volta fica a −3,9 dB da de 4/volta.
 - **Geometrias:**
   - Shay: a 30 chuffs/s os escapes se fundem e a linha da envoltória sai em 31,1; a taxa na telemetria é exata.
-  - King: a angularidade da biela separa as duas batidas de cada par. A própria 6024 tem a linha de 8/volta a −14 dB.
+  - King: a linha de 8/volta fica a −12,8 dB da de 4/volta na condição da gravação da 6024, que tem −14 (alvo −20). As válvulas de fora vão por balancim e os dois escapes de cada par abrem juntos; o que a medida ainda vê é o 2º harmônico de uma batida estreita.
   - Big Boy: o bico comum alisa os pares, e a linha de 8/volta varia só 7,6 dB.
-- **Patinagem:** o surto chega a 13,8 chuffs/s e a energia por chuff sobe em vez de cair. A caixa de válvulas não cai os 30–50% que 1.7 supõe.
+- **Patinagem:** o surto chega a 19,7 chuffs/s com a caixa de válvulas 35% abaixo, mas com o regulador todo aberto a energia por chuff ainda sobe (+3 a +4,6 dB); na arrancada com o regulador em 60% ela cai 2,4 a 3,4 dB (alvo −6).
 - **Estacionárias:**
   - Corliss: queda de −5,3% no degrau, limitada pelo reabastecimento da caixa de válvulas.
   - Aveling em lenta: o governador desce devagar, e falta o ruído de mecanismo da gravação.
@@ -2292,7 +2351,8 @@ O motivo de cada um está no `DESVIOS` de `tools/vapor-valida.ts`. Por grupo:
 ### Pendente (TODO)
 
 - Cena 3D da composição na página `vapor.html`. A Passagem já tem a cena 3D; a página do vapor não importa three.js.
-- Ruído de mecanismo das máquinas paradas (Aveling), volume do abafador do Stanley, e uma tiragem com o espectro do vale das gravações sem alongar a cauda do chuff.
+- Ruído de mecanismo das máquinas paradas (Aveling) e volume do abafador do Stanley.
+- Conservar a vazão média na rede do escape (`AMORT_ESCAPE` em `rede.ts`) e rever o bico de cada ficha: ver "Rodada de som".
 - Hélice no barco (`FonteHelice`, 2.4) e o diesel marítimo (o portador `barco` aceita o diesel, mas não há preset).
 - Conferir a ficha da Maria Fumaça no acervo da ABPF.
 
