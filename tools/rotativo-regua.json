@@ -269,6 +269,74 @@
     }
    ],
    "nota": "microfone no cofre aberto, gravação baixa (−23 dBFS): série fraca de 73 / 110 / 149 / 185 Hz"
+  },
+  {
+   "id": "rx8-passagem",
+   "titulo": "RX-8 original · passagem de fora, chegando, ~7 070 rpm (Doppler) em carga",
+   "preset": "rx8hp",
+   "rotores": 2,
+   "real": "rx8-passagem-original.wav",
+   "trecho": [
+    9.0,
+    11.0
+   ],
+   "rpm": 7070,
+   "folga": 0.15,
+   "render": [
+    "--rpm",
+    "7070",
+    "--pedal",
+    "1",
+    "--dur",
+    "8"
+   ],
+   "nota": "os 2 s mais fortes da passagem, com o carro cruzando o microfone no fim: a ignição de 236 Hz é a de ~6 300 rpm subida 12% pelo Doppler (Mach 0,12); as bandas largas mudam pouco com isso"
+  },
+  {
+   "id": "rx8-cruzeiro-cabine",
+   "titulo": "RX-8 original · cruzeiro a ~6 650 rpm, a bordo (cabine provável)",
+   "preset": "rx8hp",
+   "rotores": 2,
+   "real": "rx8-original-aceleracao.wav",
+   "trecho": [
+    27,
+    39
+   ],
+   "rpm": 6650,
+   "folga": 0.08,
+   "render": [
+    "--rpm",
+    "6650",
+    "--pedal",
+    "0.3",
+    "--ouvinte",
+    "int",
+    "--dur",
+    "8"
+   ],
+   "nota": "gravação de bordo com vento e rolagem (fração periódica baixa): serve de teto de nível das bandas, não de alvo de timbre"
+  },
+  {
+   "id": "rx8-cruzeiro-ext",
+   "titulo": "RX-8 original · o mesmo trecho de cruzeiro, ouvinte de fora (para separar o filtro de cabine)",
+   "preset": "rx8hp",
+   "rotores": 2,
+   "real": "rx8-original-aceleracao.wav",
+   "trecho": [
+    27,
+    39
+   ],
+   "rpm": 6650,
+   "folga": 0.08,
+   "render": [
+    "--rpm",
+    "6650",
+    "--pedal",
+    "0.3",
+    "--dur",
+    "8"
+   ],
+   "nota": "a gravação é de bordo; o render de fora mostra o que o escape entrega antes do filtro de cabine"
   }
  ]
 }

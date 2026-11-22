@@ -14,5 +14,9 @@
     "isolatedModules": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["tools/**/*.ts","vite.config.mts","src/acoustics/**/*.ts","src/worklet/tom.ts","src/engines/turbina/**/*.ts","src/engines/ronco/**/*.ts","src/worklet/tipos.ts","src/scene/**/*.ts","src/carriers/**/*.ts","src/engines/diesel/**/*.ts","src/engines/eletrico/**/*.ts"]
+  // Todo o DSP de src/engines/ entra por inteiro (antes eram as famílias uma a uma, e Radial, Rotativos e Vapor só eram
+  // verificados pelo que tools/ importava: um arquivo que nenhuma ferramenta usasse saía da verificação sem aviso).
+  // Os processadores do worklet (src/worklet/processador-*.ts, registrar.ts) ficam de fora: dependem dos globais do
+  // AudioWorklet, que o tsconfig.json do navegador declara.
+  "include": ["tools/**/*.ts", "vite.config.mts", "src/acoustics/**/*.ts", "src/engines/**/*.ts", "src/scene/**/*.ts", "src/carriers/**/*.ts", "src/worklet/tom.ts", "src/worklet/tipos.ts"]
 }

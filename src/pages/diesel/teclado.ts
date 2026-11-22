@@ -27,7 +27,9 @@ export function usarTeclado(k: ControleDiesel, setFreio: (on: boolean) => void) 
       else if (e.code === 'KeyB') k.cycleValve();
       else if (e.code === 'KeyI') k.toggleIgnition().catch((err) => console.error('Diesel: áudio não iniciou', err));
       else if (e.code === 'KeyC') k.nextMic();
-      else if (e.code === 'KeyV') k.setObserver(k.estado.observer === 'car' ? 'road' : 'car');
+      // a mesma condição que mostra o campo "Observador" no painel (Painel.tsx, Escuta): a via só existe com o veículo;
+      // fora dele, a tecla só traz de volta quem já estava na via
+      else if (e.code === 'KeyV' && (port === 'carro' || k.estado.observer === 'road')) k.setObserver(k.estado.observer === 'car' ? 'road' : 'car');
       else if (e.code === 'KeyJ') k.toggleFreio();
       else if (/^(Digit|Numpad)\d$/.test(e.code)) {
         const n = +e.code.slice(-1);
@@ -42,7 +44,8 @@ export function usarTeclado(k: ControleDiesel, setFreio: (on: boolean) => void) 
       else if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { input.half = false; k.sendInput(); }
       else if (e.code === 'KeyS' || e.code === 'ArrowDown') { input.brake = 0; k.sendInput(); setFreio(false); }
     };
-    const blur = () => { k.input.key = 0; k.input.pad = 0; k.input.brake = 0; k.sendInput(); };
+    // (o botão do freio na tela também se apaga: sem isso ele ficava aceso com o freio já solto)
+    const blur = () => { k.input.key = 0; k.input.pad = 0; k.input.brake = 0; k.sendInput(); setFreio(false); };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     window.addEventListener('blur', blur);

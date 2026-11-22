@@ -8,7 +8,8 @@
 //   node tools/eletrico-navegador.mjs [url da eletrico.html] [chromium|firefox] [porta]
 //   sem url: serve o dist/ em http://127.0.0.1:<porta+1>/data/engine/ (rode npm run build antes)
 //
-// CHROMIUM=/caminho e FIREFOX=/caminho trocam os executáveis; SHOT=arquivo.png grava uma captura (Chromium);
+// CHROMIUM=/caminho e FIREFOX=/caminho trocam os executáveis; MUDO=1 roda sem tocar nas caixas (o som continua sendo
+// medido); SHOT=arquivo.png grava uma captura (Chromium);
 // RESERVA=1 bloqueia o AudioWorklet para testar a reserva na thread principal. Sai com código ≠ 0 se algo falhar.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -22,6 +23,10 @@ let url = process.argv[2];
 const nav = process.argv[3] || 'chromium';
 const porta = +(process.argv[4] || (nav === 'firefox' ? 9510 : 9390));
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+// MUDO=1: o teste roda sem tocar nas caixas (o áudio continua rodando e sendo medido no analisador): --mute-audio no
+// Chromium; no Firefox, media.volume_scale 0 (o fluxo vai em silêncio ao servidor de áudio)
+const MUDO_CR = process.env.MUDO ? ['--mute-audio'] : [];
+const MUDO_FF = process.env.MUDO ? 'user_pref("media.volume_scale", "0.0");\n' : '';
 const perfil = fs.mkdtempSync(path.join(os.tmpdir(), `eletrico-${nav}-`));
 const logs = [];
 let falhas = 0;
@@ -47,7 +52,7 @@ if (!url || url === 'dist') {
 // ------------------------------------------------------------------ drivers (os de ronco-navegador.mjs)
 async function abrirChromium() {
   const bin = process.env.CHROMIUM || '/usr/bin/chromium';
-  const proc = spawn(bin, ['--headless=new', `--remote-debugging-port=${porta}`, '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check', `--user-data-dir=${perfil}`, 'about:blank'], { stdio: 'ignore' });
+  const proc = spawn(bin, ['--headless=new', `--remote-debugging-port=${porta}`, '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check', ...MUDO_CR, `--user-data-dir=${perfil}`, 'about:blank'], { stdio: 'ignore' });
   let alvo;
   for (let i = 0; i < 50 && !alvo; i++) { await espera(200); try { alvo = (await (await fetch(`http://127.0.0.1:${porta}/json`)).json()).find((t) => t.type === 'page'); } catch {} }
   const ws = new WebSocket(alvo.webSocketDebuggerUrl);
@@ -76,7 +81,7 @@ async function abrirChromium() {
 
 async function abrirFirefox() {
   const bin = process.env.FIREFOX || '/usr/bin/firefox';
-  fs.writeFileSync(path.join(perfil, 'user.js'), 'user_pref("media.autoplay.default", 0);\nuser_pref("media.autoplay.blocking_policy", 0);\n');
+  fs.writeFileSync(path.join(perfil, 'user.js'), 'user_pref("media.autoplay.default", 0);\nuser_pref("media.autoplay.blocking_policy", 0);\n' + MUDO_FF);
   const proc = spawn(bin, ['--headless', '--remote-debugging-port', String(porta), '--profile', perfil, '--no-remote', '--width', '1400', '--height', '900'], { stdio: 'ignore' });
   let ws;
   for (let i = 0; i < 60; i++) { await espera(300); try { ws = new WebSocket(`ws://127.0.0.1:${porta}/session`); await new Promise((ok, err) => { ws.onopen = ok; ws.onerror = err; }); break; } catch { ws = null; } }
@@ -116,11 +121,15 @@ const rms = () => ev(`(() => { const an = ${K}.audio?.analyser; if (!an) return 
 const deslizar = (id, v) => ev(`(() => { const r = document.getElementById(${JSON.stringify(id)}); if (!r) throw new Error('sem slider ${id}'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(r, String(${v})); r.dispatchEvent(new Event('input', { bubbles: true })); r.dispatchEvent(new Event('change', { bubbles: true })); return r.closest('.field').querySelector('output').textContent; })()`);
 const ultima = (tipo, campo) => ev(`(() => { const e = ${K}.enviadas.filter((m) => m.type === ${JSON.stringify(tipo)}); const m = e[e.length - 1]; return m ? ${campo ? `m${campo}` : 'm'} : null; })()`);
 const esperaAte = async (f, ms = 8000) => { const t0 = Date.now(); let v; while (Date.now() - t0 < ms) { v = await f(); if (v) return v; await espera(250); } return v; };
+// lê até a condição valer ou o limite passar e devolve a última leitura (no lugar de dormir um tempo fixo depois de mexer
+// num controle: com a máquina carregada a página ainda não respondeu)
+const lerAte = async (f, ok, ms = 6000) => { const t0 = Date.now(); let v; for (;;) { v = await f(); if (ok(v) || Date.now() - t0 >= ms) return v; await espera(150); } };
+const teleAte = (ok, ms = 8000) => lerAte(tele, (x) => !!x && ok(x), ms);
 const preset = async (fam, id) => { await clicar(`.fam:nth-child(${fam})`); await espera(150); await clicar(`.preset[data-id=${id}]`); await espera(800); };
 
 try {
   await b.ir(url);
-  await espera(2500);
+  await esperaAte(() => ev(`document.readyState === 'complete' && !!window.__eletrico && !!document.querySelector('.preset[aria-pressed=true]')`), 15000);
   confere((await ev('document.title')) === 'Elétrico', 'título');
   const ini = await ev(`({ familias: document.querySelectorAll('.fam').length, presets: document.querySelectorAll('.preset').length, marcado: document.querySelector('.preset[aria-pressed=true]')?.dataset.id, placa: document.querySelector('.plate')?.textContent, secoes: [...document.querySelectorAll('.controls h2')].map((h) => h.textContent.trim()) })`);
   confere(ini.familias === 6 && ini.presets === 4 && ini.marcado === 'model3', 'presets: 6 famílias, 4 carros, Model 3 marcado', JSON.stringify([ini.familias, ini.presets, ini.marcado]));
@@ -130,22 +139,21 @@ try {
   const falta = await ev(`${JSON.stringify(ids)}.filter((i) => !document.getElementById(i))`);
   confere(falta.length === 0, 'controles e mostradores da seção 6 presentes', falta.join(', ') || `${ids.length} ids`);
   await clicar('#avancado');
-  await espera(200);
-  const av = await ev(`['avFc', 'avDelta', 'avZs', 'avZp', 'avExc'].filter((i) => !document.getElementById(i))`);
+  const av = await lerAte(() => ev(`['avFc', 'avDelta', 'avZs', 'avZp', 'avExc'].filter((i) => !document.getElementById(i))`), (f) => f.length === 0, 3000);
   confere(av.length === 0, 'Avançado: f_c, δ, Z_s, Z_p, excentricidade', av.join(', '));
 
   // liga e acelera
   await clicar('#ignicao');
-  let t = await esperaAte(async () => { const x = await tele(); return x && x.idade < 500 ? x : null; }, 8000);
+  let t = await esperaAte(async () => { const x = await tele(); return x && x.idade < 500 ? x : null; }, 20000);
   if (process.env.RESERVA) confere(t?.audio === 'script', 'áudio pela reserva (ScriptProcessorNode)', `${t?.audio}`);
   else confere(t?.audio === 'worklet', 'áudio pelo AudioWorklet (não a reserva)', `${t?.audio} · ${t?.sr} Hz · ${t?.ctx}`);
   confere(await ultima('preset', '.id') === 'model3', 'preset mandado ao worklet (cfg calibrado na página)');
   await deslizar('acelerador', 1);
-  await espera(3500);
-  t = await tele();
+  t = await teleAte((x) => x.rpm > 3000 && x.v > 40, 15000);
   confere(t.rpm > 3000 && t.v > 40, 'acelerador: rpm e v sobem', `${Math.round(t.rpm)} rpm · ${t.v.toFixed(0)} km/h · ${t.modo} ${Math.round(t.fC)} Hz`);
-  confere(/rpm/.test(await texto('#ro-rpm')) && /km\/h/.test(await texto('#ro-v')) && /Hz/.test(await texto('#ro-fe')), 'mostradores de rpm, v e f_e', `${await texto('#ro-rpm')} · ${await texto('#ro-v')} · ${await texto('#ro-fe')}`);
-  const anot = +(await ev(`document.getElementById('espectro').dataset.anotadas`));
+  const mo = await lerAte(async () => [await texto('#ro-rpm'), await texto('#ro-v'), await texto('#ro-fe')], (m) => /rpm/.test(m[0]) && /km\/h/.test(m[1]) && /Hz/.test(m[2]), 4000);
+  confere(/rpm/.test(mo[0]) && /km\/h/.test(mo[1]) && /Hz/.test(mo[2]), 'mostradores de rpm, v e f_e', mo.join(' · '));
+  const anot = +(await lerAte(() => ev(`document.getElementById('espectro').dataset.anotadas`), (a) => +a > 3, 4000));
   confere(t.linhas > 0 && anot > 3, 'espectro anotado com as linhas da telemetria', `${t.linhas} linhas, ${anot} anotadas`);
   const r1 = await rms();
   confere(r1 > -70, 'som na saída', `${r1.toFixed(1)} dBFS · ${await texto('#ro-nivel')}`);
@@ -155,13 +163,23 @@ try {
   t = await esperaAte(async () => { const x = await tele(); return x.corrente < -0.05 ? x : null; }, 4000);
   confere(!!t, 'regeneração: corrente negativa', t ? `${(t.corrente * 100).toFixed(0)}% · ${await texto('#ro-potencia')}` : String((await tele()).corrente));
   await deslizar('freio', 0);
+  // R segurado e a janela perde o foco: a regeneração solta (o keyup não chega); o freio do controle deslizante fica
+  await tecla('KeyR');
+  const rSeg = await ev(`${K}.freio`);
+  await ev(`window.dispatchEvent(new Event('blur'))`);
+  const rBlur = await ev(`${K}.freio`);
+  await deslizar('freio', 0.5);
+  await ev(`window.dispatchEvent(new Event('blur'))`);
+  const rSlider = await ev(`${K}.freio`);
+  await deslizar('freio', 0);
+  confere(rSeg === 1 && rBlur === 0 && rSlider === 0.5, 'R segurado solta ao perder o foco; o freio do controle fica', `R ${rSeg} → ${rBlur} no blur · controle ${rSlider}`);
   // modo de modulação
   await chip('#modulacao', 'Assíncrona');
   t = await esperaAte(async () => { const x = await tele(); return x.modo === 'assincrona' ? x : null; }, 3000);
   confere(!!t, 'modo de modulação: assíncrona na telemetria', t?.modo ?? (await tele()).modo);
   await tecla('KeyM');
-  await espera(300);
-  confere((await ev(`${K}.modulacao`)) === 'aleatoria', 'M troca o modo', await ev(`${K}.modulacao`));
+  const mod = await lerAte(() => ev(`${K}.modulacao`), (m) => m === 'aleatoria', 3000);
+  confere(mod === 'aleatoria', 'M troca o modo', mod);
   // AVAS, carga, pneus
   await chip('#avas', 'EUA');
   confere(await ultima('eletrico', '.avas') === 'eua', 'AVAS EUA mandado');
@@ -188,19 +206,17 @@ try {
   await chip('#ouvinte', 'Cofre');
   confere(await ultima('cena', '.ouv.local') === 'cofre' && /^motor/.test(await ultima('cena', '.ouv.gimbal.alvo')), 'ouvinte no cofre, junto ao motor', await ultima('cena', '.ouv.gimbal.alvo'));
   await chip('#ouvinte', 'Livre');
-  await espera(200);
+  await esperaAte(() => ev(`!!document.getElementById('gAz')`), 3000);
   await deslizar('gAz', 30);
   confere(await ultima('cena', '.ouv.gimbal.az') === 30, 'gimbal: azimute');
   await chip('#ouvinte', 'Fora');
   // ambiente
   const conv0 = await ev(`${K}.audio.conv.buffer?.duration`);
   await chip('#ambiente', 'Túnel');
-  await espera(500);
-  const amb = await ev(`({ id: ${K}.audio.ambiente, d: ${K}.audio.conv.buffer?.duration, msg: ${K}.enviadas.filter((m) => m.type === 'cena').pop().amb.id })`);
+  const amb = await lerAte(() => ev(`({ id: ${K}.audio.ambiente, d: ${K}.audio.conv.buffer?.duration, msg: ${K}.enviadas.filter((m) => m.type === 'cena').pop().amb.id })`), (a) => a.id === 'tunel' && a.msg === 'tunel' && a.d > conv0, 4000);
   confere(amb.id === 'tunel' && amb.msg === 'tunel' && amb.d > conv0, 'ambiente túnel: resposta ao impulso nova', JSON.stringify(amb));
   await chip('#ambiente', 'Rua');
-  await espera(300);
-  confere((await ev(`${K}.audio.ambiente`)) === 'rua', 'ambiente rua (próprio da página)');
+  confere((await lerAte(() => ev(`${K}.audio.ambiente`), (a) => a === 'rua', 3000)) === 'rua', 'ambiente rua (próprio da página)');
   // master
   await deslizar('master', 0.5);
   confere(await ultima('params', '.master') === 0.5, 'volume (master)');
@@ -211,8 +227,9 @@ try {
   await deslizar('acelerador', 0.8);
   const notas = [];
   let acesa = false;
+  // (11 s de janela; com a máquina carregada ela segue, até 30 s, enquanto a escada não chegou ao patamar)
   const t0 = Date.now();
-  while (Date.now() - t0 < 11000) {
+  while (Date.now() - t0 < 11000 || (Date.now() - t0 < 30000 && !(notas.length >= 8 && notas[notas.length - 1] >= 11))) {
     const x = await tele();
     if (x.modo === 'escada' && (!notas.length || notas[notas.length - 1] !== x.nota)) notas.push(x.nota);
     if (!acesa) acesa = await ev(`!!document.querySelector('#teclado .tecla.acesa')`);
@@ -231,22 +248,20 @@ try {
   confere(!!t, 'furadeira em vazio perto de 14 850 rpm', `${Math.round((t ?? (await tele())).rpm)} rpm`);
   const rpmVazio = (await tele()).rpm;
   await chip('#carga', '100%');
-  await espera(1500);
-  t = await tele();
+  t = await teleAte((x) => x.rpm < 0.85 * rpmVazio, 8000);
   confere(t.rpm < 0.85 * rpmVazio, 'furar (carga 100%): a rotação cai', `${Math.round(rpmVazio)} → ${Math.round(t.rpm)} rpm`);
   await deslizar('acelerador', 0);
 
   // drone pairando
   await preset(5, 'mavic');
-  await espera(2500);
-  t = await tele();
+  t = await teleAte((x) => Math.abs(x.rpm - 6270) < 0.06 * 6270, 15000);
   confere(Math.abs(t.rpm - 6270) < 0.06 * 6270 && (await ev(`${K}.acel`)) === 0.5, 'drone: coletivo 50% paira perto de 6270 rpm', `${Math.round(t.rpm)} rpm`);
   confere(!(await ev(`!!document.getElementById('velocidade')`)), 'drone: sem o slider de velocidade');
 
   // Espaço desliga
   await tecla('Space');
-  await espera(300);
-  confere((await ev(`${K}.ign`)) === false && /Ligar/.test(await texto('#ignicao')), 'Espaço desliga');
+  const des = await lerAte(async () => [await ev(`${K}.ign`), await texto('#ignicao')], (d) => d[0] === false && /Ligar/.test(d[1]), 4000);
+  confere(des[0] === false && /Ligar/.test(des[1]), 'Espaço desliga');
   if (process.env.SHOT) { await preset(1, 'model3'); await tecla('Space'); await deslizar('acelerador', 0.6); await espera(3000); await b.foto(process.env.SHOT); }
 } catch (e) {
   confere(false, `exceção no teste: ${e.message}`);

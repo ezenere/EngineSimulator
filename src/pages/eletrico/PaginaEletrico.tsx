@@ -44,6 +44,7 @@ function Conteudo({ c }: { c: ControleEletrico }) {
     const med = new Medidor(), esp = new Espectrograma();
     window.addEventListener('keydown', c.keydown);
     window.addEventListener('keyup', c.keyup);
+    window.addEventListener('blur', c.blur);
     (window as unknown as { __eletrico: unknown }).__eletrico = { c, med };
     let id = 0;
     const frame = (agora: number) => {
@@ -55,7 +56,7 @@ function Conteudo({ c }: { c: ControleEletrico }) {
       id = requestAnimationFrame(frame);
     };
     id = requestAnimationFrame(frame);
-    return () => { cancelAnimationFrame(id); window.removeEventListener('keydown', c.keydown); window.removeEventListener('keyup', c.keyup); };
+    return () => { cancelAnimationFrame(id); window.removeEventListener('keydown', c.keydown); window.removeEventListener('keyup', c.keyup); window.removeEventListener('blur', c.blur); };
   }, [c]);
 
   return (

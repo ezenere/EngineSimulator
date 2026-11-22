@@ -64,6 +64,10 @@ export type PresetRotativo = Partial<PresetRonco> & {
   kVed?: number; kApito?: number;
   /** variação da queima de explosão para explosão (× a do Ronco; 3,5 se ausente: CV 0,22 na lenta dos Mazda) */
   variacao?: number;
+  /** carcaça do escape (mecanismo do motor-base): dB sobre o nível de referência; −30 ou ausente = não irradia */
+  carcaca?: number;
+  /** batida periódica da mecânica (mecanismo do motor-base; aqui vedações de ápice nas janelas e folga da engrenagem de fase): dB; −30 ou ausente = sem */
+  batida?: number;
   vedacoes?: 'novas' | 'gastas';
   nivelEscape?: number;
   reducao?: number; helice?: HelicePreset; rotor?: Record<string, any>;
@@ -95,6 +99,7 @@ export const PADRAO_ROTATIVO: Partial<PresetRotativo> = {
   intake: 'airbox', aspiration: 'na', boost: 0, cooling: 'water', engine: 'front', fuel: 'efi', valve: 'none', reso: false,
   twoStep: 'off', breakout: 'sealed', overrun: 'cut', cat: true, limiter: 'fuel', limiterBand: 70, limiterHold: 0.07,
   gears: 5, transmission: 'manual', velas: 2, trailingOn: true, vedacoes: 'novas', fHCextra: 0, muffler: 'stock',
+  carcaca: -16, batida: -12,
 };
 
 const G = GEOMETRIAS;
