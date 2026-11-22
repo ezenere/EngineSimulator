@@ -1,0 +1,144 @@
+{
+  "N700 de 16 carros (14 motores)": {
+    "grupo": "portadores",
+    "medido": 1,
+    "unidade": "",
+    "folga": "±5 %",
+    "motivo": "O trem de 16 vagões não cabe nas 64 fontes da Cena nem sem motor (2 truques + corpo + vão por vagão: 67 com uma face; maxVagoes dá 15). O orçamento é da Cena (CENA 5.1) e do trem sem motor, que esta etapa não muda; o N700 entra no trem-bala de 10 vagões da Passagem (8 carros motores, 63 fontes, agrupado por carro)."
+  },
+  "pneus do carro a 80 km/h, a 7,5 m (só pneus, asfalto, CENA 4.1)": {
+    "grupo": "portadores",
+    "medido": 75.7,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "Era a medida em campo livre (70,7 dB(A)), com este motivo: os 73 dB(A) do CENA 4.1 somam as 4 rodas como se as 4 estivessem a 7,5 m; no corpo de 4,6 × 1,85 m o par do lado de lá fica 1,55 m mais longe e os eixos a ±1,4 m: 70,7 dB(A) no máximo da passagem em campo livre, com os 95 dB(A) por roda do CENA à letra (no asfalto a imagem da fonte no chão soma +5 dB). Agora medido no asfalto, a condição do alvo e a da página (AUDITORIA T-ELE-04): passa do alvo pelo outro lado, 75,7 dB(A), 0,7 dB acima da faixa. Para a etapa de som: calibrar os pneus na condição em que se ouvem."
+  },
+  "AVAS a 2 m, 10 km/h (asfalto)": {
+    "grupo": "avas",
+    "medido": 62.9,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "AUDITORIA T-ELE-04: o passo 7 pede o AVAS a 2 m no asfalto; o nível foi acertado em campo livre (61,8 dB(A), dentro), e no asfalto a reflexão no chão soma: 62,9 dB(A), 0,4 dB acima da faixa. Para a etapa de som: calibrar a lei de nível na condição do alvo."
+  },
+  "AVAS a 2 m, 20 km/h (asfalto)": {
+    "grupo": "avas",
+    "medido": 70.4,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "AUDITORIA T-ELE-04: idem a 20 km/h: 70,4 dB(A) no asfalto (68,3 em campo livre), 1,9 dB acima da faixa de 67 ± 1,5; com o ruído de 1 kHz subindo 3 dB por 10 km/h, a reflexão do chão pesa mais na velocidade. Para a etapa de som."
+  },
+  "AVAS de parado direto a 108 km/h: L_AFmax do canal no desligamento contra o de 20 km/h": {
+    "grupo": "avas",
+    "medido": 50.3,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "AUDITORIA P-02 (defeito, B6): saindo de parado para acima do limite de uma vez, o AVAS segue a lei L_W = 74 + 0,6·v com v = 108 km/h durante os 2 s da rampa de desligar: 50 dB acima do nível no limite (na Passagem, 101,6 dB(A) com o carro a 60 m). Correção em src/engines/eletrico/avas.ts: as leis de nível, de tom e da fração de ruído com min(v, limite)."
+  },
+  "Taurus no patamar (A, estação, 4 m): bandas 20–60 / 60–150 / 400–1k / 1–2,5k / 2,5–6k": {
+    "grupo": "alvos-3.7",
+    "medido": [
+      -20,
+      -9.3,
+      -0.7,
+      -5.8,
+      -13
+    ],
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "AUDITORIA T-ELE-05: falta grave no Taurus: 20–60 Hz em −20,0 (gravação A −11,5) e 60–150 em −9,3 (−1,8), 8,5 e 7,5 dB abaixo, além dos ±6 dB; o miolo fica no limite (400–1k −0,7 contra +3,2; 1–2,5k −5,8 contra −2,0, que mudava de estado com a semente). Antes o vetor de alvos estava deslocado uma casa e o grave não entrava no critério. Para a etapa de som (item 1 do Elétrico, B6)."
+  },
+  "CPTM 9500 parado (de dentro): bandas 20–60 / 60–150 / 400–1k / 1–2,5k / 2,5–6k": {
+    "grupo": "alvos-3.7",
+    "medido": [
+      -13.7,
+      -4.6,
+      1.8,
+      -0.4,
+      -17.2
+    ],
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "AUDITORIA T-ELE-05: falta grave no metrô de dentro: 20–60 Hz em −13,7 (gravação −5,5), 8,2 dB abaixo, além dos ±6 dB; 1–2,5k em −0,4 contra −4,3, perto do limite (mudava de estado com a semente). Antes o vetor de alvos estava deslocado uma casa e o grave não entrava no critério. Para a etapa de som (item 1 do Elétrico)."
+  },
+  "Mavic pairado: bandas 20–60 / 60–150 / 400–1k / 1–2,5k / 2,5–6k": {
+    "grupo": "alvos-3.7",
+    "medido": [
+      -61,
+      -18.1,
+      -1.6,
+      -2.5,
+      -3.4
+    ],
+    "unidade": "dB",
+    "folga": "±3 dB",
+    "motivo": "O grave de 20–60 Hz da gravação do Mavic (−28,7) é o vento e o manuseio do microfone (a tolerância de ±6 dB em 20–150 Hz da decisão 3 existe por isso); o drone pairado não tem nada abaixo da BPF de 209 Hz e o modelo dá −61 dB. As outras quatro bandas batem. Medida nova (o grave não entrava no critério, T-ELE-05): limitação aceitável da referência, não defeito.",
+    "nota_folga": "folga alargada: abaixo de 60 Hz o drone não tem conteúdo e a banda é só ruído de fundo do render"
+  },
+  "|T| < 3% de T_n: engrenamento": {
+    "grupo": "mecanica",
+    "medido": -40.6,
+    "unidade": "dB",
+    "folga": "±2 dB",
+    "motivo": "A2 (AUDITORIA T-ELE-03): passa por menos de 5 % da tolerância e cai fora com outras sementes (−40,6 dB com sementes de −39,7 a −42,9, alvo < −40); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "do-re-mi a 0.6 m/s²: escala inteira (G3 → D5)": {
+    "grupo": "modos",
+    "medido": 4.3,
+    "unidade": "s",
+    "folga": "±5 %",
+    "motivo": "A2 (AUDITORIA T-ELE-03): passa por menos de 5 % da tolerância e cai fora com outras sementes (4,30 s contra 3,6 ± 0,7 (≤ 4,3); AUDITORIA T-ELE-08: o esforço de partida de 300 kN não dá 0,6 m/s² com 486 t, o pedal satura em 1); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "Mavic pairado: BPF (a dos rotores de detune 0 e +1%)": {
+    "grupo": "alvos-3.7",
+    "medido": 211,
+    "unidade": "Hz",
+    "folga": "±1.5 %",
+    "motivo": "A2 (AUDITORIA T-ELE-03): passa por menos de 5 % da tolerância e cai fora com outras sementes (211,0 Hz contra 209 ± 1 % (≤ 211,1): o pico medido é o do rotor de +1 %, não o de 209); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "MP 73 (CC reostático): centro da corcova com a velocidade": {
+    "grupo": "alvos-3.7",
+    "medido": [
+      270,
+      896
+    ],
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "motivo": "A2 (AUDITORIA T-ELE-03): passa por menos de 5 % da tolerância e cai fora com outras sementes (896 Hz a toda a velocidade, com sementes de 896 a 932, contra 550–900); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "furadeira sem fio: bandas 20–60 / 60–150 / 400–1k / 1–2,5k / 2,5–6k": {
+    "grupo": "alvos-3.7",
+    "medido": [
+      -26,
+      -17.9,
+      4.7,
+      17.3,
+      13.2
+    ],
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "motivo": "A2 (AUDITORIA T-ELE-03): passa por menos de 5 % da tolerância e cai fora com outras sementes (60–150 Hz em −17,9 contra −23,5 ± 6 e 2,5–6k em +13,2 contra +16,7 ± 4: as duas na borda; a 2,5–6k mudava de estado com a semente); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "Tesla: portadora na cabine": {
+    "grupo": "alvos-3.7",
+    "medido": [
+      9785,
+      -41.4
+    ],
+    "unidade": "",
+    "folga": "±5 % (≥ 1.5)",
+    "motivo": "A2 (AUDITORIA T-ELE-03): passa por menos de 5 % da tolerância e cai fora com outras sementes (−41,4 dB contra ≥ 40 abaixo do grave); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "metrô de 6 carros (Metropolis, 240 t): 0–80 km/h": {
+    "grupo": "maquina",
+    "medido": 38.0,
+    "unidade": "s",
+    "folga": "±5 %",
+    "motivo": "AUDITORIA F-ELE-03 e T-ELE-07: o alvo é a conta do plano (\"1,0 m/s² até o limite de potência, depois potência constante\"), refeita aqui com a ficha de hoje (16 motores de 150 kW, a potência que foi baixada para o 0–80 caber nos 36 s antigos): 30,5 s; o modelo dá 38,0 s, porque a conta não tem a resistência ao avanço nem a massa girante. A ficha real (24 motores de 180 kW) entra no item D3."
+  }
+}
