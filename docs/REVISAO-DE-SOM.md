@@ -576,7 +576,9 @@ o chocalho das engrenagens é de 1 a 10% do som ponderado A, e 0% em carga.
 
 - **Faltam médios em carga.** Na cabine, 400 Hz–2,5 kHz fica 5–10 dB abaixo das gravações casadas (Cat C15, Scania); a
   batida cresce da lenta para a carga o que a física dela manda (11–17 dB) e o escape de 150–400 Hz cresce 34 dB. O que
-  falta é conteúdo tonal do escape e da carcaça dele nessa faixa, que é o mecanismo genérico do caminho compartilhado.
+  falta é conteúdo tonal do escape e da carcaça dele nessa faixa, que é o mecanismo genérico do caminho compartilhado
+  (ver "Caso: os médios": a carcaça do escape existe no motor-base e nasce desligada no Diesel; ligá-la pede preencher
+  `carcSrc` no `buildExhaust` do Diesel e refazer o acerto de nível).
 - **A lenta continua mais seca que as gravações**: p90/p10 de 1–6 kHz de 14–21 dB contra 5–13, já com as engrenagens
   (sem elas, 19–27). O controle "Reflexos do cofre" enche mais o intervalo; o padrão ficou baixo para a carga não perder
   os pulsos.

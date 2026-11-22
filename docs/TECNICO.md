@@ -1450,7 +1450,11 @@ da passada, a lenta: 2,2–6,0). O que passa de 2,2 vem das distâncias simétri
   relativos a 150–400 Hz contra −11 / −17; Scania: −14 / −18 contra −4 / −13), e as linhas do motor nessa faixa 4–8 dB
   abaixo. A mecânica cresce da lenta para a carga o que a física dela manda (11–17 dB em 400 Hz–6 kHz no C15) e o escape
   de 150–400 Hz cresce 34 dB. O que falta é conteúdo tonal do escape e da carcaça dele nessa faixa: é o mecanismo
-  genérico do caminho compartilhado (`ronco/dsp.ts`), fora do ramo `cc`.
+  genérico do caminho compartilhado (`ronco/dsp.ts`), fora do ramo `cc`. Esse mecanismo chegou depois ao motor-base
+  (campo `carcaca` do preset: a carcaça do abafador irradiando a onda que chega a ela; Ronco → "Médios") e nasce
+  desligado nas famílias que herdam. Para o Diesel usá-lo, o `buildExhaust` do Diesel (que monta a própria rede) tem de
+  preencher `carcSrc` com a onda que chega a cada abafador, e os presets pesados ganham `carcaca`; muda o nível em
+  carga, então o acerto da `mecanica` e a validação se refazem. Não foi feito nesta passada.
 - **A lenta continua mais seca que as gravações.** Com o chocalho das engrenagens o p90/p10 de 1–6 kHz na lenta fica em
   14–21 dB (sem ele, 19–27; gravações, 5–13). O controle "Reflexos do cofre" enche mais o intervalo entre as explosões;
   o padrão (−10 dB) ficou baixo para a carga não perder os pulsos (com −7 dB o "pulso a menos" do Scania em carga passa
