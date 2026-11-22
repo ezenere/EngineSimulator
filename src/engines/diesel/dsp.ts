@@ -473,7 +473,11 @@ export class DieselDSP extends EngineDSP {
   // pré-misturada, e com ela o dp/dθ, segue o atraso
   atrasoEvento(c, p, T, rpm, k = 1) {
     // (os pesados, de câmara grande e injeção mais longa, variam menos: CV do knock das gravações 0,15–0,22 contra 0,17–0,29)
-    const s = ((this.classe === 'leve' ? 0.10 : 0.08) + 0.10 * (1 - this.warm)) * this.kVar;
+    // (4ª passada: quente, o instante varia 10% nos leves e 8% nos pesados, e a preparação da mistura varia à parte, em
+    // `injetar`; frio, a dispersão total é a de antes, 28% e 23%: com menos, as queimas ruins do motor frio em giro baixo
+    // vinham em fila e o F-1000 apagava depois de uma acelerada a 20 °C)
+    const leve = this.classe === 'leve';
+    const s = ((leve ? 0.10 : 0.08) + (leve ? 0.18 : 0.15) * (1 - this.warm)) * this.kVar;
     return this.atraso(p, T, rpm, k) * (this.tauK ? this.tauK[c] : 1) * Math.exp(clamp(s * this.rng.gauss(), -2.5 * s, 2.5 * s));
   }
 

@@ -205,7 +205,7 @@ function Motor({ k, e }: P) {
         formatar={(v) => `${virgula(v, 2)}× · ${v < 0.8 ? 'seco' : v < 1.35 ? 'normal' : 'ressoa'}`} aoSoltar={(v) => k.setSpec({ ressonancia: v }, { render: false })} />
       <Slider id="desigualdade" rotulo="Diferença entre cilindros (para quem ouve)" min={0} max={2} passo={0.05} valor={spec.desigualdade ?? 1}
         formatar={(v) => `${virgula(v, 2)}× · ${v < 0.3 ? 'todos iguais' : v < 1.35 ? 'normal' : 'um domina'}`} aoSoltar={(v) => k.setSpec({ desigualdade: v }, { render: false })} />
-      <Slider id="cofre" rotulo="Reflexos do cofre (o que volta do capô e do chão)" min={-30} max={3} passo={1} valor={spec.cofre ?? -7} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ cofre: v }, nt)} />
+      <Slider id="cofre" rotulo="Reflexos do cofre (o que volta do capô e do chão)" min={-30} max={3} passo={1} valor={spec.cofre ?? -10} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ cofre: v }, nt)} />
     </Section>
   );
 }
