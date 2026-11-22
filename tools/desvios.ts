@@ -203,8 +203,10 @@ export function avaliarDesvios<T extends Medida>(arquivo: string, linhas: T[], o
       out.push({ ...l, estado: 'desv', nota: `retrato atualizado (era ${antes})`, motivo: e.motivo });
     } else out.push({ ...l, estado: 'FALHA', nota: `saiu da folga do retrato: era ${fmtV(e.medido)} ${folga}, agora ${fmtV(l.valor)} (se a mudança é a intenção: --atualizar="${l.nome}")`, motivo: e.motivo });
   }
+  // (um grupo que morreu no meio não apaga as entradas dele: a medida não sumiu, o grupo é que não rodou)
+  const quebrados = new Set(linhas.filter((l) => l.nome === 'execução do grupo' || l.nome.endsWith(': exceção')).map((l) => l.grupo));
   for (const [n, e] of Object.entries(ret)) {
-    if (vistos.has(n) || !op.grupos.includes(e.grupo)) continue;
+    if (vistos.has(n) || !op.grupos.includes(e.grupo) || quebrados.has(e.grupo)) continue;
     if (op.atualizar === true) { delete ret[n]; mudou = true; avisos.push(`entrada sem medida retirada do retrato: "${n}"`); }
     else avisos.push(`entrada do retrato sem medida (o nome mudou?): "${n}"`);
   }
