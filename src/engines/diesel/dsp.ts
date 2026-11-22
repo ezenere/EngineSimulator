@@ -14,7 +14,7 @@ import {
 } from '../../acoustics';
 import { EngineDSP } from '../ronco/dsp';
 import { T_MAN, T_EXREF } from '../ronco/constantes';
-import { LHV, ESTEQ, CETANO_PADRAO, K_ATRASO, R_UNIV, BSFC, INJECAO, NOTCH_POT, K_MEC, K_VALV, K_FUNDO, K_VIB, K_CALOR, K_MISTURA, K_TURBINA, K_SOPRO, K_CHIADO_TURBO, K_MOD_TURBO, K_CHOQUE, EST, EST_COMB, EST_VALV, K_ASPEREZA, ASPEREZA_FIXA, F_ASPEREZA, K_JATO, JATO_V0, JATO_V1, COFRE, EST_SAIA, SAIA, EXP_TIQUE } from './constantes';
+import { LHV, ESTEQ, CETANO_PADRAO, K_ATRASO, R_UNIV, BSFC, INJECAO, NOTCH_POT, K_MEC, K_VALV, K_FUNDO, K_VIB, K_CALOR, K_MISTURA, K_TURBINA, K_SOPRO, K_CHIADO_TURBO, K_MOD_TURBO, K_CHOQUE, EST, EST_COMB, EST_VALV, K_ASPEREZA, ASPEREZA_FIXA, F_ASPEREZA, K_JATO, JATO_V0, JATO_V1, COFRE, EST_SAIA, SAIA, EXP_TIQUE, ENGRENAGENS, EST_ENG } from './constantes';
 import { DoisPortasDiesel } from './escape';
 
 // Carga e comando vindos de um portador externo (CENA.md 1.2). TODO(integração carriers/): trocar por
@@ -27,7 +27,7 @@ const enbw = (fs: number, f: number, q: number) => Math.sqrt(Math.min(1, (Math.P
 // ---- Estrutura do motor: banco de modos (constantes.ts → EST). As tabelas (frequências, fatores de qualidade e os
 // pesos de cada caminho) dependem só do motor e são sorteadas uma vez, com semente fixa: ficam em cache, porque a
 // calibração monta várias sondas do mesmo motor.
-type Estrutura = { M: number; b0: Float64Array; a1: Float64Array; a2: Float64Array; f: Float64Array; Wc: Float64Array; Wi: Float64Array; Wv: Float64Array; Wb: Float64Array; Wp: Float64Array; rug: Float32Array };
+type Estrutura = { M: number; b0: Float64Array; a1: Float64Array; a2: Float64Array; f: Float64Array; Wc: Float64Array; Wi: Float64Array; Wv: Float64Array; Wb: Float64Array; Wp: Float64Array; We: Float64Array; rug: Float32Array; eng: Float32Array };
 const cacheEst = new Map<string, Estrutura>();
 // peso por frequência: pares [Hz, peso] interpolados em log f
 const perfil = (pts: [number, number][], f: number) => {
@@ -45,7 +45,7 @@ function estrutura(fs: number, N: number, B: number, injBp: [number, number][], 
   const g = () => clamp(r.gauss(), -2.5, 2.5), dB = (x: number) => Math.pow(10, x / 20);
   const sLo = Math.sqrt(0.1 / B), sHi = Math.pow(0.1 / B, 0.25);
   const e: Estrutura = { M, b0: new Float64Array(M), a1: new Float64Array(M), a2: new Float64Array(M), f: new Float64Array(M),
-    Wc: new Float64Array((N + 1) * M), Wi: new Float64Array((N + 1) * M), Wv: new Float64Array((N + 1) * M), Wb: new Float64Array((N + 1) * M), Wp: new Float64Array((N + 1) * M), rug: new Float32Array(N * 256) };
+    Wc: new Float64Array((N + 1) * M), Wi: new Float64Array((N + 1) * M), Wv: new Float64Array((N + 1) * M), Wb: new Float64Array((N + 1) * M), Wp: new Float64Array((N + 1) * M), We: new Float64Array((N + 1) * M), rug: new Float32Array(N * 256), eng: new Float32Array(16) };
   const gan = new Float64Array(M);
   for (let i = 0; i < M; i++) {
     const u = i / (M - 1), f = Math.min(0.42 * fs, EST.fMin * Math.pow(EST.fMax / EST.fMin, u) * (sLo + (sHi - sLo) * u) * (1 + EST.espalha * r.bi()));
@@ -69,6 +69,7 @@ function estrutura(fs: number, N: number, B: number, injBp: [number, number][], 
       e.Wv[o] = gc * sn() * gan[i] * perfil(EST_VALV, f);
       e.Wb[o] = sn() * gan[i] * sino([[1300, 1], [2600, 0.4]], f);
       e.Wp[o] = gc * sn() * gan[i] * perfil(EST_SAIA, f);
+      e.We[o] = sn() * gan[i] * perfil(EST_ENG, f);
     }
   }
   // os impactos são normalizados pelo pico da resposta a um impulso unitário (média quadrática entre os caminhos):
@@ -87,7 +88,9 @@ function estrutura(fs: number, N: number, B: number, injBp: [number, number][], 
     }
     return Math.sqrt(soma / (N + 1));
   };
-  for (const W of [e.Wi, e.Wv, e.Wb, e.Wp]) { const k = 1 / Math.max(pico(W), 1e-12); for (let i = 0; i < W.length; i++) W[i] *= k; }
+  // padrão fixo dos instantes em que as engrenagens batem dentro de um intervalo de ignição
+  for (let i = 0; i < e.eng.length; i++) e.eng[i] = r.bi();
+  for (const W of [e.Wi, e.Wv, e.Wb, e.Wp, e.We]) { const k = 1 / Math.max(pico(W), 1e-12); for (let i = 0; i < W.length; i++) W[i] *= k; }
   cacheEst.set(ch, e);
   return e;
 }
@@ -114,7 +117,7 @@ export class DieselDSP extends EngineDSP {
   declare gChiado: any; declare lamInst: any; declare subidaTq: any; declare gMec: any; declare g0Rad: any; declare govBancada: any; declare boostD: any; declare aquec: any; declare estadoAnt: any; declare lentaFixa: any; declare vF: any; declare vAmp: any; declare vDec: any; declare vEnv: any; declare fundoF: any; declare fundoAmp: any; declare fundoM: any; declare pumpAmp: any; declare oilAmp: any;
   declare wBuf: any; declare gwI: any; declare wSoma: any; declare wK: any; declare wSomaK: any; declare boostFixo: any; declare queimasBoas: any; declare cicloEv: any; declare lentaBaixa: any; declare kIdi: any; declare kPre: any; declare egtN: any; declare egtD: any; declare egtNs: any; declare egtDs: any; declare soiM: any; declare thInjM: any; declare thMix: any; declare eD: any; declare pInjMax: any; declare injK: any; declare tauK: any; declare injA: any; declare jTurb: any; declare turbNzF: any; declare linTurb: any; declare pTM: any; declare kModT: any; declare zTurb: any; declare uPonta: any; declare whooshF: any; declare turboLenta: any; declare mecLP: any; declare trocaT: any; declare trocaDir: any;
   declare kBatida: any; declare kChocalho: any; declare kRot: any; declare kVar: any; declare kTiques: any; declare kValvulas: any; declare kEv: any; declare kFrio: any;
-  declare eM: any; declare eB0: any; declare eA1: any; declare eA2: any; declare eZ1: any; declare eZ2: any; declare eAcc: any; declare eWc: any; declare eWi: any; declare eWv: any; declare eWb: any; declare eWp: any; declare pInj0: any; declare kSaia: any; declare eRug: any; declare nQ: any; declare rgF: any; declare rgS: any; declare kRug: any; declare kAsp: any; declare apitoLenta: any;
+  declare eM: any; declare eB0: any; declare eA1: any; declare eA2: any; declare eZ1: any; declare eZ2: any; declare eAcc: any; declare eWc: any; declare eWi: any; declare eWv: any; declare eWb: any; declare eWp: any; declare eWe: any; declare eEng: any; declare kEng: any; declare pInj0: any; declare kSaia: any; declare eRug: any; declare nQ: any; declare rgF: any; declare rgS: any; declare kRug: any; declare kAsp: any; declare apitoLenta: any;
   declare evN: any; declare evT: any; declare evW: any; declare evO: any; declare evA: any; declare nivInj: any; declare gRess: any; declare gDesig: any; declare gJato: any; declare jatoM: any;
   declare apF: any; declare apF2: any; declare apFreq: any; declare apNorm: any; declare apAm: any; declare cfB: any; declare cfN: any; declare cfI: any; declare cfG: any; declare cfLP: any; declare cfK: any; declare cfA: any; declare gCofre: any;
 
@@ -135,7 +138,7 @@ export class DieselDSP extends EngineDSP {
     this.Pcarga = 0; this.Tcarga = 0; this.Jcarga = 0; this.regCarga = 1; this.dinamico = false; this.telN = 0; this.boostAlvo = 0;
     this.wBuf = new Float64Array(512); this.gwI = 0; this.wSoma = 0; this.wK = 0; this.wSomaK = 0;
     // ganhos de medida (tools/diesel-ouvido-render.ts isola as fontes por eles; 1 = som normal)
-    this.kBatida = 1; this.kChocalho = 1; this.kRot = 1; this.kVar = 1; this.kTiques = 1; this.kValvulas = 1; this.kSaia = 1; this.kEv = 1; this.kFrio = 1;
+    this.kBatida = 1; this.kChocalho = 1; this.kRot = 1; this.kVar = 1; this.kTiques = 1; this.kValvulas = 1; this.kSaia = 1; this.kEng = 1; this.kEv = 1; this.kFrio = 1;
     this.evN = 0; this.evT = new Int32Array(64); this.evW = new Uint8Array(64); this.evO = new Int32Array(64); this.evA = new Float64Array(64); this.jatoM = 0; this.apFreq = 0; this.apNorm = 0; this.apAm = 0;
     this.queimasBoas = 0; this.cicloEv = 0; this.egtN = 0; this.egtD = 0; this.egtNs = 0; this.egtDs = 0; this.lentaBaixa = false; this.fuelLenta = 0.1; this.fuelPartida = 0.5;
   }
@@ -423,7 +426,7 @@ export class DieselDSP extends EngineDSP {
     const B = this.bore || 0.1;
     const ij = this.inj || INJECAO['common-rail'];
     const est = estrutura(fs, this.N, B, ij.bp, this.gRess || 1, this.gDesig ?? 1);
-    this.eM = est.M; this.eB0 = est.b0; this.eA1 = est.a1; this.eA2 = est.a2; this.eWc = est.Wc; this.eWi = est.Wi; this.eWv = est.Wv; this.eWb = est.Wb; this.eWp = est.Wp; this.eRug = est.rug; this.nQ = new Int32Array(this.N); this.rgF = new Float64Array(this.N); this.rgS = new Float64Array(this.N);
+    this.eM = est.M; this.eB0 = est.b0; this.eA1 = est.a1; this.eA2 = est.a2; this.eWc = est.Wc; this.eWi = est.Wi; this.eWv = est.Wv; this.eWb = est.Wb; this.eWp = est.Wp; this.eWe = est.We; this.eEng = est.eng; this.eRug = est.rug; this.nQ = new Int32Array(this.N); this.rgF = new Float64Array(this.N); this.rgS = new Float64Array(this.N);
     this.kRug = 1 - Math.exp((-TAU * F_ASPEREZA * (0.1 / B)) / fs);
     // (pré-câmara: a chama áspera fica dentro dela e o cilindro recebe um jato já alisado pelo canal)
     this.kAsp = K_ASPEREZA * (this.idi ? 0.6 : 1);
@@ -555,6 +558,7 @@ export class DieselDSP extends EngineDSP {
       this.fechaRel[c] = soi + thInj;
       this.queimasBoas = kQ > 0.6 ? this.queimasBoas + 1 : 0;
       this.tique(c, 1);
+      this.engrenagens(rpm);
       this.eventoInjecao(c, mm + this.mPil[c], msTau, T, kQ);
     }
   }
@@ -617,16 +621,27 @@ export class DieselDSP extends EngineDSP {
   }
 
   // Pancada mecânica na estrutura (agulha do injetor, assento de válvula, êmbolo da bomba): um impulso no banco de
-  // modos, pelo caminho da peça (`tab`: 0 injetor, 1 válvula, 2 bomba, 3 saia do pistão; `linha`: o cilindro, ou N para
-  // o corpo da bomba). O instante e a força variam um pouco de uma vez para outra (EST.jitter, EST.ampJitter): com os impactos
+  // modos, pelo caminho da peça (`tab`: 0 injetor, 1 válvula, 2 bomba, 3 saia do pistão, 4 engrenagens; `linha`: o
+  // cilindro, ou N para o corpo da bomba e a tampa da distribuição), daqui a `espera` amostras. O instante e a força variam um pouco de uma vez para outra (EST.jitter, EST.ampJitter): com os impactos
   // exatamente periódicos, as linhas iam até 6 kHz e o motor zumbia; com 0,06 ms de desvio elas somem acima de ~2,5 kHz,
   // como nas gravações (HNR +5 dB em 400–1000 Hz, −1 em 1–2,5 kHz, −12 em 2,5–6 kHz no OM617 em lenta)
-  impacto(tab, linha, amp) {
+  impacto(tab, linha, amp, espera = 0) {
     const rng = this.rng, sj = EST.jitter * 1e-3 * this.fs;
-    const atraso = Math.max(1, Math.round(sj * (3 + clamp(rng.gauss(), -3, 3))));
+    const atraso = Math.max(1, Math.round(espera + sj * (3 + clamp(rng.gauss(), -3, 3))));
     const a = amp * this.kEv * clamp(1 + EST.ampJitter * rng.gauss(), 0.3, 1.8);
     const n = this.evN; if (n >= 64) return;
     this.evT[n] = atraso; this.evW[n] = tab; this.evO[n] = linha * this.eM; this.evA[n] = a; this.evN = n + 1;
+  }
+
+  // chocalho das engrenagens da distribuição no intervalo até a próxima explosão (constantes.ts → ENGRENAGENS)
+  engrenagens(rpm) {
+    const n = Math.max(2, Math.round(ENGRENAGENS.porCiclo / this.N)), rng = this.rng, pad = this.eEng;
+    const intervalo = (this.fs * (this.ciclo / this.N)) / (6 * Math.max(rpm, 60)); // amostras entre duas explosões
+    const a = ENGRENAGENS.nivel * (this.refKnock || 0.5) * (1 + ENGRENAGENS.frio * (1 - this.warm)) / (1 + ENGRENAGENS.carga * clamp(this.fuelCmd, 0, 1)) * this.kEng;
+    for (let k = 0; k < n; k++) {
+      const u = (k + 0.5 + 0.35 * pad[k % pad.length] + 0.12 * rng.bi()) / n;
+      this.impacto(4, this.N, a * (0.6 + 0.4 * rng.next()), clamp(u, 0.05, 0.98) * intervalo);
+    }
   }
 
   // tique de injeção no cilindro c (abertura e fechamento da agulha; nos injetores-bomba, o balancim), no nível do tipo
@@ -791,7 +806,7 @@ export class DieselDSP extends EngineDSP {
       const T = this.evT, Wt = this.evW, O = this.evO, A = this.evA;
       for (let k = 0; k < n;) {
         if (--T[k] > 0) { k++; continue; }
-        const tab = Wt[k] === 0 ? this.eWi : Wt[k] === 1 ? this.eWv : Wt[k] === 2 ? this.eWb : this.eWp, o = O[k], a = A[k];
+        const tab = Wt[k] === 0 ? this.eWi : Wt[k] === 1 ? this.eWv : Wt[k] === 2 ? this.eWb : Wt[k] === 3 ? this.eWp : this.eWe, o = O[k], a = A[k];
         for (let i = 0; i < M; i++) acc[i] += a * tab[o + i];
         n--; T[k] = T[n]; Wt[k] = Wt[n]; O[k] = O[n]; A[k] = A[n];
       }

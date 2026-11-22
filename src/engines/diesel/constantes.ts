@@ -75,6 +75,16 @@ export const EST_SAIA: [number, number][] = [[400, 0.2], [900, 0.8], [1800, 1.0]
 // batida de saia: pico relativo ao da batida da queima de lenta quente, com a pressão no cilindro de `p0` bar no
 // instante da troca de lado (8° depois do PMS); cresce com a pressão (carga) e com a folga do pistão frio
 export const SAIA = { nivel: 0.3, p0: 55, angulo: 8, frio: 1.5 };
+// Engrenagens da distribuição. O virabrequim de um diesel acelera a cada explosão e freia a cada compressão; na lenta,
+// sem carga que mantenha os dentes encostados, as engrenagens da frente do motor (virabrequim, intermediária, comando,
+// bomba) atravessam a folga e batem dos dois lados várias vezes entre uma explosão e a seguinte. É o chocalho de lenta
+// do diesel, e é o que enche o intervalo entre as batidas com som do próprio motor (a auditoria mediu a falta dele:
+// no cofre, 1–4 kHz caía 32 dB entre uma batida e a próxima; nas gravações, 15 a 16,5). São pancadas na estrutura,
+// pelo caminho da tampa da distribuição, num padrão fixo por motor com o instante variando; somem com a carga, que
+// mantém os dentes encostados. `nivel`: pico relativo ao da batida de lenta; `porCiclo`: pancadas por ciclo do motor
+// (repartidas pelas explosões, no mínimo 2 por explosão); `carga`: quanto a carga as apaga (1/(1 + carga·combustível))
+export const ENGRENAGENS = { nivel: 0.22, porCiclo: 24, carga: 4, frio: 0.5 };
+export const EST_ENG: [number, number][] = [[400, 0.15], [800, 0.55], [1500, 1.0], [3000, 1.0], [6000, 0.5]];
 // a força nos injetores, nos balancins e na bomba cresce com a pressão de injeção (injetor-bomba e bomba em linha:
 // ∝ rotação²; common-rail: a pressão do trilho, que a central sobe com a carga): expoente do tique sobre a razão
 // entre a pressão de injeção e a da lenta

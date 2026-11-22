@@ -45,10 +45,10 @@ import orcamento as orc  # noqa: E402
 AR = ['jato', 'valvula', 'chiadoAdm', 'sopro', 'turbina', 'wastegate', 'fundo']
 AR_CONTINUO = ['jato', 'chiadoAdm', 'sopro', 'turbina', 'wastegate', 'fundo']   # (o jato da válvula é rajada colada à abertura)
 NA_REDE = ['valvula', 'turbina', 'variacao', 'ar', 'arContinuo', 'turbo', 'turboLargo']
-FONTES = AR + ['apito', 'batida', 'chocalho', 'saia', 'tiques', 'valvulas', 'cliques', 'admissao', 'vib', 'variacao']
+FONTES = AR + ['apito', 'batida', 'chocalho', 'saia', 'engrenagens', 'tiques', 'valvulas', 'cliques', 'admissao', 'vib', 'variacao']
 TURBO = ['sopro', 'turbina', 'wastegate', 'apito']
 ESTOCASTICAS = AR + ['chocalho', 'cliques']   # (os impactos, tiques, valvulas e saia, são formas de onda que se repetem, com o instante variando)
-IMPACTOS = ['tiques', 'valvulas', 'saia']
+IMPACTOS = ['tiques', 'valvulas', 'saia', 'engrenagens']
 
 
 def principal():

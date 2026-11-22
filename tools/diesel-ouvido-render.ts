@@ -37,6 +37,7 @@
 //   batida                a batida da combustão: resposta do bloco ao dp/dθ de cada queima (determinística)
 //   chocalho              a parte da batida que é ruído (a chama turbulenta), colada à mesma subida de pressão
 //   saia                  a saia do pistão batendo na camisa depois do PMS de queima
+//   engrenagens           as engrenagens da distribuição batendo na folga entre as explosões (lenta)
 //   tiques                injetores e bomba (rajadas coladas a cada injeção)
 //   valvulas              trem de válvulas (rajadas coladas a cada abertura e fechamento)
 //   cliques               cliques de válvula herdados do Ronco
@@ -58,10 +59,10 @@ import { CEN_EXTRA } from './diesel-fontes';
 const SR = 48000, B = 128;
 export const AR = ['jato', 'valvula', 'chiadoAdm', 'sopro', 'turbina', 'wastegate', 'fundo'] as const;
 export const NA_REDE = ['valvula', 'turbina', 'variacao'];
-export const FONTES = [...AR, 'apito', 'batida', 'chocalho', 'saia', 'tiques', 'valvulas', 'cliques', 'admissao', 'vib', 'variacao'] as const;
+export const FONTES = [...AR, 'apito', 'batida', 'chocalho', 'saia', 'engrenagens', 'tiques', 'valvulas', 'cliques', 'admissao', 'vib', 'variacao'] as const;
 export const GRUPOS: Record<string, string[]> = {
   ar: [...AR], turbo: ['sopro', 'turbina', 'wastegate', 'apito'], turboLargo: ['sopro', 'turbina', 'wastegate'],
-  mecanica: ['batida', 'chocalho', 'saia', 'tiques', 'valvulas', 'cliques', 'fundo'],
+  mecanica: ['batida', 'chocalho', 'saia', 'engrenagens', 'tiques', 'valvulas', 'cliques', 'fundo'],
 };
 const bq = (f: any, g: number) => { if (f) { f.b0 *= g; f.b1 *= g; f.b2 *= g; } };
 
@@ -83,6 +84,7 @@ export function escalar(d: any, f: string, g: number) {
     case 'tiques': d.kTiques *= g; d.kRot *= g; break;
     case 'valvulas': d.kValvulas *= g; break;
     case 'saia': d.kSaia *= g; break;
+    case 'engrenagens': d.kEng *= g; break;
     case 'cliques': for (const q of d.clickF) bq(q, g); break;
     case 'admissao': d.inGain *= g; break;
     case 'vib': bq(d.vibLP, g); break;
