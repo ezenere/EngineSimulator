@@ -53,7 +53,7 @@ export type PresetDiesel = PresetRonco & {
   ressonancia?: number; // quanto o bloco ressoa depois de cada pancada (multiplica o fator de qualidade dos modos; padrão 1)
   desigualdade?: number; // quanto os cilindros soam diferentes entre si para quem ouve (multiplica a dispersão dos caminhos; padrão 1)
   cofre?: number; // dB das reflexões do cofre sobre o som direto da mecânica (padrão −10: constantes.ts → COFRE)
-  jato?: number; // dB no chiado do jato livre na boca do escape (padrão 0: constantes.ts → K_JATO)
+  jatoBoca?: number; // dB no chiado do jato livre na boca do escape (padrão 0: constantes.ts → K_JATO). (Não é o `jato` do motor-base, que escolhe a lei do jato do Ronco)
   ponteira?: number; // polegadas: diâmetro da boca de saída, de que depende o jato (padrão: o diâmetro do escape)
   mecanica?: number; // dB sobre a mecânica referida ao knock do próprio motor (acerto contra as gravações) // velas: espera = (1 s + 8 s·frio)·glowK (moderno 0,3)
   portadores: Portador[];
@@ -85,7 +85,7 @@ export const PADRAO_DIESEL: Partial<PresetDiesel> = {
   jakeCilindros: undefined, soprador: undefined, janelas: undefined, J: undefined, glowK: 1, bsfc: undefined, avanco: undefined,
   turboEngrenagem: undefined, ordemReal: undefined, gerador: undefined, locomotiva: undefined, ratios: undefined, finalDrive: undefined,
   wheelR: undefined, drag: undefined, mass: undefined,
-  ressonancia: undefined, desigualdade: undefined, cofre: undefined, jato: undefined, ponteira: undefined, turboChiado: undefined, turboLenta: undefined, turboPonta: undefined,
+  ressonancia: undefined, desigualdade: undefined, cofre: undefined, jatoBoca: undefined, ponteira: undefined, turboChiado: undefined, turboLenta: undefined, turboPonta: undefined,
 };
 
 // bases

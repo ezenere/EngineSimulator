@@ -121,7 +121,7 @@ export class DieselDSP extends EngineDSP {
   declare wBuf: any; declare gwI: any; declare wSoma: any; declare wK: any; declare wSomaK: any; declare boostFixo: any; declare queimasBoas: any; declare cicloEv: any; declare lentaBaixa: any; declare kIdi: any; declare kPre: any; declare egtN: any; declare egtD: any; declare egtNs: any; declare egtDs: any; declare soiM: any; declare thInjM: any; declare thMix: any; declare eD: any; declare pInjMax: any; declare injK: any; declare tauK: any; declare injA: any; declare jTurb: any; declare turbNzF: any; declare linTurb: any; declare pTM: any; declare kModT: any; declare zTurb: any; declare uPonta: any; declare whooshF: any; declare turboLenta: any; declare mecLP: any; declare trocaT: any; declare trocaDir: any;
   declare kBatida: any; declare kChocalho: any; declare kRot: any; declare kVar: any; declare kTiques: any; declare kValvulas: any; declare kEv: any; declare kFrio: any;
   declare eM: any; declare eB0: any; declare eA1: any; declare eA2: any; declare eZ1: any; declare eZ2: any; declare eAcc: any; declare eWc: any; declare eWi: any; declare eWv: any; declare eWb: any; declare eWp: any; declare eWe: any; declare eEng: any; declare kEng: any; declare pInj0: any; declare kSaia: any; declare eRug: any; declare nQ: any; declare rgF: any; declare rgS: any; declare kRug: any; declare kAsp: any; declare apitoLenta: any;
-  declare evN: any; declare evT: any; declare evW: any; declare evO: any; declare evA: any; declare nivInj: any; declare gRess: any; declare gDesig: any; declare gJato: any; declare jatoM: any;
+  declare evN: any; declare evT: any; declare evW: any; declare evO: any; declare evA: any; declare nivInj: any; declare gRess: any; declare gDesig: any; declare gJato: any; declare jatoMed: any;
   declare apF: any; declare apF2: any; declare apFreq: any; declare apNorm: any; declare apAm: any; declare cfB: any; declare cfN: any; declare cfI: any; declare cfG: any; declare cfLP: any; declare cfK: any; declare cfA: any; declare gCofre: any;
 
   constructor(fs: number) {
@@ -142,7 +142,7 @@ export class DieselDSP extends EngineDSP {
     this.wBuf = new Float64Array(512); this.gwI = 0; this.wSoma = 0; this.wK = 0; this.wSomaK = 0;
     // ganhos de medida (tools/diesel-ouvido-render.ts isola as fontes por eles; 1 = som normal)
     this.kBatida = 1; this.kChocalho = 1; this.kRot = 1; this.kVar = 1; this.kTiques = 1; this.kValvulas = 1; this.kSaia = 1; this.kEng = 1; this.kEv = 1; this.kFrio = 1;
-    this.evN = 0; this.evT = new Int32Array(64); this.evW = new Uint8Array(64); this.evO = new Int32Array(64); this.evA = new Float64Array(64); this.jatoM = 0; this.apFreq = 0; this.apNorm = 0; this.apAm = 0;
+    this.evN = 0; this.evT = new Int32Array(64); this.evW = new Uint8Array(64); this.evO = new Int32Array(64); this.evA = new Float64Array(64); this.jatoMed = 0; this.apFreq = 0; this.apNorm = 0; this.apAm = 0;
     this.queimasBoas = 0; this.cicloEv = 0; this.egtN = 0; this.egtD = 0; this.egtNs = 0; this.egtDs = 0; this.lentaBaixa = false; this.fuelLenta = 0.1; this.fuelPartida = 0.5;
   }
 
@@ -289,7 +289,7 @@ export class DieselDSP extends EngineDSP {
     // estrutura: quanto o bloco ressoa depois de cada pancada (multiplica o fator de qualidade dos modos) e quanto os
     // cilindros soam diferentes entre si para quem ouve (multiplica a dispersão do caminho de cada um)
     this.gRess = clamp(cfg.ressonancia ?? 1, 0.3, 3); this.gDesig = clamp(cfg.desigualdade ?? 1, 0, 3);
-    this.gJato = Math.pow(10, (cfg.jato || 0) / 20);
+    this.gJato = Math.pow(10, (cfg.jatoBoca || 0) / 20);
     this.gCofre = Math.pow(10, (cfg.cofre ?? COFRE.nivel) / 20);
     this.piloto = !!cfg.piloto; this.idi = !!cfg.idi; this.eletronico = !!cfg.eletronico;
     this.cetano = cfg.cetano || CETANO_PADRAO;
@@ -1243,8 +1243,8 @@ export class DieselDSP extends EngineDSP {
     for (let i = 0; i < this.rads.length; i++) this.rads[i].gain = this.g0Rad[i] * kb;
     // jato livre da boca do escape (constantes.ts → K_JATO): o ganho segue a velocidade média do gás na boca
     let jm = 0; for (let i = 0; i < this.jetEnv.length; i++) if (this.jetEnv[i] > jm) jm = this.jetEnv[i];
-    this.jatoM += (jm - this.jatoM) * (1 - Math.exp(-dtc / 0.03));
-    const v0 = this.jatoM / JATO_V0, v1 = this.jatoM / JATO_V1;
+    this.jatoMed += (jm - this.jatoMed) * (1 - Math.exp(-dtc / 0.03));
+    const v0 = this.jatoMed / JATO_V0, v1 = this.jatoMed / JATO_V1;
     this.jetGain = 500 * kb * kb * K_JATO * this.gJato * Math.min(1, v0 * v0) / (1 + v1 * v1);
   }
 

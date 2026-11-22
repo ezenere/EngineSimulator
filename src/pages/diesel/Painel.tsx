@@ -344,7 +344,7 @@ function Escapamento({ k, e }: P) {
       <Slider id="pipeD" rotulo="Diâmetro do escape" min={1.5} max={18} passo={0.25} valor={esc.diametro} formatar={(v) => `${virgula(v, 2)}" · ${Math.round(v * 25.4)} mm`}
         aoSoltar={(v) => k.setSpec({ escape: { ...esc, diametro: v }, ponteira: spec.ponteira ?? esc.diametro })} />
       <Slider id="ponteira" rotulo="Boca de saída (ponteira)" min={1.5} max={18} passo={0.25} valor={spec.ponteira ?? esc.diametro} formatar={(v) => `${virgula(v, 2)}" · ${Math.round(v * 25.4)} mm`} aoSoltar={(v) => k.setSpec({ ponteira: v })} />
-      <Slider id="jato" rotulo="Chiado do jato na boca (só em giro alto com carga)" min={-30} max={12} passo={1} valor={spec.jato || 0} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ jato: v }, nt)} />
+      <Slider id="jatoBoca" rotulo="Chiado do jato na boca (só em giro alto com carga)" min={-30} max={12} passo={1} valor={spec.jatoBoca || 0} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ jatoBoca: v }, nt)} />
       <Field rotulo="Chaminé">
         <ChipGroup id="chamine" opcoes={[{ valor: true, rotulo: 'Com' }, { valor: false, rotulo: 'Sem' }]} atual={!!esc.chamine} aoEscolher={(v) => setE({ chamine: v ? { altura: 1, diametro: esc.diametro } : null })} />
       </Field>

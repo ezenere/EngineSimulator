@@ -393,7 +393,7 @@ Realização (item 23): `N_turbo = turboW·turboRpmMax` (ou `max` com o engrenad
 | `ressonancia` | 0,5–2,5 (padrão 1) | quanto o bloco ressoa depois de cada pancada: multiplica o fator de qualidade dos modos (4ª passada) |
 | `desigualdade` | 0–2 (padrão 1) | quanto os cilindros soam diferentes entre si para quem ouve: multiplica a dispersão dos caminhos (4ª passada) |
 | `cofre` | dB, −30 a +3 (padrão −10) | reflexões do cofre (capô, chão, carroceria) sobre o som direto da mecânica (4ª passada) |
-| `jato` | dB (padrão 0) | chiado do jato livre na boca do escape, que agora segue U⁸ e só aparece em giro alto com carga (4ª passada) |
+| `jatoBoca` | dB (padrão 0) | chiado do jato livre na boca do escape, que agora segue U⁸ e só aparece em giro alto com carga (4ª passada) |
 | `ponteira` | polegadas (padrão: o diâmetro do escape) | boca de saída, de que depende o jato; o painel a mantém quando se mexe no diâmetro do tubo (4ª passada) |
 | `turboChiado` | dB (padrão 0) | sopro de banda larga do turbo; o padrão é quase nada |
 | `portadores` | `('carro' \| 'gerador' \| 'locomotiva' \| 'nenhum')[]` | tabela de compatibilidade |

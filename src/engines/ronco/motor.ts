@@ -177,7 +177,7 @@ class Acumulador {
  */
 export function sondarNivelRonco(cfg: any, fs: number) {
   const t = new EngineDSP(fs);
-  t.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false, breakout: 'sealed', scWhine: 0, gain: 1, mkIdle: 1 }, false);
+  t.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false, breakout: 'sealed', scWhine: 0, gain: 1, mkIdle: 1, ...t.refMedios(cfg) }, false); // (sem a carcaça, a batida e o jato novo, como a sonda de volume: eles somam nível de verdade)
   t.state = 'run'; t.lockOmega = true; t.tempMode = 'fixed'; t.tempSet = 90; t.coolant = 90;
   t.omega = (cfg.redline * 0.55 * TAU) / 60; t.rpmAvg = cfg.redline * 0.55;
   t.thrTarget = 1; t.thr = 1; t.turboW = 0.6; t.boost = cfg.boost * (t.blower ? 0.8 : 0.3);

@@ -85,15 +85,15 @@
   "bandas decolagem 9 cil. redutor, 75 m (Yak-52)": {
     "grupo": "bandas",
     "medido": [
-      0.8814,
-      -9.848,
-      -14.84,
-      -14.28
+      -2.817,
+      -9.448,
+      -15.18,
+      -15.43
     ],
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "-2.0 / -13.0 / -10.5 / -10.0 ± 4 dB",
-    "motivo": "Grave +3 e agudo −4,3 dB (0,3 dB fora): a hélice de 2 pás a 62 Hz domina o grave; o ruído largo das pás (×10 em M ≥ 0,85, acerto da etapa) ainda fica abaixo do da gravação."
+    "motivo": "Grave +3 e agudo −4,3 dB (0,3 dB fora): a hélice de 2 pás a 62 Hz domina o grave; o ruído largo das pás (×10 em M ≥ 0,85, acerto da etapa) ainda fica abaixo do da gravação. [22/11/2026: regravado depois da lei de carga da hélice (Gutin com o torque absorvido, src/carriers/leis-helice.ts): o grave foi de +0,9 para −2,8 dB (alvo −2,0, melhorou); 1–6 kHz ficou 0,4 a 1,1 dB mais baixo.]"
   },
   "centroide decolagem 9 cil. redutor, 75 m (Yak-52)": {
     "grupo": "bandas",
@@ -119,15 +119,15 @@
   "bandas decolagem 18 cil., 150 m (Corsair)": {
     "grupo": "bandas",
     "medido": [
-      -6.99,
-      -14.19,
-      -19.72,
-      -25.73
+      -10.64,
+      -14.62,
+      -20.31,
+      -26.33
     ],
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "-16.0 / -12.0 / -10.0 / -15.0 ± 4 dB",
-    "motivo": "A 150 m o ar (ISO 9613 da Cena) e o solo tiram o agudo; a gravação (jKa) tem o escape dos estaques muito mais forte em 1–6 kHz (a fileira de 4,5ª ordem, 170 Hz, a +19 dB). O grave da BPF (82 Hz) fica 9 dB acima."
+    "motivo": "A 150 m o ar (ISO 9613 da Cena) e o solo tiram o agudo; a gravação (jKa) tem o escape dos estaques muito mais forte em 1–6 kHz (a fileira de 4,5ª ordem, 170 Hz, a +19 dB). O grave da BPF (82 Hz) fica 9 dB acima. [22/11/2026: regravado depois da lei de carga da hélice (src/carriers/leis-helice.ts): o grave foi de −7,0 para −10,6 dB (alvo −16, melhorou); as outras bandas mudaram 0,4 a 0,6 dB.]"
   },
   "centroide decolagem 18 cil., 150 m (Corsair)": {
     "grupo": "bandas",
@@ -147,11 +147,11 @@
   },
   "DC-3 a 3 m da hélice (\"singing\"): 2·, 3·, 5·BPF contra a ignição": {
     "grupo": "linhas-b",
-    "medido": -3.085,
+    "medido": -7.78,
     "unidade": "dB",
     "folga": "±1.5 dB",
     "alvo": "≥ −2 dB",
-    "motivo": "A hélice na lenta é ∝ M⁴ (fonte do JetDSP, M 0,35 a 645 rpm da hélice): a 3 m ela fica 5 dB abaixo da ignição, contra ≥ −2 dB da gravação (ibg). O \"canto\" da hélice parada perto do cubo pede um termo de carga/esteira na lenta que a FonteHelice não tem.",
+    "motivo": "A hélice na lenta é ∝ M⁴ (fonte do JetDSP, M 0,35 a 645 rpm da hélice): a 3 m ela fica 5 dB abaixo da ignição, contra ≥ −2 dB da gravação (ibg). O \"canto\" da hélice parada perto do cubo pede um termo de carga/esteira na lenta que a FonteHelice não tem. [22/11/2026: PIOROU de −3,1 para −7,8 dB com a lei de carga da hélice (src/carriers/leis-helice.ts): a lei de Gutin é de campo distante e a 3 m do disco falta o termo de campo próximo. Pendência da etapa de som do Radial / da hélice.]",
     "nota_folga": "folga alargada: a mediana de 3 sementes muda mais que ±1 dB / ±5 % entre as bases 0, 1000 e 2000"
   },
   "r1340: lenta → plena carga a 55% (bocas a 5 m)": {
@@ -267,11 +267,11 @@
   },
   "R44: droop ao puxar o coletivo (0,5 → 0,75 em 1 s)": {
     "grupo": "aviacao",
-    "medido": 0.5827,
+    "medido": 0.3442,
     "unidade": "%",
     "folga": "±10 %",
     "alvo": "2–3%",
-    "motivo": "A borboleta do Ronco responde em 30 ms e o governador do rotor (Kp 0,8·0,12 por %) segura o Nr: 0,7% de queda e volta em ~1 s. O droop de 2–3% do R44 real vem do correlacionador e do atraso do coletor, que o modelo não tem; com ganho menor o Nr demorava 3 s para voltar.",
+    "motivo": "A borboleta do Ronco responde em 30 ms e o governador do rotor (Kp 0,8·0,12 por %) segura o Nr: 0,7% de queda e volta em ~1 s. O droop de 2–3% do R44 real vem do correlacionador e do atraso do coletor, que o modelo não tem; com ganho menor o Nr demorava 3 s para voltar. [22/11/2026: foi de 0,58 % para 0,34 % com o rotor novo (tração ∝ Nr², potência induzida sem a dupla contagem do perfil, src/carriers/rotor.ts); continua longe dos 2–3 % do R44 real. Pendência: o governador segura demais.]",
     "nota_folga": "folga alargada: a mediana de 3 sementes muda mais que ±1 dB / ±5 % entre as bases 0, 1000 e 2000"
   },
   "m14p: lenta quente, picos por segundo (> 16 dB)": {

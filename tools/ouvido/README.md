@@ -229,6 +229,35 @@ O que a régua diz:
   real repetem a mesma forma de onda a cada ciclo e por isso dão linhas até vários kHz; rajadas de ruído branco não.
   O dono aprovou assim, então é pista do que melhorar, não critério de reprovação.
 
+**Estado novo do Ronco (22/11/2026, sem veredito do dono).** O motor-base ganhou mecanismos que mudam o som dos carros
+de propósito (carcaça do escape, batida periódica da mecânica, jato sônico, bomba de ar: `docs/TECNICO.md` → Ronco →
+Médios) e os presets saem com eles ligados. A régua acima continua sendo a do som aprovado em 18/11: os casos
+`aprovado` e `ruim` de `regua.json` renderizam com os campos novos no valor legado (`--campo` com `null`), e refazê-la
+dá os mesmos números, casa por casa. Ao lado dela entraram os casos `-novo` (grupo `extra`), as mesmas condições com o
+preset como está (aprovado → novo; saída de `regua.py` em `referencias/_sim/ronco/regua-2026-11-19/`, fora do git):
+
+| caso | tonal | piso | envoltória | modulação | eventos | **total** | **ar** | tom a menos | pulso a menos | leito 1–6 kHz real / sim |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Fusca, 1410 rpm estável | 1,55 → 1,27 | 1,91 → 1,66 | 0,65 → 0,63 | 1,18 → 1,16 | 0,49 → 0,45 | **1,27 → 1,12** | 0,00 → 0,00 | 2,41 → 1,90 | 0,00 → 0,00 | 67% / 55% → 52% |
+| Fusca, ~2000 rpm instável | 2,39 → 2,50 | 1,62 → 1,82 | 0,23 → 0,24 | 1,28 → 1,37 | 0,98 → 1,00 | **1,48 → 1,58** | 0,08 → 0,06 | 0,00 → 0,00 | 0,12 → 0,12 | 70% / 62% → 55% |
+| Mustang frio, modo Sport | 2,90 → 2,84 | 2,44 → 2,49 | 1,37 → 1,38 | 1,52 → 1,41 | 1,94 → 2,04 | **2,11 → 2,11** | 0,44 → 0,17 | 0,85 → 0,74 | 1,15 → 0,96 | 26% / 32% → 28% |
+| Mustang frio, modo Track | 2,85 → 2,80 | 2,51 → 2,54 | 1,46 → 1,44 | 1,59 → 1,44 | 2,07 → 1,97 | **2,16 → 2,11** | 0,56 → 0,21 | 0,87 → 0,78 | 1,30 → 1,08 | 24% / 32% → 28% |
+| F1 V8 2007 em carga | 3,77 → 3,82 | 2,14 → 2,17 | 1,43 → 1,45 | 1,58 → 1,63 | 1,34 → 1,35 | **2,24 → 2,28** | 0,00 → 0,00 | 1,56 → 1,61 | 0,94 → 0,95 | 42% / 3% → 3% |
+| F1 V8 2011 em carga | 2,78 → 2,79 | 2,26 → 2,28 | 0,12 → 0,16 | 2,06 → 2,13 | 0,73 → 0,76 | **1,88 → 1,90** | 0,00 → 0,00 | 1,36 → 1,37 | 0,04 → 0,03 | 66% / 10% → 10% |
+| F1 V10 2002 em carga | 2,06 → 2,03 | 1,25 → 1,21 | 0,76 → 0,77 | 0,62 → 0,65 | 1,02 → 1,02 | **1,25 → 1,24** | 0,00 → 0,00 | 1,62 → 1,56 | 0,64 → 0,68 | 21% / 3% → 3% |
+| Hellcat, lenta quente | 1,09 → 0,98 | 2,88 → 3,10 | 0,90 → 0,81 | 1,76 → 1,79 | 1,60 → 1,67 | **1,79 → 1,86** | 0,00 → 0,00 | 0,00 → 0,00 | 0,00 → 0,00 | 43% / 16% → 9% |
+| Hellcat frio | 1,02 → 1,07 | 1,28 → 1,41 | 1,08 → 1,09 | 1,43 → 1,92 | 0,64 → 1,31 | **1,12 → 1,40** | 0,00 → 0,00 | 0,12 → 0,05 | 0,18 → 0,18 | 80% / 30% → 22% |
+| Mustang 2026, lenta quente (sem veredito) | 1,41 → 1,56 | 1,09 → 1,18 | 0,75 → 0,80 | 2,67 → 2,75 | 2,18 → 2,26 | **1,77 → 1,85** | 0,00 → 0,00 | 0,42 → 0,44 | 0,31 → 0,41 | 78% / 15% → 12% |
+
+Lido contra a faixa dos aprovados: `ar` cai onde existia (Mustang frio, 0,44–0,56 → 0,17–0,21) e segue zero no resto;
+`tom a menos` cai no Fusca (2,41 → 1,90) e `pulso a menos` no Mustang frio; o total melhora no Fusca a 1410 rpm (1,27 → 1,12)
+e no Mustang frio em Track (2,16 → 2,11), fica igual (±0,02) no Mustang frio em Sport e em duas das três Fórmulas 1, e
+piora de 0,04 a 0,28 nos outros. O que piora é simétrico: o simulado fica **mais tonal** que a
+gravação em 1–6 kHz (piso de ruído do Hellcat em lenta 2,88 → 3,10; modulação e eventos do Hellcat frio 1,43 → 1,92 e
+0,64 → 1,31), que é o lado que o viés do simulador pede (mais motor, menos ar) e que a distância simétrica conta como
+diferença. Três números passam por pouco do teto dos aprovados: o piso do Hellcat em lenta (3,10 contra 2,88), a
+modulação da F1 V8 2011 (2,13 contra 2,06) e o total da F1 V8 2007 (2,28 contra 2,24). Quem decide é o ouvido.
+
 **Como usar a régua numa família nova.** Para cada preset revisado, em duas condições contra gravação casada:
 
 1. `ar` ≤ 0,6. Passou disso, existe chiado contínuo que a gravação não comporta: ache a fonte com o orçamento.
