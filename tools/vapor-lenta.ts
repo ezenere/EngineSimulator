@@ -29,7 +29,7 @@ async function umCaso(id: string): Promise<Resultado> {
   const m = new MotorVapor(SR); m.configurar(cfg, SR);
   const conf = { ...configPortadorVapor(tipo, id, 0), ...(tipo === 'locomotiva' ? { vagoes: 0 } : {}) };
   const p: any = montarPortadorVapor(tipo, conf, m, SR)!;
-  if (tipo === 'locomotiva') p.cargaT.definirMassa(P.massa + (P.tender?.massa ?? 0) + 300 - P.massa);
+  if (tipo === 'locomotiva') p.cargaT.definirMassa(P.massa + (P.tender?.massa ?? 0) + 300); // locomotiva + tênder + 300 t de trem (antes a locomotiva ficava de fora da conta)
   const B = 128, can = p.fontes().map(() => new Float32Array(B)), ids: string[] = p.fontes().map((f: any) => f.id);
   const ich = ids.indexOf('chamine');
   let nan = false;

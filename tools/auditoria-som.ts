@@ -7,9 +7,11 @@
 // ≠ 0 só se aparecer NaN/Infinity, exceção ou travamento.
 //
 // O que mede, com o volume padrão das páginas (master 0,8) e o motor quente:
-//   --niveis    lenta e carga (pé no fundo) de TODOS os presets: RMS ponderado A, pico, fração das amostras com
-//               |saída| > 0,7 (o `tanh` de saída já comprimindo), NaN, e o custo de CPU por bloco de 128 amostras a
-//               48 kHz (média e p99, em % do quantum de 2,67 ms). Aponta quem foge mais de 8 dB da mediana da família.
+//   --niveis    lenta e carga (pé no fundo; locomotiva em notch 8, gerador com 100 % de carga) de TODOS os presets: RMS
+//               ponderado A, pico, fração das amostras com |saída| > 0,7 (o `tanh` de saída já comprimindo), NaN, e o
+//               custo de CPU por bloco de 128 amostras a 48 kHz, em % do quantum de 2,67 ms: a média é tempo de CPU do
+//               processo (não incha com a máquina ocupada), o p99 é de relógio (incha). Nas famílias de saída
+//               normalizada, aponta quem foge mais de 8 dB da mediana da família.
 //   --extremos  cada controle deslizante do painel ligado a um campo do preset (lido de src/pages/<família>/Painel.tsx),
 //               no mínimo e no máximo, em 4 presets por família: 1 s de lenta + 1 s de carga, sem NaN, sem exceção, sem
 //               pico absurdo, sem travar. No Vapor e no Elétrico, que não têm campos de ficha no painel, os comandos e
@@ -58,10 +60,19 @@ const FORA_DA_CURVA_DB = 8;    // distância à mediana da família a partir da 
 const PICO_ABSURDO = 30;       // (escala absoluta, antes do tanh) 30 × fundo de escala = 154 dB SPL a 7,5 m
 
 type Maquina = { processar(L: Float32Array, R: Float32Array, n: number): void; lenta(): void; carga(): void; rpm?(): number };
+/** põe `v` no campo `a.b.0` de um objeto; devolve false se o caminho não existe (o campo não se aplica ao preset) */
+function aplicar(o: any, caminho: string, v: number): boolean {
+  const partes = caminho.split('.');
+  let x = o;
+  for (const k of partes.slice(0, -1)) { if (x == null || typeof x[k] !== 'object' || x[k] === null) return false; x = x[k]; }
+  x[partes[partes.length - 1]] = v;
+  return true;
+}
 type Familia = {
   escala: 'tanh' | 'absoluta';
   ids: string[];
-  montar(id: string, fs: number, patch?: Record<string, number>): Maquina;
+  /** `patch`: campo (caminho) → valor; devolve null quando o campo não existe nesse preset */
+  montar(id: string, fs: number, patch?: Record<string, number>): Maquina | null;
   /** troca de preset na mesma instância (se a família tiver) */
   trocar?(m: Maquina, id: string, fs: number): void;
   painel?: string;
@@ -71,8 +82,12 @@ type Familia = {
 };
 
 // ------------------------------------------------------------------ famílias a pistão (EngineDSP e derivados)
-function pistao(DSP: any, cfgFn: (spec: any, fs: number) => any, lista: any[], padrao: any, forcar: boolean, extra?: (d: any, spec: any) => void) {
-  const spec = (id: string, patch?: Record<string, number>) => ({ ...padrao, ...lista.find((p) => p.id === id), ...patch });
+function pistao(DSP: any, cfgFn: (spec: any, fs: number) => any, lista: any[], padrao: any, forcar: boolean, extra?: (d: any, spec: any) => void, comando?: (d: any, spec: any, carga: boolean) => void) {
+  const spec = (id: string, patch?: Record<string, number>) => {
+    const s = structuredClone({ ...padrao, ...lista.find((p) => p.id === id) });
+    for (const [c, v] of Object.entries(patch || {})) if (!aplicar(s, c, v)) return null;
+    return s;
+  };
   const rodando = (d: any, s: any) => {
     d.message({ type: 'input', temp: { mode: 'fixed', value: 90 } });
     if (forcar) { // motor já funcionando na lenta, sem o procedimento de partida (o atalho de tools/radial-comum.ts)
@@ -80,20 +95,22 @@ function pistao(DSP: any, cfgFn: (spec: any, fs: number) => any, lista: any[], p
       d.omega = (s.idle * 2 * Math.PI) / 60; d.rpmAvg = s.idle; d.exhT = 450;
     } else d.message({ type: 'input', ignition: true });
   };
-  const montar = (id: string, fs: number, patch?: Record<string, number>): Maquina => {
-    const s = spec(id, patch), d: any = new DSP(fs);
+  const montar = (id: string, fs: number, patch?: Record<string, number>): Maquina | null => {
+    const s = spec(id, patch);
+    if (!s) return null;
+    const d: any = new DSP(fs);
     d.setConfig(cfgFn(s, fs));
     extra?.(d, s);
     rodando(d, s);
     return {
       processar: (L, R, n) => d.process(L, R, n),
-      lenta: () => d.message({ type: 'input', throttle: 0 }),
-      carga: () => d.message({ type: 'input', throttle: 1 }),
+      lenta: () => { comando?.(d, s, false); d.message({ type: 'input', throttle: 0 }); },
+      carga: () => { comando?.(d, s, true); d.message({ type: 'input', throttle: 1 }); },
       rpm: () => d.rpmAvg,
       d,
     } as Maquina & { d: any };
   };
-  const trocar = (m: Maquina, id: string, fs: number) => { const d = (m as any).d, s = spec(id); d.message({ type: 'config', cfg: cfgFn(s, fs) }); extra?.(d, s); if (d.state !== 'run') rodando(d, s); };
+  const trocar = (m: Maquina, id: string, fs: number) => { const d = (m as any).d, s = spec(id); d.message({ type: 'config', cfg: cfgFn(s, fs) }); extra?.(d, s); if (d.state !== 'run') rodando(d, s); comando?.(d, s, true); };
   return { montar, trocar };
 }
 
@@ -102,16 +119,20 @@ const FAMILIAS: Record<string, Familia> = {
     ...(() => { // os 68 carros dão a partida pela ignição; a família Aviação entra já rodando (partida de avião)
       const carros = pistao(EngineDSP, cfgRonco, P_RONCO, ACESSORIOS_PADRAO, false), avioes = pistao(EngineDSP, cfgRonco, PRESETS_AVIACAO, ACESSORIOS_PADRAO, true);
       const de = (id: string) => (P_RONCO.some((p) => p.id === id) ? carros : avioes);
-      return { montar: (id: string, f: number, patch?: Record<string, number>) => de(id).montar(id, f, patch), trocar: (m: Maquina, id: string, f: number) => de(id).trocar(m, id, f) };
+      return { montar: (id: string, f: number, patch?: Record<string, number>): Maquina | null => de(id).montar(id, f, patch), trocar: (m: Maquina, id: string, f: number) => de(id).trocar(m, id, f) };
     })() },
   diesel: { escala: 'tanh', ids: P_DIESEL.map((p) => p.id), painel: 'src/pages/diesel/Painel.tsx', assenta: [5, 4],
-    ...pistao(DieselDSP, cfgDiesel, P_DIESEL, PADRAO_DIESEL, false, (d, s) => d.message({ type: 'diesel', portador: s.portadores.includes('carro') ? 'carro' : s.portadores[0] })) },
+    ...pistao(DieselDSP, cfgDiesel, P_DIESEL, PADRAO_DIESEL, false, (d, s) => d.message({ type: 'diesel', portador: s.portadores.includes('carro') ? 'carro' : s.portadores[0] }),
+      // (a locomotiva e o gerador não têm pedal: a carga é o notch 8 e o degrau de 100 %)
+      (d, s, carga) => { if (!s.portadores.includes('carro')) d.message({ type: 'diesel', notch: carga ? 8 : 0, degrau: carga ? 1 : 0 }); }) },
   radial: { escala: 'tanh', ids: PRESETS_RADIAL.map((p) => p.id), painel: 'src/pages/radial/Painel.tsx', assenta: [3, 4], ...pistao(RadialDSP, cfgRadial, PRESETS_RADIAL, PADRAO_RADIAL, true) },
   rotativo: { escala: 'tanh', ids: PRESETS_ROTATIVO.filter((p) => p.tipo !== 'palhetas').map((p) => p.id), painel: 'src/pages/rotativo/Painel.tsx', assenta: [3, 3],
     ...pistao(RotativoDSP, cfgRotativo, PRESETS_ROTATIVO, PADRAO_ROTATIVO, true) },
   turbina: { escala: 'tanh', ids: PRESETS_TURBINA.map((p) => p.id), painel: 'src/pages/turbina/Painel.tsx', assenta: [3, 12],
     montar(id, fs, patch) {
-      const s: any = { ...PRESETS_TURBINA.find((p) => p.id === id), ...patch }, d: any = new JetDSP(fs);
+      const s: any = structuredClone(PRESETS_TURBINA.find((p) => p.id === id));
+      for (const [c, v] of Object.entries(patch || {})) if (!aplicar(s, c, v)) return null;
+      const d: any = new JetDSP(fs);
       d.setConfig(s);
       d.state = 'run'; d.lit = true; d.n2 = s.n2Idle; d.u = 0; d.lightT = 10; // já em lenta (o cenário takeoff de tools/render.ts)
       return { processar: (L, R, n) => d.process(L, R, n), lenta: () => d.message({ type: 'input', tla: 0 }), carga: () => d.message({ type: 'input', tla: s.ab && s.arch !== 'turboprop' ? 1.3 : 1 }), d } as Maquina;
@@ -122,16 +143,16 @@ const FAMILIAS: Record<string, Familia> = {
     montar(id, fs, patch) {
       const P = PRESETS_VAPOR.find((p) => p.id === id)!, d = new VaporDSP(fs);
       d.configurar(prepararMotorVapor(P, fs), fs);
-      const tmp = d.fontes.map(() => new Float32Array(B));
+      const maq: any = { d, tmp: d.fontes.map(() => new Float32Array(B)) };
       const cmd = (c: Record<string, unknown>) => d.comandar({ acelerador: 0, ignicao: true, partida: false, ...c, ...(patch ? { ...patch, apito: patch.apitoAbertura !== undefined } : {}) } as never);
-      return {
-        processar(L, R, n) { d.processar(tmp, n); for (let k = 0; k < n; k++) { let s = 0; for (const c of tmp) s += c[k]; L[k] = R[k] = Math.tanh(s / PA_FS); } },
+      return Object.assign(maq, {
+        processar(L: Float32Array, R: Float32Array, n: number) { const tmp: Float32Array[] = maq.tmp; d.processar(tmp, n); for (let k = 0; k < n; k++) { let s = 0; for (const c of tmp) s += c[k]; L[k] = R[k] = Math.tanh(s / PA_FS); } },
         lenta: () => { d.impor(0); cmd({ regulador: 0 }); },                                              // parada, com os auxiliares
         carga: () => { d.impor((4 / escapesPorVolta(P)) * 2 * Math.PI); cmd({ regulador: 1, cutoff: 0.5 }); }, // 4 sopros/s, regulador aberto
-        d,
-      } as Maquina;
+      }) as Maquina;
     },
-    trocar(m, id, fs) { const d = (m as any).d as VaporDSP; d.configurar(prepararMotorVapor(PRESETS_VAPOR.find((p) => p.id === id)!, fs), fs); } },
+    // (a página monta um motor novo a cada troca; aqui o mesmo `VaporDSP` é reconfigurado, com os canais refeitos)
+    trocar(m, id, fs) { const maq = m as any, d = maq.d as VaporDSP; d.configurar(prepararMotorVapor(PRESETS_VAPOR.find((p) => p.id === id)!, fs), fs); maq.tmp = d.fontes.map(() => new Float32Array(B)); } },
   eletrico: { escala: 'absoluta', ids: PRESETS_ELETRICO.map((p) => p.id), assenta: [2, 5],
     campos: [['inversor.fc', 100, 20000], ['inversor.delta', 0.02, 0.3], ['Zs', 0, 96], ['reducao.estagios.0.Zp', 5, 60], ['excentricidade', 0, 1], ['escovas.desgaste', 0, 1], ['detune', 0, 0.02]],
     montar(id, fs, patch) {
@@ -157,12 +178,14 @@ const db = (x: number) => 20 * Math.log10(Math.max(x, 1e-12));
 function medir(m: Maquina, fs: number, espera: number, dur: number, cpu = false): Medida {
   const L = new Float32Array(B), R = new Float32Array(B), pa = new PonderacaoA(fs);
   for (let i = 0; i < espera * fs; i += B) m.processar(L, R, B);
-  let soma = 0, n = 0, pico = 0, acima = 0, nan = 0;
+  let soma = 0, n = 0, pico = 0, acima = 0, nan = 0, blocos = 0;
   const tempos: number[] = [];
+  const uso0 = cpu ? process.cpuUsage() : null;
   for (let i = 0; i < dur * fs; i += B) {
     const t0 = cpu ? performance.now() : 0;
     m.processar(L, R, B);
     if (cpu) tempos.push(performance.now() - t0);
+    blocos++;
     for (let k = 0; k < B; k++) {
       const a = Math.abs(L[k]), b = Math.abs(R[k]);
       if (!(a < 1e9) || !(b < 1e9)) { nan++; continue; }
@@ -173,11 +196,14 @@ function medir(m: Maquina, fs: number, espera: number, dur: number, cpu = false)
       soma += y * y; n++;
     }
   }
+  // A média é tempo de CPU do processo (`process.cpuUsage`), que não incha quando a máquina está ocupada; o p99 é de
+  // relógio, bloco a bloco, e incha. Os dois em % do tempo do bloco (128 amostras na taxa do teste).
+  const uso = uso0 ? process.cpuUsage(uso0) : null;
+  const mediaMs = uso ? (uso.user + uso.system) / 1000 / Math.max(1, blocos) : 0;
   tempos.sort((a, b) => a - b);
-  // (a CPU é sempre referida ao quantum de 128 amostras a 48 kHz, com o bloco medido na taxa do teste)
   const escala = (fs / 48000) / QUANTUM_MS * 100;
   return { dbA: db(Math.sqrt(soma / Math.max(1, n))), pico, acima: acima / Math.max(1, n + nan), nan,
-    ...(cpu ? { cpu: (tempos.reduce((a, b) => a + b, 0) / tempos.length) * escala, p99: tempos[Math.floor(tempos.length * 0.99)] * escala } : {}), rpm: m.rpm?.() };
+    ...(cpu ? { cpu: mediaMs * escala, p99: tempos[Math.floor(tempos.length * 0.99)] * escala } : {}), rpm: m.rpm?.() };
 }
 const mediana = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : NaN; };
 
@@ -186,8 +212,11 @@ function camposDoPainel(arquivo: string): [string, number, number][] {
   const out: [string, number, number][] = [];
   for (const linha of fs.readFileSync(path.join(RAIZ, arquivo), 'utf8').split('\n')) {
     if (!linha.includes('<Slider')) continue;
-    const r = linha.match(/min=\{(-?[\d.]+)\} max=\{(-?[\d.]+)\}/), c = linha.match(/valor=\{(?:clamp\()?spec\.(\w+)/);
-    if (r && c && !out.some((x) => x[0] === c[1])) out.push([c[1], +r[1], +r[2]]);
+    const r = linha.match(/min=\{(-?[\d.]+)\} max=\{(-?[\d.]+)\}/), c = linha.match(/valor=\{(?:clamp\()?(?:spec|s)\.([\w.[\]?!]+)/);
+    if (!r || !c) continue;
+    // `spec.turboTau[0]` → `turboTau.0`; `s.janelas.apv?.[0]` → `janelas.apv.0`
+    const caminho = c[1].replace(/[?!]/g, '').replace(/\[(\d+)\]/g, '.$1').replace(/\.+/g, '.').replace(/\.$/, '');
+    if (!out.some((x) => x[0] === caminho)) out.push([caminho, +r[1], +r[2]]);
   }
   return out;
 }
@@ -200,7 +229,7 @@ function rodarFamilia(nome: string, etapas: Set<string>) {
   if (etapas.has('niveis')) {
     res.niveis = []; res.errosNiveis = [];
     for (const id of F.ids) tenta(id, res.errosNiveis, () => {
-      const m = F.montar(id, 48000);
+      const m = F.montar(id, 48000)!;
       m.lenta(); const lenta = medir(m, 48000, F.assenta[0], 3);
       m.carga(); const carga = medir(m, 48000, F.assenta[1], 3, true);
       res.niveis.push({ id, lenta, carga });
@@ -209,12 +238,13 @@ function rodarFamilia(nome: string, etapas: Set<string>) {
   if (etapas.has('extremos')) {
     const campos = F.painel ? camposDoPainel(F.painel) : F.campos || [];
     const quatro = [...new Set([0, Math.floor(F.ids.length / 3), Math.floor((2 * F.ids.length) / 3), F.ids.length - 1])].map((i) => F.ids[i]);
-    res.extremos = { campos: campos.map((c) => c[0]), presets: quatro, casos: 0, problemas: [] as string[] };
+    res.extremos = { campos: campos.map((c) => c[0]), presets: quatro, casos: 0, naoSeAplica: 0, problemas: [] as string[] };
     for (const id of quatro) for (const [campo, mn, mx] of campos) for (const v of [mn, mx]) {
-      res.extremos.casos++;
       const rot = `${id} ${campo}=${v}`, t0 = performance.now();
       tenta(rot, res.extremos.problemas, () => {
         const m = F.montar(id, 48000, { [campo]: v });
+        if (!m) { res.extremos.naoSeAplica++; return; } // (o preset não tem esse campo: sem turbo, sem soprador…)
+        res.extremos.casos++;
         m.lenta(); const a = medir(m, 48000, 0, 1);
         m.carga(); const b = medir(m, 48000, 0, 1);
         const nan = a.nan + b.nan, pico = Math.max(a.pico, b.pico), seg = (performance.now() - t0) / 1000;
@@ -229,7 +259,7 @@ function rodarFamilia(nome: string, etapas: Set<string>) {
     for (const id of [F.ids[0], F.ids[Math.floor(F.ids.length / 2)]]) {
       const linha: any = { id };
       for (const fs of [48000, 44100, 96000]) tenta(`${id} a ${fs} Hz`, res.errosTaxas, () => {
-        const m = F.montar(id, fs);
+        const m = F.montar(id, fs)!;
         m.lenta(); const lenta = medir(m, fs, F.assenta[0], 2);
         m.carga(); const carga = medir(m, fs, F.assenta[1], 2, true);
         linha[fs] = { lenta: lenta.dbA, carga: carga.dbA, nan: lenta.nan + carga.nan, cpu: carga.cpu, rpm: carga.rpm };
@@ -241,7 +271,7 @@ function rodarFamilia(nome: string, etapas: Set<string>) {
     res.trocas = { n: 0, problemas: [] as string[] };
     const L = new Float32Array(B), R = new Float32Array(B);
     tenta('trocas', res.trocas.problemas, () => {
-      const m = F.montar(F.ids[0], 48000);
+      const m = F.montar(F.ids[0], 48000)!;
       m.carga();
       for (const id of [...F.ids.slice(1), ...F.ids.slice(0, 3)]) {
         tenta(`troca para ${id}`, res.trocas.problemas, () => {
@@ -255,7 +285,7 @@ function rodarFamilia(nome: string, etapas: Set<string>) {
     });
   }
   if (etapas.has('gc')) { // (o pai roda este filho com --trace-gc e conta as linhas entre as marcas)
-    const m = F.montar(F.ids[Math.floor(F.ids.length / 2)], 48000), L = new Float32Array(B), R = new Float32Array(B);
+    const m = F.montar(F.ids[Math.floor(F.ids.length / 2)], 48000)!, L = new Float32Array(B), R = new Float32Array(B);
     m.carga();
     for (let i = 0; i < 4 * 48000; i += B) m.processar(L, R, B);
     console.log('GC-INICIO');
@@ -273,12 +303,19 @@ function relatorio(todos: any[]) {
   for (const r of todos) {
     console.log(`\n## ${r.familia} (${r.escala === 'tanh' ? 'saída normalizada do worklet' : 'pressão a 7,5 m, 0 dBFS = 124 dB SPL'})\n`);
     if (r.niveis) {
-      const ml = mediana(r.niveis.map((x: any) => x.lenta.dbA)), mc = mediana(r.niveis.map((x: any) => x.carga.dbA));
-      console.log('| preset | lenta dBFS(A) | pico | carga dBFS(A) | pico | carga − lenta | > 0,7 em carga | CPU média / p99 (% do quantum) | fora da curva |\n|---|---|---|---|---|---|---|---|---|');
+      // (motor que não ficou rodando neste banco, como a Megola sem embreagem, fica fora da mediana)
+      const parado = (x: any) => x.carga.rpm !== undefined && x.carga.rpm !== null && x.carga.rpm < 50;
+      const vivos = r.niveis.filter((x: any) => !parado(x));
+      const ml = mediana(vivos.map((x: any) => x.lenta.dbA)), mc = mediana(vivos.map((x: any) => x.carga.dbA));
+      console.log('| preset | lenta dBFS(A) | pico | carga dBFS(A) | pico | carga − lenta | > 0,7 em carga | CPU em carga: média / p99 de relógio (% do quantum) | observação |\n|---|---|---|---|---|---|---|---|---|');
       for (const x of r.niveis) {
         const obs: string[] = [];
-        if (Math.abs(x.lenta.dbA - ml) > FORA_DA_CURVA_DB) obs.push(`lenta ${x.lenta.dbA > ml ? '+' : ''}${f1(x.lenta.dbA - ml)} dB`);
-        if (Math.abs(x.carga.dbA - mc) > FORA_DA_CURVA_DB) obs.push(`carga ${x.carga.dbA > mc ? '+' : ''}${f1(x.carga.dbA - mc)} dB`);
+        if (parado(x)) obs.push('não ficou rodando neste banco');
+        // (em pressão absoluta as máquinas são de tamanhos diferentes de propósito: não há "fora da curva")
+        else if (r.escala === 'tanh') {
+          if (Math.abs(x.lenta.dbA - ml) > FORA_DA_CURVA_DB) obs.push(`lenta ${x.lenta.dbA > ml ? '+' : ''}${f1(x.lenta.dbA - ml)} dB`);
+          if (Math.abs(x.carga.dbA - mc) > FORA_DA_CURVA_DB) obs.push(`carga ${x.carga.dbA > mc ? '+' : ''}${f1(x.carga.dbA - mc)} dB`);
+        }
         if (x.carga.acima > 0.01) obs.push('limitador');
         if (x.lenta.nan || x.carga.nan) { obs.push('NaN'); ruim++; }
         console.log(`| ${x.id} | ${f1(x.lenta.dbA)} | ${x.lenta.pico.toFixed(2)} | ${f1(x.carga.dbA)} | ${x.carga.pico.toFixed(2)} | ${f1(x.carga.dbA - x.lenta.dbA)} | ${(100 * x.carga.acima).toFixed(2)}% | ${f1(x.carga.cpu)} / ${f1(x.carga.p99)} | ${obs.join(', ')} |`);
@@ -290,7 +327,7 @@ function relatorio(todos: any[]) {
       for (const e of r.errosNiveis) { console.log(`ERRO ${e}`); ruim++; }
     }
     if (r.extremos) {
-      console.log(`\nExtremos: ${r.extremos.casos} casos (${r.extremos.campos.length} campos × mínimo e máximo × ${r.extremos.presets.join(', ')}): ${r.extremos.problemas.length ? `${r.extremos.problemas.length} problema(s)` : 'sem NaN, exceção, pico absurdo ou travamento'}.`);
+      console.log(`\nExtremos: ${r.extremos.casos} casos (${r.extremos.campos.length} campos × mínimo e máximo × ${r.extremos.presets.join(', ')}; ${r.extremos.naoSeAplica} combinações em que o preset não tem o campo): ${r.extremos.problemas.length ? `${r.extremos.problemas.length} problema(s)` : 'sem NaN, exceção, pico absurdo ou travamento'}.`);
       console.log(`Campos: ${r.extremos.campos.join(', ')}.`);
       for (const p of r.extremos.problemas) { console.log(`- ${p}`); if (/NaN|exceção|levou/.test(p)) ruim++; }
     }
@@ -309,7 +346,7 @@ function relatorio(todos: any[]) {
       console.log(`\nTroca rápida de preset: ${r.trocas.n} trocas a cada 0,4 s com o motor em carga: ${r.trocas.problemas.length ? '' : 'sem NaN nem exceção.'}`);
       for (const p of r.trocas.problemas) { console.log(`- ${p}`); if (/NaN|exceção/.test(p)) ruim++; }
     }
-    if (r.gc) console.log(`\nColeta de lixo em 10 s de carga (${r.gc.preset}): ${r.gc.coletas} coleta(s)${r.gc.coletas ? `, ${r.gc.pausaMs.toFixed(1)} ms de pausa no total, maior ${r.gc.maiorMs.toFixed(1)} ms` : ' (não aloca no laço)'}.`);
+    if (r.gc) console.log(`\nColeta de lixo em 10 s de carga (${r.gc.preset}): ${r.gc.coletas} coleta(s)${r.gc.coletas ? `, ≈ ${r.gc.alocadoMB.toFixed(0)} MB alocados, ${r.gc.pausaMs.toFixed(1)} ms de pausa no total, maior ${r.gc.maiorMs.toFixed(2)} ms` : ' (não aloca no laço)'}.`);
   }
   return ruim;
 }
@@ -342,8 +379,14 @@ else {
       if (etapas.has('gc')) {
         const g = await filho(nome, ['gc'], true);
         const trecho = g.saida.slice(g.saida.indexOf('GC-INICIO'), g.saida.indexOf('GC-FIM'));
-        const pausas = [...trecho.matchAll(/(?:Scavenge|Mark-Compact|Mark-sweep)[^\n]*?\/ ([\d.]+) ms/g)].map((m) => +m[1]);
-        r.gc = { ...g.res.gc, coletas: (trecho.match(/Scavenge|Mark-Compact|Mark-sweep/g) || []).length, pausaMs: pausas.reduce((a, b) => a + b, 0), maiorMs: Math.max(0, ...pausas) };
+        // linha do --trace-gc: "… Scavenge 5.1 (6.3) -> 4.2 (7.3) MB, [pooled: 0 MB,] 0.52 / 0.00 ms …"
+        const linhas = [...trecho.matchAll(/(?:Scavenge|Mark-Compact|Mark-sweep)[^\n]*? ([\d.]+) \([\d.]+\) -> ([\d.]+) \([\d.]+\) MB, (?:pooled: [\d.]+ MB, )?([\d.]+) \/ [\d.]+ ms/g)];
+        const pausas = linhas.map((m) => +m[3]);
+        // o que foi alocado entre duas coletas: heap antes desta − heap depois da anterior
+        let alocado = 0;
+        for (let i = 1; i < linhas.length; i++) alocado += Math.max(0, +linhas[i][1] - +linhas[i - 1][2]);
+        if (linhas.length > 1) alocado *= linhas.length / (linhas.length - 1); // (a primeira coleta não tem a anterior no trecho)
+        r.gc = { ...g.res.gc, coletas: (trecho.match(/Scavenge|Mark-Compact|Mark-sweep/g) || []).length, pausaMs: pausas.reduce((a, b) => a + b, 0), maiorMs: Math.max(0, ...pausas), alocadoMB: alocado };
       }
       return r;
     }));
