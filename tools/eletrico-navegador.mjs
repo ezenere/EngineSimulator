@@ -139,8 +139,8 @@ try {
   const falta = await ev(`${JSON.stringify(ids)}.filter((i) => !document.getElementById(i))`);
   confere(falta.length === 0, 'controles e mostradores da seção 6 presentes', falta.join(', ') || `${ids.length} ids`);
   await clicar('#avancado');
-  const av = await lerAte(() => ev(`['avFc', 'avDelta', 'avZs', 'avZp', 'avExc'].filter((i) => !document.getElementById(i))`), (f) => f.length === 0, 3000);
-  confere(av.length === 0, 'Avançado: f_c, δ, Z_s, Z_p, excentricidade', av.join(', '));
+  const av = await lerAte(() => ev(`['avFc', 'avDelta', 'avZs', 'avZp', 'avExc', 'avRess', 'avFolga'].filter((i) => !document.getElementById(i))`), (f) => f.length === 0, 3000);
+  confere(av.length === 0, 'Avançado: f_c, δ, Z_s, Z_p, excentricidade, ressonâncias da carcaça, folga da redução', av.join(', '));
 
   // liga e acelera
   await clicar('#ignicao');
@@ -194,6 +194,16 @@ try {
   await chip('#pneus', 'Só o trem');
   confere(await ultima('preset', '.pneusAero') === false, 'pneus e vento desligados: o preset vai de novo');
   await chip('#pneus', 'Ligados');
+  // pneus e vento: cada um com o seu nível (o trem de força não muda), ao vivo, sem remontar o preset
+  await esperaAte(() => ev(`!!document.getElementById('pneusDb') && !!document.getElementById('ventoDb')`), 3000);
+  const ar0 = await ev(`[${K}.pneusDb, ${K}.ventoDb]`);
+  const nPreset = await ev(`${K}.enviadas.filter((m) => m.type === 'preset').length`);
+  await deslizar('pneusDb', -12);
+  await deslizar('ventoDb', -18);
+  confere(await ultima('eletrico', '.pneusDb') === -12 && await ultima('eletrico', '.ventoDb') === -18 && (await ev(`${K}.enviadas.filter((m) => m.type === 'preset').length`)) === nPreset,
+    'pneus e vento: nível próprio de cada um, ao vivo', `de ${ar0.join(' / ')} dB para ${await ultima('eletrico', '.pneusDb')} / ${await ultima('eletrico', '.ventoDb')} dB`);
+  await deslizar('pneusDb', ar0[0]);
+  await deslizar('ventoDb', ar0[1]);
   // velocidade imposta
   await deslizar('velocidade', 60);
   await chip('#impor', 'Impor');
@@ -224,6 +234,13 @@ try {
   // Taurus: o do-re-mi
   await preset(2, 'taurus');
   confere((await ev(`!document.getElementById('teclado').hidden`)), 'Taurus: teclado do do-re-mi visível');
+  // os auxiliares: controles no Avançado e som com a locomotiva parada (sopradores, compressor, transformador)
+  const aux = await lerAte(() => ev(`['avVent', 'avComp', 'avArCond', 'avTrafo', 'avRede'].filter((i) => !document.getElementById(i))`), (f) => f.length === 0, 3000);
+  confere(aux.length === 0, 'Taurus: sopradores, compressor, ar-condicionado, transformador e rede no Avançado', aux.join(', '));
+  await espera(2500);
+  const tPar = await tele();
+  const rPar = await rms();
+  confere(tPar.v < 1 && rPar > -70, 'Taurus parado e ligado: soa (auxiliares)', `${tPar.v.toFixed(1)} km/h · ${rPar.toFixed(1)} dBFS`);
   await deslizar('acelerador', 0.8);
   const notas = [];
   let acesa = false;

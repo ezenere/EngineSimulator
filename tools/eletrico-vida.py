@@ -14,7 +14,8 @@ sentido; escolha patamares.
 Por banda (as do projeto, relativas à âncora de 150–400 Hz):
   nível      potência total da banda
   linhas     potência dos picos estreitos acima do piso (mediana corrida do espectro fino)
-  HNR        linhas ÷ piso, dB (sem supor f0)
+  HNR        linhas ÷ piso, dB (sem supor f0), no espectro do trecho inteiro
+  curto      o mesmo em quadros de ~170 ms (mediana dos quadros): a que vale quando as linhas varrem (trem acelerando)
   piso       potência do piso entre as linhas
   planura    média geométrica ÷ aritmética do PISO na banda, dB (0 = liso como ruído branco; negativa = com relevo)
   n          quantas linhas passam de 10 dB sobre o piso
@@ -111,6 +112,34 @@ def bandas(f, P, piso, linhas):
     return res
 
 
+def hnr_curto(x, fs, n=8192):
+    """HNR de tempo curto por banda: em cada quadro de ~170 ms, a potência das raias a mais de 6 dB do piso (mediana
+    corrida de 8% da frequência central da banda) ÷ o piso; mediana dos quadros, dB, de −30 a 60. É a medida que vale
+    quando as linhas varrem (trem acelerando: o Welch do trecho inteiro borra a linha que sobe e o kit, que dobra tudo
+    num ciclo, não conta a linha fixa do conversor). Sem banda de 20–60 Hz (raias de menos)."""
+    from scipy.ndimage import median_filter
+    if len(x) < 2 * n:
+        return [float('nan')] * len(BANDAS)
+    f, _, Z = signal.stft(x, fs, window='hann', nperseg=n, noverlap=n * 3 // 4, boundary=None, padded=False)
+    P = np.abs(Z) ** 2
+    df = f[1] - f[0]
+    res = []
+    for lo, hi in BANDAS:
+        m = (f >= lo) & (f < hi)
+        if m.sum() < 12:
+            res.append(float('nan'))
+            continue
+        w = max(9, int(0.08 * (lo + hi) / 2 / df) | 1)
+        hn = []
+        for k in range(P.shape[1]):
+            p = P[m, k]
+            piso = np.exp(median_filter(np.log(p + 1e-300), size=w, mode='nearest')) * 1.44  # mediana → média (exponencial)
+            lin = np.sum((p - piso)[p > 4 * piso])
+            hn.append(10 * np.log10(max(lin, 1e-30) / max(np.sum(piso), 1e-300)))
+        res.append(float(np.clip(np.median(hn), -30, 60)))
+    return res
+
+
 def vida_da_linha(x, fs, f0):
     """Amplitude e frequência instantâneas de uma linha (heteródino + passa-baixa)."""
     B = float(min(40.0, max(6.0, 0.025 * f0)))
@@ -159,17 +188,22 @@ def vida_da_linha(x, fs, f0):
 
 def medir(arq, trecho, n_linhas, fmin, fmax):
     x, fs = nu.ler_audio(arq, trecho)
+    # silêncio digital (o trem parado de antes dos auxiliares): não há espectro a medir; um chão de −200 dBFS, com semente,
+    # deixa as contas finitas e o resultado marcado (`mudo`)
+    mudo = not np.any(x)
+    if mudo:
+        x = 1e-10 * np.random.default_rng(0).standard_normal(len(x))
     f, P, piso, df, n = espectro(x, fs)
-    todas = achar_linhas(f, P, piso, 20.0, 12000.0)
+    todas = [] if mudo else achar_linhas(f, P, piso, 20.0, 12000.0)
     cand = [q for q in todas if fmin <= q['f'] <= fmax][:n_linhas]
     for q in cand:
         q.update(vida_da_linha(x, fs, q['f']))
     anc = np.sum(P[(f >= 150) & (f < 400)]) * df
     for q in cand:
         q['nivel_db'] = float(nu.db10(q['pot'] / anc))
-    return {'arquivo': os.path.basename(str(arq)), 'trecho': list(trecho) if trecho else None, 'dur': len(x) / fs, 'df': float(df),
-            'bandas': bandas(f, P, piso, todas), 'linhas': cand, 'n_linhas_10db': sum(1 for q in todas if q['sobre_db'] >= 10),
-            '_f': f, '_P': P, '_piso': piso, '_anc': anc}
+    return {'arquivo': os.path.basename(str(arq)), 'trecho': list(trecho) if trecho else None, 'dur': len(x) / fs, 'df': float(df), 'mudo': mudo,
+            'bandas': bandas(f, P, piso, todas), 'hnr_curto': hnr_curto(x, fs), 'linhas': cand, 'n_linhas_10db': sum(1 for q in todas if q['sobre_db'] >= 10),
+            '_f': f, '_P': P, '_piso': piso, '_anc': anc, '_x': x, '_fs': fs, '_todas': todas}
 
 
 def mediana_linhas(m, campo):
@@ -178,13 +212,13 @@ def mediana_linhas(m, campo):
 
 
 def imprimir(ms, rot):
-    print('por banda (dB re 150–400 Hz):   ' + '   |   '.join(f'{r:^44s}' for r in rot))
-    print('banda     ' + '   |   '.join('  nível linhas   piso    HNR planura  n   ' for _ in ms))
+    print('por banda (dB re 150–400 Hz):   ' + '   |   '.join(f'{r:^51s}' for r in rot))
+    print('banda     ' + '   |   '.join('  nível linhas   piso    HNR  curto planura  n   ' for _ in ms))
     for i, nome in enumerate(NOMES):
         cols = []
         for m in ms:
             b = m['bandas'][i]
-            cols.append(f"{b['nivel']:7.1f} {b['linhas']:6.1f} {b['piso']:6.1f} {b['hnr']:6.1f} {b['planura']:7.1f} {b['n']:3d}   ")
+            cols.append(f"{b['nivel']:7.1f} {b['linhas']:6.1f} {b['piso']:6.1f} {b['hnr']:6.1f} {m['hnr_curto'][i]:6.1f} {b['planura']:7.1f} {b['n']:3d}   ")
         print(f'{nome:9s} ' + '   |   '.join(cols))
     for m, r in zip(ms, rot):
         print(f"\nlinhas mais fortes de {r} ({m['n_linhas_10db']} linhas a mais de 10 dB do piso no espectro inteiro):")
@@ -216,14 +250,25 @@ def figura(ms, rot, arq, titulo):
     ax.legend(loc='upper right')
     for j in range(k):
         a2 = fig.add_subplot(gs[1, j])
-        for m, r, c in zip(ms, rot, cores):
+        q0 = ms[0]['linhas'][j]
+        casou = True
+        for i, (m, r, c) in enumerate(zip(ms, rot, cores)):
             q = m['linhas'][j]
+            if i > 0:
+                # do outro lado, a MESMA linha: a mais forte a até 3% da frequência; se não houver, a j-ésima mais forte de lá
+                perto = [t for t in m['_todas'] if abs(t['f'] / q0['f'] - 1) <= 0.03]
+                if perto:
+                    q = dict(perto[0])
+                    if 'am_db' not in q:
+                        q.update(vida_da_linha(m['_x'], m['_fs'], q['f']))
+                else:
+                    casou = False
             f, P = m['_f'], m['_P']
             mm = np.abs(f - q['f']) <= 60
-            a2.plot(f[mm] - q['f'], 10 * np.log10(P[mm] / P[mm].max()), color=c, lw=0.9, label=f"{r.split(' ')[0]} {q['f']:.0f} Hz · AM {q['am_db']:.1f} dB · FM {q['fm_cents']:.1f} c")
+            a2.plot(f[mm] - q['f'], 10 * np.log10(P[mm] / P[mm].max()), color=c, lw=0.9, label=f"{r.split(' ')[0]} {q['f']:.0f} Hz · AM {q['am_db']:.1f} dB · FM {q['fm_cents']:.1f} c · {q['largura_hz']:.1f} Hz")
         a2.set_ylim(-70, 3); a2.set_xlim(-60, 60); a2.grid(True, alpha=0.25)
         a2.set_xlabel('Hz em volta da linha'); a2.set_ylabel('dB re pico')
-        a2.set_title(f'{j + 1}ª linha mais forte de cada lado', fontsize=10)
+        a2.set_title(f"{j + 1}ª linha mais forte da gravação" + ('' if casou or len(ms) < 2 else ' (sem par no simulado: a dele)'), fontsize=10)
         a2.legend(fontsize=8, loc='lower center')
     plt.tight_layout()
     plt.savefig(arq)
