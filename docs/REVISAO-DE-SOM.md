@@ -18,6 +18,7 @@ qualquer veículo, antigo ou novo.
 - [Caso: o som de ar dos Rotativos](#caso-o-som-de-ar-dos-rotativos)
 - [Caso: Rotativos: motor, não ar](#caso-rotativos-motor-não-ar)
 - [Caso: os pipocos do radial](#caso-os-pipocos-do-radial)
+- [Caso: Diesel: motor, não ar](#caso-diesel-motor-não-ar)
 - [Caso: os médios](#caso-os-médios)
 - [Caso: papel rasgando](#caso-papel-rasgando)
 - [Ferramentas](#ferramentas)
@@ -57,6 +58,7 @@ Estes erros aconteceram na sessão que gerou este método. Cada um virou uma reg
 | Diâmetro de escape menor no Fusca para soprar mais | O som tonal do motor mudou (−6 a −9 dB, outras ordens) | — | Mudar só a peça que o fenômeno envolve (a ponteira virou um campo próprio) |
 | Hipótese do chiado do carburador para o agudo do Fusca | Não foi implementada: o auditor refutou | — | Auditoria independente antes de implementar |
 | Diesel: sopro do turbo ∝ vazão·U⁵ liso (±15% pela vazão média) e fundo mecânico liso subido 5× para o p90/p10 da lenta bater com um vídeo | "Som de mar", "vento" no turbo; "ar" alto na lenta | O p90/p10 da gravação inclui o ruído da própria gravação, e ninguém mediu de que fonte era o vão do simulado: em carga o sopro era 60–95% do som ponderado A; na lenta o fundo era 80–100% do vão de 1–4 kHz | Medir a composição do vão por fonte (`tools/diesel-fontes.ts`: uma fonte desligada por vez, mesma semente). O que enche o vão tem de ser preso ao motor (modulado pelo pulso), não ruído liso |
+| Diesel: batida da queima, injetores e válvulas como rajadas de ruído branco filtrado, uma por evento; jato da boca ∝ v²; pás do turbo contadas com as intermediárias | "Som de ar em vez do *nhe nhe nhe*"; "soavam como vento"; "quando o turbo sobe, faz som de mar" | As rajadas eram coladas ao evento, então p90/p10 e modulação passavam; ninguém mediu quanto de cada banda era linha do motor nem de que fonte vinha cada banda em carga; o apito tinha ido para 18 kHz e do turbo só sobrava a banda larga | Uma pancada numa estrutura é uma forma de onda que se repete, não ruído: medir o HNR por banda. Orçamento por fonte em lenta, em carga e no transitório, antes de mexer ([caso do Diesel](#caso-diesel-motor-não-ar)) |
 | Comparar o Mustang a 2027 rpm tomando a linha mais forte do grave (135 Hz) pela ignição | Hipótese errada de "estouros aleatórios" e ordens do grave sem sentido | A linha mais forte era o 13º harmônico do ciclo; a lenta real era ~1250 rpm | Confirmar a rotação dobrando o sinal em N períodos da linha mais forte (ver Armadilhas) |
 
 ## Passo a passo
@@ -496,6 +498,107 @@ T-28, R-2800 em banco, Rotec e Sh-14):
   estouros) mudava o resultado de +2,6 a +5,9%: era sorte, não margem.
 - **Duas gravações em sentidos opostos.** O M-14P tem 3× os picos do Yak-52 na lenta, mas o T-6G, também de carburador de
   boia, tem 14× os do R-1340 simulado. Com as duas puxando para lados opostos, o galope de boia não mudou.
+
+## Caso: Diesel: motor, não ar
+
+**Queixa**, depois de três passadas que acertaram tabelas de bandas: "os caminhões faziam um som de ar ao invés do *nhe nhe
+nhe nhe* ou do *rom rom rom*"; "alguns soavam como vento, parecia que era apenas ar"; "quando o turbo sobe, ele faz um som
+de mar; podia ser só uma coisa mais sutil de turbo". E a regra de gosto que passou a valer acima da gravação: "no real é
+mais assim mesmo, mas pro simulador ele tem que soar mais motor e menos som de ar do motor".
+
+**Como se achou.** Oito presets (picapes, aspirado, caminhões, ônibus, gerador, locomotiva) em lenta, carga parcial,
+plena carga e num degrau de carga com o giro travado (o turbo enchendo sem o motor mudar de rotação), cada um contra o
+trecho de gravação casado, com o kit `tools/ouvido/` e o orçamento de ruído por fonte com a mesma semente
+(`tools/diesel-ouvido.py`, casos em `tools/diesel-ouvido.json`; números em `TECNICO.md` → Diesel → Quarta passada).
+
+- **O "mar" era o sopro do compressor.** Em carga ele era a fonte dominante de 400 Hz para cima: 75–77% de 400–1000 Hz,
+  85–90% de 1–2,5 kHz e 100% de 2,5–6 kHz na cabine do caminhão, 46–48% do som ponderado A. No enchimento do turbo, com o
+  giro parado, subia o que há acima de 1 kHz em 6,5 dB (de fora) a 10,9 dB (cabine): um degrau de chiado. Na locomotiva
+  era a banda larga da turbina: 77–94% do som ponderado A.
+- **O apito não existia.** As pás do compressor tinham sido contadas com as intermediárias (14), para fugir do "apito
+  bizarro" da 1ª passada; a passagem das pás em carga foi para 18 kHz. Do turbo só se ouvia a banda larga. Na gravação
+  de um Cat C15 na cabine o turbo é o contrário: um tom fino que varre de 7 a 9,4 kHz com a carga, 14 dB sobre o fundo
+  local e 20 dB abaixo das ordens, e mais nada.
+- **O "vento" do aspirado era o jato da boca do escape**: 76% do som ponderado A do 300D em lenta, 88% em carga parcial.
+  A lei do Ronco (amplitude ∝ velocidade², afinada de ouvido para os "pufs" de um motor a gasolina) superestima o jato de
+  um diesel em lenta em 30–50 dB: um jato livre irradia com a oitava potência da velocidade.
+- **Na lenta não havia "ar": havia rajadas.** A batida, os injetores e as válvulas eram ruído branco filtrado com a
+  envoltória de cada evento, e entre uma explosão e outra, silêncio (p90/p10 de 1–6 kHz de 25–38 dB; nas gravações,
+  5–13). Uma fila de rajadas de ruído soa como sopro pulsado, não como batida. Faltavam as linhas do motor acima de 400
+  Hz (no 300D, 15 dB a menos que na gravação) e os cilindros eram todos iguais (variação entre explosões de 0,07–0,19
+  contra 0,11–0,44).
+
+**O que foi implementado** (tudo em `src/engines/diesel/`; o `dsp.ts` do Ronco não mudou):
+
+| Mudança | Campo / controle | Por quê |
+|---|---|---|
+| A mecânica é a resposta de um banco de 30 modos do bloco (150 Hz a 7 kHz), com um caminho por cilindro | `mecanica` (nível), `ressonancia`, `desigualdade` | Uma pancada numa estrutura repete a mesma forma de onda: dá linhas e uma voz por cilindro |
+| A queima excita o banco pela taxa de subida de pressão que ela produz, com aspereza (metade fixa por cilindro, metade sorteada) | — (física do cilindro) | Lenta: degrau de pressão curto, toca o médio (*nhe*); carga: subida longa, empurra o grave (*rom*) |
+| Injetores, válvulas, bomba e saia do pistão são impulsos no mesmo banco, com 0,06 ms de variação no instante | tipo de injeção | Com os impactos exatamente periódicos o motor zumbia; com a variação, as linhas somem acima de ~2,5 kHz, como nas gravações |
+| Engrenagens da distribuição: 24 pancadas por ciclo no mesmo banco, num padrão fixo por motor, que somem com a carga | — (segue `mecanica`) | É o chocalho das engrenagens que enche o intervalo entre as batidas na lenta: som do motor, preso ao giro, e não um fundo de ruído |
+| Reflexões do cofre (4 atrasos realimentados, 40 ms) | `cofre` | O motor real não fica mudo entre as explosões; o que volta é a própria batida, não ruído |
+| Jato da boca ∝ U⁸, com a boca separada do tubo | `jatoBoca`, `ponteira` | Some na lenta; "Diâmetro do escape" no mínimo não rasga mais (antes: +20 a +28 dB de chiado) |
+| Sopro do compressor −30 dB; banda larga da turbina −22 dB | `turboChiado` | A caixa do filtro e o abafador são silenciadores; o padrão é quase nada |
+| Apito pelas pás principais (7 ou 6), nível ∝ rotação³ e pressão, tom com oscilação e saia estreita | `turboPas`, `turboApito` | Um tom fino que segue a rotação do turbo e só aparece em carga |
+
+**Resultado** (gravação / antes / depois; painéis de antes e de depois em `docs/ouvido/diesel/`, os resultados
+completos de cada caso em `referencias/_sim/diesel/antes/` e `depois/`):
+
+| | HNR 400–1k (dB) | HNR 1–2,5k | leito de 1–6 kHz | p90/p10 de 1–6 kHz (dB) | ar | o ar contínuo no nível A |
+|---|---|---|---|---|---|---|
+| Cat C15, lenta, de fora | −6 / 3 / 4 | −15 / −4 / −2 | 84% / 0% / 3% | 10,4 / 32,3 / 20,6 | 0 → 0 | 0 → 0 dB |
+| Cat C15, em carga, cabine | −1 / −6 / 4 | −11 / −14 / 0 | 80% / 18% / 7% | 6,3 / 10,4 / 15,9 | 0 → 0 | 2,7 → 0 dB |
+| Scania V8, em carga, cabine | 2 / −6 / 5 | −14 / −10 / −1 | 14% / 42% / 7% | 19,7 / 8,6 / 15,7 | 2,7 → 0 | 2,9 → 0 dB |
+| Hilux 2.8, lenta, cofre aberto | −15 / 2 / 5 | −25 / 0 / 0 | 79% / 0% / 8% | 12,8 / 31,1 / 15,6 | 0 → 0 | 0 → 0 dB |
+| Mercedes 300D, lenta | 5 / −12 / 2 | −1 / −11 / 0 | 16% / 6% / 2% | 10,5 / 16,8 / 20,1 | 0 → 0 | 6,2 → 0 dB |
+| EMD 710, notch 8 | 9 / −8 / 10 | −7 / −20 / −2 | 83% / 96% / 49% | 9,3 / 5,7 / 7,1 | 1,3 → 0,4 | 12,1 → 0,4 dB |
+
+No enchimento do turbo a banda larga passou a subir o total ponderado A em 0,0 dB (antes 0,7–3,3; locomotiva 12,2 →
+0,8) e o que há acima de 1 kHz em 0,0–0,1 dB (antes 4–13; locomotiva 19,9 → 3,3); o apito do caminhão em carga fica em
+9,4 kHz, 21 dB sobre o fundo local e 29 dB abaixo das ordens na cabine (na gravação do Cat C15: 14 dB e 20 dB). Na lenta,
+o chocalho das engrenagens é de 1 a 10% do som ponderado A, e 0% em carga.
+
+**Lições:**
+
+- **Ruído colado ao evento ainda não é motor.** A regra "ruído só entra modulado pelo evento" foi cumprida na 3ª passada e
+  o ouvido continuou ouvindo ar. O que separa uma batida de uma rajada é a forma de onda se repetir: meça o HNR por banda
+  e a fração determinística com duas sementes, não só a envoltória.
+- **Tirar um defeito sem medir o que sobra cria o defeito seguinte.** O apito "agudo demais" da 1ª passada foi resolvido
+  mandando-o para fora da faixa audível; sobrou a banda larga, que virou o "mar". Depois de atenuar, refaça o orçamento.
+- **A âncora de 150–400 Hz engana quando o simulado não tem nada nela.** Na lenta do caminhão o simulado tinha um buraco
+  de 100 a 400 Hz; normalizado por essa banda, todo o resto parecia alto e o acerto foi abaixar a mecânica. Olhe o nível
+  absoluto por banda nas duas condições antes de acertar um ganho.
+- **Pela terceira vez um controle mexia no tubo e na ponteira ao mesmo tempo** (Fusca, Rotativos, Diesel). A boca de
+  saída é sempre um campo próprio.
+- **Um sorteio novo no meio de uma tabela sorteada muda a voz de todos os motores.** O caminho das engrenagens entrou no
+  laço que sorteia o caminho de cada cilindro, e todos os sorteios seguintes andaram: a mecânica do Cat C15 em lenta caiu
+  2 dB em 400–1000 Hz e subiu 1 dB em 150–400 Hz sem ninguém ter mexido nela, e uma medida do `teste:diesel` reprovou por
+  0,2 dB. Fonte nova tem gerador aleatório próprio; depois de acrescentar uma, confira o nível por banda de um preset
+  que não devia mudar (`tools/diesel-ouvido-bandas.py` nos WAVs de antes e de depois).
+- **Quando gravação e gosto discordam, vale o gosto, e o desvio fica escrito.** As gravações de lenta têm 30–85% de leito
+  contínuo em 1–6 kHz (ventilador, sala, microfone, e o motor mesmo); o simulado ficou com 2–9%, de propósito. As
+  distâncias simétricas do kit sobem com isso (o simulado é mais pulsado que a gravação); os defeitos de um lado só não.
+
+**Pendente:**
+
+- **Faltam médios em carga.** Na cabine, 400 Hz–2,5 kHz fica 5–10 dB abaixo das gravações casadas (Cat C15, Scania); a
+  batida cresce da lenta para a carga o que a física dela manda (11–17 dB) e o escape de 150–400 Hz cresce 34 dB. O que
+  falta é conteúdo tonal do escape e da carcaça dele nessa faixa, que é o mecanismo genérico do caminho compartilhado
+  (ver "Caso: os médios"). A carcaça do escape do motor-base ficou ligada ao Diesel e desligada nos presets (controle
+  "Carcaça do escape"): com o valor dos carros (−6 dB) nenhuma banda muda; com +18 a +24 dB sobem as linhas de 400–1000 Hz
+  em carga (2 a 7 dB), e nada de 1 a 2,5 kHz.
+- **A lenta continua mais seca que as gravações**: p90/p10 de 1–6 kHz de 14–21 dB contra 5–13, já com as engrenagens
+  (sem elas, 19–27). O controle "Reflexos do cofre" enche mais o intervalo; o padrão ficou baixo para a carga não perder
+  os pulsos.
+- **A locomotiva em notch 8 continua com o agudo liso** (p90/p10 de 1–6 kHz de 7,1 dB contra 9,3 da gravação): a banda
+  larga da turbina caiu 22 dB e ainda é o que mais pesa acima de 1 kHz. São 241 explosões por segundo; o que a gravação
+  tem é uma flutuação mais lenta, que o modelo não tem.
+- **O grave da lenta sobra**: relativo a 150–400 Hz, a banda de 60–150 Hz fica de 4 a 20 dB acima das gravações de fora
+  (Ram +20 contra 0; Hilux +18 contra +5; Scania +9 contra −4). É o escape, que esta passada não mexeu.
+- **Gerador e locomotiva tocam na página sem ventilador nem alternador**: as fontes existem nos portadores
+  (`src/carriers/gerador.ts`, `locomotiva.ts`), mas só a Cena os monta; a página do Diesel roda o motor com a carga
+  interna.
+- A 2ª ordem de queima do 6 em linha em carga (153 Hz a 1535 rpm) sai 10 dB abaixo da gravação de cabine do C15.
 
 ## Caso: os médios
 

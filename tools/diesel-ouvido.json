@@ -1,0 +1,67 @@
+{
+ "nota": "Casos da régua do Diesel (tools/diesel-ouvido.py). Gravações em referencias/diesel/ do checkout principal (fora do git; referencias/INDEX.md). A rotação de cada trecho foi conferida com tools/ouvido/f0.py --linha-do-tempo. 'casada: false' = gravação de outro motor ou de carga desconhecida (vale como faixa).",
+ "casos": [
+  {"id": "catc15-lenta", "preset": "catc15", "titulo": "Cat C15, lenta 702 rpm, de fora", "rpm": 702, "ouvinte": "ext",
+   "real": "cat-c15-6nz-lenta.wav", "trecho": [24, 60], "rpmReal": 702, "ev": 6},
+  {"id": "catc15-parcial", "preset": "catc15", "titulo": "Cat C15, 1545 rpm com pouca carga, cabine", "rpm": 1545, "comb": 0.3, "ouvinte": "int",
+   "real": "cat-c15-apito-do-turbo-cabine.wav", "trecho": [2, 20], "rpmReal": 1545, "ev": 6},
+  {"id": "catc15-plena", "preset": "catc15", "titulo": "Cat C15, 1535 rpm em carga, cabine", "rpm": 1535, "comb": 0.95, "ouvinte": "int",
+   "real": "cat-c15-apito-do-turbo-cabine.wav", "trecho": [30, 58], "rpmReal": 1535, "ev": 6},
+  {"id": "catc15-plena-ext", "preset": "catc15", "titulo": "Cat C15, 1555 rpm em carga, de fora (gravação: 3406E na cabine)", "rpm": 1555, "comb": 0.95, "ouvinte": "ext",
+   "real": "cat-3406e-carga.wav", "trecho": [130, 146], "rpmReal": 1555, "ev": 6, "casada": false},
+  {"id": "catc15-turbo", "preset": "catc15", "titulo": "Cat C15, 1400 rpm, carga de 12% a 100%: o turbo enche (de fora)", "rpm": 1400, "degrau": [0.12, 1.0, 2.0], "dur": 10, "ouvinte": "ext"},
+  {"id": "catc15-turbo-cabine", "preset": "catc15", "titulo": "Cat C15, 1400 rpm, carga de 12% a 100%: o turbo enche (cabine)", "rpm": 1400, "degrau": [0.12, 1.0, 2.0], "dur": 10, "ouvinte": "int"},
+
+  {"id": "scaniav8-lenta", "preset": "scaniav8", "titulo": "Scania V8, lenta 600 rpm, de fora", "rpm": 600, "ouvinte": "ext",
+   "real": "scania-v8-r560-lenta-acelerada.wav", "trecho": [1, 36], "rpmReal": 600, "ev": 8},
+  {"id": "scaniav8-parcial", "preset": "scaniav8", "titulo": "Scania V8, 1450 rpm com 40% de carga, cabine", "rpm": 1450, "comb": 0.4, "ouvinte": "int",
+   "real": "scania-v8-r620-carga-cabine.wav", "trecho": [196, 210], "rpmReal": 1450, "ev": 8, "casada": false},
+  {"id": "scaniav8-plena", "preset": "scaniav8", "titulo": "Scania V8, 1450 rpm em carga, cabine", "rpm": 1450, "comb": 0.95, "ouvinte": "int",
+   "real": "scania-v8-r620-carga-cabine.wav", "trecho": [196, 210], "rpmReal": 1450, "ev": 8},
+  {"id": "scaniav8-turbo", "preset": "scaniav8", "titulo": "Scania V8, 1300 rpm, carga de 12% a 100%: o turbo enche (de fora)", "rpm": 1300, "degrau": [0.12, 1.0, 2.0], "dur": 10, "ouvinte": "ext"},
+
+  {"id": "onibusisl-lenta", "preset": "onibusisl", "titulo": "Ônibus ISL9 (médio), lenta 618 rpm, de fora", "rpm": 618, "ouvinte": "ext",
+   "real": "onibus-urbano-lenta-fora.wav", "trecho": [8, 52], "rpmReal": 618, "ev": 6},
+  {"id": "onibusisl-parcial", "preset": "onibusisl", "titulo": "Ônibus ISL9, 1450 rpm com 40% de carga, de fora (gravação: ERF de bordo)", "rpm": 1450, "comb": 0.4, "ouvinte": "ext",
+   "real": "erf-e14-cummins-bordo.wav", "trecho": [76, 90], "rpmReal": 1450, "ev": 6, "casada": false},
+  {"id": "onibusisl-plena", "preset": "onibusisl", "titulo": "Ônibus ISL9, 1450 rpm em carga, de fora (gravação: ERF de bordo)", "rpm": 1450, "comb": 0.95, "ouvinte": "ext",
+   "real": "erf-e14-cummins-bordo.wav", "trecho": [76, 90], "rpmReal": 1450, "ev": 6, "casada": false},
+  {"id": "onibusisl-turbo", "preset": "onibusisl", "titulo": "Ônibus ISL9, 1500 rpm, carga de 12% a 100%: o turbo enche (de fora)", "rpm": 1500, "degrau": [0.12, 1.0, 2.0], "dur": 10, "ouvinte": "ext"},
+
+  {"id": "ram67-lenta", "preset": "ram67", "titulo": "Ram 6.7 Cummins, lenta 700 rpm, de fora", "rpm": 700, "ouvinte": "ext",
+   "real": "cummins67-lenta.wav", "trecho": [74, 96], "rpmReal": 700, "ev": 6},
+  {"id": "ram67-lenta-fria", "preset": "ram67", "titulo": "Ram 6.7 Cummins, lenta fria 1000 rpm a −23 °C, de fora", "rpm": 1000, "agua": -23, "ouvinte": "ext",
+   "real": "cummins67-lenta-fria.wav", "trecho": [64, 84], "rpmReal": 1000, "ev": 6},
+  {"id": "ram67-parcial", "preset": "ram67", "titulo": "Ram 6.7 Cummins, 1800 rpm com 35% de carga, de fora", "rpm": 1800, "comb": 0.35, "ouvinte": "ext"},
+  {"id": "ram67-plena", "preset": "ram67", "titulo": "Ram 6.7 Cummins, 1800 rpm em plena carga, de fora", "rpm": 1800, "comb": 1.0, "ouvinte": "ext"},
+  {"id": "ram67-turbo", "preset": "ram67", "titulo": "Ram 6.7 Cummins, 2000 rpm, carga de 8% a 100%: o turbo enche (de fora)", "rpm": 2000, "degrau": [0.08, 1.0, 2.0], "dur": 8, "ouvinte": "ext"},
+
+  {"id": "hilux28-lenta-cofre", "preset": "hilux28", "titulo": "Hilux 2.8, lenta 858 rpm, cofre aberto", "rpm": 858, "ouvinte": "bay",
+   "real": "hilux-1gd-lenta-cofre.wav", "trecho": [24, 36], "rpmReal": 858, "ev": 4},
+  {"id": "hilux28-lenta", "preset": "hilux28", "titulo": "Hilux 2.8, lenta 769 rpm, de fora (gravação: 1KD 3.0)", "rpm": 769, "ouvinte": "ext",
+   "real": "hilux-1kd-lenta-aceleradas.wav", "trecho": [5, 12], "rpmReal": 769, "ev": 4},
+  {"id": "hilux28-parcial", "preset": "hilux28", "titulo": "Hilux 2.8, 2200 rpm com 35% de carga, de fora", "rpm": 2200, "comb": 0.35, "ouvinte": "ext"},
+  {"id": "hilux28-plena", "preset": "hilux28", "titulo": "Hilux 2.8, 2200 rpm em plena carga, de fora", "rpm": 2200, "comb": 1.0, "ouvinte": "ext"},
+  {"id": "hilux28-turbo", "preset": "hilux28", "titulo": "Hilux 2.8, 2400 rpm, carga de 8% a 100%: o turbo enche (de fora)", "rpm": 2400, "degrau": [0.08, 1.0, 2.0], "dur": 8, "ouvinte": "ext"},
+
+  {"id": "om617-lenta", "preset": "om617", "titulo": "Mercedes 300D (aspirado), lenta 677 rpm, de fora", "rpm": 677, "ouvinte": "ext",
+   "real": "om617-300d-lenta.wav", "trecho": [1, 45], "rpmReal": 677, "ev": 5},
+  {"id": "om617-parcial", "preset": "om617", "titulo": "Mercedes 300D, 2500 rpm com 40% de carga, de fora", "rpm": 2500, "comb": 0.4, "ouvinte": "ext"},
+  {"id": "om617-plena", "preset": "om617", "titulo": "Mercedes 300D, 2500 rpm em plena carga, de fora", "rpm": 2500, "comb": 1.0, "ouvinte": "ext"},
+
+  {"id": "emd710-lenta", "preset": "emd710", "titulo": "EMD 710, lenta 250 rpm, beira da via", "rpm": 250, "ouvinte": "ext",
+   "real": "emd710-sd70ace-notches.wav", "trecho": [0, 8], "rpmReal": 245, "ev": 16, "fmin": 3, "fmax": 18},
+  {"id": "emd710-parcial", "preset": "emd710", "titulo": "EMD 710, 680 rpm em notch intermediário, ao lado", "rpm": 680, "comb": 0.5, "ouvinte": "ext",
+   "real": "emd710-sd70ace-autoteste.wav", "trecho": [12, 40], "rpmReal": 680, "ev": 16, "fmin": 3, "fmax": 18},
+  {"id": "emd710-plena", "preset": "emd710", "titulo": "EMD 710, notch 8 (904 rpm; gravação a 950), ao lado", "rpm": 904, "comb": 0.95, "ouvinte": "ext",
+   "real": "emd710-sd70ace-autoteste.wav", "trecho": [166, 200], "rpmReal": 950, "ev": 16, "fmin": 3, "fmax": 18},
+  {"id": "emd710-turbo", "preset": "emd710", "titulo": "EMD 710, da lenta ao notch 8: o turbo engrenado sobe com o giro (ao lado)", "cenario": "n8", "de": 0, "ate": 30, "ouvinte": "ext"},
+
+  {"id": "gen500-vazio", "preset": "gen500", "titulo": "Gerador QSX15, 1570 rpm sem carga, de fora (gravação: NT855 a 50 Hz)", "rpm": 1570, "ouvinte": "ext",
+   "real": "gerador-cummins-nt855-partida-vazio.wav", "trecho": [106, 120], "rpmReal": 1570, "ev": 6},
+  {"id": "gen500-parcial", "preset": "gen500", "titulo": "Gerador QSX15, 1800 rpm com 40% de carga, de fora", "rpm": 1800, "comb": 0.4, "ouvinte": "ext"},
+  {"id": "gen500-plena", "preset": "gen500", "titulo": "Gerador QSX15, 1800 rpm com 90% de carga, de fora (gravação: QSK de 2500 kW)", "rpm": 1800, "comb": 0.9, "ouvinte": "ext",
+   "real": "gerador-cummins-2500kw-carga.wav", "trecho": [144, 180], "rpmReal": 1800, "casada": false},
+  {"id": "gen500-turbo", "preset": "gen500", "titulo": "Gerador QSX15, 1800 rpm, degrau de carga de 10% a 90%: o turbo enche (de fora)", "rpm": 1800, "degrau": [0.1, 0.9, 2.0], "dur": 10, "ouvinte": "ext"}
+ ]
+}
