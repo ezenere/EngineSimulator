@@ -22,7 +22,7 @@ import * as A from './analise';
 import { corteAr, POLO_POR_CORTE } from '../../src/scene/ar';
 import { mag2Polo, k1 } from '../../src/scene/filtros';
 import type { Linha } from './medidas';
-import { REF_LEGADO, lerLegado } from '../legado';
+import { REF_LEGADO, lerLegado, comCorrecoes, CORRECOES_RONCO } from '../legado';
 import { raizesEmissao, parametrosEstrondo } from '../../src/scene/supersonico';
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
@@ -32,11 +32,14 @@ const req = createRequire(import.meta.url);
 const SR = 48000, B = 128;
 const r3 = (x: number) => Math.round(x * 1000) / 1000;
 
-/** extrai os arquivos legados do commit de referência para uma pasta temporária e carrega */
+/** extrai os arquivos legados do commit de referência para uma pasta temporária e carrega. Os presets do Ronco vão com
+ *  as correções de ficha declaradas em tools/legado.ts (CORRECOES_RONCO), como na paridade: a referência é o DSP legado
+ *  com a mesma ficha do lado migrado (o Camaro desde 22/11/2026 com a ordem de ignição do LT1, AUDITORIA F-RON-19) */
 function carregarMaster() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'engine-legado-'));
   for (const f of ['dsp.js', 'jet-dsp.js', 'presets.js', 'jet-presets.js', 'geometry.js']) {
-    fs.writeFileSync(path.join(dir, f), lerLegado(`src/${f}`));
+    const txt = lerLegado(`src/${f}`);
+    fs.writeFileSync(path.join(dir, f), f === 'presets.js' ? comCorrecoes(txt, CORRECOES_RONCO) : txt);
   }
   const L = (f: string) => req(path.join(dir, f));
   const commit = execFileSync('git', ['rev-parse', '--short', REF_LEGADO], { cwd: RAIZ, encoding: 'utf8' }).trim();
@@ -156,16 +159,16 @@ export function compararLegado(): Linha[] {
   const c = guardado.carro;
   out.push({ passo: '2.11', nome: 'legado: carro a 6 m, Doppler da ignição de 200 Hz', alvo: 'teoria ± 2 Hz', medido: `${c.dopplerChegando} / ${c.dopplerIndo} Hz (teoria ${c.teoria.join(' / ')})`,
     // (a linha tinha `ok` fixo em true; a folga é a resolução da medida de frequência no legado)
-    ok: Math.abs(c.dopplerChegando - c.teoria[0]) <= 2 && Math.abs(c.dopplerIndo - c.teoria[1]) <= 2 });
+    ok: Math.abs(c.dopplerChegando - c.teoria[0]) <= 2 && Math.abs(c.dopplerIndo - c.teoria[1]) <= 2, valor: [c.dopplerChegando, c.dopplerIndo], unidade: 'Hz' });
   const a = guardado.aviao;
-  out.push({ passo: '2.11', nome: 'legado: avião a 1500 m, 4 kHz rel. 500 Hz no ponto mais próximo', alvo: '≤ −20 dB', medido: `${a.oitava4kRel500} dB`, ok: a.oitava4kRel500 <= -20 });
+  out.push({ passo: '2.11', nome: 'legado: avião a 1500 m, 4 kHz rel. 500 Hz no ponto mais próximo', alvo: '≤ −20 dB', medido: `${a.oitava4kRel500} dB`, ok: a.oitava4kRel500 <= -20, valor: a.oitava4kRel500, unidade: 'dB' });
   const e = guardado.estrondo;
-  out.push({ passo: '2.11', nome: 'legado: instante do cone (M 1,5, 200 m)', alvo: '3,37 s (teoria 3,38)', medido: `${e.tCone} s (teoria ${e.tTeoria} s), Δp ${e.dpPa} Pa, T ${e.duracaoS} s`, ok: Math.abs(e.tCone - 3.37) <= 0.01 });
+  out.push({ passo: '2.11', nome: 'legado: instante do cone (M 1,5, 200 m)', alvo: '3,37 s (teoria 3,38)', medido: `${e.tCone} s (teoria ${e.tTeoria} s), Δp ${e.dpPa} Pa, T ${e.duracaoS} s`, ok: Math.abs(e.tCone - 3.37) <= 0.01, valor: e.tCone, unidade: 's' });
   // Cena nova: absorção do ar a 1500 m (os dois polos), contra o critério do legado
   const fs_ = 48000, kp = k1(fs_, Math.min(0.45 * fs_, corteAr(1500) * POLO_POR_CORTE));
   const at = (f: number) => -20 * Math.log10(mag2Polo(fs_, kp, f));   // dois polos: 2 × 10·log
   const dCena = -(at(4000) - at(500));
-  out.push({ passo: '5 #4', nome: 'Cena nova: ar a 1500 m, 4 kHz rel. 500 Hz (só a absorção)', alvo: '≤ −20 dB (critério do legado)', medido: `${dCena.toFixed(1)} dB`, ok: dCena <= -20 });
+  out.push({ passo: '5 #4', nome: 'Cena nova: ar a 1500 m, 4 kHz rel. 500 Hz (só a absorção)', alvo: '≤ −20 dB (critério do legado)', medido: `${dCena.toFixed(1)} dB`, ok: dCena <= -20, valor: dCena, unidade: 'dB' });
   // resolvedor supersônico da Cena (cópia do legado): instante do cone com os mesmos tiques de 64 amostras
   {
     const v = 1.5 * 340, Q = (200 - 1.7) ** 2, raiz = new Float64Array(2);
@@ -175,7 +178,7 @@ export function compararLegado(): Linha[] {
       if (raizesEmissao(flyX + e.bx, v, Q, raiz).cone) { tCone = ((Math.floor(j / 2) + 1) * 128) / 48000; break; }
     }
     const pe = parametrosEstrondo(1.5, 200, e.comprimento, e.forma);
-    out.push({ passo: '5 #4', nome: 'Cena nova (supersonico.ts): instante do cone, Δp e T de Carlson', alvo: `${e.tCone} s ± 1 ms; Δp e T idênticos`, medido: `${tCone.toFixed(4)} s; Δp ${pe.dp.toFixed(3)} Pa, T ${pe.T.toFixed(3)} s`, ok: Math.abs(tCone - e.tCone) <= 0.001 && Math.abs(pe.dp - e.dpPa) < 0.001 && Math.abs(pe.T - e.duracaoS) < 0.001 });
+    out.push({ passo: '5 #4', nome: 'Cena nova (supersonico.ts): instante do cone, Δp e T de Carlson', alvo: `${e.tCone} s ± 1 ms; Δp e T idênticos`, medido: `${tCone.toFixed(4)} s; Δp ${pe.dp.toFixed(3)} Pa, T ${pe.T.toFixed(3)} s`, ok: Math.abs(tCone - e.tCone) <= 0.001 && Math.abs(pe.dp - e.dpPa) < 0.001 && Math.abs(pe.T - e.duracaoS) < 0.001, valor: [tCone, pe.dp, pe.T], unidade: '' });
   }
   // (as bandas do carro a 6 m e do avião a 1500 m pela Cena, com os motores adaptados, estão no grupo `motores`)
   return out;

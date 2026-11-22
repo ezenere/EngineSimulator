@@ -12,13 +12,16 @@ import type { Portador, Motor } from '../../src/carriers/tipos';
 import * as A from './analise';
 import { Bq } from '../../src/scene/filtros';
 import type { Linha } from './medidas';
+import { semear } from '../desvios';
 
 const SR = 48000, B = 128;
 const f1 = (x: number, d = 1) => (Number.isFinite(x) ? x.toFixed(d) : String(x));
-const L = (passo: string, nome: string, alvo: string, medido: string, ok: boolean, desvio?: string): Linha => ({ passo, nome, alvo, medido, ok, desvio });
+const L = (passo: string, nome: string, alvo: string, medido: string, ok: boolean, valor?: number | number[], unidade?: string, ordem?: number): Linha => ({ passo, nome, alvo, medido, ok, valor, unidade, ordem });
 
 /** roda o portador por `dur` s chamando `aoBloco(t)`; devolve os canais de saída concatenados (opcional) */
 function rodar(p: Portador, dur: number, aoBloco?: (t: number) => void, gravar = false) {
+  // (o ruído do portador na semente atual de tools/desvios.ts; um portador já semeado não muda)
+  semear(p);
   const nF = p.fontes().length, canais = Array.from({ length: nF }, () => new Float32Array(B));
   const n = Math.round(dur * SR);
   const saida = gravar ? Array.from({ length: nF }, () => new Float32Array(n)) : [];
@@ -42,14 +45,14 @@ export function medirPortadores(): Linha[] {
       ['locomotiva × diesel', () => new Locomotiva(SR).acoplar(new MotorTeste({ familia: 'diesel', Tmax: 1, J: 1, atrito: 0, tau: 0.1, omega0: 0 })), true],
     ];
     const res = casos.map(([nome, f, deve]) => { let ok = true; try { f(); } catch { ok = false; } return { nome, ok: ok === deve }; });
-    out.push(L('1.6', 'tabela motor × portador (acoplar aceita/recusa)', 'conforme 1.6', res.map((r) => `${r.nome} ${r.ok ? 'ok' : 'ERRADO'}`).join('; '), res.every((r) => r.ok)));
+    out.push(L('1.6', 'tabela motor × portador (acoplar aceita/recusa)', 'conforme 1.6', res.map((r) => `${r.nome} ${r.ok ? 'ok' : 'ERRADO'}`).join('; '), res.every((r) => r.ok), res.filter((r) => !r.ok).length, ''));
   }
   // ---------------------------------------------------------- hélice: tabela de 4.2
   {
     const linhas = Object.entries(HELICES).map(([id, h]) => `${id} BPF ${f1(bpfHelice(h.B, h.nHelice), 0)} Hz M_t ${f1(machPonta(h.D, h.nHelice), 2)}`);
     const ref: Record<string, [number, number]> = { c172: [90, 0.8], caravan: [95, 0.79], atr72: [120, 0.72], spitfire: [84, 0.63], tu95: [50, 0.64] };
     const ok = Object.entries(HELICES).every(([id, h]) => Math.abs(bpfHelice(h.B, h.nHelice) - ref[id][0]) <= 1 && Math.abs(machPonta(h.D, h.nHelice) - ref[id][1]) <= 0.02);
-    out.push(L('4.2', 'hélices: BPF e M_t estático (tabela de 4.2)', '±1 Hz, ±0,02', linhas.join('; '), ok));
+    out.push(L('4.2', 'hélices: BPF e M_t estático (tabela de 4.2)', '±1 Hz, ±0,02', linhas.join('; '), ok, Object.values(HELICES).map((h) => bpfHelice(h.B, h.nHelice)), 'Hz'));
     // governador: ATR 72 com turbina de bancada; manete 0,4 → 1,0 aos 5 s, a rotação volta a 1200 rpm
     const h = new Helice(SR, { B: 6, D: 3.93, i: 17, nHelice: 1200 });
     const m = new MotorTeste({ familia: 'turboelice', Tmax: 1300, J: 1.2, atrito: 0.02, tau: 0.5, omega0: (1200 * 17 * 2 * Math.PI) / 60 });
@@ -63,7 +66,7 @@ export function medirPortadores(): Linha[] {
     });
     const nh = h.telemetria().rpmHelice as number, b1 = h.cargaH.beta;
     out.push(L('4.2', 'governador da hélice: manete 0,4 → 1,0 (ATR 72, turbina de bancada)', 'rotação volta a 1200 ± 1%, passo sobe',
-      `${f1(nh, 0)} rpm aos 25 s (faixa ${f1(rpmMin, 0)}–${f1(rpmMax, 0)}), β ${f1((beta0 * 180) / Math.PI)}° → ${f1((b1 * 180) / Math.PI)}°`, Math.abs(nh - 1200) <= 12 && b1 > beta0));
+      `${f1(nh, 0)} rpm aos 25 s (faixa ${f1(rpmMin, 0)}–${f1(rpmMax, 0)}), β ${f1((beta0 * 180) / Math.PI)}° → ${f1((b1 * 180) / Math.PI)}°`, Math.abs(nh - 1200) <= 12 && b1 > beta0, nh, 'rpm'));
   }
   // ---------------------------------------------------------- rotor R44
   {
@@ -74,15 +77,15 @@ export function medirPortadores(): Linha[] {
     // assim contava duas vezes; com κ 1,15 da teoria do momento modificada (Leishman, cap. 2) e o peso máximo do Raven II,
     // 1 134 kg: 97 + 41 + 14 + 5. O IO-540 do Raven II dá 205 hp = 153 kW por 5 min na decolagem: o pairado fora do efeito
     // solo no peso máximo cabe nisso, e com 170 kW não caberia)
-    out.push(L('4.3', 'R44: potência no coletivo de pairado (peso máximo, 1 134 kg)', '≈ 155 kW (97 + 41 + 14 + 5)', `${f1(p.total / 1000, 0)} kW (induzida ${f1(p.ind / 1000, 0)}, perfil ${f1(p.perfil / 1000, 0)}, cauda ${f1(p.cauda / 1000, 0)}, acess. 5)`, Math.abs(p.total / 1000 - 155) <= 10));
+    out.push(L('4.3', 'R44: potência no coletivo de pairado (peso máximo, 1 134 kg)', '≈ 155 kW (97 + 41 + 14 + 5)', `${f1(p.total / 1000, 0)} kW (induzida ${f1(p.ind / 1000, 0)}, perfil ${f1(p.perfil / 1000, 0)}, cauda ${f1(p.cauda / 1000, 0)}, acess. 5)`, Math.abs(p.total / 1000 - 155) <= 10, p.total / 1000, 'kW'));
     // BPF e cauda medidos no canal do rotor (sem motor: Nr imposto)
     r.comandar({ pedal: 0.75 });
     const s = rodar(r, 6, undefined, true);
     const ids = r.fontes().map((f) => f.id);
     const sp = s[ids.indexOf('rotor.principal')], sc = s[ids.indexOf('rotor.cauda')];
     const bpf = A.picoEm(sp, SR, 3.5, 5, 8, 20, 4), fc = A.picoEm(sc, SR, 3.5, 5, 60, 130, 4);
-    out.push(L('5 #10', 'R44: BPF do rotor principal (medida)', '13,6 ± 0,05 Hz', `${f1(bpf, 3)} Hz (telemetria ${f1(tele.bpf as number, 3)})`, Math.abs(bpf - 13.6) <= 0.05));
-    out.push(L('5 #10', 'R44: BPF do rotor de cauda (medida)', '≈ 93 Hz', `${f1(fc, 1)} Hz`, Math.abs(fc - 93.3) <= 1.5));
+    out.push(L('5 #10', 'R44: BPF do rotor principal (medida)', '13,6 ± 0,05 Hz', `${f1(bpf, 3)} Hz (telemetria ${f1(tele.bpf as number, 3)})`, Math.abs(bpf - 13.6) <= 0.05, bpf, 'Hz'));
+    out.push(L('5 #10', 'R44: BPF do rotor de cauda (medida)', '≈ 93 Hz', `${f1(fc, 1)} Hz`, Math.abs(fc - 93.3) <= 1.5, fc, 'Hz'));
     // harmônicos: nível de cada h·BPF no espectro de 4 s
     const harm = (x: Float32Array, H: number) => {
       const nfft = 1 << 18;
@@ -92,8 +95,8 @@ export function medirPortadores(): Linha[] {
       return res;
     };
     const hp = harm(sp, 10), faixa1 = Math.max(...hp) - Math.min(...hp);
-    out.push(L('5 #10', 'R44 em pairado: harmônicos 1–10 da BPF', 'dentro de 20 dB', `${f1(faixa1)} dB`, faixa1 <= 20));
-    const r2 = new Rotor(SR); r2.comandar({ pedal: 1 });
+    out.push(L('5 #10', 'R44 em pairado: harmônicos 1–10 da BPF', 'dentro de 20 dB', `${f1(faixa1)} dB`, faixa1 <= 20, faixa1, 'dB'));
+    const r2 = semear(new Rotor(SR)); r2.comandar({ pedal: 1 });
     const s2 = rodar(r2, 6, undefined, true)[ids.indexOf('rotor.principal')];
     const h2 = harm(s2, 30).slice(9), faixa2 = Math.max(...h2) - Math.min(...h2);
     // curtose do sinal em 300–1000 Hz (tapa)
@@ -101,8 +104,8 @@ export function medirPortadores(): Linha[] {
     let m2 = 0, m4 = 0, nn = 0;
     for (let i = SR; i < s2.length; i++) { const y = f[1].run(f[0].run(s2[i])); m2 += y * y; m4 += y * y * y * y; nn++; }
     const curt = (m4 / nn) / ((m2 / nn) ** 2);
-    out.push(L('5 #10', 'R44 com coletivo 1,0: harmônicos 10–30', 'dentro de 15 dB', `${f1(faixa2)} dB`, faixa2 <= 15));
-    out.push(L('5 #10', 'R44 com coletivo 1,0: curtose em 300–1000 Hz (tapa)', '> 6', f1(curt, 1), curt > 6));
+    out.push(L('5 #10', 'R44 com coletivo 1,0: harmônicos 10–30', 'dentro de 15 dB', `${f1(faixa2)} dB`, faixa2 <= 15, faixa2, 'dB'));
+    out.push(L('5 #10', 'R44 com coletivo 1,0: curtose em 300–1000 Hz (tapa)', '> 6', f1(curt, 1), curt > 6, curt, ''));
     // droop: O-540 de bancada, coletivo 0,75 → 1,0 em 0,2 s
     const r3 = new Rotor(SR);
     const wN = (ROTOR_R44.Nr * ROTOR_R44.icx * 2 * Math.PI) / 60;
@@ -118,13 +121,13 @@ export function medirPortadores(): Linha[] {
     });
     const droop = 100 * (1 - nrMin / nr0);
     tMin -= 2; tRec -= 2;
-    out.push(L('5 #10', 'R44: droop ao puxar o coletivo (0,75 → 1,0 em 0,2 s)', '2–3% em ~1 s', `${f1(droop, 2)}% (mínimo ${f1(tMin - 3, 2)} s depois; volta a 99,5% em ${f1(tRec - 3, 2)} s)`, droop >= 2 && droop <= 3 && tMin - 3 < 1.5,
-      'Até 22/11/2026 dava 2,35% (mínimo 1,33 s depois, volta em 2,97 s). Com a potência do rotor corrigida (a figura de mérito 0,72 do CENA 4.3 contava o perfil duas vezes; agora κ 1,15 da teoria do momento modificada) e a tração caindo com Nr² (o rotor que perde giro pede menos), o mesmo puxão pede menos potência a mais e o motor de bancada (Tmax 900 N·m, atraso de torque de 1,1 s, que imita o O-540 com o correlacionador) cai 1,1% e volta em 1,35 s. O droop de 2–3% de 5.10 é o do R44 de verdade; o atraso do motor de bancada não foi reacertado para ele.'));
+    out.push(L('5 #10', 'R44: droop ao puxar o coletivo (0,75 → 1,0 em 0,2 s)', '2–3% em ~1 s', `${f1(droop, 2)}% (mínimo ${f1(tMin - 3, 2)} s depois; volta a 99,5% em ${f1(tRec - 3, 2)} s)`, droop >= 2 && droop <= 3 && tMin - 3 < 1.5, [droop, tMin - 3], ''));
     out.push(L('4.3', 'tabela de helicópteros: BPF B·Nr/60 e cauda', 'R44 13,6/93; R22 17,7/111; AS350 19,5/69,5; 206 13,1/85; UH-60 17,2/79,3; Mi-8 16,0/56,2',
       Object.entries(HELICOPTEROS).map(([id, h]) => `${id} ${f1((h.B * h.Nr) / 60, 1)}/${f1((h.Bc * h.rpmCauda) / 60, 1)}`).join('; '),
       // (a linha tinha `ok` fixo em true; agora confere a tabela contra os valores do CENA.md 4.3: ±0,1 Hz no principal, ±0,5 Hz na cauda)
       Object.entries(HELICOPTEROS).every(([id, h]) => { const a = ({ r44: [13.6, 93], r22: [17.7, 111], as350: [19.5, 69.5], b206: [13.1, 85], uh60: [17.2, 79.3], mi8: [16.0, 56.2] } as Record<string, number[]>)[id];
-        return !!a && Math.abs((h.B * h.Nr) / 60 - a[0]) <= 0.1 && Math.abs((h.Bc * h.rpmCauda) / 60 - a[1]) <= 0.5; })));
+        return !!a && Math.abs((h.B * h.Nr) / 60 - a[0]) <= 0.1 && Math.abs((h.Bc * h.rpmCauda) / 60 - a[1]) <= 0.5; }),
+      Object.values(HELICOPTEROS).map((h) => (h.B * h.Nr) / 60), 'Hz'));
   }
   // ---------------------------------------------------------- gerador: degrau de 50%
   {
@@ -140,16 +143,16 @@ export function medirPortadores(): Linha[] {
     });
     tRec = ultimoFora - 4;
     const queda = 100 * (1 - wMin / wN);
-    out.push(L('5 #10', 'gerador (500 kW, 1800 rpm): degrau de 50%', 'queda 4–8%, recupera a ±2% em < 3 s', `queda ${f1(queda, 1)}% (aos ${f1(tMin - 4, 2)} s), dentro de ±2% a partir de ${f1(tRec, 2)} s`, queda >= 4 && queda <= 8 && tRec < 3));
+    out.push(L('5 #10', 'gerador (500 kW, 1800 rpm): degrau de 50%', 'queda 4–8%, recupera a ±2% em < 3 s', `queda ${f1(queda, 1)}% (aos ${f1(tMin - 4, 2)} s), dentro de ±2% a partir de ${f1(tRec, 2)} s`, queda >= 4 && queda <= 8 && tRec < 3, [queda, tRec], ''));
     // alternador: 120 Hz em vazio e a plena carga
     const nivel120 = (fr: number) => {
-      const gg = new Gerador(SR); gg.comandar({ pedal: 0, cargaFracao: fr });
+      const gg = semear(new Gerador(SR)); gg.comandar({ pedal: 0, cargaFracao: fr });
       const s = rodar(gg, 2, undefined, true)[gg.fontes().findIndex((f) => f.id === 'alternador')];
       const P = A.espectro(s, SR, SR, 1 << 16); const k = Math.round((120 * (1 << 16)) / SR); let mm = 0; for (let j = -3; j <= 3; j++) mm = Math.max(mm, P[k + j]);
       return 10 * Math.log10(mm);
     };
     const d120 = nivel120(1) - nivel120(0);
-    out.push(L('5 #10', 'gerador: 120 Hz a plena carga − em vazio', '+8 ± 2 dB', `${f1(d120)} dB`, Math.abs(d120 - 8) <= 2));
+    out.push(L('5 #10', 'gerador: 120 Hz a plena carga − em vazio', '+8 ± 2 dB', `${f1(d120)} dB`, Math.abs(d120 - 8) <= 2, d120, 'dB'));
   }
   // ---------------------------------------------------------- locomotiva: notches
   {
@@ -157,7 +160,7 @@ export function medirPortadores(): Linha[] {
     const tab = NOTCH_RPM.emd710;
     const m = new MotorTeste({ familia: 'diesel', Tmax: 48000, J: 60, atrito: 2, tau: 0.3, omega0: (tab[0] * 2 * Math.PI) / 60 });
     loc.acoplar(m as Motor);
-    const erros: string[] = []; let okRpm = true, okPot = true;
+    const erros: string[] = [], errosRpm: number[] = [], errosPot: number[] = []; let okRpm = true, okPot = true;
     let t0n = 0, rampaMed = NaN, r1 = 0;
     const rpm = () => (m.eixo.omega * 60) / (2 * Math.PI);
     for (let notch = 1; notch <= 8; notch++) {
@@ -169,14 +172,15 @@ export function medirPortadores(): Linha[] {
       const e = (100 * (rpm() - tab[notch])) / tab[notch];
       // (a potência elétrica do gerador de tração: η·P no eixo, que a telemetria dá)
       const pe = (100 * ((loc.telemetria().potencia as number) / 1000 - NOTCH_POTENCIA[notch] * 3200)) / (NOTCH_POTENCIA[notch] * 3200);
+      errosRpm.push(e); errosPot.push(pe);
       if (Math.abs(e) > 1) okRpm = false;
       if (Math.abs(pe) > 3) okPot = false;
       erros.push(`N${notch} ${f1(rpm(), 0)} rpm (${f1(e, 2)}%)`);
     }
     void t0n;
-    out.push(L('5 #10', 'locomotiva EMD 710: rpm por notch (motor de bancada)', '±1%', erros.join(', '), okRpm));
-    out.push(L('5 #10', 'locomotiva: potência do gerador de tração por notch', '±3% (depois do atraso de 1,5 s)', okPot ? 'todas dentro' : 'fora', okPot));
-    out.push(L('5 #10', 'locomotiva: rampa de rotação', '100 rpm/s', `${f1(rampaMed, 1)} rpm/s`, Math.abs(rampaMed - 100) <= 2));
+    out.push(L('5 #10', 'locomotiva EMD 710: rpm por notch (motor de bancada)', '±1%', erros.join(', '), okRpm, errosRpm, '%'));
+    out.push(L('5 #10', 'locomotiva: potência do gerador de tração por notch', '±3% (depois do atraso de 1,5 s)', okPot ? 'todas dentro' : 'fora', okPot, errosPot, '%'));
+    out.push(L('5 #10', 'locomotiva: rampa de rotação', '100 rpm/s', `${f1(rampaMed, 1)} rpm/s`, Math.abs(rampaMed - 100) <= 2, rampaMed, 'rpm/s'));
   }
   return out;
 }

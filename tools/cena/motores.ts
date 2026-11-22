@@ -48,9 +48,7 @@ export function passagemAviao(id: string, vKmh: number, h: number, sNariz0: numb
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const REF = () => JSON.parse(fs.readFileSync(path.join(AQUI, 'referencias', 'legado.json'), 'utf8'));
 const f1 = (x: number, d = 1) => (Number.isFinite(x) ? x.toFixed(d) : String(x));
-const L = (passo: string, nome: string, alvo: string, medido: string, ok: boolean, desvio?: string): Linha => ({ passo, nome, alvo, medido, ok, desvio });
-/** índices das bandas de FAIXAS_PROJETO acima de 2,5 kHz */
-const FAIXAS_HF = [4, 5];
+const L = (passo: string, nome: string, alvo: string, medido: string, ok: boolean, valor?: number | number[], unidade?: string, ordem?: number): Linha => ({ passo, nome, alvo, medido, ok, valor, unidade, ordem });
 const mono = (a: Float32Array, b: Float32Array) => Float32Array.from(a, (v, i) => 0.5 * (v + b[i]));
 
 /** motor do Ronco pronto (calibrado como na página) */
@@ -90,11 +88,11 @@ export function medirMotores(): Linha[] {
     // instante (recepção) com o escape em x (o centro do carro fica 2,35 m à frente): t = (x + 2,35 + 180)/30 + r/c
     const tEm = (x: number) => (x + 2.35 + 180) / 30 + Math.hypot(x, 6, 1.25) / 343;
     const fa = A.picoEm(m, SR, tEm(-90), 0.25, 170, 250), fi = A.picoEm(m, SR, tEm(90), 0.25, 160, 230);
-    out.push(L('2.11', 'carro a 6 m pela Cena (Camaro SS adaptado): Doppler da ignição de 200 Hz', '219 ± 1 / 184 ± 1 Hz', `${f1(fa)} / ${f1(fi)} Hz (legado ${ref.carro.dopplerChegando} / ${ref.carro.dopplerIndo})`, Math.abs(fa - 219.2) <= 1 && Math.abs(fi - 183.9) <= 1));
+    out.push(L('2.11', 'carro a 6 m pela Cena (Camaro SS adaptado): Doppler da ignição de 200 Hz', '219 ± 1 / 184 ± 1 Hz', `${f1(fa)} / ${f1(fi)} Hz (legado ${ref.carro.dopplerChegando} / ${ref.carro.dopplerIndo})`, Math.abs(fa - 219.2) <= 1 && Math.abs(fi - 183.9) <= 1, [fa, fi], 'Hz'));
     const t0 = tEm(0);
     const ban = A.balanco([r.dL, r.dR], SR, Math.round((t0 - 0.25) * SR), Math.round((t0 + 0.25) * SR)).rel;
     const dif = ban.map((b, i) => b - ref.carro.bandasAbeam.relDb[i]);
-    out.push(L('2.11', 'carro a 6 m: bandas no instante abeam (dB rel. 150–400) contra o legado', '±1,5 dB por banda', `${ban.map((b) => f1(b)).join(' / ')} (Δ ${dif.map((b) => f1(b)).join(' / ')})`, dif.every((x) => Math.abs(x) <= 1.5)));
+    out.push(L('2.11', 'carro a 6 m: bandas no instante abeam (dB rel. 150–400) contra o legado', '±1,5 dB por banda', `${ban.map((b) => f1(b)).join(' / ')} (Δ ${dif.map((b) => f1(b)).join(' / ')})`, dif.every((x) => Math.abs(x) <= 1.5), dif, 'dB', Math.max(...dif.map(Math.abs))));
     // curva nível × x a cada 0,25 s (forma: relativa ao pico)
     const lf = A.nivelF(r.dL, r.dR, SR, 1, false, 480);
     // (sem o primeiro ponto, t = 1 s: transitório do começo do render nos dois)
@@ -108,7 +106,7 @@ export function medirMotores(): Linha[] {
     // a Cena soma a amplificação convectiva |1 − M·cosθ|^−2 (2.1), que o road() não tem: +0,8 dB chegando e −0,75 indo
     const ch = dc.filter((_, i) => c[i][0] < -10), id = dc.filter((_, i) => c[i][0] > 10);
     const med = (v: number[]) => v.reduce((a, b) => a + b, 0) / v.length;
-    out.push(L('2.11', 'carro a 6 m: curva nível × x (relativa ao pico) contra o legado sem o som de fundo', '±1 dB (rms)', `rms ${f1(rms, 2)} dB, máx ${f1(mx, 2)} dB; chegando ${f1(med(ch), 2)} dB, indo ${f1(med(id), 2)} dB (convecção a 30 m/s: 20·log₁₀((1 + M)/(1 − M)) = ${f1(20 * Math.log10((1 + 30 / 343) / (1 - 30 / 343)), 2)} dB)`, rms <= 1));
+    out.push(L('2.11', 'carro a 6 m: curva nível × x (relativa ao pico) contra o legado sem o som de fundo', '±1 dB (rms)', `rms ${f1(rms, 2)} dB, máx ${f1(mx, 2)} dB; chegando ${f1(med(ch), 2)} dB, indo ${f1(med(id), 2)} dB (convecção a 30 m/s: 20·log₁₀((1 + M)/(1 − M)) = ${f1(20 * Math.log10((1 + 30 / 343) / (1 - 30 / 343)), 2)} dB)`, rms <= 1, rms, 'dB'));
     if (process.env.DEPURA) console.log(c.map(([x], i) => `${f1(x, 0)}:${f1(dc[i])}`).join(' '));
   }
   // ------------------------------------------------------------ avião a 1500 m (737, 300 km/h, manete 0,85)
@@ -124,12 +122,11 @@ export function medirMotores(): Linha[] {
       // acima de 2,5 kHz a diferença é a do ar: a Cena tem dois polos em 1,554·f_c(r) (f_c(1500 m) = 680 Hz, 2.3) e o
       // flyby legado dois polos em 900 Hz (o piso de 14000·(60/(r + 60))^0,85); com o ar do legado a Cena fica a ±1,2 dB
       // de 60 Hz a 2,5 kHz (medido trocando só o corte). Os dois absorvem menos que a ISO (4 kHz a 1500 m: −50 dB).
-      const soAr = !ok && dif.every((x, i) => (FAIXAS_HF.includes(i) ? Math.abs(x) <= 4 : Math.abs(x) <= 2.2));
-      out.push(L('2.11', `avião a 1500 m pela Cena (737 adaptado): bandas ${nome}`, '±2 dB por banda (rel. 150–400)', `${b.map((x) => f1(x)).join(' / ')} (Δ ${dif.map((x) => f1(x)).join(' / ')})`, ok,
-        soAr ? 'Acima de 2,5 kHz a Cena fica mais clara que o flyby no ponto mais próximo: o ar dela (dois polos no f_c(r) da ISO, decisão de 2.3: 680 Hz a 1500 m) contra os dois polos em 900 Hz do legado (o piso da fórmula dele, igual a 1500 e a 1750 m). Trocando só o corte pelo do legado (sem solo) a diferença cai para ≤ 1,2 dB de 60 Hz a 2,5 kHz e 0,9 dB em 2,5–6 kHz; 10 s antes, os 2,1 dB em 60–150 Hz são o pente denso do solo (Δr ≈ 3 m) na janela de 2 s. 2.3 manda registrar: o legado vale por definição na etapa 1; os dois modelos absorvem bem menos que a ISO em 4 kHz a essa distância.' : undefined));
+      // (o teto embutido de antes, 4 dB acima de 2,5 kHz e 2,2 no resto, virou o retrato do desvio: tools/cena-desvios.json)
+      out.push(L('2.11', `avião a 1500 m pela Cena (737 adaptado): bandas ${nome}`, '±2 dB por banda (rel. 150–400)', `${b.map((x) => f1(x)).join(' / ')} (Δ ${dif.map((x) => f1(x)).join(' / ')})`, ok, dif, 'dB', Math.max(...dif.map(Math.abs))));
     }
     const abs = 10 * Math.log10(oit(tCima, 4000) / oit(tCima, 500));
-    out.push(L('2.11', 'avião a 1500 m pela Cena: 4 kHz rel. 500 Hz no ponto mais próximo', '≤ −20 dB', `${f1(abs)} dB (legado ${ref.aviao.oitava4kRel500})`, abs <= -20));
+    out.push(L('2.11', 'avião a 1500 m pela Cena: 4 kHz rel. 500 Hz no ponto mais próximo', '≤ −20 dB', `${f1(abs)} dB (legado ${ref.aviao.oitava4kRel500})`, abs <= -20, abs, 'dB'));
   }
   // ------------------------------------------------------------ estrondo (F-16, Mach 1,5, 200 m)
   {
@@ -147,7 +144,7 @@ export function medirMotores(): Linha[] {
     });
     for (let i = 0; i < r.dL.length; i++) pico = Math.max(pico, Math.abs(r.dL[i]));
     out.push(L('2.11', 'estrondo pela Cena (F-16 adaptado, M 1,5, 200 m): instante do cone, Δp e T de Carlson', `${e.tCone} s ± 1 ms; Δp ${e.dpPa} Pa, T ${e.duracaoS} s`,
-      `${f1(tCone, 4)} s; Δp ${f1(dp, 3)} Pa, T ${f1(T, 3)} s; pico na saída ${f1(pico, 2)} FS`, Math.abs(tCone - e.tCone) <= 0.001 && Math.abs(dp - e.dpPa) < 0.01 && Math.abs(T - e.duracaoS) < 0.001));
+      `${f1(tCone, 4)} s; Δp ${f1(dp, 3)} Pa, T ${f1(T, 3)} s; pico na saída ${f1(pico, 2)} FS`, Math.abs(tCone - e.tCone) <= 0.001 && Math.abs(dp - e.dpPa) < 0.01 && Math.abs(T - e.duracaoS) < 0.001, [tCone, dp, T], ''));
   }
   out.push(...medirHeliceIdentica());
   return out;
@@ -188,7 +185,7 @@ function heliceIdentica(lei: 'turbina' | 'carga'): Linha {
   let dif = 0, ref = 0, nd = 0;
   for (let i = 0; i < n; i++) { const e = Math.abs(y[i] - m.tap.tomHelice[i]); if (e > 0) nd++; dif = Math.max(dif, e); ref = Math.max(ref, Math.abs(y[i])); }
   return L('4.2 / 5 #10', `hélice idêntica: tom da hélice do JetDSP (Caravan, 6 s) × FonteHelice de carriers/helice.ts, lei ${lei === 'turbina' ? 'da Turbina' : 'de carga (Cena)'}`, 'idêntico amostra a amostra',
-    nd === 0 ? `idêntico (${n} amostras, pico ${f1(20 * Math.log10(ref / 2e-5))} dB a 30 m)` : `${nd} amostras diferentes, erro máx ${f1(20 * Math.log10(dif / ref + 1e-30))} dB rel. pico`, nd === 0);
+    nd === 0 ? `idêntico (${n} amostras, pico ${f1(20 * Math.log10(ref / 2e-5))} dB a 30 m)` : `${nd} amostras diferentes, erro máx ${f1(20 * Math.log10(dif / ref + 1e-30))} dB rel. pico`, nd === 0, nd, '');
 }
 
 
@@ -226,7 +223,8 @@ export function medirNiveisMotores(): Linha[] {
     const r = renderPassagem({ portadorPronto: c, v: 30, d: 6 - c.corpo.segmentos[0].largura / 2, ambiente: 'ceu', solo: 'asfalto', dur: 10, sCentro0: -150, reverb: false, semFundo: true });
     const n = niveis(r, 3, 8);
     const rpm = m.dsp.rpmAvg;
-    out.push(L('níveis', `carro a 6 m em carga (Camaro SS, 3ª, pé no fundo, 108 km/h, ${f1(rpm, 0)} rpm): L_AFmax`, '85–90 dB(A)', `${f1(n.max)} dB(A)`, n.max >= 85 && n.max <= 90));
+    // (o nome não leva mais a rotação, que muda com a semente: ela vai no medido)
+    out.push(L('níveis', 'carro a 6 m em carga (Camaro SS, 3ª, pé no fundo, 108 km/h): L_AFmax', '85–90 dB(A)', `${f1(n.max)} dB(A) (${f1(rpm, 0)} rpm)`, n.max >= 85 && n.max <= 90, n.max, 'dB'));
   }
   // ------------------------------------------------------------ Hilux em lenta
   {
@@ -238,8 +236,7 @@ export function medirNiveisMotores(): Linha[] {
     const n = niveis(r, 6, 9);
     const r2 = renderPassagem({ portadorPronto: (() => { const m2 = motorDiesel('hilux28', 'carro'), c2 = new CarroLegado(); c2.acoplar(m2); c2.comandar({ pedal: 0, ignicao: true, velocidadeFixa: 0 }); return c2; })(), v: 0, d: 7.5, ambiente: 'ceu', solo: 'asfalto', dur: 9, sCentro0: 0, reverb: false, semFundo: true });
     const n2 = niveis(r2, 6, 9);
-    out.push(L('níveis', `Hilux 2.8 em lenta (${f1(m.dsp.rpmAvg, 0)} rpm), parada, a 1 m atrás da ponteira: L_Aeq`, '~70 dB(A) (±3)', `${f1(n.eq)} dB(A) (a 7,5 m da lateral: ${f1(n2.eq)})`, Math.abs(n.eq - 70) <= 3,
-      'A picape usa a convenção do carro (DIESEL.md 6.3): DB_REF_RONCO em carga e a lenta 21 dB abaixo (calibração do Ronco). Com a referência em 95 dB, que põe o Camaro em carga a 6 m em 89 dB(A), a lenta da Hilux a 1 m fica 3 dB abaixo do alvo; com os 100 dB do CENA ficaria em 71,7 e o carro em 94. Os dois alvos pedem referências diferentes para gasolina e diesel leve, o que fica para quando houver gravações calibradas.'));
+    out.push(L('níveis', 'Hilux 2.8 em lenta, parada, a 1 m atrás da ponteira: L_Aeq', '~70 dB(A) (±3)', `${f1(n.eq)} dB(A) (${f1(m.dsp.rpmAvg, 0)} rpm; a 7,5 m da lateral: ${f1(n2.eq)})`, Math.abs(n.eq - 70) <= 3, n.eq, 'dB'));
   }
   // ------------------------------------------------------------ locomotiva EMD em N8 a 15 m
   {
@@ -248,8 +245,7 @@ export function medirNiveisMotores(): Linha[] {
     p.comandar({ pedal: 0, ignicao: true, notch: 8, velocidadeFixa: 0 });
     const r = renderPassagem({ portadorPronto: p, v: 0, d: 15, ambiente: 'ceu', solo: 'brita', dur: 22, sCentro0: 0, reverb: false, semFundo: true });
     const n = niveis(r, 18, 22);
-    out.push(L('níveis', `locomotiva EMD SD70ACe em N8 (${f1(m.dsp.rpmAvg, 0)} rpm), parada, a 15 m: L_Aeq`, '~95 dB(A) (±3; 40 CFR 201: 87 dB(A) a 30 m parada)', `${f1(n.eq)} dB(A)`, Math.abs(n.eq - 95) <= 3,
-      'O escape está no L_W 128 dB(A) do DIESEL.md 6.3 (103 dB(A) a 5 m, conferido canal a canal). A 15 m a chaminé, 0,5 m acima do teto, fica rasante à borda da caixa (4,7 m): a sombra (Maekawa, 2.5) tira ~4 dB (sem sombra: 92,6 dB(A)); o resto é a distância real da chaminé (17 m) e o solo de brita, que reflete pouco acima de 800 Hz. O limite da 40 CFR 201 é medido a 30 m, onde o ângulo sobre a borda é mais aberto.'));
+    out.push(L('níveis', 'locomotiva EMD SD70ACe em N8, parada, a 15 m: L_Aeq', '~95 dB(A) (±3; 40 CFR 201: 87 dB(A) a 30 m parada)', `${f1(n.eq)} dB(A) (${f1(m.dsp.rpmAvg, 0)} rpm)`, Math.abs(n.eq - 95) <= 3, n.eq, 'dB'));
   }
   // ------------------------------------------------------------ ATR 72 em decolagem a 100 m
   {
@@ -261,8 +257,7 @@ export function medirNiveisMotores(): Linha[] {
     const x0 = 900, dur = x0 / 60 + 100 / 343 + 6;
     const r = renderPassagem({ portadorPronto: h, v: 60, d: 0, altitude: 100 - mt.fontes[0].pos[2], ambiente: 'ceu', solo: 'grama', dur, sCentro0: -x0, reverb: false, semFundo: true, comprimentoVia: 6000 });
     const n = niveis(r, x0 / 60 - 6, x0 / 60 + 6);
-    out.push(L('níveis', 'ATR 72 em decolagem (manete 1, 60 m/s) a 100 m de altura: L_AFmax', '~85 dB(A) (±3; certificação de ruído ICAO/EASA do ATR 72: ~84 EPNdB no ponto lateral a 450 m)', `${f1(n.max)} dB(A)`, Math.abs(n.max - 85) <= 3,
-      'Na Cena a hélice do turboélice segue a física (tom de carga de Gutin com o torque dos 2 051 kW de decolagem do PW127M, e o ruído de vórtice; src/carriers/leis-helice.ts): 105 dB a 30 m por motor, contra os 113 da lei do JetDSP, que deu 95,0 dB(A) aqui até 22/11/2026. Fica 0,3 dB acima da faixa: o alvo vem de 84 EPNdB a 450 m, e a conversão de EPNdB para dB(A) numa hélice de tom grave tem uns ±3 dB; o resto do nível é o jato e o gerador de gás do JetDSP, que nunca foram calibrados em absoluto (o 737 no mesmo modelo dá 112,5 dB a 30 m por barramento). A página Turbina continua com a lei dela.'));
+    out.push(L('níveis', 'ATR 72 em decolagem (manete 1, 60 m/s) a 100 m de altura: L_AFmax', '~85 dB(A) (±3; certificação de ruído ICAO/EASA do ATR 72: ~84 EPNdB no ponto lateral a 450 m)', `${f1(n.max)} dB(A)`, Math.abs(n.max - 85) <= 3, n.max, 'dB'));
   }
   return out;
 }

@@ -22,6 +22,7 @@
     "navegador:turbina": "node tools/servir-dist.mjs node tools/turbina-testa-navegador.mjs {url}/turbina.html",
     "navegador:passagem": "node tools/passagem-navegador.mjs",
     "teste:cena": "tsx tools/cena/valida.ts",
+    "cpu:cena": "tsx tools/cena/cpu.ts",
     "teste:passagem": "tsx tools/passagem-presets.ts",
     "teste:diesel": "tsx tools/diesel-valida.ts",
     "lenta:diesel": "tsx tools/diesel-lenta.ts",
