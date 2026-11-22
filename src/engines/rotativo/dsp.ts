@@ -675,7 +675,8 @@ export class RotativoDSP extends EngineDSP {
     t.pAbertura = this.pEO[0]; t.tAbertura = this.TEO[0]; t.machAbertura = this.MjEO[0]; t.densMax = this.densMax;
     t.queima1090 = 0.496 * (42 + 26 * rf) * slowB * this.kBurn;
     t.falha = this.falhaBase; t.residual = this.xRes.reduce((a, b) => a + b, 0) / Math.max(1, this.N); t.fumaca = this.fumaca; t.vedacoes = this.gastas ? 'gastas' : 'novas';
-    t.traco = Array.from(this.traco, (x) => Math.round(x / 100) / 10); // bar, 64 pontos do ciclo da câmara 0
+    // (o traço guarda Pa; 1 bar = 1e5 Pa. Dividia por 1 000 e chamava de bar: o mostrador dava 804 "bar" na lenta)
+    t.traco = Array.from(this.traco, (x) => Math.round(x / 1e4) / 10); // bar com uma casa, 64 pontos do ciclo da câmara 0
     t.pPico = Math.max(...t.traco);
   }
 }
