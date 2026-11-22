@@ -482,19 +482,19 @@ cinco hipóteses em `TECNICO.md` → Médios):
 | Mudança | Campo / controle | Por quê |
 |---|---|---|
 | Carcaça do escape | `carcaca` (dB) · "Carcaça do escape", em Escapamento | A parede dos tubos e do abafador responde à onda que passa por dentro e irradia em 0,5–2,5 kHz. Filtro fixo sobre onda periódica: sai em linhas |
-| Batida periódica | `batida` (dB) · "Batida da mecânica", em Características | Pistão e válvulas dão o mesmo impacto todo ciclo; o bloco responde em 0,75–2,1 kHz. Cresce com a rotação, quase não depende da carga: enche os médios onde o escape não tem |
+| Batida periódica | `batida` (dB) · "Batida da mecânica", em Características | Pistão e válvulas dão o mesmo impacto todo ciclo; o bloco responde em 0,75–1,8 kHz. Cresce com a rotação, quase não depende da carga: enche os médios onde o escape não tem |
 | Bomba de ar secundário | `bombaAr` · "Bomba de ar secundário", em Temperatura | Os dois senos parados (760 e 1520 Hz) viram um zumbido de linha larga; o Mustang GT não tem a bomba |
 
 **Resultado** (linhas em dB relativos a 150–400 Hz; antes → agora; gravação):
 
 | | 400 Hz–1 kHz | 1–2,5 kHz | 2,5–6 kHz |
 |---|---|---|---|
-| Fusca, 1410 rpm | −10,0 → −5,9 (real −5,2) | −23,9 → −5,9 (real −7,1) | −21,7 → −13,6 (real −9,7) |
-| Hellcat, lenta quente | −23,8 → −22,1 (real −25,2) | −34,8 → −28,4 (real −31,2) | −53,0 → −41,7 (real −45,2) |
-| Mustang frio, 1251 rpm | −19,5 → −18,7 (real −5,1) | −39,1 → −33,5 (real −18,8) | sem linha no real |
-| Camaro, 2500 rpm em carga parcial | −11,2 → −10,0 | −34,3 → −24,1 | −54,3 → −37,8 |
-| Golf GTI, 2500 rpm em carga parcial | −20,2 → −17,9 | −35,6 → −23,5 | −51,1 → −37,2 |
-| S2000, plena carga a 6500 rpm | +8,5 → +10,5 | +7,1 → +9,7 | −7,4 → −6,9 |
+| Fusca, 1410 rpm | −10,0 → −6,4 (real −5,2) | −23,9 → −8,2 (real −7,1) | −21,7 → −19,1 (real −9,7) |
+| Hellcat, lenta quente | −23,8 → −23,1 (real −25,2) | −34,8 → −29,3 (real −31,2) | −53,0 → −46,3 (real −45,2) |
+| Mustang frio, 1251 rpm | −19,5 → −20,2 (real −5,1) | −39,1 → −34,4 (real −18,8) | sem linha no real |
+| Camaro, 2500 rpm em carga parcial | −11,2 → −11,5 | −34,3 → −25,5 | −54,3 → −43,0 |
+| Golf GTI, 2500 rpm em carga parcial | −20,2 → −18,1 | −35,6 → −24,9 | −51,1 → −42,2 |
+| S2000, plena carga a 6500 rpm | +8,5 → +7,4 | +7,1 → +9,9 | −7,4 → −7,3 |
 
 **Erros que quase custaram rodadas:**
 
@@ -506,18 +506,23 @@ cinco hipóteses em `TECNICO.md` → Médios):
 - **A primeira carcaça era um passa-faixa em 620 Hz.** Deixava passar 300 Hz, onde o pulso é forte, e não chegava a
   1–2,5 kHz. A física da parede (rígida abaixo da ressonância: 12 dB por oitava) dá o passa-alta ressonante.
 - **A primeira batida subia o agudo.** Com um modo em 2,8 kHz e sem corte, as linhas de 2,5–6 kHz subiam 20 dB na
-  lenta. Corte em 2,2 kHz e impacto ∝ rotação^1,5: na lenta ela quase some.
+  lenta. Corte em 1,7 kHz e impacto ∝ rotação^1,5: na lenta ela quase some.
+- **Duas fontes coerentes se cancelam.** A carcaça responde em contrafase com a boca abaixo da ressonância da parede: no
+  Fusca, cujo abafador já tira 7 dB em 300 Hz, ela cancelava 1,8 dB de 150–400 Hz. Só apareceu comparando o nível
+  absoluto por banda, antes × depois (a normalização pela âncora escondia). Uma caixa pequena irradia mal o grave: entrou.
 - **O tom parado de 1520 Hz do Mustang** saía do código como hipótese (2º harmônico da bomba de ar). Confirmar é
   desligar a fonte com a mesma semente: os tons de 760 e 1520 Hz caem 19 dB, até o piso.
-- **Número que bate não prova o caráter.** As linhas do Fusca ficaram a 1–4 dB da gravação, mas a batida periódica é a
+- **Número que bate não prova o caráter.** As linhas do Fusca ficaram a 1 dB da gravação até 2,5 kHz, mas a batida periódica é a
   terceira tentativa do "clec clec" (as duas primeiras, rajada de ruído ampliada e ressonância estreita, o ouvido
   rejeitou). Por isso ela tem controle próprio e posição legada.
 
 **Pendente:**
 
-- **Mustang frio:** continua 13–15 dB abaixo em 400 Hz–2,5 kHz. O motor real está no aquecimento do catalisador, com a
+- **Mustang frio:** continua 15–16 dB abaixo em 400 Hz–2,5 kHz. O motor real está no aquecimento do catalisador, com a
   queima invadindo o escape; o pulso chega à ponteira com a frente muito mais íngreme. Falta essa queima no tubo.
-- **400 Hz–1 kHz** subiu pouco (+1 a +4 dB): a parede e o bloco respondem acima disso. Quem quiser mais sobe a carcaça.
+- **400 Hz–1 kHz** quase não mudou (±1 dB com abafador esportivo, +1 a +3 dB com o original e o antigo): a parede e o
+  bloco respondem acima disso. O ganho está em 1–2,5 kHz (+2 a +7 dB em carga leve; +10 a +29 dB nos carros de
+  abafador original). Ponderado A, os médios da carga leve continuam bem abaixo dos das gravações.
 - **Fórmula 1:** as gravações de bordo têm a ordem 2 (~600 Hz) onde o simulado tem a ignição. É a posição da câmera.
 - **Carga parcial e motor solto não têm gravação casada.** Tudo o que se diz deles aqui é contra o som de antes.
 
