@@ -1,6 +1,6 @@
 // Auditoria de nível e de robustez do áudio de todas as famílias, fora do navegador (docs/AUDITORIA.md, frentes 5 e 6).
 //
-//   npx tsx tools/auditoria-som.ts [familias separadas por vírgula] [--niveis] [--extremos] [--taxas] [--trocas] [--gc]
+//   npx tsx tools/auditoria-som.ts [familias separadas por vírgula] [--niveis] [--extremos] [--taxas] [--trocas] [--gc] [--cpu]
 //                                  [--json arquivo]
 //
 // Sem opções roda tudo (uns 10 min; uma família por processo, em paralelo). É relatório, não portão: sai com código
@@ -19,6 +19,8 @@
 //   --taxas     2 presets por família a 44,1 e 96 kHz contra 48 kHz (nível de lenta e de carga).
 //   --trocas    troca de preset a cada 0,4 s com o motor rodando, todos os presets da família em sequência.
 //   --gc        10 s de carga com `node --trace-gc`: coletas de lixo durante o áudio (alocação no laço).
+//   --cpu       custo de cada preset em carga, uma família de cada vez (mediana e p99 de relógio por bloco): é a
+//               medida de CPU que vale; rode com a máquina parada.
 //
 // Escalas: Ronco, Turbina, Diesel, Radial e Rotativos saem normalizados (calibração + `tanh`), como no worklet de
 // cada página. Vapor e Elétrico saem em pressão (Pa a 7,5 m, somando as fontes do motor/portador, sem a Cena): aqui
@@ -173,7 +175,7 @@ const FAMILIAS: Record<string, Familia> = {
 };
 
 // ------------------------------------------------------------------ medidas
-type Medida = { dbA: number; pico: number; acima: number; nan: number; cpu?: number; p99?: number; rpm?: number };
+type Medida = { dbA: number; pico: number; acima: number; nan: number; cpu?: number; med?: number; p99?: number; rpm?: number };
 const db = (x: number) => 20 * Math.log10(Math.max(x, 1e-12));
 function medir(m: Maquina, fs: number, espera: number, dur: number, cpu = false): Medida {
   const L = new Float32Array(B), R = new Float32Array(B), pa = new PonderacaoA(fs);
@@ -203,7 +205,7 @@ function medir(m: Maquina, fs: number, espera: number, dur: number, cpu = false)
   tempos.sort((a, b) => a - b);
   const escala = (fs / 48000) / QUANTUM_MS * 100;
   return { dbA: db(Math.sqrt(soma / Math.max(1, n))), pico, acima: acima / Math.max(1, n + nan), nan,
-    ...(cpu ? { cpu: mediaMs * escala, p99: tempos[Math.floor(tempos.length * 0.99)] * escala } : {}), rpm: m.rpm?.() };
+    ...(cpu ? { cpu: mediaMs * escala, med: tempos[Math.floor(tempos.length * 0.5)] * escala, p99: tempos[Math.floor(tempos.length * 0.99)] * escala } : {}), rpm: m.rpm?.() };
 }
 const mediana = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : NaN; };
 
@@ -284,6 +286,15 @@ function rodarFamilia(nome: string, etapas: Set<string>) {
       }
     });
   }
+  if (etapas.has('cpu')) { // (o pai roda uma família de cada vez: nada mais disputando o processador)
+    res.cpu = [];
+    for (const id of F.ids) tenta(id, [], () => {
+      const m = F.montar(id, 48000)!;
+      m.carga();
+      const c = medir(m, 48000, F.assenta[1], 4, true);
+      res.cpu.push({ id, med: c.med, p99: c.p99, cpu: c.cpu });
+    });
+  }
   if (etapas.has('gc')) { // (o pai roda este filho com --trace-gc e conta as linhas entre as marcas)
     const m = F.montar(F.ids[Math.floor(F.ids.length / 2)], 48000)!, L = new Float32Array(B), R = new Float32Array(B);
     m.carga();
@@ -346,6 +357,10 @@ function relatorio(todos: any[]) {
       console.log(`\nTroca rápida de preset: ${r.trocas.n} trocas a cada 0,4 s com o motor em carga: ${r.trocas.problemas.length ? '' : 'sem NaN nem exceção.'}`);
       for (const p of r.trocas.problemas) { console.log(`- ${p}`); if (/NaN|exceção/.test(p)) ruim++; }
     }
+    if (r.cpu) {
+      const ord = [...r.cpu].sort((a: any, b: any) => b.med - a.med);
+      console.log(`\nCPU em carga, uma família de cada vez (bloco de 128 amostras a 48 kHz; % do quantum de 2,67 ms; mediana e p99 de relógio): os três mais caros: ${ord.slice(0, 3).map((x: any) => `${x.id} ${f1(x.med)} % (p99 ${f1(x.p99)} %)`).join(', ')}. Margem do pior: ${f1(100 / ord[0].med)}× na mediana, ${f1(100 / ord[0].p99)}× no p99. Mediana da família: ${f1(mediana(r.cpu.map((x: any) => x.med)))} %.`);
+    }
     if (r.gc) console.log(`\nColeta de lixo em 10 s de carga (${r.gc.preset}): ${r.gc.coletas} coleta(s)${r.gc.coletas ? `, ≈ ${r.gc.alocadoMB.toFixed(0)} MB alocados, ${r.gc.pausaMs.toFixed(1)} ms de pausa no total, maior ${r.gc.maiorMs.toFixed(2)} ms` : ' (não aloca no laço)'}.`);
   }
   return ruim;
@@ -353,7 +368,7 @@ function relatorio(todos: any[]) {
 
 // ------------------------------------------------------------------ CLI
 const args = process.argv.slice(2);
-const ETAPAS = ['niveis', 'extremos', 'taxas', 'trocas', 'gc'];
+const ETAPAS = ['niveis', 'extremos', 'taxas', 'trocas', 'gc', 'cpu'];
 const pedidas = ETAPAS.filter((e) => args.includes('--' + e));
 const etapas = new Set(pedidas.length ? pedidas : ETAPAS);
 if (args[0] === '--filho') rodarFamilia(args[1], new Set(args[2].split(',')));
@@ -373,7 +388,7 @@ else {
   });
   (async () => {
     const t0 = Date.now();
-    const semGc = [...etapas].filter((e) => e !== 'gc');
+    const semGc = [...etapas].filter((e) => e !== 'gc' && e !== 'cpu');
     const todos = await Promise.all(nomes.map(async (nome) => {
       const r = semGc.length ? (await filho(nome, semGc)).res : { familia: nome, escala: FAMILIAS[nome].escala };
       if (etapas.has('gc')) {
@@ -390,6 +405,8 @@ else {
       }
       return r;
     }));
+    // CPU: depois de tudo, uma família de cada vez, para o relógio não medir a disputa entre os processos deste teste
+    if (etapas.has('cpu')) for (const r of todos) r.cpu = (await filho(r.familia, ['cpu'])).res.cpu;
     console.log(`# Auditoria de nível e robustez (${nomes.join(', ')}; ${[...etapas].join(', ')}; ${((Date.now() - t0) / 1000).toFixed(0)} s)`);
     const ruim = relatorio(todos);
     if (iJson >= 0) fs.writeFileSync(args[iJson + 1], JSON.stringify(todos, null, 1));

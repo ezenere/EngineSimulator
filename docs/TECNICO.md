@@ -1219,7 +1219,7 @@ As funções de aviação moram em `src/engines/ronco/aviacao.ts` (`instalarAvia
 | bandas lenta 9 cil. a 12 m (Yak-52) | +4 / −6 / −15 / −14 | +9,7 / −8,8 / −12,8 / −13,7 (**desvio** no grave) |
 | bandas lenta 9 cil. a 4 m (T-6G) | +12 / −1 / +2 / 0 | 0 / −0,7 / +2,9 / +2,5 (**desvio** no grave) |
 | bandas lenta 18 cil. estaques a 8 m (Corsair) | −4 / −5 / −9 / −14,5 | +1,1 / −10,6 / −12,6 / −12,6 (**desvio**) |
-| bandas lenta 7 cil. a 4 m (Rotec) | +3 / −8 / −4 / −6 | +10,2 / +0,7 / +3,1 / +1,7 (**desvio**) |
+| bandas lenta 7 cil. a 4 m (Rotec) | +3 / −8 / −4 / −6 | −1,3 / +1,0 / +3,3 / +1,8 (**desvio**; com o redutor 3:2 da ficha corrigida na auditoria: antes, com a hélice direta, o grave dava +10,2) |
 | bandas decolagem Yak (75 m), T-6 (50 m), Corsair (150 m) | ver 4.1 | grave da BPF 3–11 dB acima, agudo 4–10 dB abaixo (**desvio**) |
 | centroides (lenta DC-3, Yak, P-47, Corsair; decolagem T-6) | ±30% | 360 / 351 / 365 / 375 / 794 Hz |
 | R-2800 estaques na lenta: 4,5ª contra a 9ª · P-47: 9ª contra a 4,5ª | ≥ −3 · ≥ 0 dB | +2,6 · +24,5 dB |
