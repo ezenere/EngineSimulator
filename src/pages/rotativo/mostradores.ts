@@ -8,7 +8,7 @@
 //    janelas secundárias, pressão de pico; no motor de palhetas, a rotação, a pressão, a passagem de palheta e o hospedeiro.
 import type { ControleRotativo } from './controle';
 import { Mostradores } from '../ronco/mostradores';
-import { escreverLeiturasAv } from '../comum/Aviacao';
+import { escreverLeiturasAv, fumacaDaPartida } from '../comum/Aviacao';
 
 const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
 
@@ -164,6 +164,6 @@ export class MostradoresRot {
     if (t.pPico !== undefined) set('roPico', `${n1(t.pPico)} bar`);
     set('roSeq', t.boostSec ? `secundário ${n0(100 * t.boostSec)}% · ${n1(t.boost || 0)} bar` : '—');
     set('roApv', t.apv && t.apv.length ? t.apv.map((x: number, i: number) => `${i ? 'auxiliar' : 'secundária'} ${x ? 'aberta' : 'fechada'}`).join(' · ') : '—');
-    set('roFumaca', t.fumaca > 0.02 ? `fumaça azul ${n0(100 * t.fumaca)}%` : '—');
+    set('roFumaca', fumacaDaPartida(t.fumaca));
   }
 }

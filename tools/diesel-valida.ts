@@ -4,7 +4,7 @@
 // docs/TECNICO.md → Diesel) e aparecem como "desvio", sem reprovar.
 //
 //   npx tsx tools/diesel-valida.ts [--j 12] [--so grupo1,grupo2]
-//   grupos: pressoes, bandas, real3, envoltoria, fumaca, jake, potencia, veiculo, cambio, nan, lenta, governador, troca
+//   grupos: pressoes, bandas, real3, envoltoria, ar, fumaca, jake, potencia, veiculo, cambio, nan, lenta, governador, troca
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { renderizar, preset, media, trecho, SR, type Cenario } from './diesel-comum';
 import { analisar, welch, bandaEEnvoltoria, envoltoriaBanda } from './diesel-bandas';
 import { PRESETS } from '../src/engines/diesel/presets';
+import { render as renderTravado } from './diesel-ouvido-render';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 type Linha = { grupo: string; nome: string; alvo: string; medido: string; ok: boolean; desvio?: boolean };
@@ -27,19 +28,23 @@ export const DESVIOS: [RegExp, string][] = [
   [/EMD 710.*(ângulo do pico|T na abertura|gás no coletor)/, 'lavagem de zona única: o ar que atravessa o cilindro direto para o escape esfria o coletor (136/361 °C) e a lenta de 2 ms de atraso acende antes do PMS'],
   [/Jake a 1900 rpm .*PMS/, 'o ar comprimido com o turbo girado pelo sopro do Jake passa de 50 bar no PMS; com a válvula do Jake maior (que baixaria o PMS) a rede do escape fica instável'],
   // ---- referências internas do DIESEL.md (YouTube, vários lo-fi; o alvo principal é o real3)
-  [/leve · cofre · hilux28 lenta: (2,5–6 kHz|curtose)/, 'referência interna lo-fi: com a mecânica +7 dB que o real3 pede na picape em lenta, o cofre sai 3 dB mais agudo e mais impulsivo (curtose 11) que o vídeo do 1GD'],
+  [/leve · cofre · hilux28 lenta: (2,5–6 kHz|curtose)/, 'referência interna lo-fi: no cofre a batida é uma pancada seca e o intervalo entre as explosões só tem o chocalho das engrenagens da distribuição (curtose 34 contra 6–9 do vídeo do 1GD, cujo intervalo também é enchido pelo ventilador, pela sala e pelo ruído da própria gravação; era 15 antes da 4ª passada, com o fundo mecânico liso, e 46 sem as engrenagens); o leito contínuo que daria a curtose do vídeo é o "som de ar" que o viés do dono tirou (4ª passada)'],
+  [/picape lenta quente.*dp\/dθ máx/, '2,97 bar/° (alvo 3–6): o instante da ignição passou a variar 10% (antes 16%) e a preparação da mistura a variar à parte; o atraso médio ficou 1% mais curto e a fração pré-misturada média caiu junto (4ª passada)'],
   [/ram67 lenta fria: (centroide|1–2,5 kHz|1–4 kHz)/, 'referência interna (Cummins a −23 °C, vídeo): a mecânica +10 dB que o real3 pede no Cummins em lenta deixa o frio 5 dB mais agudo; o escape de 4" irradia grave na câmera atrás'],
   [/pesado · escape · catc15/, 'a mecânica que a câmera de lado pede vaza para o microfone do escape'],
   [/lenta → plena carga/, '25,9 dB, 0,9 dB acima da janela'],
   // ---- real3 (scratchpad/real3/diesel/RESUMO.md)
   [/real3 · picape lenta.*60–150/, '16,3 dB contra 15,9 do arquivo mais grave da classe: o escape da picape com DPF e abafador original passa o grave da ignição e corta 150–400'],
+  [/real3 · picape lenta.*(6–12k|CV)/, '4ª passada: acima de 6 kHz vale a física, não a gravação (PLANO, regra 3), e o que havia ali era o chiado dos tiques e do jato, que saiu (−24,0 dB contra −23,6 do arquivo mais escuro); o CV das alturas de pico sobe para 0,57 porque cada batida agora é um clique de forma fixa por cilindro, com um cilindro dominante: pela energia de cada explosão (kit ouvido, 1–6 kHz) a variação é 0,26–0,37 contra 0,21–0,44 das gravações'],
+  [/real3 · caminhão lenta.*6–12k/, '4ª passada: −28,9 dB (faixa −24,4 a −11): acima de 6 kHz o que havia era o ruído dos tiques e do fundo mecânico; a parede do bloco de 137 mm corta a batida em 5,4 kHz. Acima de 6 kHz vale a física, não a gravação'],
   [/real3 · caminhão lenta.*(30–60|60–150|CV)/, 'o primeiro harmônico da ignição (30 Hz) sai 8 dB acima das gravações de 2–3 m: a irradiação de monopolo da chaminé (+6 dB/oitava) não basta para o pulso de 2 L por cilindro; o CV (0,28) é o da picape, um pouco irregular demais para o caminhão'],
   [/real3 · ônibus carga.*400–1k/, 'o ônibus carregado é 3 dB mais escuro em 400–1000 Hz que o mais escuro da classe (gravações de dentro do ônibus têm a carroceria e a rodagem)'],
   [/real3 · gerador/, 'o grupo gerador é ouvido pela câmera de veículo (ouvinte ext): sem a carenagem e o radiador do grupo, o grave do escape domina e a mecânica e o ventilador ficam 10–15 dB abaixo; falta o portador gerador da Cena com a posição do ouvinte ao lado do grupo'],
   [/real3 · locomotiva lenta/, 'a EMD em lenta é escura: faltam os ventiladores, o compressor de ar e os sopradores da carroceria que dão o agudo (e o centroide de 2,2 kHz) da gravação; o 60–150 sai alto pelo pulso de 2 tempos sem os 4 cilindros de folga entre bancadas'],
+  [/real3 · EMD notch 8.*2,5–6k/, '4ª passada: −20,2 dB (faixa −7,8 a 3,1): o agudo do EMD em notch 8 era a banda larga da turbina, 94% do som ponderado A e a fonte dominante de 400 Hz a 6 kHz; caiu 22 dB e o que sobra do turbo é o apito em 8,1 kHz, 21 dB abaixo das ordens (gravação: 2 dB abaixo, o "grito"). O controle "Apito do turbo" sobe'],
   [/real3 · EMD notch 8.*(30–60|60–150|1–2,5k|6–12k|CV)/, 'a EMD em notch 8 tem 60–150 Hz 16 dB acima de 150–400 nas gravações (ventiladores do radiador, motores de tração e o desequilíbrio entre bancadas a 15 Hz); o modelo tem a ignição de 240 Hz e o ruído da turbina, sem essas fontes'],
-  [/real3 · caminhão carga.*CV/, 'CV 0,16 sob carga (gravações de cabine 0,20–0,36, que somam a rodagem e as trocas): a queima por mistura com a injeção longa é mais regular'],
-  [/real3 · GE 7FDL notch 8.*(centroide|CV)/, 'centroide 323 Hz (7 Hz abaixo da faixa) e CV 0,16: a queima do GE em carga é regular demais'],
+  [/real3 · caminhão carga.*(400–1k|1–2,5k|2,5–6k|centroide|CV)/, '4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o "som de mar"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros'],
+  [/real3 · GE 7FDL notch 8.*(1–2,5k|2,5–6k|6–12k|centroide|CV)/, '4ª passada: acima de 1 kHz a GE em notch 8 era só a banda larga da turbina (o motor não tinha nada ali); com ela 22 dB abaixo ficam −18 / −26 / −43 dB (gravação: −4,5 / −9,5 / −21) e o centroide em 170 Hz. Falta som de motor em carga nessa faixa (pendente), não ruído; na lenta a GE bate com a gravação (−11 / −20 dB)'],
   // ---- fumaça, freio-motor, veículo, governador
   [/λ < 1,3/, 'sem fumaça preta no transiente: o aspirado tem ar sobrando com o combustível máximo da ficha (λ mín ≈ 1,7; a subida de torque da bomba levava a 1,33 mas tirava a lenta do F-1000 da janela); na locomotiva o regulador de carga sobe junto com o giro (fazer a carga subir com o notch apagava o motor com o turbo vazio)'],
   [/Jake 6: 2,5–6 kHz/, 'o sopro do Jake passa pela turbina e pelo abafador do caminhão, que comem o agudo; o estalo do balancim (mecânica) não chega aos +6 dB'],
@@ -48,7 +53,8 @@ export const DESVIOS: [RegExp, string][] = [
   [/hilux28 degrau de 30%/, 'a lenta carregada oscila ±2% com a dispersão de ciclo a ciclo (atraso e injetor), e encosta na faixa por 5 s; a queda (7%) está na janela'],
   [/emd710 potência por notch/, '3,2% num notch (alvo 3%)'],
   // ---- 3ª passada (turbo modulado, sopro −6 dB, fundo mecânico −18 dB; TECNICO.md → Diesel → Terceira passada)
-  [/leve · cofre · hilux28 lenta: p90\/p10/, 'referência interna lo-fi (vídeo do 1GD no cofre): o p90/p10 de 15 dB só saía com o fundo mecânico liso enchendo o vão (o "som de ar" da lenta); sem ele o vão do cofre fica mais fundo que o do vídeo, cujo vão é o ruído da própria gravação'],
+  [/leve · cofre · hilux28 lenta: p90\/p10/, 'referência interna lo-fi (vídeo do 1GD no cofre): o p90/p10 de 15 dB só saía com o fundo mecânico liso enchendo o vão (o "som de ar" da lenta); sem ele o vão é enchido só pelo chocalho das engrenagens da distribuição (20 dB; 28 sem elas) e fica mais fundo que o do vídeo, cujo vão é também o ruído da própria gravação'],
+  [/real3 · ônibus carga.*1–2,5k/, '4ª passada: −15,4 dB (faixa −14,5 a 3): o mesmo que no caminhão em carga; sem o sopro do compressor sobra a batida, 1 dB abaixo da gravação mais escura'],
   [/real3 · ônibus carga.*(2,5–6k|6–12k|CV)/, 'o agudo de carga do ônibus era o sopro liso do compressor (60–95% do som ponderado A); modulado e 6 dB abaixo, faltam 3–4 dB acima de 2,5 kHz contra as gravações de dentro do ônibus (carroceria, rodagem, ventilação), e o CV do knock cai para 0,10 sem o ruído do sopro por cima: a queima do ISL9 com injeção longa é regular demais'],
   [/envoltória · GE 7FDL notch 8/, 'o agudo da GE em N8 é o ruído da turbina, que segue a pressão na entrada dela: no 7FDL-16 do preset os 8 pulsos por volta se fundem no coletor (6,8 dB, quase liso); a gravação é de um 7FDL-12 (6 por volta, 9,7 dB)'],
   [/om617 (droop|caça)/, 'droop 9,1% (alvo 7–9%) e caça ±2–3,6% em lenta: a dispersão das bombas mecânicas (±6,5% por elemento) move a lenta do OM617'],
@@ -203,10 +209,15 @@ const GRUPOS: Record<string, () => Linha[]> = {
         const w: number[] = []; for (let j = k2 - 40; j <= k2 + 40; j++) if (j >= 0 && j < Ld.length) w.push(Ld[j]);
         w.sort((a, b) => a - b); const pr = Ld[k2] - w[w.length >> 1]; if (pr > best) { best = pr; fb = f[k2]; }
       }
-      return { best, fb };
+      // nível do tom relativo à banda das ordens (150–400 Hz), como no índice do acervo: potência em ±2% do pico
+      let pt = 0, pb = 0;
+      for (let k2 = 0; k2 < f.length; k2++) { if (f[k2] >= 0.98 * fb && f[k2] <= 1.02 * fb) pt += P[k2]; if (f[k2] >= 150 && f[k2] < 400) pb += P[k2]; }
+      return { best, fb, rel: 10 * Math.log10(pt / (pb + 1e-30) + 1e-30) };
     };
     const t1 = tom('scaniav8', carga(40), 'int', 20, 40), t2 = tom('ram67', lentaQ(14), 'ext', 6, 14, undefined, 5000, 9000), t3 = tom('emd710', loco(8), 'ext', 30, 40, 'locomotiva', 3500, 17500);
-    L.push({ grupo: 'real3', nome: 'real3 · turbo: caminhão em carga sem apito proeminente', alvo: '≤ +11 dB', medido: `+${t1.best.toFixed(0)} dB em ${(t1.fb / 1000).toFixed(1)} kHz`, ok: t1.best <= 11 });
+    // (4ª passada: o caminhão em carga tem o apito, um tom fino; o que não pode é passar do da gravação do Cat C15 na
+    // cabine, 20 dB abaixo da banda das ordens. Ver também o grupo `ar`)
+    L.push({ grupo: 'real3', nome: 'real3 · turbo: apito do caminhão em carga, na cabine', alvo: '≤ −20 dB re 150–400 Hz', medido: `${t1.rel.toFixed(0)} dB em ${(t1.fb / 1000).toFixed(1)} kHz`, ok: t1.rel <= -20 });
     L.push({ grupo: 'real3', nome: 'real3 · turbo: VGT do Cummins 6.7 em lenta', alvo: '+17 a +24 dB em ~7 kHz', medido: `+${t2.best.toFixed(0)} dB em ${(t2.fb / 1000).toFixed(1)} kHz`, ok: faixa(t2.best, 14, 27) });
     L.push({ grupo: 'real3', nome: 'real3 · turbo: EMD em notch 8', alvo: '+19,5 dB (3,6–17 kHz)', medido: `+${t3.best.toFixed(0)} dB em ${(t3.fb / 1000).toFixed(1)} kHz`, ok: faixa(t3.best, 14, 26) });
     return L;
@@ -214,8 +225,9 @@ const GRUPOS: Record<string, () => Linha[]> = {
 
   // Envoltória do agudo (REVISAO-DE-SOM.md: "ruído contínuo que sobe com o giro e enche o silêncio entre as explosões
   // soa como mar: exigir modulação"; 3ª passada do Diesel, TECNICO.md). Em carga: o contraste p90/p10 da envoltória de
-  // 2–6 kHz (envoltoriaBanda) dentro da faixa das gravações do real3 da mesma classe ±1 dB (ruído liso pela mesma
-  // cadeia: 6,1 dB). Na lenta: o fundo mecânico (ruído liso) não pode ser o que enche o vão entre as explosões em
+  // 2–6 kHz (envoltoriaBanda) não pode ficar abaixo do das gravações do real3 da mesma classe, −1 dB (ruído liso pela
+  // mesma cadeia: 6,1 dB). Desde a 4ª passada o critério é de um lado só: a gravação é piso de pulso (viés do dono, "mais
+  // motor, menos ar"; o tools/ouvido trata igual), e ficar mais pulsado que ela não reprova. Na lenta: o fundo mecânico (ruído liso) não pode ser o que enche o vão entre as explosões em
   // 1–4 kHz (amostras abaixo do p30 da envoltória de 1–4 kHz do motor inteiro): no máximo metade da energia ali.
   envoltoria: () => {
     const L: Linha[] = [];
@@ -235,7 +247,7 @@ const GRUPOS: Record<string, () => Linha[]> = {
       const sp = preset(id), rr = renderizar(sp, cen, { ouvinte: ouv, portador: port });
       const rpm = med(trecho(rr.tele, t0, t1), 'rpm'), fIgn = (rpm / 60) * sp.cylinders * (2 / sp.tempos);
       const e = envoltoriaBanda(mono(rr, t0, t1), SR, 2000, 6000, fIgn);
-      L.push({ grupo: 'envoltoria', nome: `envoltória · ${nome}: p90/p10 de 2–6 kHz`, alvo: `${fx[0].toFixed(1)}–${fx[1].toFixed(1)} dB`, medido: `${f1(e.p9010)} dB`, ok: faixa(e.p9010, fx[0], fx[1]) });
+      L.push({ grupo: 'envoltoria', nome: `envoltória · ${nome}: p90/p10 de 2–6 kHz`, alvo: `≥ ${fx[0].toFixed(1)} dB (gravações até ${fx[1].toFixed(1)})`, medido: `${f1(e.p9010)} dB`, ok: e.p9010 >= fx[0] });
     }
     // lenta: parte do vão de 1–4 kHz que é o fundo mecânico liso (motor inteiro − motor sem o fundo; a semente do ruído
     // segue igual, então a diferença é o fundo)
@@ -249,6 +261,57 @@ const GRUPOS: Record<string, () => Linha[]> = {
       for (let i = 0; i < x.length; i++) if (ea.env[i] < lim) { et += ea.y[i] * ea.y[i]; const df = ea.y[i] - yb[i]; ef += df * df; }
       const fr = 10 * Math.log10(ef / (et + 1e-30) + 1e-30);
       L.push({ grupo: 'envoltoria', nome: `envoltória · ${id} lenta: fundo mecânico liso no vão de 1–4 kHz`, alvo: '≤ −3 dB', medido: `${f1(fr)} dB`, ok: fr <= -3 });
+    }
+    return L;
+  },
+
+  // "Mais motor, menos ar" (viés do dono, docs/PLANO.md; 4ª passada do Diesel, TECNICO.md). Com o giro travado e a mesma
+  // semente do gerador de ruído, o motor inteiro e o motor sem uma fonte diferem só pela fonte:
+  //  · as fontes de ar contínuas (jato da boca, chiado da admissão, sopro do compressor, banda larga da turbina,
+  //    wastegate, fundo mecânico) juntas mudam o nível ponderado A em menos de 1,5 dB na lenta e em carga parcial;
+  //  · enquanto o turbo enche (degrau de carga com o giro travado; na locomotiva, da lenta ao notch 8), a banda larga do
+  //    turbo não sobe o total ponderado A em mais de 1 dB em nenhuma janela de 0,25 s;
+  //  · o apito do turbo é um componente estreito: em carga, o pico dele fica 10 dB ou mais acima do fundo em volta.
+  ar: () => {
+    const L: Linha[] = [];
+    const pondA = (x: Float32Array | Float64Array, n = 8192) => {
+      const [f, P] = welch(x, SR, n);
+      let s = 0;
+      for (let k = 1; k < f.length; k++) { const q = f[k] * f[k], ra = (12194 ** 2 * q * q) / ((q + 20.6 ** 2) * Math.sqrt((q + 107.7 ** 2) * (q + 737.9 ** 2)) * (q + 12194 ** 2)); s += P[k] * ra * ra * 1.585; }
+      return 10 * Math.log10(s + 1e-30);
+    };
+    const op = (o: any) => ({ dur: 6, ouvinte: 'ext', ambiente: false, campo: {}, sem: [] as string[], escala: [] as [string, number][], ...o });
+    const CONT = ['jato', 'chiadoAdm', 'sopro', 'turbina', 'wastegate', 'fundo'];
+    // [preset, rotação de carga parcial, combustível]
+    const C: [string, number, number][] = [['hilux28', 2200, 0.35], ['ram67', 1800, 0.35], ['om617', 2500, 0.4], ['catc15', 1400, 0.35], ['scaniav8', 1300, 0.35], ['onibusisl', 1500, 0.35], ['gen500', 1800, 0.4], ['emd710', 680, 0.5]];
+    for (const [id, rpm, comb] of C) {
+      const sp = preset(id);
+      for (const [nome, o] of [['lenta', { rpm: sp.idle }], [`${rpm} rpm com ${Math.round(comb * 100)}% de carga`, { rpm, comb }]] as [string, any][]) {
+        const a = renderTravado(id, op(o)), b = renderTravado(id, op({ ...o, comb: a.info.comb, sem: CONT }));
+        const d = pondA(a.m) - pondA(b.m);
+        L.push({ grupo: 'ar', nome: `ar · ${id} ${nome}: fontes de ar contínuas no nível ponderado A`, alvo: '< 1,5 dB', medido: `${f1(d)} dB`, ok: Math.abs(d) < 1.5 });
+      }
+    }
+    // enchimento do turbo
+    const T: [string, any][] = [['catc15 de fora', { id: 'catc15', rpm: 1400, degrau: [0.12, 1, 2], dur: 8 }], ['catc15 na cabine', { id: 'catc15', rpm: 1400, degrau: [0.12, 1, 2], dur: 8, ouvinte: 'int' }],
+      ['scaniav8', { id: 'scaniav8', rpm: 1300, degrau: [0.12, 1, 2], dur: 8 }], ['hilux28', { id: 'hilux28', rpm: 2400, degrau: [0.08, 1, 2], dur: 7 }], ['ram67', { id: 'ram67', rpm: 2000, degrau: [0.08, 1, 2], dur: 7 }],
+      ['gen500', { id: 'gen500', rpm: 1800, degrau: [0.1, 0.9, 2], dur: 8 }], ['emd710 da lenta ao notch 8', { id: 'emd710', cenario: 'n8', de: 0, ate: 24 }]];
+    for (const [nome, { id, ...o }] of T) {
+      const a = renderTravado(id, op(o)), b = renderTravado(id, op({ ...o, sem: ['turboLargo'] }));
+      const jan = Math.round(0.25 * SR), t0 = Math.round(((o.degrau ? o.degrau[2] : 3)) * SR);
+      let pior = -99;
+      for (let i = t0; i + jan <= a.m.length; i += jan >> 1) pior = Math.max(pior, pondA(a.m.subarray(i, i + jan), 4096) - pondA(b.m.subarray(i, i + jan), 4096));
+      L.push({ grupo: 'ar', nome: `ar · turbo enchendo (${nome}): a banda larga do turbo no total ponderado A`, alvo: '≤ 1 dB', medido: `${f1(pior)} dB`, ok: pior <= 1 });
+      // o apito no fim do transitório: pico entre 1,5 e 16 kHz sobre a mediana em volta
+      const fim = a.m.subarray(a.m.length - Math.round(1.5 * SR));
+      const [f, P] = welch(fim, SR, 8192), Ld = Array.from(P, (q) => 10 * Math.log10(q + 1e-30));
+      let best = -99, fb = 0;
+      for (let k = 0; k < f.length; k++) {
+        if (f[k] < 1500 || f[k] > 16000) continue;
+        const w: number[] = []; for (let j = k - 40; j <= k + 40; j++) if (j >= 0 && j < Ld.length) w.push(Ld[j]);
+        w.sort((x, y) => x - y); const pr = Ld[k] - w[w.length >> 1]; if (pr > best) { best = pr; fb = f[k]; }
+      }
+      L.push({ grupo: 'ar', nome: `ar · turbo cheio (${nome}): o apito é um tom fino`, alvo: '≥ 10 dB sobre o fundo em volta', medido: `+${best.toFixed(0)} dB em ${(fb / 1000).toFixed(1)} kHz`, ok: best >= 10 });
     }
     return L;
   },

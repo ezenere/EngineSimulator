@@ -28,6 +28,8 @@ export type Telemetria = Record<string, any> & { rpm: number; theta: number; sta
 const ponteiraDe = (e: PresetRotativo['escape']) => e.ponteira ?? (e.tipo === 'megafone' ? e.megafone?.Dboca : e.saidas[0]?.D) ?? 63.5;
 export const specDe = (p: PresetRotativo): Spec => ({ ...PADRAO_ROTATIVO, ...p, escape: { ...p.escape, ponteira: ponteiraDe(p.escape) }, redline: p.rpmMax } as Spec);
 const geometria = (s: Spec) => (s.tipo === 'palhetas' ? null : montarRotativo(s));
+/** lenta mínima das janelas de competição, em rpm (a dos rótulos do painel: bridge 1 500–2 000, periférica 1 600–2 200) */
+const LENTA_JANELA: Record<string, number> = { bridge: 1500, periferica: 1800 };
 const VALVE_MODES = ['closed', 'auto', 'sport', 'open'];
 
 export class ControleRotativo {
@@ -122,7 +124,19 @@ export class ControleRotativo {
     this.pushConfig(structural);
   }
   setGeo(p: Partial<{ R: number; e: number; b: number }>) { this.setSpec({ geo: { ...(this.spec.geo || { R: 105, e: 15, b: 80 }), ...p } }); }
-  setJanelas(p: Partial<Spec['janelas']>) { this.setSpec({ janelas: { ...this.spec.janelas, ...p } as Spec['janelas'] }); }
+  setJanelas(p: Partial<Spec['janelas']>) {
+    const patch: Partial<Spec> = { janelas: { ...this.spec.janelas, ...p } as Spec['janelas'] };
+    // a lenta acompanha a janela de admissão: com bridge ou periférica a carga volta diluída demais para segurar uma lenta
+    // de rua (a 750 rpm o motor caça de 400 a 1 000 e apaga à toa), e o preparador a acerta lá em cima; ao voltar para uma
+    // janela de rua, a lenta do preset
+    const de = this.spec.janelas.admissao, para = p.admissao;
+    if (para && para !== de) {
+      const min = LENTA_JANELA[para];
+      if (min && this.spec.idle < min) patch.idle = min;
+      else if (!min && LENTA_JANELA[de]) { const base = PRESETS_ROTATIVO.find((x) => x.id === this.spec.id); if (base && base.idle < this.spec.idle) patch.idle = base.idle; }
+    }
+    this.setSpec(patch);
+  }
   setEscape(p: Record<string, any>) { this.setSpec({ escape: { ...this.spec.escape, ...p } }); }
   setTurbo(p: Record<string, any>) { const t = { sequencial: false, boost: 0.6, ...(this.spec.turbo || {}), ...p }; this.setSpec({ turbo: t, aspiration: 'turbo', boost: t.boost }); }
   semTurbo() { this.setSpec({ turbo: undefined, aspiration: 'na', boost: 0 }); }

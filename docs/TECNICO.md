@@ -35,11 +35,11 @@ O site é compilado com Vite (TypeScript + React) e publicado como páginas est�
 | `turbina.html`, `src/pages/turbina/` | Página da Turbina, migrada de `jato.html` + `jet-app.js`: `controle.ts` (estado e mensagens para o DSP, fora do React), `Painel.tsx` (controles), `Turbina.tsx` (barra, presets, manete, instrumentos, laço de desenho), `desenho.ts` (EICAS, fan, osciloscópio, mapa e leituras em canvas) |
 | `src/engines/turbina/` | DSP da Turbina em TypeScript: `dsp.ts` (`JetDSP`), `presets.ts` (os aviões, tipo `PresetTurbina`), `constantes.ts` (tabela de seno, diretividade, volta da passagem); o worklet é `src/worklet/processador-turbina.ts` (`turbina-engine`) |
 | `tools/turbina-paridade.ts`, `tools/turbina-testa-navegador.mjs` | Prova de som idêntico ao legado (todos os aviões) e teste da página no Chromium e no Firefox headless |
-| `src/pages/comum/` | `Aviacao.tsx`: os controles e as leituras de aviação (magnetos, mistura, partida, hélice, rotor) usados pelo Ronco, pelo Radial e pelos Rotativos. `Casca.tsx` e `ProvaDoWorklet.tsx` são a casca e a prova do worklet da etapa de base; nenhuma página os usa mais |
-| `src/ui/` | Componentes React compartilhados (`Slider`, `ChipGroup`, `Field`, `Section`, `FamilyNav`, `PresetNav`, `Barra`, `BotaoIgnicao`, `Manete`) e os estilos (`estilo.css`, ex-`style.css`; `turbina.css`, ex-`jet.css`; `manete.css`) |
+| `src/pages/comum/` | `Aviacao.tsx`: os controles e as leituras de aviação (magnetos, mistura, partida, hélice, rotor) usados pelo Ronco, pelo Radial e pelos Rotativos. (A casca e a prova do worklet da etapa de base, `Casca.tsx`, `ProvaDoWorklet.tsx`, `casca.css` e `src/worklet/processador-tom.ts`, saíram em 22/11/2026: nenhuma página as usava) |
+| `src/ui/` | Componentes React compartilhados (`Slider`, `ChipGroup`, `Field`, `Section`, `FamilyNav`, `PresetNav`, `Barra`, `BotaoIgnicao`, `Manete`) e os estilos (`estilo.css`, ex-`style.css`, com os tokens e as regras do sistema visual descritos em `docs/AUDITORIA-UI.md`; `turbina.css`, ex-`jet.css`; `manete.css`). `PresetNav.tsx` tem também a `Faixa`, a linha de famílias ou de presets que rola de lado (pontas esmaecidas, setas, roda do mouse, o escolhido trazido à vista); `paginas.ts` é a lista das páginas do site, na ordem do menu e da faixa de navegação da `Barra`; `formato.ts` formata números e listas em pt-BR (`dec`, `num`, `grau`, `resumoGraus`, `listaGraus`: vírgula decimal, ponto de milhar, `8 × 90°`); `onda.ts` (`OndaEEspectro`) desenha o quadro de onda e espectro das páginas de motor (`.scope-wrap` / `#scope`), hoje usado pelo Vapor (o Ronco, o Diesel, o Radial, os Rotativos e a Turbina ainda têm a sua cópia do mesmo desenho) |
 | `src/ui/audio/` | `AudioShell` (contexto React) e `CadeiaDeAudio`: AudioContext, carga do worklet e a cadeia compressor → EQ → seco/molhado → ambiente → analisador; ambientes e respostas ao impulso; perfis de Ronco e Turbina |
 | `src/acoustics/` | Blocos de acústica compartilhados: `RNG`, `Biquad`/`BiquadComPiso`, guias de onda (`Line`, `Junction`, `TwoPort`, `Radiator`, `Cutout`, `ClosedEnd`), escoamento compressível, constantes físicas |
-| `src/worklet/` | Pipeline do AudioWorklet: `registrar.ts` (envolve um DSP num `AudioWorkletProcessor`), `tipos.ts` (contrato do DSP), `processador-*.ts` (pontos de entrada) e o DSP de prova `tom.ts` |
+| `src/worklet/` | Pipeline do AudioWorklet: `registrar.ts` (envolve um DSP num `AudioWorkletProcessor`), `tipos.ts` (contrato do DSP), `processador-*.ts` (pontos de entrada, um por página) e o DSP de prova `tom.ts` (o tom de 440 Hz, usado só por `tools/render.ts tom` para provar o laço offline) |
 | `tools/ronco-paridade.ts`, `tools/ronco-navegador.mjs` | Prova de que o Ronco migrado soa igual ao legado (dados, WAV e bundle do worklet) e teste da página no Chromium e no Firefox headless |
 | `tools/legado.ts` | A referência do legado para as paridades: o commit fixo (`REF_LEGADO`), a leitura dos arquivos por `git show` e as correções de ficha declaradas (`CORRECOES_RONCO`, `CORRECOES_TURBINA`), aplicadas ao legado antes de comparar |
 | `tools/render.ts`, `tools/compare-wav.ts`, `tools/acoustics-paridade.ts` | Renderização offline para WAV, comparação amostra a amostra e conferência bit a bit do `acoustics/` contra o legado |
@@ -52,7 +52,11 @@ O site é compilado com Vite (TypeScript + React) e publicado como páginas est�
 | `vapor.html`, `src/pages/vapor/`, `src/engines/vapor/`, `src/carriers/{locomotiva-vapor,trator,barco,carro-direto,portadores-vapor}.ts` | Vapor (`VaporDSP`, um DSP novo que implementa `Motor` direto: cilindros de dupla ação, rede bico → caixa de fumaça → chaminé, apito de guia de onda, sino, auxiliares, caldeira) e os portadores dele: a composição locomotiva + tênder + vagões, trator, barco de rodas de pás, `CarroDireto` do Stanley e o Corliss no `Gerador` (ver [Vapor](#vapor)); testes em `tools/vapor-*.ts` e `tools/vapor-navegador.mjs` |
 | `passagem.html`, `src/pages/passagem/`, `public/3d/` | Página Passagem / modo de testes: ouvinte no gimbal, cena three.js, mostradores; texturas com `LICENSES.md` (ver [Página Passagem e modo de testes](#página-passagem-e-modo-de-testes)); teste em `tools/passagem-navegador.mjs` |
 | `tools/wav.ts` | Leitura e gravação de WAV (float 32 e PCM 16) usada pelas ferramentas |
-| `docs/` | Este documento, o plano (`PLANO.md`), os projetos de cada etapa (`CENA.md`, `DIESEL.md`, `RADIAL.md`, `ROTATIVO.md`, `VAPOR.md`, `ELETRICO.md`: são o que se pretendia; o que foi feito está aqui), o método de revisão de som (`REVISAO-DE-SOM.md`), os créditos (`CREDITOS.md`) e a auditoria (`AUDITORIA.md`) |
+| `tools/verificar.mjs` | O portão do projeto: `npm run verificar` roda em ordem, um passo de cada vez, as paridades, os `teste:*` e `lenta:*` de cada família, `typecheck` e `build`, e imprime um resumo; `npm run verificar:rapido` é a parte curta do dia a dia; `-- --navegador` acrescenta os roteiros de navegador (ver [Ferramentas de verificação](#ferramentas-de-verificação)) |
+| `tools/*-navegador.mjs`, `tools/servir-dist.mjs` | Os roteiros de navegador de cada página (`npm run navegador:<página>`, sobre o `dist/`): Chromium por CDP ou Firefox por WebDriver BiDi, sem dependências; esperam pela condição (a telemetria mudou, o texto apareceu) com limite folgado; tocam o som, e `MUDO=1` roda em silêncio. `servir-dist.mjs` serve o `dist/` em `/data/engine/` e passa a url aos roteiros que a pedem |
+| `tools/capturas.mjs`, `docs/ui/` | Capturas de tela de todas as páginas em várias larguras e estados, com a auditoria automática de cada uma (rolagem horizontal, elementos para fora, contraste, nomes acessíveis, alvos de toque) em `relatorio.json`; as capturas ficam fora do git (`.claude/capturas/`). As imagens do README ficam em `docs/ui/` (1200 × 750, `--larguras 1200 --altura 750`) |
+| `public/favicon.svg` | O ícone do site (todas as páginas) |
+| `docs/` | Este documento, o plano (`PLANO.md`), os projetos de cada etapa (`CENA.md`, `DIESEL.md`, `RADIAL.md`, `ROTATIVO.md`, `VAPOR.md`, `ELETRICO.md`: são o que se pretendia; o que foi feito está aqui), o método de revisão de som (`REVISAO-DE-SOM.md`), os créditos (`CREDITOS.md`) e as duas auditorias: a de correção e completude (`AUDITORIA.md`: achados por área e a tabela "Pendências, por prioridade") e a visual e de interface (`AUDITORIA-UI.md`: o sistema visual adotado, os defeitos por página e as pendências) |
 
 **De onde veio cada parte** (os nomes do legado aparecem nos comentários do código): `src/geometry.js` → `src/engines/ronco/geometria.ts`; `src/presets.js` → `src/engines/ronco/presets.ts`; `src/dsp.js` → `src/engines/ronco/dsp.ts` e `src/acoustics/`; `src/app.js` e `style.css` → `src/pages/ronco/` e `src/ui/`; `src/jet-presets.js` → `src/engines/turbina/presets.ts`; `src/jet-dsp.js` → `src/engines/turbina/dsp.ts`; `src/jet-app.js`, `jato.html` e `jet.css` → `src/pages/turbina/` e `src/ui/turbina.css`. Para ler um deles: `git show 02c185f:src/dsp.js`.
 
@@ -71,12 +75,13 @@ Os arquivos `*-dsp.js` legados ficavam dentro de uma função-fábrica (`EngineD
 O processador é importado pela página com o sufixo `?worker&url` do Vite:
 
 ```ts
-import urlTom from '../../worklet/processador-tom.ts?worker&url';
-await ctx.audioWorklet.addModule(urlTom);
+// src/pages/ronco/PaginaRonco.tsx (a URL vai para o AudioShell, que chama audioWorklet.addModule)
+import urlRonco from '../../worklet/processador-ronco.ts?worker&url';
+await ctx.audioWorklet.addModule(urlRonco);
 ```
 
-- **No build**, o Vite compila `processador-tom.ts` e tudo o que ele importa (DSP, `acoustics/`) num bundle separado, `dist/assets/processador-tom-<hash>.js`, formato ES (`worker.format: 'es'`), e a página recebe a URL como `new URL('processador-tom-<hash>.js', import.meta.url)`, relativa ao próprio chunk (por isso funciona em qualquer subpasta). O bundle do worklet **não é minificado** (`worker.rolldownOptions.output.minify: false`), para o código do DSP no navegador ser o mesmo, linha a linha, que roda no Node. (O Rolldown ainda dobra constantes, como `1 - 0.985` → `0.015000000000000013`, que dá o mesmo double.)
-- **No dev**, a URL aponta para o próprio `.ts` (`/src/worklet/processador-tom.ts?worker_file&type=module`); o Vite o transforma em módulo ES e os `import` dele são carregados pelo worklet como módulos. O Vite injeta `import "/@vite/env"` no topo, que só mexe em `globalThis` e funciona no escopo do worklet.
+- **No build**, o Vite compila `processador-ronco.ts` e tudo o que ele importa (DSP, `acoustics/`) num bundle separado, `dist/assets/processador-ronco-<hash>.js`, formato ES (`worker.format: 'es'`), e a página recebe a URL como `new URL('processador-ronco-<hash>.js', import.meta.url)`, relativa ao próprio chunk (por isso funciona em qualquer subpasta). O bundle do worklet **não é minificado** (`worker.rolldownOptions.output.minify: false`), para o código do DSP no navegador ser o mesmo, linha a linha, que roda no Node. (O Rolldown ainda dobra constantes, como `1 - 0.985` → `0.015000000000000013`, que dá o mesmo double.)
+- **No dev**, a URL aponta para o próprio `.ts` (`/src/worklet/processador-ronco.ts?worker_file&type=module`); o Vite o transforma em módulo ES e os `import` dele são carregados pelo worklet como módulos. O Vite injeta `import "/@vite/env"` no topo, que só mexe em `globalThis` e funciona no escopo do worklet.
 - O plugin do React exclui `src/worklet/`, `src/acoustics/`, `src/engines/`, `src/scene/` e `src/carriers/`: o React Refresh injetaria código que usa `window`, que não existe no worklet.
 - **three.js** (dependência `three`, tipos em `@types/three`) só entra na página Passagem, num chunk carregado sob demanda (`import('./cena3d')`, ~600 kB, 150 kB gzip; `chunkSizeWarningLimit` 700). Arquivos de `public/` (as texturas de `public/3d/`) vão para o `dist/` como estão e são lidos com `import.meta.env.BASE_URL`, relativo à página.
 - **Regra do DSP:** não usa nada do navegador nem o `sampleRate` global; recebe a taxa no construtor. Só `src/worklet/registrar.ts` toca nos globais do worklet:
@@ -88,7 +93,7 @@ await ctx.audioWorklet.addModule(urlTom);
 
   O contrato (`src/worklet/tipos.ts`) é o mesmo do `EngineDSP`/`JetDSP`: `process(L, R, n, envioL?, envioR?)`, `message(m)`, `post(m)`.
 - **Reserva:** se o worklet não carregar, `CadeiaDeAudio` roda o mesmo DSP num `ScriptProcessorNode` na thread principal, se a página passar `criarDspLocal`.
-- **Verificado** com Chromium e Firefox headless, em `npm run dev`, `npm run preview` e com o `dist/` servido em `/data/engine/`: o tom toca pelo worklet (modo `worklet`, não a reserva), a telemetria volta pela porta, troca de frequência e de ambiente funcionam, sem erros no console.
+- **Verificado** com Chromium e Firefox headless, em `npm run dev`, `npm run preview` e com o `dist/` servido em `/data/engine/`: na etapa de base com um worklet de prova (um tom, hoje removido), e desde então pelos roteiros `tools/*-navegador.mjs` de cada página, que conferem o som pelo worklet (modo `worklet`, não a reserva), a telemetria pela porta, a troca de ambiente e o console sem erros.
 
 ### Cadeia de áudio e `AudioShell`
 
@@ -1110,7 +1115,7 @@ O projeto está em [`DIESEL.md`](DIESEL.md); aqui fica o que foi feito, como e o
 - **Atraso** de Hardenberg–Hase com `p` e `T` do cilindro na injeção, `kAtraso` 1,6, cetano do preset; o principal com piloto usa 0,6×.
 - **Wiebe na pré-misturada + queima por mistura na difusão** (2ª passada, ver abaixo; pré-misturada `φ_p = clamp(τ/θ_inj)·k_pre`, 6–10°) com `dQ` limitado a 6 bar por amostra. `θ_inj` vem da vazão do injetor, escalada para a plena carga durar ~32° na rotação de potência (com a vazão fixa por mg do DIESEL.md o EMD injetava em 11° e queimava quase tudo pré-misturado).
 - **Frio**: parede `430 + 0,9·(água − 90)` K; queima parcial quando `τ > 4 ms` ou a temperatura alcançada no atraso (a maior entre a da injeção e a estimada no PMS, mais o ponto quente da vela) passa abaixo de 620 K; queimas parciais `0,3·frio·e^(−t/40 s)`; σ de 2,5% a 8%.
-- **Knock**: `dp/dθ` medido no cilindro em cada amostra de queima (±5% fixo por cilindro) → 2 passa-altas de 2ª ordem em `700·√(0,1/B)` Hz → banco de 5 ressonadores (bloco ×3 pelo diâmetro, tampa, câmara) → passa-baixa de 6 kHz → 70% determinístico + 30% ruído pela envoltória. Toda a mecânica (knock, tiques de injeção por tipo da tabela 2.7, trem de válvulas, bombas e um fundo mecânico contínuo) é referida ao pico do knock de lenta quente do próprio motor, medido na sonda de calibração (`refKnock`), e escalada por `K_MEC` e pelo `mecanica` do preset (dB).
+- **Batida e mecânica** (reescritas na 4ª passada, abaixo): a estrutura do motor é um banco de 30 modos, de 150 Hz a 7 kHz, com um caminho por cilindro até quem ouve. A queima o excita pela taxa de subida de pressão que ela mesma produz, `(γ−1)·dQ/V` por unidade de tempo, com a aspereza de uma chama real; os injetores, as válvulas, a saia do pistão e a bomba, por impulsos. Nada disso é ruído branco filtrado. Os impactos são referidos ao pico da batida de lenta quente do próprio motor, medido na sonda de calibração só com a queima (`refKnock`); o nível absoluto é `K_MEC` vezes o `mecanica` do preset (dB). (Até a 3ª passada: `dp/dθ` → dois passa-altas de 700 Hz → 5 ressonadores → 70% determinístico + 30% ruído, e tiques e válvulas como rajadas de ruído.)
 
 ### Governadores, carga e partida
 
@@ -1118,7 +1123,7 @@ O projeto está em [`DIESEL.md`](DIESEL.md); aqui fica o que foi feito, como e o
 - **Ganhos normalizados por motor** (desvio do DIESEL.md): os do documento (Kp 6, Ki 1,5/s na lenta) davam caça de ±12% a 2,4 Hz na Hilux. Aqui `P = Kt/(J·ω)` é a aceleração relativa por unidade de combustível e `Kp = ω_c/P` (lenta 9 rad/s, gerador 2,7, locomotiva 2,5, bancada 8; no EMD em N8 isso dá Kp ≈ 6). A rotação medida é a média do ω no último intervalo de ignição.
 - **Portadores internos ("bancada")**: carro (o câmbio do Ronco), gerador (P = degrau·kWe/η, rampa de 0,1 s, AVR com queda por subfrequência abaixo de 97%), locomotiva (tabela de notches; o regulador de carga segue a rotação já alcançada e alivia se o combustível satura), dinamômetro (torque em fração do nominal). A carga entra como pressão média de freio somada ao atrito. `acoplar(carga)` e `{ type: 'diesel', combustivel }` são o que o `MotorDiesel` (`src/engines/diesel/motor.ts`) usa para os portadores de `carriers/` (os comentários `TODO(integração carriers/)` que sobraram no `dsp.ts` são anteriores a ele).
 - **Atrito diesel**: +0,57 bar sobre o do Ronco (o ×1,6 do DIESEL.md no polinômio inteiro dava 4,4 bar na rotação máxima). **Motor de partida** de redução (torque de travamento ~2,5× o atrito frio, gira a 150–250 rpm; o do Ronco girava um 15 L a 30–60 rpm). **Velas**: espera `(1 + 8·frio)·glowK` s antes de girar, com o relé estalando.
-- **Turbo**: rotação pela energia do escape `√(rpm·combustível)`, τ do preset, mínimo 0,15 no VGT, engrenado do EMD `max(livre, rpm·18,3)`, wastegate com chiado; apito `z·N/60` (2º harmônico, queda acima de 16 kHz), chiado modulado pelos pulsos do escape. **Freio-motor**: borboleta (3 bar, atenua a boca e o jato), VGT (2,5 bar, turbo acelera), Jake (janela de −8° a +40° em volta do PMS de compressão, 0,35·AexMax, cilindros 2/4/6; o sopro gira a turbina), VEB. (A janela 350–390° do DIESEL.md cai no PMS de troca de gases, onde não há ar comprimido: foi entendida como "em volta do PMS de compressão".)
+- **Turbo**: rotação pela energia do escape `√(rpm·combustível)`, τ do preset, mínimo 0,15 no VGT, engrenado do EMD `max(livre, rpm·18,3)`, wastegate com chiado; apito `z·N/60` com `z` = pás principais do compressor (2º harmônico, queda acima de 16 kHz), nível ∝ rotação³ e pressão; a banda larga (sopro do compressor, esteira da turbina) segue os pulsos do escape e ficou como tempero (4ª passada). **Freio-motor**: borboleta (3 bar, atenua a boca e o jato), VGT (2,5 bar, turbo acelera), Jake (janela de −8° a +40° em volta do PMS de compressão, 0,35·AexMax, cilindros 2/4/6; o sopro gira a turbina), VEB. (A janela 350–390° do DIESEL.md cai no PMS de troca de gases, onde não há ar comprimido: foi entendida como "em volta do PMS de compressão".)
 
 ### Ferramentas e portões
 
@@ -1254,6 +1259,260 @@ Desvios novos (`DESVIOS`): p90/p10 do cofre da Hilux (referência lo-fi), 2,5–
 do preset os 8 pulsos por volta se fundem antes da turbina); o cofre fica em 32 dB (alvo lo-fi 15). `npm run teste:diesel`:
 0 falhas, 66 desvios (antes 65), com o grupo novo `envoltoria` (6 casos de carga e 2 de lenta). Saíram dois desvios (CV do knock e 400–1 kHz do Scania em
 carga voltaram para dentro da faixa).
+
+### Quarta passada ("mais motor, menos ar")
+
+Queixa do dono, depois da 3ª passada: "os caminhões faziam um som de ar ao invés do *nhe nhe nhe nhe* ou do *rom rom
+rom*"; "alguns soavam como vento, parecia que era apenas ar"; "quando o turbo sobe, ele faz um som de mar; podia ser só
+uma coisa mais sutil de turbo". E a regra que vale acima da gravação (PLANO.md, "viés do simulador"): mais motor e menos
+som de ar do motor. Método: o kit `tools/ouvido/` e o orçamento de ruído por fonte com a mesma semente, em 8 presets
+(Hilux, Ram 6.7, 300D aspirado, Cat C15, Scania V8, ônibus ISL9, gerador QSX15, EMD 710), cada um em lenta, carga
+parcial e plena carga com o giro travado na rotação da gravação casada, mais um degrau de carga com o giro travado (o
+turbo enche e o motor não muda de rotação). Ferramentas novas: `tools/diesel-ouvido-render.ts` (o render de condição
+casada do Diesel: giro travado, combustível mandado de fora, uma fonte desligada por vez), `tools/diesel-ouvido.py` com
+os casos em `tools/diesel-ouvido.json` (a régua: painel, HNR, leito, orçamento e transitório de todos os casos, em
+`referencias/_sim/diesel/`), `tools/diesel-ouvido-acerto.py` (o nível da mecânica de cada preset) e o grupo `ar` do
+`npm run teste:diesel`. O caso está contado no `REVISAO-DE-SOM.md` ("Diesel: motor, não ar").
+
+**Quem fazia o ar e o mar** (antes; fração da potência com a fonte isolada pela mesma semente):
+
+| Fonte | Onde | Total ponderado A | 400–1k / 1–2,5k / 2,5–6k Hz |
+|---|---|---|---|
+| sopro do compressor (`K_SOPRO`, chiado de 1,3 kHz) | caminhão em carga, cabine (Cat C15, Scania) | 46–48% (desligar: −2,7 a −2,9 dB) | 75–77% / 85–90% / 100% |
+| | caminhão, ônibus, gerador e picape em carga, de fora | 14–23% | 30–72% / 76–90% / 73–98% |
+| banda larga da turbina (`K_TURBINA`) | EMD 710 em notch intermediário e em notch 8 | 77% e 94% (−8,7 e −13 dB) | 71–84% / 86–98% / 97–100% |
+| jato da boca do escape | 300D aspirado: lenta, carga parcial, plena | 76%, 88%, 87% (−6,2, −9,4, −8,8 dB) | 80–87% / 74–100% / 93–100% |
+| | Hilux: carga parcial e plena | 18% e 15% | 29% / 35% / 61–96% |
+
+No enchimento do turbo, com o giro parado, a banda larga do turbo subia o total ponderado A em 0,7 a 3,3 dB (EMD: 12,2)
+e o que há acima de 1 kHz em 4,1 a 13 dB (EMD: 19,9): o degrau de chiado que o dono ouve como mar. O apito não existia:
+com as pás contadas com as intermediárias (14), a passagem das pás em carga ficava em 13–18 kHz e o tom mais forte
+entre 1,5 e 16 kHz tinha 3–5 dB sobre o fundo. Na lenta não havia fonte de ar (todas somadas: 0,0 dB), mas a mecânica
+inteira era ruído branco filtrado com a envoltória de cada evento, com silêncio entre as explosões: p90/p10 de 1–6 kHz
+de 25 a 38 dB nos motores turbo (gravações: 5–13), fração estocástica de até 52% do total ponderado A, os tiques de
+injeção com 85–91% de 2,5–6 kHz nos pesados, e nenhuma linha do motor de 100 a 400 Hz no caminhão (o simulado era escalado +32 dB para casar
+com a gravação nessa banda).
+
+**O que mudou, pelo mecanismo** (tudo em `src/engines/diesel/`; o `dsp.ts` do Ronco não foi tocado):
+
+- **A estrutura do motor é um banco de modos** (`estrutura()` e `mecanica()` em `dsp.ts`; `EST` em `constantes.ts`): 30
+  ressonadores de 150 Hz a 7 kHz (num cilindro de 100 mm; o grave escala com √(100 mm/diâmetro)), fator de qualidade 9 a
+  15, frequências com um desvio sorteado e fixo. Cada cilindro chega a quem ouve por um caminho próprio (ganho com σ de
+  2 dB, mais 3 dB e um sinal por modo): cada um tem a sua voz, um domina, e aparecem as linhas de meia ordem que as
+  gravações têm de 100 a 600 Hz. Controles: `mecanica` (nível), `ressonancia` (×Q), `desigualdade` (×dispersão).
+- **A batida é a queima empurrando o bloco** (`queimar()`): a excitação é a taxa de subida de pressão que a liberação de
+  calor produz, `(γ−1)·dQ/V` por unidade de tempo, em bar/ms (antes: `dp/dθ` depois de dois passa-altas de 700 Hz, o que
+  dependia do ângulo, não do tempo, e incluía o degrau da compressão no instante da ignição). O peso por frequência é a
+  atenuação estrutural de um motor (`EST_COMB`: ~10 dB por oitava até 1,5 kHz, plana até 3 kHz). Na lenta, quase tudo
+  queima pré-misturado: um degrau de pressão de ~1 ms que toca o médio. Em carga, a subida é longa e empurra os modos
+  graves. A subida é áspera (`K_ASPEREZA` 3, cortada em 2,5 kHz·(100 mm/diâmetro)): metade da aspereza é uma assinatura
+  fixa de cada cilindro (repete-se igual em todo ciclo, então dá linhas) e metade é sorteada a cada queima (o que sobrou
+  de "chocalho"; nos motores de pré-câmara, ×0,6).
+- **Os impactos são impulsos no mesmo banco** (`impacto()`): a agulha de cada injetor e o balancim (`tique()`), cada
+  válvula assentando (`valvulas()`), o êmbolo das bombas em linha e de alta, e a saia do pistão batendo na camisa 8°
+  depois do PMS de queima (`SAIA`, nova: cresce com a pressão no cilindro e com a rotação). O instante varia 0,06 ms e a
+  força 25% de uma vez para outra: com os impactos exatamente periódicos as linhas iam a 6 kHz e o motor zumbia; com a
+  variação, o HNR cai com a frequência como nas gravações. A força dos tiques cresce com a pressão de injeção
+  (`EXP_TIQUE`) e a das válvulas com a rotação. O injetor-bomba passou de +6 para 0 dB. O atraso de ignição varia menos
+  no instante com o motor quente (10% nos leves, 8% nos pesados; a frio continua em 28% e 23%, como antes) e a preparação
+  da mistura varia à parte (22% e 16%): a força da batida muda mais que a hora dela.
+- **Chocalho das engrenagens da distribuição** (`engrenagens()`; `ENGRENAGENS`, `EST_ENG`): o virabrequim de um diesel
+  acelera a cada explosão e freia a cada compressão; na lenta, sem carga que mantenha os dentes encostados, as
+  engrenagens da frente do motor (virabrequim, intermediária, comando, bomba) atravessam a folga e batem várias vezes
+  entre uma explosão e a seguinte. São 24 pancadas por ciclo (no mínimo 2 por explosão) no mesmo banco de modos, pelo
+  caminho da tampa da distribuição, num padrão fixo por motor com o instante variando 12% do espaço entre elas; a força
+  cai com a carga (1/(1 + 4·combustível)) e sobe 50% a frio. Enche o intervalo entre as batidas com som do próprio
+  motor e não com ruído (achado 2 da auditoria, "lenta de perto é estalo solto sobre silêncio"): no cofre da Hilux a
+  curtose de 1–4 kHz foi de 46 para 34 (gravação: 6–9), o p90/p10 de 28 para 20 dB (gravação: 15) e os picos por
+  explosão de 1,9 para 3,6 (gravação: 2–4); na régua do kit, o p90/p10 de 1–6 kHz da lenta foi de 19–27 para 14–21 dB
+  (gravações: 5–13). É de 1 a 10% do som ponderado A na lenta e 0% em carga. Não tem controle próprio: segue
+  `mecanica`. O caminho das engrenagens e o padrão delas têm um sorteio à parte (`rE` em `estrutura()`): quando entraram
+  no mesmo sorteio dos caminhos dos cilindros, a voz de todos os motores mudou (a mecânica do Cat C15 em lenta caiu 2 dB
+  em 400–1000 Hz) sem ninguém ter mexido nela.
+- **Reflexões do cofre** (`COFRE`): depois do banco, 4 atrasos realimentados (2,3 a 6,7 ms, T60 de 40 ms, −10 dB): o som
+  do bloco bate no capô, no chão e na carroceria. É determinístico (devolve a própria batida). Controle `cofre`.
+- **Jato da boca do escape** (`freio()`; `K_JATO`, `JATO_V0`, `JATO_V1`): o ganho segue a velocidade média do gás na boca
+  ao quadrado; com a velocidade de cada pulso ao quadrado, que o Ronco já aplica, dá U⁴ na amplitude, a lei de um jato
+  livre (U⁸ na potência). Satura acima de 1,5× a velocidade de referência. A boca virou um campo próprio (`ponteira`),
+  e o painel a mantém quando se mexe no diâmetro do tubo. Controle `jatoBoca` (o campo `jato` é do motor-base e
+  escolhe a lei do jato do Ronco; o Diesel não o usa).
+- **Turbo** (`turboSom()`, `afinaApito()`): sopro do compressor −30 dB (`K_SOPRO` 2,25 → 0,07 e o chiado de 1,3 kHz
+  junto), banda larga da turbina −22 dB (`K_TURBINA` 0,0045 → 0,00035), jato na válvula de escape −4 dB (−14 dB nos 2
+  tempos). O apito conta as pás principais (`turboPas` 7 nos pesados e nas picapes grandes, 6 nas pequenas) e a
+  rotação máxima do turbo dos pesados é 95 000 rpm: em carga o tom cai em 9,1–9,4 kHz (gravação do Cat C15: 7 a 9,4
+  kHz). Nível ∝ rotação³·(0,25 + 0,75·pressão): some na lenta e com pouca carga. Só os presets com `turboLenta`
+  (Cummins 6.7, Duramax) têm o assobio de lenta das palhetas fechadas. O tom oscila ±0,1% e tem uma saia de ruído
+  estreita (dois passa-faixas de Q 30) que cresce com a vazão.
+- **Fontes que deixaram de ser ruído**: os cliques de válvula herdados do Ronco (ficam só para o relé das velas) e o
+  chiado da bomba de óleo do HEUI (agora pancadas a 7 por volta).
+- **Nível da mecânica por preset** (`mecanica`): acertado na lenta, de fora, para a banda de 1–2,5 kHz ficar em −3 a +2
+  dB relativa a 150–400 Hz (faixa das gravações de fora) e para o grave do escape não ficar mais de ~12 dB acima dessa
+  banda. Hilux 5, Ranger 1, Ram 10, Duramax 10, Power Stroke 6, 300D 8, TDI 3, F-1000 10, Scania 17, Volvo 22, C15 15,
+  ônibus 17, 6V92 38, gerador 24, EMD 26, GE 8.
+
+**Antes × depois × gravação** (giro travado na rotação da gravação; ouvinte `ext`, ou `int` na cabine; em cada célula
+gravação / antes / depois; nas três últimas colunas, antes / depois; os resultados completos, com painel, orçamento e
+WAVs de cada caso, ficam em `referencias/_sim/diesel/antes/` e `depois/`, e cinco pares de painéis em
+`docs/ouvido/diesel/`):
+
+| Caso | HNR 400–1k (dB) | HNR 1–2,5k | HNR 2,5–6k | leito de 1–6 kHz | m na ignição (1–6 kHz) | p90/p10 (dB) | ar | pulso a menos | total |
+|---|---|---|---|---|---|---|---|---|---|
+| Cat C15, lenta 702 rpm, de fora | −6 / 3 / 4 | −15 / −4 / −2 | −25 / −25 / −8 | 84% / 0% / 3% | 0,09 / 1,52 / 1,03 | 10,4 / 32,3 / 20,6 | 0 / 0 | 0 / 0 | 5,1 / 3,4 |
+| Cat C15, 1545 rpm, pouca carga, cabine | −6 / 5 / 5 | −8 / 4 / 0 | −18 / −25 / −5 | 81% / 3% / 4% | 0,02 / 1,20 / 0,81 | 7,0 / 22,4 / 16,7 | 0 / 0 | 0 / 0 | 3,6 / 3,1 |
+| Cat C15, 1535 rpm, em carga, cabine | −1 / −6 / 4 | −11 / −14 / 0 | −15 / −25 / −3 | 80% / 18% / 7% | 0,06 / 0,48 / 0,80 | 6,3 / 10,4 / 15,9 | 0 / 0 | 0 / 0 | 1,6 / 2,7 |
+| Scania V8, lenta 600 rpm, de fora | 4 / 3 / 4 | −1 / −9 / −2 | −25 / −25 / −9 | 31% / 0% / 3% | 0,42 / 1,29 / 0,91 | 9,2 / 32,3 / 20,3 | 0 / 0 | 0 / 0 | 4,0 / 2,5 |
+| Scania V8, 1450 rpm, em carga, cabine | 2 / −6 / 5 | −14 / −10 / −1 | −25 / −25 / −5 | 14% / 42% / 7% | 0,65 / 0,35 / 0,61 | 19,7 / 8,6 / 15,7 | 2,74 / 0 | 2,59 / 1,13 | 1,9 / 1,6 |
+| Ônibus ISL9, lenta 618 rpm, de fora | 3 / 3 / 5 | −3 / −6 / −1 | −25 / −25 / −11 | 56% / 1% / 5% | 0,17 / 1,30 / 0,90 | 5,4 / 24,9 / 17,1 | 0 / 0 | 0 / 0 | 4,3 / 3,1 |
+| Ram 6.7, lenta 700 rpm, de fora | −1 / 4 / 5 | −7 / 0 / −2 | −22 / −17 / −8 | 85% / 0% / 8% | 0,03 / 1,50 / 0,89 | 5,3 / 31,1 / 15,7 | 0 / 0 | 0 / 0 | 5,1 / 3,4 |
+| Hilux 2.8, lenta 769 rpm, de fora | −1 / 4 / 5 | −4 / −6 / −1 | −25 / −25 / −7 | 50% / 0% / 7% | 0,31 / 1,32 / 0,87 | 8,2 / 29,0 / 15,6 | 0 / 0 | 0 / 0 | 3,9 / 2,6 |
+| Hilux 2.8, lenta 858 rpm, cofre aberto | −15 / 2 / 5 | −25 / 0 / 0 | −21 / −14 / −6 | 79% / 0% / 8% | 0,15 / 1,49 / 0,86 | 12,8 / 31,1 / 15,6 | 0 / 0 | 0 / 0 | 6,0 / 4,6 |
+| 300D aspirado, lenta 677 rpm, de fora | 5 / −12 / 2 | −1 / −11 / 0 | −12 / −25 / −7 | 16% / 6% / 2% | 0,50 / 0,74 / 1,08 | 10,5 / 16,8 / 20,1 | 0 / 0 | 0 / 0 | 2,3 / 2,4 |
+| Gerador QSX15, 1570 rpm sem carga | 0 / 4 / 6 | −3 / −2 / −1 | −25 / −22 / −6 | 78% / 0% / 9% | 0,02 / 1,34 / 0,76 | 5,3 / 29,4 / 14,4 | 0 / 0 | 0 / 0 | 4,6 / 3,0 |
+| EMD 710, lenta 250 rpm | 4 / 2 / 0 | −6 / −7 / −7 | −6 / −18 / −10 | 96% / 59% / 37% | 0,01 / 0,26 / 0,28 | 5,0 / 7,8 / 9,1 | 0 / 0 | 0,09 / 0,06 | 2,2 / 1,9 |
+| EMD 710, 680 rpm, notch intermediário | 7 / −9 / 4 | 3 / −25 / −4 | −17 / −25 / −15 | 66% / 98% / 46% | 0,01 / 0,01 / 0,20 | 7,8 / 5,8 / 8,3 | 3,66 / 0 | 0,77 / 0,17 | 2,3 / 2,1 |
+| EMD 710, notch 8 | 9 / −8 / 10 | −7 / −20 / −2 | −23 / −23 / −15 | 83% / 96% / 49% | 0 / 0,01 / 0,20 | 9,3 / 5,7 / 7,1 | 1,32 / 0,42 | 0,78 / 0,62 | 2,3 / 2,1 |
+
+| Orçamento (antes → depois) | fontes de ar contínuas no nível ponderado A | fração que muda com a semente (A) | quem mais pesa em 400–1k / 1–2,5k / 2,5–6k Hz, depois | engrenagens (A) |
+|---|---|---|---|---|
+| Cat C15, lenta | 0 → 0 dB | 52% → 46% | batida 82% / aspereza sorteada 34% / batida 33% | 1,8% |
+| Cat C15, em carga, cabine | 2,7 → 0 dB | 49% → 6% | batida 49% / batida 45% / batida 34% | 0% |
+| Scania V8, lenta | 0 → 0 dB | 51% → 54% | batida 81% / batida 45% / batida 26% | 2,0% |
+| Scania V8, em carga, cabine | 2,9 → 0 dB | 51% → 10% | batida 63% / aspereza sorteada 47% / batida 37% | 0% |
+| Ônibus ISL9, em carga, de fora | 1,2 → 0 dB | 31% → 18% | batida 43% / batida 47% / aspereza sorteada 34% | 0% |
+| Ram 6.7, lenta | 0 → 0 dB | 23% → 29% | batida 66% / batida 37% / válvulas 22% | 3,5% |
+| Ram 6.7, plena carga, de fora | 0,7 → 0 dB | 15% → 4% | (escape; batida 10%) / batida 51% / batida 54% | 0% |
+| Hilux 2.8, lenta, de fora | 0,2 → 0 dB | 40% → 36% | batida 79% / batida 50% / batida 33% | 7,2% |
+| Hilux 2.8, lenta, cofre aberto | 0 → 0 dB | 51% → 50% | batida 73% / batida 54% / batida 28% | 10,3% |
+| Hilux 2.8, plena carga, de fora | 2,1 → 0 dB | 39% → 6% | (escape; variação da queima 6%) / batida 56% / batida 52% | 0% |
+| 300D, lenta | 6,2 → 0 dB | 85% → 48% | batida 33% / tiques 46% / tiques 39% | 2,1% |
+| 300D, 2500 rpm com 40% | 9,4 → 0 dB | 89% → 11% | batida 37% / batida 32% / válvulas 45% | 0,1% |
+| 300D, plena carga | 8,8 → 0 dB | 87% → 8% | (escape; batida 16%) / aspereza sorteada 36% / aspereza sorteada 25% | 0% |
+| Gerador, 90% de carga | 0,9 → 0 dB | 22% → 14% | batida 57% / batida 40% / batida 31% | 0% |
+| EMD 710, lenta | 0,2 → 0 dB | 24% → 47% | aspereza sorteada 35% / aspereza sorteada 32% / tiques 44% | 4,8% |
+| EMD 710, notch intermediário | 6,4 → 0,1 dB | 87% → 24% | batida 35% / aspereza sorteada 40% / apito 26% | 0% |
+| EMD 710, notch 8 | 12,1 → 0,4 dB | 94% → 20% | (escape; batida 5%) / turbina (ar) 31% / turbina (ar) 77% | 0% |
+
+(A "fração que muda com a semente" conta tudo o que sai diferente com outra semente do gerador aleatório: as fontes de
+ruído e também o instante sorteado dos impactos, que não é ar. A última coluna é a parte do chocalho das engrenagens no
+som ponderado A: 1 a 10% na lenta, 0% em carga.)
+
+| Enchimento do turbo (antes → depois) | banda larga no total ponderado A | no que há acima de 1 kHz | o apito, depois: frequência, sobre o fundo local, relativo às ordens (150–400 Hz) |
+|---|---|---|---|
+| Cat C15, 1400 rpm, de fora | 1,3 → 0 dB | 6,5 → 0 dB | 9,4 kHz, 21 dB, −35 dB |
+| Cat C15, 1400 rpm, cabine | 3,3 → 0 dB | 10,9 → 0,1 dB | 9,4 kHz, 21 dB, −29 dB |
+| Scania V8, 1300 rpm | 1,6 → 0 dB | 4,9 → 0 dB | 9,1 kHz, 22 dB, −33 dB |
+| Ônibus ISL9, 1500 rpm | 1,6 → 0 dB | 4,1 → 0 dB | 9,3 kHz, 22 dB, −36 dB |
+| Ram 6.7, 2000 rpm | 0,7 → 0 dB | 13,0 → 0 dB | 12,5 kHz, 21 dB, −39 dB |
+| Hilux 2.8, 2400 rpm | 1,4 → 0 dB | 5,2 → 0,1 dB | 14,7 kHz, 20 dB, −35 dB |
+| Gerador QSX15, 1800 rpm | 1,0 → 0 dB | 7,6 → 0 dB | 10,7 kHz, 22 dB, −35 dB |
+| EMD 710, da lenta ao notch 8 | 12,2 → 0,8 dB | 19,9 → 3,3 dB | 8,1 kHz, 24 dB, −21 dB |
+
+Referências do apito (acervo): Cat C15 na cabine, em carga, 7 a 9,4 kHz, 14 dB sobre o fundo local e 20 dB abaixo das
+ordens; com pouca carga, 36 dB abaixo. Na lenta de fora: Ram 6.7 com 7,28 kHz a −33 dB (gravação: 7,25 kHz a −20 dB),
+Duramax 9,8 kHz a −35 dB (gravação: 9,66 kHz a −35 dB), Hilux sem tom (como a gravação).
+
+"Papel rasgando" (o controle "Diâmetro do escape" no mínimo, 1,5"): antes, o jato passava a ser 99–99,9% do som
+ponderado A no 300D (desligá-lo mudava o nível em 20 a 28 dB) e 83–99% na Hilux (8 a 19 dB); a boca seguia o tubo e o
+jato crescia com 1/área². Agora mexer no tubo não mexe na boca: 0,0 a 0,3 dB. Com a boca também forçada a 1,5" pelo
+controle novo, 0,0 a 3,9 dB (o jato satura).
+
+**Critérios do viés, e onde não se cumprem:**
+
+1. *HNR do simulado ≥ o da gravação até 6 kHz*: cumprido nos casos casados de picape, caminhão, ônibus e gerador, com
+   uma falta de 0,7 dB (Scania em lenta, 1–2,5 kHz: −2,1 contra −1,4); fica abaixo no 300D em 400–1000 Hz (2 contra 5 dB:
+   o atraso de ignição longo da pré-câmara espalha o instante da batida) e no EMD em lenta (400–1000 Hz, 0 contra 4,5;
+   2,5–6 kHz, −10 contra −6) e no notch intermediário (400–1000 Hz, 4 contra 7; 1–2,5 kHz, −4 contra 3). As gravações da
+   locomotiva têm linhas de auxiliares que o modelo não tem (uma linha de 65,9 Hz igual em lenta e em notch 8).
+2. *Leito de ruído ≤ o da gravação e `ar` ≤ 0,6*: `ar` 0,00 em todos os casos de estrada e no gerador, e neles o leito do
+   simulado fica abaixo do da gravação em toda banda até 6 kHz. No EMD em notch 8 o `ar` é 0,42: o leito de 2,5–6 kHz é
+   90% da banda contra 82% na gravação (a banda larga da turbina, que mesmo 22 dB mais baixa ainda é o que mais pesa
+   ali). Abaixo de 150 Hz o EMD em carga também tem mais leito que a gravação (30–60 Hz: 28% contra 1% no notch
+   intermediário e 15% contra 4% no notch 8; 60–150 Hz: 4–7% contra 3–4%): é a variação de uma queima para a outra no
+   grave do escape de 16 cilindros, não uma fonte de ar.
+3. *Fontes de ar contínuas mudam o nível ponderado A em menos de 1,5 dB em lenta e carga parcial*: 0,00 a 0,02 dB em todos
+   os presets de estrada e no gerador (também em plena carga); 0,10 dB no EMD em notch intermediário (0,44 em notch 8).
+   Nenhuma fonte de ar é a que mais pesa em banda nenhuma até 6 kHz, fora a banda larga da turbina do EMD em notch 8
+   acima de 1 kHz (31% de 1–2,5 kHz e 77% de 2,5–6 kHz).
+4. *Turbo no enchimento*: banda larga ≤ 0,01 dB no total ponderado A (EMD 0,85 dB); o apito é um tom fino 20–24 dB acima
+   do fundo local.
+5. *Modulação na ignição ≥ a da gravação na lenta*: cumprido em todos (0,28–1,08 contra 0,01–0,50). Em carga: 0,60–0,81
+   nos motores de estrada (gravações de cabine: 0,02–0,65; no Scania, 0,61 contra 0,65) e 0,20 no EMD.
+6. *Três primeiras ordens de queima a ±3 dB*: **não foi objeto desta passada** (o escape não mudou). Medido, relativo ao
+   total (gravação / simulado): Scania em carga −2 / −1, −9 / −7, −19 / −23 dB; Hilux em lenta, de fora, −26 / −20, −8 /
+   −8, −4 / −4; Cat C15 em carga na cabine −7 / −1, −3 / −13, −15 / −12 (a 2ª ordem, 153 Hz, sai 10 dB baixa); Cat C15 em
+   lenta −18 / −6, −2 / −3, −19 / −9 e 300D −4 / −14, −13 / −4, −23 / −5 (abaixo de ~100 Hz a gravação de celular não é
+   confiável).
+
+Na régua do kit (aprovados pelo ouvido: total ≤ 2,2), os casos de carga ficam em 1,6–3,2 e os de lenta em 1,9–4,6 (antes
+da passada, a lenta: 2,2–6,0). O que passa de 2,2 vem das distâncias simétricas de envoltória e de modulação: o simulado
+é mais pulsado que a gravação (p90/p10 de 14–21 dB na lenta dos motores de estrada e do gerador contra 5–13; leito de
+2–9% contra 16–85%), de propósito. Os três defeitos de um lado só ficam dentro dos portões em todos os casos (`ar` ≤
+0,42; tom a menos ≤ 1,70; pulso a menos ≤ 1,13).
+
+**Pendente** (relatado, não resolvido aqui):
+
+- **Faltam médios em carga.** Na cabine, 400 Hz–2,5 kHz fica 5–10 dB abaixo das gravações casadas (Cat C15: −17 / −22 dB
+  relativos a 150–400 Hz contra −11 / −17; Scania: −14 / −18 contra −4 / −13), e as linhas do motor nessa faixa 4–8 dB
+  abaixo. A mecânica cresce da lenta para a carga o que a física dela manda (11–17 dB em 400 Hz–6 kHz no C15) e o escape
+  de 150–400 Hz cresce 34 dB. O que falta é conteúdo tonal do escape e da carcaça dele nessa faixa: é o mecanismo
+  genérico do caminho compartilhado (`ronco/dsp.ts`), fora do ramo `cc`. Esse mecanismo chegou depois ao motor-base
+  (campo `carcaca` do preset: a carcaça do abafador irradiando a onda que chega a ela; Ronco → "Médios") e nasce
+  desligado nas famílias que herdam. O Diesel ficou ligado a ele (`buildExhaust` preenche `carcSrc` com o tubo que chega
+  a cada abafador, as sondas rodam sem ela por `refMedios`, e o painel tem o controle "Carcaça do escape"), mas
+  **desligado nos presets**: a medida não confirmou o valor recomendado para os carros. Com `carcaca` −6 dB nenhuma
+  banda muda (0,0 dB em 13 casos da régua). Com +18 e +24 dB, relativo a 150–400 Hz, a banda de 400–1000 Hz sobe 2,0
+  e 4,8 dB no Cat C15 em carga na cabine (−17,2 → −15,2 → −12,4; gravação −10,7), 1,9 e 3,6 no Scania (−14,1 → −12,2 →
+  −10,5; gravação −4,1) e 4,5 e 7,3 no ônibus de fora (−11,4 → −6,9 → −4,1; gravação −3,1), o HNR dela sobe de 4,5 para
+  11 dB (são linhas) e os totais da régua mudam de −0,25 a +0,1; a de 1–2,5 kHz não sobe (relativa, cai 1 a 2,5 dB, porque a de
+  150–400 sobe junto): com tubo de 5" a parede ressoa em 475 Hz e a massa corta em 1,3 kHz. É um caminho para os médios
+  de 300 a 1000 Hz em carga, com valores 24 a 30 dB acima dos do Ronco; ligá-lo muda o nível em carga e pede refazer o
+  acerto da `mecanica` e a validação. O que falta de 1 a 2,5 kHz na cabine não vem dele.
+- **O que o Diesel não herda do motor-base**: a `batida` periódica (o Diesel tem a dele, pela queima); o `jato: 'sonico'`
+  (o jato do Diesel já segue a velocidade média na boca e a boca é um campo à parte: com o tubo em 1,5" o jato muda o
+  nível ponderado A em 0,0 a 0,3 dB); e a bomba de ar secundário não toca no Diesel (`hasCat = false` em `tune()`:
+  render de lenta fria idêntico com `bombaAr: 'tom'` e sem o campo).
+- **A lenta continua mais seca que as gravações.** Com o chocalho das engrenagens o p90/p10 de 1–6 kHz na lenta fica em
+  14–21 dB (sem ele, 19–27; gravações, 5–13). O controle "Reflexos do cofre" enche mais o intervalo entre as explosões;
+  o padrão (−10 dB) ficou baixo para a carga não perder os pulsos (com −7 dB o "pulso a menos" do Scania em carga passa
+  de 1,3).
+- **Locomotiva em notch 8** (achado 1 da auditoria, "chiado contínuo"): a banda larga da turbina caiu 22 dB (desligá-la
+  mudava o nível ponderado A em 12,1 dB; agora, em 0,4), mas o agudo continua mais liso que o das gravações (p90/p10 de 1–6 kHz de 7,1 dB contra
+  9,3; "pulso a menos" 0,62, dentro do portão) e a turbina ainda é o que mais pesa acima de 1 kHz (31% e 77%; `ar` 0,42).
+  Com 16 cilindros a 904 rpm são 241 explosões por segundo: o que as gravações têm é uma flutuação mais lenta, que o
+  modelo não tem. O EMD em lenta (achado 3, "escura e ribombante") segue com 400–1000 Hz 12 dB abaixo da gravação e
+  60–150 Hz 8 dB acima, relativos a 150–400 Hz.
+- **O grave da lenta sobra** (achado 5 da auditoria): relativo a 150–400 Hz, a banda de 60–150 Hz fica acima das
+  gravações de fora em 4 dB no Cat C15 (+12 contra +9), 13 no Scania (+9 contra −4), 11 no ônibus (+7 contra −4), 20 na
+  Ram (+20 contra 0), 13 na Hilux (+18 contra +5) e 10 no 300D (+11 contra +1). É o escape (caminho compartilhado, que
+  esta passada não mexeu) somado à pouca energia do simulado em 150–400 Hz.
+- **Gerador e locomotiva tocam na página sem ventilador, alternador nem sopradores** (achado 4 da auditoria): as fontes
+  existem nos portadores (`Gerador` em `src/carriers/gerador.ts`: `alternador`, `ventilador`; `Locomotiva` em
+  `locomotiva.ts`: `ventilador.k`, `soprador.tracao` e as outras), mas só a Cena os monta (`src/scene/dsp-cena.ts`). A
+  página do Diesel roda o `DieselDSP` com a carga interna (governador e torque; os `TODO(integração carriers/)` em
+  `src/engines/diesel/dsp.ts` e em `src/pages/diesel/Painel.tsx`). Ligar pede que o worklet da página monte o portador,
+  acople o motor (`src/engines/diesel/motor.ts`) e some as fontes próprias dele na distância de referência (7,5 m), ou
+  que a página rode pela Cena; os dois caminhos passam por `src/carriers/` e `src/scene/`. O ventilador do gerador tem
+  uma parte de ruído largo: quem ligar confere o orçamento de ruído, pelo viés.
+- **O ouvinte de fora ouve o motor perto demais em relação ao do cofre**: entre as duas posições a gravação da Hilux
+  muda 11 dB em 400–1000 Hz e 19 dB em 1–2,5 kHz; o simulado, 1 e 2 dB (os pesos de posição são do caminho
+  compartilhado).
+- **O som de fundo do ambiente** pesa na lenta da Hilux (+0,4 dB no nível ponderado A; +2,5 dB em 150–400 Hz) mais que
+  nos carros aprovados (Mustang +0,1 dB, Fusca 0,0): a lenta da picape é 5,5 dB mais baixa que a do Mustang em nível
+  ponderado A. É o único "ar" que sobra na lenta; o botão "Som de fundo do ambiente" o desliga. (O ambiente é do
+  caminho compartilhado.)
+- **Desvios novos na validação** (`DESVIOS` em `tools/diesel-valida.ts`, cada um com o motivo): o agudo acima de 6 kHz da
+  picape e do caminhão em lenta, o médio e o agudo do caminhão e do ônibus em carga na cabine, o agudo do EMD e da GE em
+  notch 8 (era tudo ruído: tiques, sopro, turbina), o CV das alturas de pico da batida (0,57 nas picapes: cada batida é
+  agora um clique de forma fixa por cilindro), a curtose do cofre da Hilux e o dp/dθ da lenta da Hilux (2,97 bar/° para
+  3–6). São 17 medidas em desvio com motivo desta passada, de 70 (eram 66 de 255 medidas antes dela; hoje são 288
+  medidas, com o grupo `ar`). O teste da envoltória em carga passou a ser de um lado só (não pode ser mais liso que a
+  gravação) e o do apito do caminhão passou a medir o tom relativo à banda das ordens (≤ −20 dB).
+- **Medidas que dependem da realização do sorteio** (T-DSL-02 da auditoria): o degrau de 100% do gerador passa com
+  10,0% de queda (limite 10%) e o dp/dθ da lenta da Hilux fica em 3,0 bar/° (limite 3): qualquer retoque que consuma
+  números do gerador aleatório pode virar as duas. A lenta do F-1000 a 20 °C depois das aceleradas do `lenta:diesel`
+  foi conferida em 10 sementes: não apaga em nenhuma (mínimo de 504 a 558 rpm; antes da passada, de 450 a 563). Com a
+  dispersão do atraso de ignição a frio reduzida (uma versão intermediária desta passada) apagava em 1 de 10, e por
+  isso a dispersão a frio voltou ao valor de antes.
 
 ## Radial e aviação a pistão
 
@@ -1795,14 +2054,77 @@ A pós-queima na boca era ruído puro (branco de 400 Hz a 3 kHz) injetado a 6 cm
 
 **Sem gravação casada** (medidos só pelo orçamento e pelos portões): X Mini e XTS-210, AE50R, AR741, MidWest, Mistral, RX-3, Cosmo 110S e RX-8 de 4 janelas (neles o jato da ponta passou a ler a razão de áreas ponteira/tubo no lugar da área absoluta: nos tubos finos, onde ele era 64–99% do agudo, cai 8–24 dB); e o motor de palhetas (outro sintetizador, que esta rodada não tocou; as duas gravações de retífica do acervo ficaram por comparar). O Eunos Cosmo em carga só tem gravação de cabine sem som periódico (fração periódica 0,07: vento e rolagem), que não serve de alvo.
 
+### Segunda passada: carcaça do escape, batida e trocas de configuração (novembro de 2026)
+
+Os dois mecanismos de médios do motor-base (Ronco → "Médios: carcaça do escape e batida periódica") ligados nos Rotativos, o jato num caminho só e a lenta que afundava a cada troca de configuração. Renders e painéis em `referencias/_sim/rotativo/p2-*`; painéis reduzidos da passagem do RX-8 em [`docs/ouvido/rotativo/`](ouvido/rotativo/).
+
+**O RX-8 em giro alto: o que a gravação tem.** A primeira rodada escreveu que faltavam "20 dB ou mais de 1 a 6 kHz, em linhas". O nível falta; as linhas, não. Nas aceleradas paradas de fora com o escape original (`rx8-original-lenta-aceleradas.wav`, 8–15 s) as bandas de 1–2,5 kHz e 2,5–6 kHz são leito liso (96–100% da banda; o espectrograma só mostra harmônicos até ~700 Hz). Na passagem (`rx8-passagem-original.wav`, 9–11 s, ~7 070 rpm com o Doppler) as linhas de 1–2,5 kHz ficam em −13,9 dB rel. 150–400 Hz e o nível da banda em −6,4: a diferença é rolagem, vento e sopro. O simulado em plena carga tinha as linhas em −16,9: faltavam 3 dB de tom. O resto do que a gravação tem ali é ar, que o viés do simulador manda não repor. (O cruzeiro a bordo, `rx8-original-aceleracao.wav` 27–39 s, é quase só vento e rolagem, fração periódica 0,13: não serve de alvo de timbre.)
+
+**Carcaça do escape** (`carcaca`, em dB; controle "Carcaça do escape" em Escapamento). O `buildExhaust` do rotativo preenche `carcSrc`, um tubo por boca: o que entra no abafador daquela saída (depois do catalisador e do pré-silencioso); no megafone, que não tem caixa, o que entra no cone (o direto e o megafone irradiam 0,3×, a escala do motor-base). As sondas (`calibrate`, `measurePower`, `sondarNivelRotativo`) rodam sem ela (`refMedios`): o controle muda o volume de verdade. Nível escolhido pela régua, no RX-8 em plena carga a 7 070 rpm, de fora:
+
+| `carcaca` | linhas de 1–2,5 kHz (gravação −13,9) | nível de 1–2,5 kHz (gravação −6,4) | 2,5–6 kHz (gravação −14,6) | FC na lenta, 1–2,5 kHz (gravação −35,2) | ponteira de 20 mm: queda em plena carga |
+|---|---|---|---|---|---|
+| sem | −16,9 | −16,6 | −28,3 | −36,8 | −18,1 dB |
+| **−16 (padrão)** | **−12,6** | −12,4 | −26,6 | −34,8 | −13,9 dB |
+| −12 | ≈ −10 | −10,0 | −25,4 | −33,7 | −10,9 dB |
+| −10 | −8,7 | −8,5 | −24,5 | −32,9 | −9,1 dB |
+| −7 | −6,5 | −6,3 | −23,2 | −31,6 | — |
+| 0 (referência dos carros do Ronco) | +0,2 | +0,4 | −17,5 | — | — |
+
+O padrão ficou em **−16 dB**: as linhas do simulado ficam a 1,3 dB das da gravação, a lenta do FC fica no nível da gravação casada (−34,8 contra −35,2) e a ponteira fina continua amolecendo o pulso em carga. A carcaça não passa pela ponteira: com −12 a queda em plena carga encolhe de 18 para 11 dB e a medida "pelo menos 6 dB a mais em carga que na lenta" do teste deixa de valer; com −10 o nível da banda chega perto do da gravação (−8,5 contra −6,4), em linhas onde ela tem leito. O controle vai até +12 para quem quiser mais motor nos médios. Acima de 2,5 kHz continuam faltando 12 dB: é o filtro do abafador original em `src/acoustics/guias.ts` (−47 dB em 4 kHz), do motor-base.
+
+**Batida periódica** (`batida`, em dB; controle "Batida da mecânica" em Características). O Wankel não tem válvula assentando nem pistão encostando. Ficou ligado o que tem contrapartida: a vedação de ápice, que a mola empurra para dentro da janela e a borda de saída devolve à ranhura (um impacto por passagem, no fechamento do escape e no da admissão: `batV` em `janelasRot`), e a folga da engrenagem de fase e do mancal do excêntrico tomada pela força de cada explosão (o ramo de centelha do Ronco, `batC`). Os tiques sorteados (`clickEnv`) continuam. O padrão é **−12 dB** (a sugestão do motor-base era −6); medidas com a carcaça em −10 dB:
+
+| `batida` | FD a bordo em carga: `ar` / tom a menos | FC na lenta: picos/s · curtose de 1–6 kHz (gravação 16,1 · 6,8) | Ro 80 no cofre: curtose (gravação 3,3) | bridge na lenta: `ar` | 787B a 7 700 rpm: 2·ign − ign (gravação −6 ± 4) |
+|---|---|---|---|---|---|
+| sem | 3,58 / 1,81 | 27,7 · 16,2 | 16,9 | 0,56–0,59 | −8,2 dB |
+| **−12 (padrão)** | 3,28 / 1,54 | 32,9 · 15,6 | 15,2 | 0,60–0,61 | −9,8 dB |
+| −6 | 2,62 / 1,21 | 39,3 · 14,9 | 19,4 (p90/p10 de 11,5 para 14,7 dB; gravação 11,1) | 0,63 | −10,6 dB |
+
+Com −6 a cabine ganha mais (é onde a estrutura do motor mais se ouve), mas no cofre aberto a envoltória de 1–6 kHz passa a ter dois calombos por ignição (vira tique), o `ar` do bridge passa do limite de 0,6 (as batidas seguem as rajadas e contam como leito) e a linha de 2·ign do 787B, que a batida cancela em parte no ouvinte de fora, sai da tolerância. Com −12 o `ar` do bridge fica em 0,61 (era 0,59; limite 0,6): desvio de 0,01, anotado.
+
+**Jato: um caminho só.** A `BocaRot` já é o orifício (contrapressão, velocidade na ponteira, teto sônico). O `jato: 'sonico'` do motor-base trocaria o `step` dela pelo bocal dele: o `tune` do rotativo força `jatoFis = false`. Conferido: o mesmo render com e sem `jato: 'sonico'` (ponteira de 20 mm, plena carga) sai igual amostra a amostra.
+
+**Lenta que afundava nas trocas de configuração.** Cada troca estrutural no painel (abafador, pré-silencioso, janela) manda a configuração inteira, e o `setConfig` do motor-base recomeça todas as câmaras com o gás do coletor e sem ar contado: um ciclo de câmara inteiro (três voltas do eixo) sem queimar. Com as janelas de fábrica a lenta caía de 750 para ~600 rpm a cada troca (medido: mínimo de 596–654 rpm, depois 880–980 na volta). Com a janela periférica somava-se a composição do gás recomeçando do zero em todas as câmaras, e a lenta de rua (750 rpm) que o FD mantinha com uma janela de corrida, caçando de 400 a 1 000 rpm sozinha: um ciclo sem queima em cima de uma rajada de falhas apagava o motor. Três mudanças:
+
+- **O estado passa de uma configuração para a outra** (`RotativoDSP.setConfig`): com o motor funcionando, as mesmas câmaras e a mesma geometria, pressão, massa, ar, queima em curso e composição do gás de cada câmara são guardados antes do `setConfig` do motor-base e postos de volta. Se a janela mudou, a composição recomeça (era a das janelas antigas) e o resto passa. Trocas de escape com as janelas de fábrica: 708–799 rpm, sem afundar.
+- **A lenta acompanha a janela** (`setJanelas` da página): ao escolher bridge ou periférica a lenta sobe para 1 500 ou 1 800 rpm (as dos rótulos do painel) se estiver abaixo; ao voltar para uma janela de rua, a do preset.
+- **Teste** (`npm run lenta:rotativo`, quatro casos novos): três trocas de escape seguidas, 0,4 s entre elas, com as janelas de fábrica, com a periférica e no 787B (mínimo nas trocas ≥ o mínimo dos 6 s de antes − 8% do alvo, sem apagar), e a troca da janela para a periférica com o motor na lenta. Com a correção desligada o caso de fábrica falha (596 rpm; mínimo aceito 663).
+
+O ciclo sem queima a cada `setConfig` é do motor-base e vale para todas as famílias que herdam dele; aqui foi contornado só nos Rotativos.
+
+**Antes → depois desta passada** (régua; níveis em dB rel. 150–400 Hz, gravação / antes / depois):
+
+| caso | ar | tom a menos | pulso a menos | total | 1–2,5 kHz | 2,5–6 kHz |
+|---|---|---|---|---|---|---|
+| fc-lenta | 0,00 → 0,00 | 0,18 → 0,17 | 0,15 → 0,15 | 2,06 → 2,05 | −35,2 / −36,8 / −34,8 | −41,0 / −40,5 / −40,5 |
+| fc-3550 | 0,00 → 0,00 | 0,00 → 0,00 | 0,62 → 0,50 | 3,38 → 3,09 | −12,3 / −19,2 / −17,5 | −24,2 / −30,7 / −30,5 |
+| bridge-lenta | 0,59 → 0,61 | 1,32 → 1,32 | 0,12 → 0,12 | 2,76 → 2,72 | −16,9 / −19,6 / −19,5 | −20,2 / −30,1 / −30,1 |
+| fd-carga-cabine | 3,58 → 3,28 | 1,80 → 1,54 | 1,92 → 2,30 | 2,67 → 2,83 | −11,3 / −30,1 / −29,3 | −23,7 / −48,1 / −47,9 |
+| fd-carga-ext | 0,00 → 0,00 | 0,34 → 0,34 | 0,00 → 0,00 | 2,66 → 2,51 | −11,3 / −4,6 / −4,7 | −23,7 / −9,9 / −9,9 |
+| rx8-lenta-esportivo | 0,00 → 0,00 | 0,03 → 0,05 | 0,00 → 0,00 | 4,17 → 4,11 | −21,3 / −19,0 / −18,1 | −27,9 / −39,1 / −39,0 |
+| 20b-lenta | 0,00 → 0,00 | 0,00 → 0,00 | 0,00 → 0,00 | 2,22 → 2,27 | −34,9 / −33,7 / −31,3 | −43,7 / −42,6 / −42,4 |
+| 787b-lenta | 0,00 → 0,00 | 0,25 → 0,25 | 0,94 → 0,98 | 1,59 → 1,59 | −20,0 / −16,8 / −16,6 | −14,1 / −18,4 / −18,3 |
+| 787b-7700 | 0,00 → 0,00 | 0,02 → 0,02 | 0,58 → 0,55 | 2,17 → 2,19 | −1,2 / −10,1 / −9,2 | −13,6 / −20,6 / −20,4 |
+| 787b-bordo | 0,00 → 0,00 | 1,10 → 1,12 | 0,35 → 0,00 | 2,53 → 2,42 | −8,3 / −14,2 / −14,1 | −8,9 / −49,3 / −44,4 |
+| 787b-bordo-ext | 0,00 → 0,00 | 1,24 → 1,25 | 0,00 → 0,00 | 2,75 → 2,78 | −8,3 / −2,7 / −2,1 | −8,9 / −11,3 / −11,2 |
+| norton-lenta | 0,00 → 0,00 | 0,77 → 0,78 | 0,22 → 0,22 | 3,66 → 3,56 | −2,8 / −16,8 / −15,9 | −12,7 / −38,7 / −38,8 |
+| ro80-lenta | 0,00 → 0,00 | 0,00 → 0,00 | 0,44 → 0,33 | 2,51 → 2,58 | −0,7 / −18,8 / −15,1 | −14,2 / −24,7 / −24,1 |
+| rx8-passagem (novo) | 0,00 → 0,00 | 0,00 → 0,00 | 1,84 → 2,56 | 3,58 → 3,55 | −6,4 / −16,6 / −12,4 | −14,6 / −28,3 / −26,6 |
+| rx8-cruzeiro-cabine (novo) | 0,00 → 0,00 | 0,21 → 0,21 | 0,09 → 0,24 | 4,48 → 4,33 | −13,6 / −24,2 / −22,3 | −23,5 / −54,2 / −50,0 |
+| rx8-cruzeiro-ext (novo) | 0,00 → 0,00 | 0,06 → 0,06 | 0,00 → 0,09 | 3,74 → 3,48 | −13,6 / −16,8 / −16,0 | −23,5 / −29,7 / −28,9 |
+
+Na passagem o "pulso a menos" (1,84 → 2,56) é da gravação: em 2 s o carro chega e o nível sobe 15 dB, e a régua lê isso como envoltória funda. Os totais dos casos do RX-8 seguem altos pelo mesmo motivo da primeira rodada (a gravação é leito, o simulado é tom). No `teste:rotativo` (151 medidas: 137 ok, 14 desvios, 0 falhas) duas medidas saíram da lista de desvios (centroide do 787B a 7 700 rpm, 627 → 657 Hz; lenta → plena carga do Cosmo, +17,9 → +18,0 dB) e nenhuma entrou; as que mexeram mais: ponteira de 20 mm em plena carga −18,1 → −13,9 dB (a carcaça), 2·ign − ign do 787B −8,2 → −9,8 dB (a batida), RX-8 a 5 000 rpm sustentados 1–2,5 kHz −29,1 → −25,7 e Ro 80 frio 1–2,5 kHz −22,0 → −15,8 (a carcaça).
+
 ### Pendente (TODO)
 
-- Médios em carga leve e giro alto no megafone (787B a 7 700 rpm em ponto morto): pulso mais forte na abertura com pouca carga e os modos do megafone (um tubo cônico, que o DSP não tem).
+- Médios em carga leve e giro alto no megafone (787B a 7 700 rpm em ponto morto): pulso mais forte na abertura com pouca carga e os modos do megafone (um tubo cônico, que o DSP não tem). Na segunda passada só a batida mexeu nisso (1–2,5 kHz de −10,1 para −9,2 dB; a gravação tem −1,2): a carcaça é linear e somaria igual em plena carga, onde 1–2,5 kHz já passa da gravação de bordo.
+- A cada `setConfig` o motor-base recomeça as câmaras (um ciclo sem queimar); os Rotativos passam o estado de uma configuração para a outra, as outras famílias não.
 - O "brap" do bridge de plenum comum se repete a cada 7 voltas (8 queimas, 6 falhas); as gravações dão 6. No 787B, de dutos individuais, o período já é de 6 voltas, mas a rajada é menos funda que a do vídeo (modulação a 5 Hz de −12 dB contra −5).
 - Cabine: o filtro de cabine do Ronco tira o tom acima de 1 kHz (FD e 787B a bordo); é do motor-base.
 - Irradiação: no Ronco o ganho da boca cresce com d² (d³ no grave); o rotativo passou a d (monopolo). Vale conferir no motor-base.
 - Norton e os demais Sachs: eventos das janelas "a conferir" (a duração de admissão da tabela, 330°e, não fecha com uma janela periférica, que fica aberta pelo menos 360°e); o agudo mecânico do motor refrigerado a ar que a gravação mostra.
-- RX-8 em giro alto, de fora (genérico, do abafador de série): sustentado a 5 000 rpm o simulado tem 1–2,5k / 2,5–6k a −29,1 / −35,6 dB rel. 150–400; as gravações de fora do acervo dão −7,4 / −11,4 (aceleradas paradas, escape original, trecho de 8–15 s) e −4,8 / −14,5 (passagem). Faltam 20 dB ou mais de 1 a 6 kHz, em linhas e não em chiado: o abafador `stock` do Ronco e o que a carroceria irradia. A lenta com o escape original do acervo é só ruído de gravação (−41 dBFS) e não serve de alvo.
+- RX-8 em giro alto, de fora: com a carcaça em −16 dB as linhas de 1–2,5 kHz em plena carga ficam a 1,3 dB das da passagem gravada; o nível das bandas segue abaixo do da gravação (−12,4 contra −6,4 em 1–2,5 kHz, −26,6 contra −14,6 em 2,5–6 kHz), porque lá ele é leito (sopro, rolagem, vento) e não linhas. O que falta acima de 2,5 kHz em tom é o filtro do abafador original em `src/acoustics/guias.ts` (motor-base). A lenta com o escape original do acervo é só ruído de gravação (−41 dBFS) e não serve de alvo.
 - Ro 80: a admissão do KKM 612 é periférica e a ficha usa a lateral (aproximação declarada no preset). Tentada uma periférica de rua (eventos estimados: abre 60° antes do PMS, fecha 70° depois do PMI; dois estágios de 0,036 + 0,114·boreEq²): o modelo de diluição põe a lenta a queimar em 51% das explosões, com o ritmo de 6 voltas de um bridge port (autocorrelação −0,91 a 3 voltas e +0,81 a 6; coletor a 0,85 bar), e contra a gravação casada o total vai de 2,51 a 3,03, com 20 estalos/s contra 1,8. Faltam duas coisas: os tempos reais da janela (não achados; a fonte primária é Froede, SAE 680461) e, no modelo, o estrangulamento entre as duas janelas periféricas durante a sobreposição (o gás do escape só chega à admissão pela folga do flanco na cintura da carcaça e pelo rebaixo do rotor, poucos cm², e o modelo liga as duas janelas pela câmara inteira). Com ele os limiares de diluição do bridge e do 787B precisam ser calibrados de novo.
 - CPU (10 s em Node, máquina carregada, relativo ao 787B = 1): `rx8hp` 0,8; `rx7fd` 1,8; `cosmo20b` 2,3. Os caros são os turbo (igual antes da rodada: 0,8 / 1,8 / 2,3 no código anterior), não o RX-8; o teste de CPU só mede o 787B.
 - Estouros por segundo do mecanismo do Ronco com o ciclo de 1 080°e (a taxa por evento conta N·rpm/120; o Wankel tem N·rpm/180): um termo `× cyc/720` no `dsp.ts` do Ronco.

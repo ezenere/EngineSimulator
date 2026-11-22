@@ -200,7 +200,12 @@ function Motor({ k, e }: P) {
       </Field>
       <Slider id="cetano" rotulo="Número de cetano" min={40} max={55} passo={1} valor={spec.cetano || 48} formatar={(v) => `${v}${v >= 51 ? ' (europeu)' : v >= 48 ? ' (S10)' : ''}`} aoMudar={(v) => k.setSpec({ cetano: v }, nt)} />
       <Slider id="cam" rotulo="Cruzamento de válvulas" min={0} max={0.3} passo={0.01} valor={clamp(spec.cam || 0, 0, 0.3)} formatar={(v) => virgula(v, 2)} aoMudar={(v) => k.setSpec({ cam: v }, nt)} />
-      <Slider id="mecanica" rotulo="Ruído mecânico (acerto do motor)" min={-20} max={30} passo={1} valor={spec.mecanica || 0} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ mecanica: v }, nt)} />
+      <Slider id="mecanica" rotulo="Batida e mecânica do motor (nível)" min={-20} max={40} passo={1} valor={spec.mecanica || 0} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ mecanica: v }, nt)} />
+      <Slider id="ressonancia" rotulo="Ressonância do bloco (quanto cada batida soa depois da pancada)" min={0.5} max={2.5} passo={0.05} valor={spec.ressonancia ?? 1}
+        formatar={(v) => `${virgula(v, 2)}× · ${v < 0.8 ? 'seco' : v < 1.35 ? 'normal' : 'ressoa'}`} aoSoltar={(v) => k.setSpec({ ressonancia: v }, { render: false })} />
+      <Slider id="desigualdade" rotulo="Diferença entre cilindros (para quem ouve)" min={0} max={2} passo={0.05} valor={spec.desigualdade ?? 1}
+        formatar={(v) => `${virgula(v, 2)}× · ${v < 0.3 ? 'todos iguais' : v < 1.35 ? 'normal' : 'um domina'}`} aoSoltar={(v) => k.setSpec({ desigualdade: v }, { render: false })} />
+      <Slider id="cofre" rotulo="Reflexos do cofre (o que volta do capô e do chão)" min={-30} max={3} passo={1} valor={spec.cofre ?? -10} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ cofre: v }, nt)} />
     </Section>
   );
 }
@@ -335,7 +340,14 @@ function Escapamento({ k, e }: P) {
         ]} atual={esc.abafador} aoEscolher={(v) => setE({ abafador: v as any })} />
       </Field>
       <Slider id="pipe" rotulo="Comprimento do escape" min={0.6} max={8} passo={0.1} valor={esc.comprimento} formatar={(v) => `${virgula(v, 1)} m`} aoSoltar={(v) => setE({ comprimento: v })} />
-      <Slider id="pipeD" rotulo="Diâmetro do escape" min={1.5} max={18} passo={0.25} valor={esc.diametro} formatar={(v) => `${virgula(v, 2)}" · ${Math.round(v * 25.4)} mm`} aoSoltar={(v) => setE({ diametro: v })} />
+      {/* (o diâmetro do tubo muda o tom; a boca de saída, o jato: mexer no tubo não mexe mais na boca) */}
+      <Slider id="pipeD" rotulo="Diâmetro do escape" min={1.5} max={18} passo={0.25} valor={esc.diametro} formatar={(v) => `${virgula(v, 2)}" · ${Math.round(v * 25.4)} mm`}
+        aoSoltar={(v) => k.setSpec({ escape: { ...esc, diametro: v }, ponteira: spec.ponteira ?? esc.diametro })} />
+      <Slider id="ponteira" rotulo="Boca de saída (ponteira)" min={1.5} max={18} passo={0.25} valor={spec.ponteira ?? esc.diametro} formatar={(v) => `${virgula(v, 2)}" · ${Math.round(v * 25.4)} mm`} aoSoltar={(v) => k.setSpec({ ponteira: v })} />
+      <Slider id="jatoBoca" rotulo="Chiado do jato na boca (só em giro alto com carga)" min={-30} max={12} passo={1} valor={spec.jatoBoca || 0} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ jatoBoca: v }, nt)} />
+      {/* (carcaça do escape, do motor-base: a parede do abafador irradiando a onda que chega a ele; no Diesel nasce desligada) */}
+      <Slider id="carcaca" rotulo="Carcaça do escape (linhas de 300 a 1000 Hz em carga)" min={-30} max={30} passo={1} valor={spec.carcaca ?? -30} formatar={(v) => (v <= -30 ? 'desligada' : `${v > 0 ? '+' : ''}${v} dB`)}
+        aoMudar={(v) => k.setSpec({ carcaca: v }, nt)} />
       <Field rotulo="Chaminé">
         <ChipGroup id="chamine" opcoes={[{ valor: true, rotulo: 'Com' }, { valor: false, rotulo: 'Sem' }]} atual={!!esc.chamine} aoEscolher={(v) => setE({ chamine: v ? { altura: 1, diametro: esc.diametro } : null })} />
       </Field>
@@ -432,9 +444,9 @@ function Admissao({ k, e }: P) {
           </Field>
           <Slider id="boost" rotulo="Pressão máxima" min={0.3} max={2.6} passo={0.05} valor={spec.boost} formatar={(v) => `${virgula(1 + v, 2)} bar abs`} aoMudar={(v) => k.setSpec({ boost: v }, nt)} />
           <Slider id="turboRpmMax" rotulo="Rotação máxima do turbo" min={10000} max={220000} passo={1000} valor={spec.turboRpmMax} formatar={(v) => `${br(v)} rpm`} aoMudar={(v) => k.setSpec({ turboRpmMax: v }, nt)} />
-          <Slider id="turboPas" rotulo="Pás do compressor" min={5} max={30} passo={1} valor={spec.turboPas} formatar={(v) => `${v} · apito ${br(Math.round((v * spec.turboRpmMax) / 60 / 100) / 10)} kHz no máximo`} aoMudar={(v) => k.setSpec({ turboPas: v }, nt)} />
-          <Slider id="turboApito" rotulo="Volume do apito" min={-40} max={12} passo={1} valor={spec.turboApito} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ turboApito: v }, nt)} />
-          <Slider id="turboChiado" rotulo="Sopro do turbo (segue os pulsos do escape)" min={-30} max={12} passo={1} valor={spec.turboChiado || 0} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ turboChiado: v }, nt)} />
+          <Slider id="turboPas" rotulo="Pás principais do compressor" min={5} max={30} passo={1} valor={spec.turboPas} formatar={(v) => `${v} · apito ${br(Math.round((v * spec.turboRpmMax) / 60 / 100) / 10)} kHz no máximo`} aoMudar={(v) => k.setSpec({ turboPas: v }, nt)} />
+          <Slider id="turboApito" rotulo="Apito do turbo (tom fino que segue a rotação do turbo)" min={-40} max={12} passo={1} valor={spec.turboApito} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ turboApito: v }, nt)} />
+          <Slider id="turboChiado" rotulo="Sopro do turbo (banda larga; o padrão é quase nada)" min={-30} max={24} passo={1} valor={spec.turboChiado || 0} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ turboChiado: v }, nt)} />
           <Slider id="turboTau" rotulo="Atraso do turbo (sobe)" min={0.3} max={8} passo={0.1} valor={spec.turboTau[0]} formatar={(v) => `${virgula(v, 1)} s · desce em ${virgula(spec.turboTau[1], 1)} s`} aoMudar={(v) => k.setSpec({ turboTau: [v, v * (spec.turboTau[1] / spec.turboTau[0])] }, nt)} />
         </>
       )}
