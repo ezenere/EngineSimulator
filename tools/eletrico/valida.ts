@@ -716,30 +716,30 @@ function bandasCaso(nome: string, bs: number[][], alvo: number[]) {
 
 // =============================================================================================== 11. Passagem e Cena
 function gCena() {
-  // Taurus a 7,5 m na estação: o tom do inversor acima do fundo do ambiente
+  // Taurus a 7,5 m na estação: o tom do inversor acima do fundo do ambiente (mediana de 3 sementes: o patamar mais longo
+  // da escada entre 3 e 7 s muda com a semente, 247 ou 294 Hz, e a diferença ia de +12,4 a +13,7 dB)
   {
-    const t = portador('taurus', {}, { faces: 'uma', ladoOuvinte: -1 }) as Trem;
-    t.comandar({ pedal: 0.63, ignicao: true, velocidadeFixa: 0 });
-    const { L, R } = renderCena(t, { amb: ambientePassagem('estacao'), traj: { lateral: 7.5 - 1.5, comprimento: 4000 }, ouv: { pos: [0, 0, 1.6], binaural: false }, dur: 7, s0: -t.corpo.comprimento / 2 + 5, eventos: [[3, () => t.comandar({ pedal: 0.63, velocidadeFixa: null })]] });
-    const x = mono(L, R);
-    // fundo: o trem parado ligado (aux) entra também; o fundo do ambiente é o da estação (murmúrio): mede-se 1 s antes de arrancar
-    // o tom: o patamar da escada mais longo entre 3 e 7 s (as notas a ±1%), medido no próprio trecho
-    const pts = patamares(rastrear(x, 3, 7, 150, 800)).filter((p) => NOTAS_TAURUS.some((n) => rel(p.f, n) <= 0.01)).sort((a, b) => b.dur - a.dur);
-    const pt = pts[0] ?? { f: 300, t: 4.2, dur: 0.5 }, ft = pt.f;
-    const [f, P] = welch(x, Math.round(pt.t * SR), Math.round((pt.t + pt.dur) * SR), 8192);
-    let pk = 0; for (let i = 0; i < f.length; i++) if (Math.abs(f[i] - ft) < 4) pk = Math.max(pk, P[i]);
-    // fundo na mesma faixa de 1/3 de oitava, no ambiente sozinho (sem trem)
+    // fundo: o ambiente da estação sozinho (sem trem): o murmúrio, dB SPL sem ponderação
     const d = new CenaDSP(SR); d.cru = true; d.message({ type: 'cena', amb: ambientePassagem('estacao'), traj: { tipo: 'reta', comprimento: 4000, raioCurva: 2000, lateral: 6, altitude: 0, sentido: 1 }, ouv: { modo: 'fixo', pos: [0, 0, 1.6], gimbal: { az: 90, el: 0, r: 5, alvo: 'corpo' }, local: 'fora', binaural: false } });
     const vazio = new Trem(SR, { N: 1, faces: 'uma' }); vazio.comandar({ pedal: 0, velocidadeFixa: 0 }); d.montar(vazio);
     const B = 128, l = new Float32Array(B), r = new Float32Array(B), sl = new Float32Array(B), sr = new Float32Array(B), fundo = new Float32Array(2 * SR);
     for (let k = 0; k < 2 * SR; k += B) { d.process(l, r, B, sl, sr); for (let j = 0; j < B; j++) fundo[k + j] = 0.5 * (l[j] + r[j]) * PA_FS; }
     const [f2, P2] = welch(fundo, SR / 2, 2 * SR, 8192);
-    const fb = potFaixa(f2, P2, ft / 1.122, ft * 1.122) / (f2[1] - f2[0]) / ((ft * 1.122 - ft / 1.122) / (f2[1] - f2[0]));
-    const dd = 10 * Math.log10(pk / Math.max(fb, 1e-30)) - 10 * Math.log10(1);
-    // o tom (a linha, em dB SPL) contra o fundo da estação inteiro (o murmúrio, dB SPL sem ponderação)
-    const tomDb = 10 * Math.log10(pk * (f[1] - f[0]) * 1.5 / 4e-10), fundoDb = 10 * Math.log10(potFaixa(f2, P2, 20, 20000) / 4e-10);
-    void dd;
-    caso('Taurus a 7,5 m arrancando: tom do inversor acima do fundo da estação', '10 ± 3 dB', `${sg(tomDb - fundoDb)} dB (tom ${f1(ft, 0)} Hz a ${f1(tomDb)} dB SPL, fundo ${f1(fundoDb)} dB SPL)`, perto(tomDb - fundoDb, 10, 3), tomDb - fundoDb, 'dB');
+    const fundoDb = 10 * Math.log10(potFaixa(f2, P2, 20, 20000) / 4e-10);
+    // o tom: o patamar da escada mais longo entre 3 e 7 s (as notas a ±1%), a linha em dB SPL no próprio trecho
+    const ts = porSementes(() => {
+      const t = portador('taurus', {}, { faces: 'uma', ladoOuvinte: -1 }) as Trem;
+      t.comandar({ pedal: 0.63, ignicao: true, velocidadeFixa: 0 });
+      const { L, R } = renderCena(t, { amb: ambientePassagem('estacao'), traj: { lateral: 7.5 - 1.5, comprimento: 4000 }, ouv: { pos: [0, 0, 1.6], binaural: false }, dur: 7, s0: -t.corpo.comprimento / 2 + 5, eventos: [[3, () => t.comandar({ pedal: 0.63, velocidadeFixa: null })]] });
+      const x = mono(L, R);
+      const pts = patamares(rastrear(x, 3, 7, 150, 800)).filter((p) => NOTAS_TAURUS.some((n) => rel(p.f, n) <= 0.01)).sort((a, b) => b.dur - a.dur);
+      const pt = pts[0] ?? { f: 300, t: 4.2, dur: 0.5 }, ft = pt.f;
+      const [f, P] = welch(x, Math.round(pt.t * SR), Math.round((pt.t + pt.dur) * SR), 8192);
+      let pk = 0; for (let i = 0; i < f.length; i++) if (Math.abs(f[i] - ft) < 4) pk = Math.max(pk, P[i]);
+      return { ft, tomDb: 10 * Math.log10(pk * (f[1] - f[0]) * 1.5 / 4e-10) };
+    });
+    const dt = m3(ts.map((q) => q.tomDb - fundoDb));
+    caso('Taurus a 7,5 m arrancando: tom do inversor acima do fundo da estação', '10 ± 3 dB', `${dt.txt} dB (tons ${fmtSementes(ts.map((q) => q.ft), 0)} Hz, fundo ${f1(fundoDb)} dB SPL)`, perto(dt.m, 10, 3), dt.m, 'dB');
   }
   // Tesla a 6 m e 30 km/h (AVAS + pneus) e a 100 km/h (trem de força contra o total)
   {

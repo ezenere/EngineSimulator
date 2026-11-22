@@ -161,7 +161,7 @@ export function avaliarDesvios<T extends Medida>(arquivo: string, linhas: T[], o
   for (const l of linhas) {
     vistos.add(l.nome);
     const e = ret[l.nome], at = pedido(op.atualizar, l.nome);
-    if (e && e.grupo !== l.grupo) { e.grupo = l.grupo; mudou = true; } // (a medida mudou de grupo: só o rótulo)
+    if (e && e.grupo !== l.grupo) { e.grupo = l.grupo; if (op.atualizar) mudou = true; } // (a medida mudou de grupo: só o rótulo)
     if (l.ok) {
       out.push({ ...l, estado: 'ok' });
       if (e?.beira) {

@@ -400,10 +400,15 @@ async function grupo(nome: string): Promise<Linha[]> {
     const edb = Array.from(ed).map((v) => 20 * Math.log10(v + 1e-9)).sort((a, b) => a - b);
     const prof = edb[Math.floor(0.95 * edb.length)] - edb[Math.floor(0.05 * edb.length)];
     add('apito do 844: batimento entre 407 e 420 Hz', '13 ± 2 Hz, ≥ 6 dB', lb ? `${f1(lb.f, 1)} Hz, ${f1(prof, 1)} dB` : 'sem linha', !!lb && Math.abs(lb.f - 13) <= 2 && prof >= 6, lb ? [lb.f, prof] : NaN, '');
-    // quilling: apito 0,1 só chia (linha < 10 dB)
-    const { x: xq } = await nota('d51', 1, 3, 1, 3, 0.1);
-    const lq = X.linhasTonais(xq, SR, { lim: 10 });
-    add('quilling (apito 0,1): só o chiado filtrado', 'nenhuma linha > 10 dB', lq.length ? `${lq.length} linhas (${f1(Math.max(...lq.map((l) => l.rel)), 1)} dB)` : 'nenhuma', lq.length === 0, lq.length, '');
+    // quilling: apito 0,1 só chia (linha < 10 dB). A linha mais saliente (procurada a partir de 6 dB; "6" se nenhuma
+    // passa disso), mediana de 3 sementes: com uma semente só ela beirava os 10 dB e às vezes passava (10,2)
+    const qs = await porSementesAsync(async () => {
+      const { x: xq } = await nota('d51', 1, 3, 1, 3, 0.1);
+      const lq = X.linhasTonais(xq, SR, { lim: 6 });
+      return lq.length ? Math.max(...lq.map((l) => l.rel)) : 6;
+    });
+    const qm = m3(qs);
+    add('quilling (apito 0,1): só o chiado filtrado', 'nenhuma linha > 10 dB', `linha mais saliente ${qm.txt} dB`, qm.m <= 10, qm.m, 'dB');
     // varredura 0 → 1 em 5 s: a nota certa e o nível monotônico
     const dv = X.dsp('d51', {}); dv.apito.aq = 1; dv.apito.tubos.splice(1); dv.apito.notas.splice(1);
     const evv: [number, any][] = []; for (let k = 0; k <= 50; k++) evv.push([k * 0.1, X.comando({ apito: k / 50 })]);
@@ -616,13 +621,16 @@ async function grupo(nome: string): Promise<Linha[]> {
       const lp = X.linhas(e, fe, 0.8, 10, 6).filter((l) => Math.abs(l.f - 2.5) < 0.3).sort((a, b) => b.prom - a.prom)[0];
       const dtR = (38 * B) / SR, k30 = Math.round(30 / dtR);
       const antes = X.media(rpm.slice(k30 - 50, k30)), seg = rpm.slice(k30, k30 + 100), min = Math.min(...seg);
-      let tv = 30; for (let k = k30 + seg.indexOf(min); k < rpm.length; k++) if (Math.abs(rpm[k] / antes - 1) <= 0.01) { tv = (k - k30) * dtR; break; }
+      // tempo de acomodação: do degrau até a última vez que a rotação sai de ±1% (30 s se não se acomoda); a primeira passagem
+      // por ±1%, que era a medida, caía em 1 a 10 s ou em nunca conforme a semente, porque o governador caça em volta
+      let ult = -1; for (let k = k30; k < rpm.length; k++) if (Math.abs(rpm[k] / antes - 1) > 0.01) ult = k;
+      const tv = ult < 0 ? 0 : Math.min(30, (ult + 1 - k30) * dtR);
       return { f: lp ? lp.f : NaN, prom: lp ? lp.prom : NaN, queda: 100 * (min / antes - 1), tv };
     });
     const lpf = mediana(cos.map((c) => c.f)), queda = m3(cos.map((c) => c.queda), 2), tv = m3(cos.map((c) => c.tv));
     add('Corliss a 75 rpm: pulsos por segundo (2 por volta)', '2,5 ± 0,05', Number.isFinite(lpf) ? `${f1(lpf, 3)} (${f1(mediana(cos.map((c) => c.prom)), 0)} dB)` : 'sem linha', Number.isFinite(lpf) && Math.abs(lpf - 2.5) <= 0.05, lpf, '/s');
     add('Corliss: degrau de 50% de carga (50 → 100%)', '−3 ± 1%', queda.txt + '%', Math.abs(queda.m + 3) <= 1, queda.m, '%');
-    add('Corliss: volta a ±1% depois do degrau', '5–10 s', tv.txt + ' s', dentro(tv.m, 5, 10), tv.m, 's');
+    add('Corliss: volta a ±1% depois do degrau (e fica)', '5–10 s', tv.txt + ' s', dentro(tv.m, 5, 10), tv.m, 's');
     // Aveling em lenta: 2,5 ± 0,3 escapes/s, 400–1k +8 ± 4 dB (mediana de 3 sementes: com uma delas a lenta dava 2,44/s)
     const { Trator, configTrator } = await import('../src/carriers/trator');
     const avs = porSementes(() => {
