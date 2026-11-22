@@ -44,7 +44,7 @@ function Conteudo({ c }: { c: ControlePassagem }) {
         </Field>
         <p className="note">{trem && c.motor === 'eletrico' ? `Motor elétrico por truque (etapa 6): as unidades do motor replicadas nos truques motores, sob o assoalho. ${c.fontes.filter((f) => f.tipo !== 'pressao').length} fontes com propagação.`
           : trem ? `Sem motor: o som é do trem andando. ${c.fontes.filter((f) => f.tipo !== 'pressao').length} fontes com propagação.`
-          : c.portador === 'rotor' ? (c.motor === 'nenhum' ? 'Rotor sem motor: Nr imposto (408 rpm), o coletivo muda a tração e o tapa das pás.' : 'Rotor com motor a pistão (Lycoming dos Robinson, Franklin do Bell 47, R-1340 do S-55): o governador do rotor mexe na borboleta e segura o Nr; o coletivo pede potência. O turboeixo ainda não existe.')
+          : c.portador === 'rotor' ? (c.motor === 'nenhum' ? 'Rotor sem motor: Nr imposto (408 rpm), o coletivo muda a tração e o tapa das pás.' : 'Rotor com motor (Lycoming dos Robinson e do Schweizer, Franklin do Bell 47, R-1340 do S-55, Wankel do Camcopter): o governador do rotor mexe na borboleta e segura o Nr; o coletivo pede potência (ao trocar o motor, o coletivo volta ao pairado, 0,75, ou ao que o motor aguenta). O turboeixo ainda não existe.')
           : `${c.fontes.filter((f) => f.tipo !== 'pressao').length} fontes: as do motor (canais do DSP da família, em Pa a ${c.fontes[0] ? fmt(c.fontes[0].refDist) : '—'} m) e as do portador.`}</p>
       </Section>
 

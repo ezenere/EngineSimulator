@@ -12,6 +12,7 @@ import type { Linha } from './medidas';
 import { CarroLegado } from '../../src/carriers/carro';
 import { MotorRonco, prepararMotorRonco } from '../../src/engines/ronco/motor';
 import { PRESETS as PRESETS_RONCO, ACESSORIOS_PADRAO } from '../../src/engines/ronco/presets';
+import { MODO_LEGADO_RONCO } from '../legado';
 import { PRESETS_TURBINA as PRESETS_JATO } from '../../src/engines/turbina/presets';
 import { MotorTurbina } from '../../src/engines/turbina/motor';
 import { FonteHelice } from '../../src/carriers/helice';
@@ -62,7 +63,9 @@ export function motorRonco(id: string, extra: Record<string, any> = {}) {
 
 /** o cenário do legado (legado.ts): Camaro SS, 3000 rpm travado, ponto morto, borboleta 0,5, v = 30 m/s, 6 m do eixo */
 export function passagemCarroLegado(x0 = 180, dur = 12, ouvinte?: any) {
-  const m = motorRonco('muscle');
+  // (comparação com o road() do legado: o motor vai com os mecanismos novos do Ronco no valor legado, como na paridade;
+  // com a carcaça e a batida ligadas os médios sobem 1–2 dB e a comparação deixava de ser do adaptador)
+  const m = motorRonco('muscle', MODO_LEGADO_RONCO);
   const c = new CarroLegado();
   c.acoplar(m);
   const d = m.dsp, w = (3000 * 2 * Math.PI) / 60;
@@ -156,29 +159,36 @@ export function medirMotores(): Linha[] {
  * (np, potência, reverso, velocidade, diretividade) e a mesma fase inicial. Tem de sair idêntico amostra a amostra.
  */
 export function medirHeliceIdentica(): Linha[] {
+  // as duas leis do nível: a do JetDSP (a página Turbina, a aviação do Ronco e a página Radial) e a de carga, com que o
+  // turboélice toca na Cena (leiCarga, o torque da potência de decolagem da ficha) e o portador Hélice toca os motores a
+  // pistão (src/carriers/leis-helice.ts)
+  return (['turbina', 'carga'] as const).map(heliceIdentica);
+}
+function heliceIdentica(lei: 'turbina' | 'carga'): Linha {
   const dur = 6, n = Math.round(dur * SR);
   const m = new MotorTurbina(SR);
   m.configurar(PRESETS_JATO.find((p) => p.id === 'single')!, SR);
   const d: any = m.dsp;
+  d.leiCarga = lei === 'carga';
   const fase0 = d.phP[0];
   const rec: number[][] = [];
   const orig = d.sources.bind(d);
-  d.sources = (dtc: number) => { orig(dtc); rec.push([d.np, d.u, d.rev || 0, d.vFly, d.de[0].prop]); };
+  d.sources = (dtc: number) => { orig(dtc); rec.push([d.np, d.u, d.rev || 0, d.vFly, d.de[0].prop, d.qHelice]); };
   m.tap.tomHelice = new Float32Array(n + 64);
   const canais = m.fontes.map(() => new Float32Array(BLOCO));
   m.velocidade = 300 / 3.6;
   for (let i = 0; i < n; i += BLOCO) { m.comandar({ acelerador: i < SR ? 0.3 : 1, ignicao: true, partida: false }); m.processar(canais, BLOCO); }
   const f = new FonteHelice(SR, d.propB, d.propD, d.cfg.propRpm);
-  f.pp = fase0; f.semRuido = true;
+  f.pp = fase0; f.semRuido = true; f.lei = lei;
   const y = new Float32Array(n), t = new Float32Array(64);
   for (let j = 0; j * 64 < n; j++) {
-    const r = rec[j]; f.np = r[0]; f.u = r[1]; f.rv = r[2]; f.vFly = r[3]; f.dprop = r[4];
+    const r = rec[j]; f.np = r[0]; f.u = r[1]; f.rv = r[2]; f.vFly = r[3]; f.dprop = r[4]; f.torque = r[5];
     f.preencher(t, 64); y.set(t.subarray(0, Math.min(64, n - j * 64)), j * 64);
   }
   let dif = 0, ref = 0, nd = 0;
   for (let i = 0; i < n; i++) { const e = Math.abs(y[i] - m.tap.tomHelice[i]); if (e > 0) nd++; dif = Math.max(dif, e); ref = Math.max(ref, Math.abs(y[i])); }
-  return [L('4.2 / 5 #10', 'hélice idêntica: tom da hélice do JetDSP (Caravan, 6 s) × FonteHelice de carriers/helice.ts', 'idêntico amostra a amostra',
-    nd === 0 ? `idêntico (${n} amostras, pico ${f1(20 * Math.log10(ref / 2e-5))} dB a 30 m)` : `${nd} amostras diferentes, erro máx ${f1(20 * Math.log10(dif / ref + 1e-30))} dB rel. pico`, nd === 0)];
+  return L('4.2 / 5 #10', `hélice idêntica: tom da hélice do JetDSP (Caravan, 6 s) × FonteHelice de carriers/helice.ts, lei ${lei === 'turbina' ? 'da Turbina' : 'de carga (Cena)'}`, 'idêntico amostra a amostra',
+    nd === 0 ? `idêntico (${n} amostras, pico ${f1(20 * Math.log10(ref / 2e-5))} dB a 30 m)` : `${nd} amostras diferentes, erro máx ${f1(20 * Math.log10(dif / ref + 1e-30))} dB rel. pico`, nd === 0);
 }
 
 
@@ -252,7 +262,7 @@ export function medirNiveisMotores(): Linha[] {
     const r = renderPassagem({ portadorPronto: h, v: 60, d: 0, altitude: 100 - mt.fontes[0].pos[2], ambiente: 'ceu', solo: 'grama', dur, sCentro0: -x0, reverb: false, semFundo: true, comprimentoVia: 6000 });
     const n = niveis(r, x0 / 60 - 6, x0 / 60 + 6);
     out.push(L('níveis', 'ATR 72 em decolagem (manete 1, 60 m/s) a 100 m de altura: L_AFmax', '~85 dB(A) (±3; certificação de ruído ICAO/EASA do ATR 72: ~84 EPNdB no ponto lateral a 450 m)', `${f1(n.max)} dB(A)`, Math.abs(n.max - 85) <= 3,
-      'O nível é o do JetDSP sem retoque (as fontes já são "Pa a 30 m": a hélice é 9·(M/0,75)⁴ Pa, 113 dB a 30 m por motor na decolagem). A Turbina nunca foi calibrada em absoluto (a página normaliza a saída por cfgGain), e a hélice dela sai ~10 dB acima do que a certificação sugere a 100 m. O 737 no mesmo modelo dá 112,5 dB a 30 m por barramento, também alto. Corrigir a escala da Turbina muda o mostrador de dB da página Turbina: fica para a revisão de níveis da Turbina.'));
+      'Na Cena a hélice do turboélice segue a física (tom de carga de Gutin com o torque dos 2 051 kW de decolagem do PW127M, e o ruído de vórtice; src/carriers/leis-helice.ts): 105 dB a 30 m por motor, contra os 113 da lei do JetDSP, que deu 95,0 dB(A) aqui até 22/11/2026. Fica 0,3 dB acima da faixa: o alvo vem de 84 EPNdB a 450 m, e a conversão de EPNdB para dB(A) numa hélice de tom grave tem uns ±3 dB; o resto do nível é o jato e o gerador de gás do JetDSP, que nunca foram calibrados em absoluto (o 737 no mesmo modelo dá 112,5 dB a 30 m por barramento). A página Turbina continua com a lei dela.'));
   }
   return out;
 }

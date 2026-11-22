@@ -174,6 +174,9 @@ function NotaDaOrdem({ e, parsed }: { e: EstadoRonco; parsed: number[] | null })
   return <p className={cls} id="orderNote">{txt}</p>;
 }
 
+// carcaça do escape e batida da mecânica (médios): dB sobre o nível de referência; o mínimo do controle desliga (som legado)
+const dbOuLegado = (v: number) => (v <= -30 ? 'sem · legado' : `${v > 0 ? '+' : ''}${v} dB`);
+
 // ---- Características
 function Caracteristicas({ k, e }: P) {
   const { spec } = e;
@@ -206,6 +209,9 @@ function Caracteristicas({ k, e }: P) {
           { valor: 'air', rotulo: 'Ar', titulo: 'Aletas, sem radiador (Fusca, 911 antigo, motos clássicas): sem camisa d\'água em volta, a mecânica soa mais' },
         ]} atual={spec.cooling || 'water'} aoEscolher={(v) => k.setSpec({ cooling: v }, { structural: false })} />
       </Field>
+      {/* batida periódica: pistão e válvulas excitam o bloco com o mesmo impulso a cada ciclo (linhas nos médios, não ruído); no mínimo, o som legado */}
+      <Slider id="batida" rotulo="Batida da mecânica (pistão e válvulas)" min={-30} max={12} passo={1} valor={spec.batida ?? -30} formatar={dbOuLegado}
+        aoMudar={(v) => k.setSpec({ batida: v }, nt)} />
       <Slider id="inertia" rotulo="Volante do motor" min={0.2} max={2} passo={0.05} valor={spec.inertia}
         formatar={(v) => (v < 0.5 ? 'muito leve' : v < 0.85 ? 'leve' : v < 1.25 ? 'normal' : 'pesado')} aoMudar={(v) => k.setSpec({ inertia: v }, nt)} />
     </Section>
@@ -271,6 +277,13 @@ function Temperatura({ k, e }: P) {
       </Field>
       <Field rotulo="Som da bomba de ar secundário">
         <ChipGroup id="saSound" opcoes={LIGADO} atual={params.saSound} aoEscolher={(v) => k.setParams({ saSound: v }, true)} />
+      </Field>
+      <Field rotulo="Bomba de ar secundário">
+        <ChipGroup id="bombaAr" opcoes={[
+          { valor: 'larga', rotulo: 'Linha larga', titulo: 'Motor elétrico de verdade: a rotação deriva um pouco e o zumbido não é um tom parado' },
+          { valor: 'sem', rotulo: 'Sem bomba', titulo: 'Carro que esquenta o catalisador só com a centelha atrasada (Mustang GT)' },
+          { valor: 'tom', rotulo: 'Tom parado (legado)', titulo: 'Dois senos fixos em 760 e 1520 Hz, como antes' },
+        ]} atual={e.spec.bombaAr || 'tom'} aoEscolher={(v) => k.setSpec({ bombaAr: v }, { structural: false })} />
       </Field>
       <p className="note">Frio: marcha lenta mais alta, ronco mais rasgado nos primeiros segundos (a central esquenta o catalisador), mais barulho de tucho e a bomba de ar zunindo. Perto de 90 °C a termostática abre; acima de ~99 °C liga a ventoinha.</p>
     </Section>
@@ -349,6 +362,9 @@ function Escapamento({ k, e }: P) {
           { valor: 'leaky', rotulo: 'Com vazamento', titulo: 'Junta furada ou escape solto: o vazamento sopra forte a cada explosão' },
         ]} atual={spec.breakout || 'sealed'} aoEscolher={(v) => k.setSpec({ breakout: v }, { structural: false })} />
       </Field>
+      {/* carcaça: a parede dos tubos e do abafador irradia o que passa por dentro, em linhas de 0,5 a 2,5 kHz (o "corpo" do ronco); no mínimo, o som legado */}
+      <Slider id="carcaca" rotulo="Carcaça do escape (parede dos tubos e do abafador)" min={-30} max={12} passo={1} valor={spec.carcaca ?? -30} formatar={dbOuLegado}
+        aoMudar={(v) => k.setSpec({ carcaca: v }, { structural: false, render: false })} />
       <Field rotulo="Traçado">
         <ChipGroup id="routing" opcoes={[
           { valor: 'single', rotulo: 'Único' }, { valor: 'dual', rotulo: 'Duplo' },
@@ -400,6 +416,12 @@ function Acessorios({ k, e }: P) {
       <Slider id="pipeD" rotulo="Diâmetro do escape" min={1.5} max={4} passo={0.05} valor={spec.pipeD || 2.5} formatar={polegadas} aoSoltar={(v) => k.setSpec({ pipeD: v }, { render: false })} />
       {/* a ponteira é só a saída: fina, o gás sai rápido e sopra (o Fusca tem duas finas); larga, sai manso */}
       <Slider id="tipD" rotulo="Ponteira (saída)" min={1.25} max={4} passo={0.05} valor={spec.tipD || spec.pipeD || 2.5} formatar={polegadas} aoSoltar={(v) => k.setSpec({ tipD: v }, { render: false })} />
+      <Field rotulo="Jato da ponteira">
+        <ChipGroup id="jato" opcoes={[
+          { valor: 'sonico', rotulo: 'Sônico', titulo: 'O sopro de cada pulso segue a vazão do gás e satura no escoamento sônico; ponteira mais fina que o tubo vira um bocal: sobe a contrapressão e amolece o pulso, sem chiado sem limite' },
+          { valor: 'legado', rotulo: 'Legado', titulo: 'Lei antiga: o chiado cresce com 1/área² da ponteira (tubo e ponteira finos viram "papel rasgando")' },
+        ]} atual={spec.jato === 'sonico' ? 'sonico' : 'legado'} aoEscolher={(v) => k.setSpec({ jato: v })} />
+      </Field>
       <Field rotulo="Ressonador">
         <ChipGroup id="reso" opcoes={[
           { valor: false, rotulo: 'Sem' },

@@ -12,7 +12,7 @@ import type { FonteSonora, Carga, Vec3 } from '../scene/tipos';
 import type { Portador, Corpo, Cinematica, ComandoPortador, TelemetriaPortador, Motor, FamiliaMotor } from './tipos';
 import { COMPAT, validarCompat } from './compat';
 import { CORPO_CARRO } from './carro';
-import { FonteRuido, FonteAero, Ramo, polo1 } from './ruido';
+import { FonteRuido, FonteAero, FontePneu, Ramo, polo1 } from './ruido';
 import { Bq, fatorPotenciaDir } from '../scene/filtros';
 import { RHO } from '../scene/constantes';
 import type { MotorEletrico } from '../engines/eletrico/motor';
@@ -21,17 +21,7 @@ import type { ComandoEletrico } from '../engines/eletrico/dsp';
 const G = 9.81;
 const V_REF_PNEU = 80 / 3.6;
 
-/**
- * Pneu (CENA 4.1): pico de 1/3 de oitava em 800–1250 Hz, −10 dB em 250 Hz e 4 kHz (passa-banda em 1 kHz com Q 0,8: duas
- * oitavas para cada lado dão −10 dB), modulação lenta pela textura (±1,5 dB); L_W 95 dB(A) por roda a 80 km/h, n 3,5.
- */
-export class FontePneu extends FonteRuido {
-  constructor(fs: number, lw: number, semente: number) {
-    super(fs, { lw, n: 3.5, vRef: V_REF_PNEU, refDist: 7.5, modLenta: 1.5 }, semente);
-    this.ramos = [new Ramo(semente, [new Bq()])];
-  }
-  montar(_v: number) { this.ramos[0].bq[0].bp(this.fs, 1000, 0.8); }
-}
+// (o pneu é a FontePneu de ruido.ts, a do CENA 4.1: 95 dB(A) por roda a 80 km/h, 98 no ônibus)
 
 /** braços do trole (trólebus): tom eólio 0,2·v/d (d 0,03 m: 0 a 130 Hz até 70 km/h), Q 4, fraco */
 export class FonteTrole extends FonteRuido {
@@ -93,7 +83,7 @@ export class CarroEletrico implements Portador {
     const xs = nP === 6 ? [L / 2 - 2.6, L / 2 - 2.6, -L / 2 + 3.2, -L / 2 + 3.2, -L / 2 + 3.2, -L / 2 + 3.2] : [1.4, 1.4, -1.4, -1.4];
     const ys = nP === 6 ? [W / 2 - 0.2, -W / 2 + 0.2, W / 2 - 0.2, -W / 2 + 0.2, W / 2 - 0.5, -W / 2 + 0.5] : [W / 2 - 0.15, -W / 2 + 0.15, W / 2 - 0.15, -W / 2 + 0.15];
     if (c.pneusAero !== false) {
-      for (let k = 0; k < nP; k++) this.propria({ id: `pneu.${k}`, tipo: 'rolamento', pos: [xs[k], ys[k], 0.02], hCorpo: 0.02, dir: omni, refDist: 7.5, dentro: false }, new FontePneu(fs, onibus ? 98 : 95, prox()));
+      for (let k = 0; k < nP; k++) this.propria({ id: `pneu.${k}`, tipo: 'rolamento', pos: [xs[k], ys[k], 0.02], hCorpo: 0.02, dir: omni, refDist: 7.5, dentro: false }, new FontePneu(fs, prox(), { lw: onibus ? 98 : 95 }));
       // aero: para-brisa e retrovisores (CENA 4.1 e 2.7): 80 dB(A) a 80 km/h, n 6
       this.propria({ id: 'aero', tipo: 'aero', pos: onibus ? [L / 2 - 0.3, 0, 2.6] : [0.8, 0, 1.0], dir: omni, refDist: 7.5, dentro: false },
         new FonteAero(fs, { lw: onibus ? 86 : 80, n: 6, vRef: V_REF_PNEU, refDist: 7.5 }, prox(), 500));

@@ -24,7 +24,8 @@ import {
   RNG, Biquad, Line, Junction, TwoPort, Radiator, Cutout, ClosedEnd, port,
 } from '../../acoustics';
 import type { DSPDeAudio } from '../../worklet/tipos';
-import { T_MAN, T_BACK, T_WALL, T_EXREF, SCREW_H, ENV_LOOP } from './constantes';
+import { T_MAN, T_BACK, T_WALL, T_EXREF, SCREW_H, ENV_LOOP, CARCACA, BATIDA, JATO_MACH, BOMBA_AR } from './constantes';
+import { montarMedios } from './medios';
 import { instalarAviacao } from './aviacao';
 
 // Diferencial padrão: motores de giro alto pedem redução maior para a mesma velocidade.
@@ -83,6 +84,10 @@ export class EngineDSP implements DSPDeAudio {
   // Wankel) e o que os ganchos `if (this.rot)` leem (o EngineDSP só os declara; a subclasse os põe na instância)
   declare rot: any; declare cyc: any; declare kBurn: any; declare falhaRot: any; declare prRot: any; declare Vh: any; declare kVol: any; declare runRot: any;
   declare rotQueima: any; declare rotJanelas: any; declare rotEscape: any; declare rotAdmissao: any; declare rotDens: any; declare posQueima: any; declare mechRot: any; declare rotTBurn: any; declare rotTelemetria: any; declare rotApito: any;
+  // médios e jato da ponteira (docs/TECNICO.md → Ronco → "Médios" e "Jato da ponteira"): tudo nasce no valor legado (desligado)
+  // e quem liga é o preset (`carcaca`, `batida`, `jato`, `bombaAr`); as famílias que herdam não mudam sem eles
+  declare carcK: any; declare carcSrc: any; declare carcF: any; declare carcOut: any; declare carcS: any; declare carcKp: any; declare batK: any; declare batF: any; declare batW: any; declare batC: any; declare batV: any; declare batQ0: any;
+  declare jatoFis: any; declare jatoQ: any; declare jatoM: any; declare saModo: any; declare saJit: any;
 
   constructor(fs) {
     this.fs = fs; this.dt = 1 / fs;
@@ -122,6 +127,9 @@ export class EngineDSP implements DSPDeAudio {
     this.tap = null;
     this.av = false; this.radial = false; this.carga = null; // (RADIAL.md 1.6, gancho 1: gasolina sem aviação)
     this.rot = false; this.cyc = 720; // (rotativo, gancho 1: pistão de 4 tempos; o RotativoDSP põe rot = true e cyc = 1080)
+    // médios e jato físico: valor legado (o som de antes) até o preset pedir
+    this.carcK = 0; this.carcSrc = null; this.carcF = null; this.carcOut = null; this.carcS = null; this.carcKp = 0; this.batK = 0; this.batF = null; this.batW = null; this.batC = 0; this.batV = 0; this.batQ0 = 1;
+    this.jatoFis = false; this.jatoQ = 0; this.jatoM = 0; this.saModo = 0; this.saJit = 0;
   }
 
   message(m) {
@@ -238,6 +246,7 @@ export class EngineDSP implements DSPDeAudio {
     }
     this.buildExhaust(cfg);
     this.buildFilters(cfg);
+    montarMedios(this, cfg); // (carcaça, batida periódica e ponteira com bocal: nada acontece sem os campos no preset)
     // (a interface calibra fora da thread de áudio e manda o resultado em cfg.gain/mkIdle/powerModel)
     if (cfg.gain) { this.cfgGain = cfg.gain; this.mkIdle = cfg.mkIdle || 1; }
     else if (calibrate) { const c = this.calibrate(cfg); this.cfgGain = c.gain; this.mkIdle = c.idle; }
@@ -337,6 +346,17 @@ export class EngineDSP implements DSPDeAudio {
     // (faixa pequena + ~70 ms de corte: batido rápido em neutro e em marcha, como nas centrais reais)
     this.limBand = clamp(cfg.limiterBand || 70, 30, 1000);
     this.limHold = clamp(cfg.limiterHold ?? 0.07, 0, 0.5);
+    // ---- médios e jato da ponteira (docs/TECNICO.md → Ronco). Sem o campo no preset vale o legado, bit a bit:
+    // carcaça do escape e batida periódica da mecânica, em dB sobre o nível de referência; no piso do controle, desligadas
+    // (a parede que irradia é sobretudo a do abafador: o direto não tem caixa, só tubo; o esportivo e o original irradiam igual; a caixa de
+    // lata do antigo é a mais fina)
+    this.carcK = cfg.carcaca != null && cfg.carcaca > CARCACA.piso ? CARCACA.ref * Math.pow(10, cfg.carcaca / 20) * (CARCACA.abafador[cfg.muffler] ?? 1) : 0;
+    this.batK = cfg.batida != null && cfg.batida > BATIDA.piso ? BATIDA.ref * Math.pow(10, cfg.batida / 20) : 0;
+    this.batQ0 = Math.max(1e-9, (this.Vd || 5e-4) * 1.2 * 2.6e6); // (calor de uma carga cheia a 1 bar: a batida segue a força da explosão)
+    // jato da ponteira: 'sonico' = segue a vazão do pulso e satura no escoamento sônico; sem o campo, a lei antiga (1/área²)
+    this.jatoFis = cfg.jato === 'sonico';
+    // bomba de ar secundário: sem o campo, os dois tons parados de antes; 'larga' = a rotação deriva e a linha fica larga; 'sem' = o carro não tem
+    this.saModo = BOMBA_AR[cfg.bombaAr] || 0;
   }
 
   volume(a) {
@@ -344,11 +364,23 @@ export class EngineDSP implements DSPDeAudio {
     return this.Vc + this.Ap * (r * (1 - Math.cos(th)) + l - Math.sqrt(l * l - r * r * s * s));
   }
 
+  // O que as sondas de calibração trocam nos mecanismos de médios e no jato: eles mudam o volume de verdade, como o
+  // abafador e o vazamento, então as sondas rodam sem eles (e o ganho do carro é o mesmo com eles ligados ou no valor
+  // legado: mexer no controle não muda o resto do som). Sem os campos no preset devolve um objeto vazio: a sonda é a de antes.
+  refMedios(cfg) {
+    const r: any = {};
+    if (cfg.carcaca != null) r.carcaca = undefined;
+    if (cfg.batida != null) r.batida = undefined;
+    if (cfg.jato === 'sonico') { r.jato = undefined; r.tipD = undefined; } // (com o jato novo a ponteira também fica fora da sonda; na lei antiga ela entrava, e continua entrando)
+    if (cfg.bombaAr != null) r.bombaAr = undefined;
+    return r;
+  }
+
   // Renderiza um trecho em carga total a rotação fixa para normalizar o volume
   // entre configurações (mantendo a diferença natural entre abafadores).
   calibrate(cfg) {
     const t = new EngineDSP(this.fs);
-    t.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false, breakout: 'sealed', scWhine: 0 }, false);
+    t.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false, breakout: 'sealed', scWhine: 0, ...this.refMedios(cfg) }, false);
     t.state = 'run'; t.lockOmega = true; t.tempMode = 'fixed'; t.tempSet = 90; t.coolant = 90;
     t.omega = (this.redline * 0.55 * TAU) / 60; t.rpmAvg = this.redline * 0.55;
     // turbo calibrado em pressão parcial: com a pressão cheia o motor sopra quase o dobro de ar e
@@ -368,7 +400,7 @@ export class EngineDSP implements DSPDeAudio {
     // e em marcha lenta: motores com dinâmica muito diferente (turbo abafado × corrida) ficavam
     // 30 dB apartados na lenta; a média geométrica (pesada 60/40 para a carga) dos dois ganhos divide essa diferença ao meio
     const ti = new EngineDSP(this.fs);
-    ti.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false, breakout: 'sealed', scWhine: 0 }, false);
+    ti.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false, breakout: 'sealed', scWhine: 0, ...this.refMedios(cfg) }, false);
     ti.state = 'run'; ti.lockOmega = true; ti.tempMode = 'fixed'; ti.tempSet = 90; ti.coolant = 90; ti.runT = 60;
     ti.omega = (this.idle * TAU) / 60; ti.rpmAvg = this.idle; ti.thrTarget = 0; ti.thr = 0; ti.params.master = 0.02; ti.dash = 0;
     // com o giro travado o controle de lenta não tem o que corrigir; aqui a válvula de ar é ajustada até o
@@ -392,7 +424,7 @@ export class EngineDSP implements DSPDeAudio {
   // a dinâmica até a ficha técnica do carro sem mexer no som.
   measurePower(cfg) {
     const t = new EngineDSP(this.fs);
-    t.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false, breakout: 'sealed', scWhine: 0, limiter: 'none', power: undefined }, false);
+    t.setConfig({ ...cfg, muffler: 'sport', valve: 'none', pipeD: 2.5, reso: false, twoStep: false, breakout: 'sealed', scWhine: 0, limiter: 'none', power: undefined, ...this.refMedios(cfg) }, false);
     t.state = 'run'; t.lockOmega = true; t.tempMode = 'fixed'; t.tempSet = 90; t.coolant = 90; t.runT = 100;
     t.thrTarget = 1; t.thr = 1; t.turboW = 1; t.boost = cfg.boost; t.maxBoost = cfg.boost; t.params.master = 0;
     const B = 256, L = new Float32Array(B), R = new Float32Array(B);
@@ -408,7 +440,7 @@ export class EngineDSP implements DSPDeAudio {
 
   buildExhaust(cfg) {
     const fs = this.fs, N = this.N;
-    const lines = []; const nodes = []; const runners = new Array(N); const rads = [];
+    const lines = []; const nodes = []; const runners = new Array(N); const rads = []; const carc = [];
     // (afiamento da onda: o teórico é (γ+1)/2γ ≈ 0,88; atrito e troca de calor nas paredes seguram a frente, e 0,6
     // bate com gravações de V8 acelerando. Com o chiado de jato antigo, alto em qualquer giro, isso virava um
     // muro de agudo e o valor tinha descido a 0,28, o que deixava o ronco abafado)
@@ -462,14 +494,14 @@ export class EngineDSP implements DSPDeAudio {
         const stub = L(0.2, mid.Y * 0.9, 5000, dw), m3 = L(0.12, mid.Y, 9000, dw);
         nodes.push(new Junction([port(feed, 1), port(stub, 0), port(m3, 0)]));
         const cut = new Cutout(fs, stub, 0.5 + 0.3 * (panL - panR), 0.5 + 0.3 * (panR - panL), 1500 / ds, 1.0 * A2, this.valveState, fRad);
-        nodes.push(cut); rads.push(cut);
+        nodes.push(cut); rads.push(cut); carc.push(null);
         feed = m3;
       }
       const tail = L(pipe * 0.3, mid.Y, 9000, dw);
       // depois do abafador a onda já é fraca: quase não se afia de novo (senão refaz os agudos que ele tirou)
       tail.kNL = cfg.muffler === 'stock' ? 0.05 : cfg.muffler === 'classic' ? 0.15 : 0.6;
       nodes.push(new TwoPort(fs, port(feed, 1), port(tail, 0), cfg.muffler));
-      const r = new Radiator(fs, tail, panL, panR, 1500 / ds, A2, fRad); nodes.push(r); rads.push(r);
+      const r = new Radiator(fs, tail, panL, panR, 1500 / ds, A2, fRad); nodes.push(r); rads.push(r); carc.push(feed); // (carcaça: a onda que chega ao abafador desta ponta)
     };
     const routing = cfg.routing;
     if (routing === 'single') {
@@ -505,7 +537,7 @@ export class EngineDSP implements DSPDeAudio {
         addTail(bankOut[1], 0.28, 0.95);
       }
     }
-    this.lines = lines; this.nodes = nodes; this.runners = runners; this.rads = rads;
+    this.lines = lines; this.nodes = nodes; this.runners = runners; this.rads = rads; this.carcSrc = carc;
     this.radHP = rads.map(() => new Biquad().hp(this.fs, 45, 0.7));
     // microfones junto ao carro: a ponteira fica a ~35 cm do asfalto, e abaixo de ~200 Hz a reflexão no chão
     // chega em fase (fonte-imagem): é o "peso" do grave que se sente perto do escape
@@ -829,6 +861,7 @@ export class EngineDSP implements DSPDeAudio {
     const r = this.rCrank, l = this.lRod, Ap = this.Ap, Vc = this.Vc, Zr = this.Zr, hw = this.hw;
     const g1 = GAM - 1;
     const cyc = this.cyc, cyc2 = cyc / 2, cyc3 = (3 * cyc) / 4, cyc4 = cyc / 4; // (gancho 3: 720/360/540/180 no pistão, os mesmos doubles)
+    const batK = this.batK, carcK = this.carcK, jatoFis = this.jatoFis; // (médios e jato: 0/false = legado)
 
     for (let s = 0; s < n; s++) {
       if (this.ctrl-- <= 0) { this.control(16 * dt); this.ctrl = 15; }
@@ -929,6 +962,7 @@ export class EngineDSP implements DSPDeAudio {
             if (this.av) this.burnK[c] *= this.burnAv; // (gancho 4: um magneto só, mistura pobre)
             this.xb[c] = 0;
             this.knockEnv += 0.6 + 0.4 * rng.next();
+            if (batK) this.batC += this.batW[c] * (0.3 + 0.7 * Math.min(1.5, this.Q[c] / this.batQ0)); // (batida periódica: cada pistão bate do seu jeito, com a força da própria explosão)
           } else {
             this.Q[c] = 0; this.xb[c] = 1;
             // estouro no escape: a mistura que não queimou no cilindro chega ao coletor quente e explode lá. Precisa
@@ -970,6 +1004,7 @@ export class EngineDSP implements DSPDeAudio {
         else if (this.rot) this.rotJanelas(c, a, ap); // (rotativo, gancho 9: tiques do ápice nas bordas das janelas e nas velas)
         else {
         if ((ap < evo && a >= evo) || (ap < evc && a >= evc) || (ap < ivo && a >= ivo) || (ap < ivc && a >= ivc)) this.clickEnv += 0.5 + 0.5 * rng.next();
+        if (batK) { if (ap < evc && a >= evc) this.batV += this.batW[N + c]; else if (ap < ivc && a >= ivc) this.batV += this.batW[2 * N + c]; } // (válvula assentando na sede: o mesmo estalo em todo ciclo)
         if (ap < ivo && a >= ivo) this.air[c] = 0;
         }
         aPrev[c] = a;
@@ -1149,10 +1184,18 @@ export class EngineDSP implements DSPDeAudio {
         // o chiado segue a velocidade instantânea do gás em cada pulso (∝ v²): é o "puf" de cada explosão saindo
         // pela ponteira, com silêncio entre elas. (Uma versão que usava a velocidade média do gás tirava esses pufs
         // e deixava o agudo de todos os carros abafado, como um fundo liso)
-        const vel = Math.max(0, rd.u) / (2.5e4 * this.tipA);
+        // (jato 'sonico': o sopro segue a vazão do pulso, não 1/área²: abaixo de 2,5" não cresce com o estreitamento, e a
+        // velocidade na ponteira, vazão ÷ área, satura no escoamento sônico; ver montarMedios)
+        const vel = jatoFis ? Math.max(0, rd.u) * this.jatoQ : Math.max(0, rd.u) / (2.5e4 * this.tipA);
         this.jetEnv[i] += (vel - this.jetEnv[i]) * 0.15;
         const jv = this.jetEnv[i], nz = rng.bi();
-        x += (this.jetF[i][0].run(nz) + 0.8 * this.jetF[i][1].run(nz)) * jv * jv * this.jetGain * P.air;
+        if (jatoFis) { const m = jv * this.jatoM, m2 = m * m, je = jv / Math.sqrt(Math.sqrt(1 + m2 * m2)); x += (this.jetF[i][0].run(nz) + 0.8 * this.jetF[i][1].run(nz)) * je * je * this.jetGain * P.air; }
+        else x += (this.jetF[i][0].run(nz) + 0.8 * this.jetF[i][1].run(nz)) * jv * jv * this.jetGain * P.air;
+        // carcaça do escape: a parede dos tubos e do abafador responde à onda que passa por dentro (antes do abafador) e
+        // irradia a sua aceleração: abaixo da ressonância da parede (~1 kHz) ela é rígida e a resposta sobe 12 dB/oitava,
+        // na ressonância reforça, acima a massa segura; e uma caixa pequena irradia mal o grave (mais 6 dB/oitava abaixo de
+        // ~600 Hz: sem isso ela cancelava parte do grave da boca). É um filtro fixo sobre um sinal periódico: sai em linhas
+        if (carcK) { const src = this.carcSrc[i]; if (src) { const f = this.carcF[i], pw = src.in1, lo = (this.carcS[i] += this.carcKp * (pw - this.carcS[i])), cz = f[1].run(f[0].run(pw - lo)) * carcK; this.carcOut[i] = cz; x += cz; } }
         if (this.tap) this.tap.jato(i, x);
         exL += x * rd.panL; exR += x * rd.panR;
         const ib = this.itdB[i], dd = this.itdD[i]; ib[iw] = x;
@@ -1189,6 +1232,16 @@ export class EngineDSP implements DSPDeAudio {
         const kn = rng.bi() * this.knockEnv * (0.3 + 0.7 * pMan / P0) * (1 + 1.2 * coldN);
         mech += (this.knockF[0].run(kn) + 0.6 * this.knockF[1].run(kn) + 0.25 * this.knockF[2].run(kn)) * 0.07;
         }
+        // batida periódica (`batida`): o pistão que encosta na parede a cada explosão e as válvulas que assentam na sede excitam o
+        // bloco e o cabeçote com um impulso, e a estrutura responde nos seus modos (0,8–2,5 kHz, bem amortecidos). O impulso de
+        // cada cilindro tem um tamanho fixo (folgas) vezes a força da explosão, e cresce com a rotação (a velocidade do
+        // impacto): a forma de onda se repete a cada ciclo e aparece como linhas de meia ordem, não como rajada de ruído.
+        // Na lenta quase não se ouve; com o motor girando leve é ela que enche os médios; em plena carga o escape a cobre
+        if (batK) {
+          const bf = this.batF, br = rf * Math.sqrt(rf), bc = this.batC * br; // (impacto ∝ rotação, e mais forte quanto mais rápido: rf^1,5)
+          mech += bf[3].run(bf[0].run(bc) + BATIDA.peso2 * bf[1].run(bc) + BATIDA.pesoV * bf[2].run(this.batV * br)) * batK; // (sem reforço a frio: na lenta fria de um V8 a batida passava a ser o que se ouvia em 1–6 kHz, onde a gravação é um leito liso)
+          this.batC = 0; this.batV = 0;
+        }
         this.phW += omega * dt; if (this.phW > 1e4) this.phW -= TAU * 1000;
         if (this.rot) mech += this.mechRot(omega, rf); // (rotativo, gancho 16: engrenagem fixa / coroa do rotor)
         else mech += (Math.sin(this.phW * 23) * 0.6 + Math.sin(this.phW * 2.9 * 12) * 0.4) * 0.002 * rf * rf;
@@ -1201,9 +1254,17 @@ export class EngineDSP implements DSPDeAudio {
         if (this.airCool) mech *= 1.2; // (sem a camisa d'água em volta, tucho, válvula e pistão irradiam mais)
         if (this.radial) mech *= 1.17; // (gancho 12: cilindros e aletas expostos)
         // bomba de ar secundário (zumbido elétrico) e ventoinha do radiador
-        if (this.secAir > 0.01 && P.saSound !== false) {
+        if (this.secAir > 0.01 && P.saSound !== false && this.saModo !== 2) { // (`bombaAr: 'sem'`: o carro não tem a bomba)
+          if (this.saModo === 1) {
+            // (motor elétrico: a tensão e a contrapressão variam a rotação ~0,7% e a linha fica larga, sem o 2º harmônico
+            // puro; dois senos parados apareciam como um tom que não é ordem do motor, que a gravação do carro não tem)
+            this.saJit += 0.002 * (rng.bi() - this.saJit);
+            this.phSA += 760 * (1 + 0.4 * this.saJit) * dt; if (this.phSA > 1) this.phSA -= 1;
+            mech += this.secAir * (0.001 * Math.sin(TAU * this.phSA) + 0.003 * this.saF.run(rng.bi()));
+          } else {
           this.phSA += 760 * dt; if (this.phSA > 1) this.phSA -= 1;
           mech += this.secAir * (0.001 * Math.sin(TAU * this.phSA) + 0.0004 * Math.sin(2 * TAU * this.phSA) + 0.003 * this.saF.run(rng.bi()));
+          }
         }
         if (this.fanSpin > 0.01 && P.fanSound !== false) {
           this.phFan += 7 * 42 * this.fanSpin * dt; if (this.phFan > 1) this.phFan -= 1;

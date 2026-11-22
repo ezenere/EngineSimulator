@@ -15,8 +15,27 @@ import { AMBIENTES, PORTADORES, PRESETS_PASSAGEM } from './presets';
 import { Medidor, Espectro, Osciloscopio, desenharPressao, escreverLeituras, textoHud, type Leituras } from './mostradores';
 import type { Cena3D, ModoCamera } from './cena3d';
 
+/**
+ * (AUDITORIA.md P-07) A calibração dos motores (1–9 s de sonda) roda num Web Worker, fora da thread principal: a página
+ * não trava ao carregar um preset com motor. Sem worker (navegador sem módulos em worker), o controle calibra na hora.
+ */
+function criarCalibrador(): ControlePassagem['calibrador'] {
+  if (typeof Worker === 'undefined') return null;
+  let w: Worker;
+  try { w = new Worker(new URL('./calibracao.worker.ts', import.meta.url), { type: 'module' }); } catch { return null; }
+  let n = 0;
+  const esperando = new Map<number, { ok: (c: Record<string, any>) => void; erro: (e: Error) => void }>();
+  w.onmessage = (e: MessageEvent<{ n: number; cfg?: Record<string, any>; erro?: string }>) => {
+    const p = esperando.get(e.data.n); if (!p) return;
+    esperando.delete(e.data.n);
+    if (e.data.cfg) p.ok(e.data.cfg); else p.erro(new Error(e.data.erro || 'calibração'));
+  };
+  w.onerror = () => { for (const p of esperando.values()) p.erro(new Error('o worker de calibração falhou')); esperando.clear(); };
+  return (pedido) => new Promise((ok, erro) => { const k = ++n; esperando.set(k, { ok, erro }); w.postMessage({ n: k, pedido }); });
+}
+
 export function PaginaPassagem() {
-  const [c] = useState(() => new ControlePassagem());
+  const [c] = useState(() => { const x = new ControlePassagem(); x.calibrador = criarCalibrador(); return x; });
   return (
     <AudioShell perfil={PERFIL_PASSAGEM} moduloUrl={urlCena} processador="cena" criarDspLocal={(fs) => new CenaDSP(fs)}
       ambiente="passagem" medidor aoMensagem={c.onTelemetria}>
@@ -119,7 +138,7 @@ function Placa({ c }: { c: ControlePassagem }) {
 
 function Disparar({ c }: { c: ControlePassagem }) {
   useTopico(c, 'estado');
-  const rot = c.erro ? `Erro no áudio: ${c.erro}` : c.andando ? 'Parar' : 'Disparar passagem';
+  const rot = c.erro ? `Erro no áudio: ${c.erro}` : c.andando ? 'Parar' : c.calibrando ? 'Calibrando o motor…' : 'Disparar passagem';
   return <BotaoIgnicao id="ignicao" ligado={c.andando} rotulo={rot} estado={c.erro ? 'erro' : undefined} aoClicar={() => (c.andando ? c.parar() : c.disparar())} />;
 }
 
