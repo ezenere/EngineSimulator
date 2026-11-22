@@ -306,6 +306,8 @@ export class VaporDSP implements Motor {
     const est = P.familia === 'estacionaria';
     const add = (f: Omit<FonteSonora, 'refDist' | 'dentro'> & { dentro?: boolean }) => { F.push({ refDist: R, dentro: false, ...f }); return F.length - 1; };
     const ch = this.ch;
+    // (reconfigurar o mesmo DSP com outro preset: sem zerar, o canal de uma fonte que o preset novo não tem, como a 2ª bomba de ar, ficava apontando para o preset antigo e o `processar` lançava exceção)
+    for (const k of Object.keys(ch) as (keyof typeof ch)[]) ch[k] = -1;
     ch.chamine = add({ id: 'chamine', tipo: 'escape', pos: [g.xChamine, 0, g.zTopo + 0.3], dir: dir(OMNI, [0, 0, 1]) });
     const doisLados = P.cilindros.n > 1 || !!P.compound || (P.motores ?? 1) > 1;
     ch.cilE = add({ id: 'cilindro.e', tipo: 'mecanica', pos: [g.xCilindros, yC, 0.6], dir: dir(yC > 0.9 ? T_LADO : OMNI, [0, 1, 0]), dentro: est });

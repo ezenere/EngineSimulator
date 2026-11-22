@@ -10,11 +10,11 @@
 //   ouvinte: Ronco ext (padrão), pipe, int, bay… · Turbina ground (padrão), cabin, cockpit…
 //   --pcm16: grava PCM 16 bits como os harnesses antigos (o padrão é float 32, para comparar amostra a amostra)
 //
-//   DSP=<arquivo>  usa outro DSP: um legado CommonJS que exporta a fábrica (ex.: git show master:src/dsp.js > /tmp/dsp.master.js)
-//                  ou um módulo TS/ES que exporta EngineDSP / JetDSP (ex.: src/engines/ronco/dsp.ts, depois da migração)
+//   DSP=<arquivo>  usa outro DSP: um módulo TS/ES que exporta EngineDSP / JetDSP, ou um legado CommonJS que exporta a
+//                  fábrica (as paridades extraem src/dsp.js e src/jet-dsp.js do commit REF_LEGADO de tools/legado.ts)
 //   PRESETS=<arquivo>, GEOMETRY=<arquivo>  idem para os presets e a geometria
 //
-// Por padrão usa o DSP legado em src/dsp.js e src/jet-dsp.js.
+// Por padrão usa o DSP, os presets e a geometria em TypeScript (src/engines/ronco/ e src/engines/turbina/), os do site.
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -159,10 +159,10 @@ if (familia === 'tom') {
   const tabela = ronco ? CEN_RONCO : CEN_TURBINA;
   if (!tabela[scen]) { console.error(`cenário desconhecido: ${scen} (${Object.keys(tabela).join(', ')})`); process.exit(2); }
   fs.mkdirSync(outdir, { recursive: true });
-  const dspArq = process.env.DSP || (ronco ? 'src/dsp.js' : 'src/jet-dsp.js');
+  const dspArq = process.env.DSP || (ronco ? 'src/engines/ronco/dsp.ts' : 'src/engines/turbina/dsp.ts');
   const M = carregar(dspArq, ronco ? 'EngineDSP' : 'JetDSP');
-  const PRESETS = lista(process.env.PRESETS || (ronco ? 'src/presets.js' : 'src/jet-presets.js'));
-  const G = ronco ? lista(process.env.GEOMETRY || 'src/geometry.js') : null;
+  const PRESETS = lista(process.env.PRESETS || (ronco ? 'src/engines/ronco/presets.ts' : 'src/engines/turbina/presets.ts'));
+  const G = ronco ? lista(process.env.GEOMETRY || 'src/engines/ronco/geometria.ts') : null;
   const escolhidos = which === 'all' ? PRESETS : PRESETS.filter((p) => which.split(',').includes(p.id));
   if (!escolhidos.length) { console.error(`nenhum preset com id ${which}`); process.exit(2); }
   console.log(`DSP: ${dspArq} · ${formato}`);

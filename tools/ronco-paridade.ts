@@ -73,13 +73,18 @@ console.log(`referência: ${REF} · temporários em ${tmp}`);
 }
 
 // ------------------------------------------------------------------ 1. dados
+// os presets que vieram do legado (na ordem do arquivo) e os acrescentados depois
+const MIGRADOS = PRESETS.filter((p) => LP.some((a: any) => a.id === p.id));
+const NOVOS = PRESETS.filter((p) => !LP.some((a: any) => a.id === p.id));
 {
-  if (!isDeepStrictEqual(LP.families, PRESETS.families)) falha('famílias diferentes');
-  if (LP.length !== PRESETS.length) falha(`${LP.length} presets no legado, ${PRESETS.length} no migrado`);
+  // (famílias e presets acrescentados depois da migração ficam fora da paridade: não há legado para comparar)
+  if (!isDeepStrictEqual(LP.families, PRESETS.families.filter((f) => LP.families.some((a) => a.id === f.id)))) falha('famílias diferentes');
+  if (LP.length !== MIGRADOS.length) falha(`${LP.length} presets no legado, só ${MIGRADOS.length} deles no migrado`);
+  if (NOVOS.length) console.log(`presets novos, fora da paridade (não existem no legado): ${NOVOS.map((x) => x.id).join(', ')}`);
   let iguais = 0;
   for (let i = 0; i < LP.length; i++) {
     // (os campos dos mecanismos novos não existem no legado: saem da comparação; o resto, valor e ordem, tem de bater)
-    const a = LP[i], b = PRESETS[i] && semCamposNovos(PRESETS[i]);
+    const a = LP[i], b = MIGRADOS[i] && semCamposNovos(MIGRADOS[i]);
     // mesma ordem de campos também (é a ordem em que o painel e o DSP os veem)
     if (!b || !isDeepStrictEqual(a, b) || JSON.stringify(Object.keys(a)) !== JSON.stringify(Object.keys(b))) falha(`preset ${a.id} difere`);
     else iguais++;
@@ -119,7 +124,7 @@ const add = (preset: string, cen: string, ouvinte = 'ext') => { if (!trabalhos.s
 if (RAPIDO) for (const id of VARIADOS) { add(id, 'idle'); add(id, 'rev'); }
 else {
   for (const id of VARIADOS) for (const cen of ['idle', 'rev', 'wot', 'sweep']) add(id, cen);
-  for (const p of PRESETS) { add(p.id, 'idle'); add(p.id, 'rev'); }
+  for (const p of MIGRADOS) { add(p.id, 'idle'); add(p.id, 'rev'); }
   for (const id of ['muscle', 'fusca', 'flat6', 'evo']) for (const o of ['pipe', 'int', 'bay', 'road']) add(id, 'rev', o);
   for (const id of ['muscle', 'fusca', 'i4', 'r1']) add(id, 'cold');
 }

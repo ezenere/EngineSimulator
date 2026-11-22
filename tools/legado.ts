@@ -80,10 +80,57 @@ export function presetsEmModoLegado(caminhoPresets: string): string {
 export type Correcoes = Record<string, Record<string, unknown>>;
 
 /** Ronco: id do preset → campos corrigidos (valor novo) */
-export const CORRECOES_RONCO: Correcoes = {};
+export const CORRECOES_RONCO: Correcoes = {
+  // (docs/AUDITORIA.md, F-RON-01…15: nenhum destes campos muda o timbre; só o nome, o rótulo e como o carro anda)
+  // potência (455 hp), relações e diferencial 3,73 são do Camaro SS de 6ª geração, que usa o LT1; o LS3 (426 hp) é o da 5ª,
+  // com 3,01/2,07/1,43/1,00/0,84/0,57 e 3,45 (gmauthority.com, especificações do Camaro 2016; Wikipedia, Tremec TR-6060)
+  muscle: { tag: '6.2 V8 LT1 · cross-plane' },
+  // 10R80: a 4ª é 1,769 (Wikipedia, Ford–GM 10-speed automatic transmission)
+  mustang: { ratios: [4.70, 2.99, 2.15, 1.77, 1.52, 1.28, 1.00, 0.85, 0.69, 0.64] },
+  // Tremec TR-9070 DCT do GT500 2020: 3,14/2,05/1,43/1,10/0,86/0,68/0,56 (suplemento do manual da Ford, março de 2020)
+  gt500: { ratios: [3.14, 2.05, 1.43, 1.10, 0.86, 0.68, 0.56] },
+  // o Z06 C6 usa 2,66/1,78/1,30/1,00/0,74/0,50 com 3,42 (1ª até ~100 km/h); 2,97/2,07/1,43/1,00/0,71/0,57 é o pacote Z51
+  // do Corvette comum (corvsport.com, especificações de 2008; Wikipedia, Tremec TR-6060)
+  corvette: { ratios: [2.66, 1.78, 1.30, 1.00, 0.74, 0.50] },
+  // o Century 1976 tinha o automático THM 350 de 3 marchas (2,52/1,52/1,00); 2,74/1,57/1,00/0,67 é o 200-4R, de 1981
+  v6odd: { gears: 3, ratios: [2.52, 1.52, 1.00] },
+  // 1525 kg é o peso seco da Lamborghini; com fluidos, 1770 kg (Wikipedia, Lamborghini Aventador)
+  aventador: { mass: 1770 },
+  // faltava a redução secundária do câmbio do S2000 (1,160): 4,100 × 1,160 = 4,756; 6ª a 100 km/h ≈ 3300 rpm (hondanews.com)
+  i4: { finalDrive: 4.76 },
+  // EK9: 3,230/2,105/1,458/1,107/0,848 com 4,400 (ficha da Honda de 08/1997); 1,034/0,787 são do Integra Type R 98, com 4,785
+  ek9: { ratios: [3.23, 2.11, 1.46, 1.11, 0.85] },
+  // Skyactiv-MT do ND: 5,087/2,991/2,035/1,594/1,286/1,000 com 2,866: a 6ª é direta (mazdausa.com, especificações de 2018)
+  mx5: { ratios: [5.09, 2.99, 2.04, 1.59, 1.29, 1.00] },
+  // SMG III: 3,985/2,652/1,806/1,392/1,159/1,000/0,833 com 3,62 (ficha de imprensa da BMW, press.bmwgroup.com)
+  m5e60: { ratios: [3.99, 2.65, 1.81, 1.39, 1.16, 1.00, 0.83] },
+  // o M156 6.2 é do C 63 AMG W204 (2008–2014); "Mercedes-AMG C 63" é o W205 em diante, com o 4.0 biturbo
+  c63: { name: 'Mercedes-Benz C 63 AMG' },
+  // a 412 T2 tinha câmbio transversal de 6 marchas (f1technical.net; Wikipedia, Ferrari 412 T2); mesma 1ª e mesma última
+  f1v12: { gears: 6, ratios: [3.60, 2.79, 2.16, 1.67, 1.29, 1.00] },
+  // Fusca 1600: coroa e pinhão 8 × 33 = 4,125; 4,375 é o do 1300 (fichas dos clubes de Fusca, ver AUDITORIA.md)
+  fusca: { finalDrive: 4.125 },
+  // o emblema do Gol de 1989 (2.0 AP com injeção, sem catalisador) é "GTi"
+  golgti: { name: 'VW Gol GTi' },
+  // a 450 SX-F é de motocross; a de trilha (enduro) da KTM é a EXC-F
+  single: { tag: 'monocilíndrico de motocross' },
+};
 
 /** Turbina: id do preset → campos corrigidos (valor novo) */
-export const CORRECOES_TURBINA: Correcoes = {};
+export const CORRECOES_TURBINA: Correcoes = {
+  // Nenhum destes campos entra no som: `tag` é o rótulo do preset e `thrust` só vai para o mostrador de empuxo
+  // (thrust100 em src/engines/turbina/dsp.ts, usado só na telemetria).
+  // GE90-115B: deixou de ser "o maior fan" com o GE9X do 777X (134 pol = 3,40 m, certificado em 25/9/2020;
+  // https://en.wikipedia.org/wiki/General_Electric_GE9X). O fan de 128 pol (3,25 m) e as 22 pás estão na ficha.
+  wide: { tag: '2× GE90-115B · fan de 3,25 m, 22 pás' },
+  // JT3D: não foi o primeiro turbofan; o primeiro motor com derivação a entrar em serviço foi o Rolls-Royce Conway
+  // (https://en.wikipedia.org/wiki/Rolls-Royce_Conway), no 707-420 e no DC-8-40, em 1960; o JT3D veio em 1961.
+  b707b: { tag: '4× JT3D · um dos primeiros turbofans' },
+  // Phenom 300: o PW535E dá 3 360 lbf = 14,95 kN POR MOTOR (PW535E1 do 300E: 3 478 lbf = 15,47 kN;
+  // https://en.wikipedia.org/wiki/Embraer_Phenom_300 e relatório TAR 13/21B/3 da CAA da Nova Zelândia). A ficha tinha
+  // 30 kN, que é a soma dos dois motores, num campo que é "kN por motor" (os outros três executivos estão por motor).
+  bizjet: { thrust: 15 },
+};
 
 /** O arquivo de presets legado (CommonJS, `module.exports = PRESETS`) com as correções aplicadas no fim. */
 export function comCorrecoes(fontePresets: string, correcoes: Correcoes): string {

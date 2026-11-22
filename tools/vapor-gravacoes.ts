@@ -17,11 +17,14 @@
 //  - Grand Canyon 4960 8–10 s: as 8 linhas batem.
 // Os trechos de vídeo (v) não entram aqui (alvo interno, não públicos).
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import { lerMono, trecho, analisarChuff, linhasTonais, cinco, textoChuff, type MedidaChuff } from './vapor-analise';
 
 const ai = process.argv.indexOf('--pasta');
-const PASTA = ai >= 0 ? process.argv[ai + 1] : '/tmp/claude-1000/-home-ezenere-Documents-Projects-Engine/e31418c8-04d3-4470-8423-a94efb88e841/scratchpad/real2/vapor/wav';
+// (as gravações ficam fora do git, em referencias/ na raiz do repositório: docs/PLANO.md, regra 1 da rodada de som.
+// O padrão antigo era uma pasta de /tmp de uma sessão, que o sistema apagou.)
+const PASTA = ai >= 0 ? process.argv[ai + 1] : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'referencias', 'vapor', 'wav');
 
 type Alvo = {
   nome: string; arq: string; t0: number; t1: number;
@@ -61,7 +64,7 @@ const cache = new Map<string, { x: Float64Array; fs: number }>();
 const ler = (arq: string) => { if (!cache.has(arq)) cache.set(arq, lerMono(path.join(PASTA, arq))); return cache.get(arq)!; };
 
 const t0 = Date.now();
-if (!fs.existsSync(PASTA)) { console.error(`pasta das gravações não encontrada: ${PASTA}`); process.exit(2); }
+if (!fs.existsSync(PASTA)) { console.error(`pasta das gravações não encontrada: ${PASTA}\n(as gravações não vão no git; ponha os WAV do Apêndice A.2 do docs/VAPOR.md nessa pasta ou passe --pasta <caminho>)`); process.exit(2); }
 
 for (const a of CHUFFS) {
   const { x, fs: sr } = ler(a.arq);

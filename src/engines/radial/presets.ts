@@ -112,18 +112,21 @@ export const PRESETS_RADIAL: PresetRadial[] & { families: FamiliaRadial[] } = Ob
     carburador: 'boia', superalimentador: { relacao: 8.26, pas: 14, boost: 0.25 }, partida: 'ar',
     escape: { tipo: 'anel', Danel: 0.9, Oanel: 60, Lp: 0.15, saidas: [{ L: 0.4, O: 60, phi: 120 }, { L: 0.4, O: 60, phi: 240 }] }, breakout: 'old', vazamento: -10,
     nivelEscape: 140, ...aviao, aeronave: { massa: 1300, comprimento: 7.7, envergadura: 9.3 } },
-  { ...R9, id: 'm14pf', family: 'sovieticos', name: 'Vedeneyev M-14PF', tag: 'Su-31 / Yak-55M · 400 hp · estaques acrobáticos',
+  { ...R9, id: 'm14pf', family: 'sovieticos', name: 'Vedeneyev M-14PF', tag: 'Su-31 · 400 hp · escapes individuais curtos',
     displacement: 10.16, cr: 6.3, idle: 700, rpmMax: 2950, power: 294, J: 0.7, reducao: 0.658, helice: { B: 3, D: 2.5, J: 5, nMax: 1940 },
     carburador: 'boia', superalimentador: { relacao: 8.26, pas: 14, boost: 0.3 }, partida: 'ar',
     escape: { tipo: 'tubos', Lt: 0.35, Ot: 45 }, breakout: 'old',
     nivelEscape: 140, ...aviao, aeronave: { massa: 780, comprimento: 6.8, envergadura: 7.8 } },
   // ---- Pequenos modernos
+  // Os Rotec têm redutor planetário 3:2 no nariz: a ficha do fabricante dá a potência a 2 450 rpm DA HÉLICE (≈ 3 675 do
+  // motor), com hélice fixa de 76 pol (1,93 m) no R2800 e de 80–90 pol no R3600 (rotecaerosport.com/r2800 e /r3600).
+  // (Estavam como acionamento direto, com a hélice a 3 600 rpm e a ponta a Mach 0,97–1,00.)
   { ...R7, id: 'rotec2800', family: 'pequenos', name: 'Rotec R2800', tag: 'Kitfox, Pietenpol · 7 cil. · 2,8 L · 110 hp',
-    displacement: 2.8, cr: 8.5, idle: 1000, rpmMax: 3600, power: 82, J: 0.15, reducao: 1, helice: { B: 2, D: 1.75, J: 1.5, passoFixo: true, nMax: 3600 },
+    displacement: 2.8, cr: 8.5, idle: 1000, rpmMax: 3600, power: 82, J: 0.15, reducao: 0.6667, helice: { B: 2, D: 1.93, J: 1.5, passoFixo: true, nMax: 2400 },
     carburador: 'boia', partida: 'direta', escape: { tipo: 'tubos', Lt: 0.6, Ot: 38 }, breakout: 'leaky', vazamento: -20,
     nivelEscape: 130, ...aviao, aeronave: { massa: 550, comprimento: 5.8, envergadura: 9.8 } },
   { ...R9, id: 'rotec3600', family: 'pequenos', name: 'Rotec R3600', tag: 'Pietenpol, réplicas · 9 cil. · 3,6 L · 150 hp',
-    displacement: 3.6, cr: 8.5, idle: 950, rpmMax: 3600, power: 112, J: 0.2, reducao: 1, helice: { B: 3, D: 1.8, J: 1.8, passoFixo: true, nMax: 3600 },
+    displacement: 3.6, cr: 8.5, idle: 950, rpmMax: 3600, power: 112, J: 0.2, reducao: 0.6667, helice: { B: 3, D: 2.03, J: 1.8, passoFixo: true, nMax: 2400 },
     carburador: 'boia', partida: 'direta', escape: { tipo: 'tubos', Lt: 0.6, Ot: 38 }, breakout: 'leaky',
     nivelEscape: 130, ...aviao, aeronave: { massa: 700, comprimento: 6, envergadura: 9 } },
   { ...R3, id: 'verner3', family: 'pequenos', name: 'Verner Scarlett 3V', tag: 'ultraleves · 3 cil. · 1,6 L · 42 hp',

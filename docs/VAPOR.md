@@ -1,5 +1,18 @@
 # Vapor: projeto do `VaporDSP`, dos portadores a vapor e da página `vapor.html` (etapa 5)
 
+> **O que mudou na implementação** (auditoria de 18/11/2026). Este documento é o projeto; o que está no código é o que o [`TECNICO.md`](TECNICO.md#vapor) descreve. Os pontos em que os dois diferem:
+>
+> - **`acoustics/` (decisão 1).** O que faltava no pacote ficou em `src/engines/vapor/rede.ts`: uma `Line` com velocidade do som por instância, o volume da caixa de fumaça e o orifício implícito. `src/acoustics/` não mudou.
+> - **Apito (1.8).** A malha saturada não oscila na ressonância linear: cada tubo é afinado na construção (0,3 s soprado, comprimento corrigido pela nota medida).
+> - **Contas deste documento que não fecham** (viraram desvios nos testes): o apito por 20 s derruba 0,16 bar, não 0,6; 124 dB(A) de `L_W` dão 89,5 dB(A) a 15 m em campo livre, abaixo do que 4.6 espera; a conta da composição a 100 km/h (3.5) esquece o rolamento da locomotiva e do tênder.
+> - **Patinagem (1.7).** O surto chega a 13,8 chuffs/s e a energia por chuff sobe em vez de cair: a caixa de válvulas não cai os 30–50% supostos.
+> - **Fichas (5).** A Maria Fumaça é uma ficha por classe (Consolidation métrica Baldwin, dimensões estimadas, a conferir no acervo da ABPF); a pannier tem `lwChuff` 118 (4.6 a lista com 124); o Corliss escapa para o condensador (`lwChuff` 80).
+> - **CPU (decisão 11).** O Big Boy custa 0,34 do Ronco por amostra, acima do teto de 1/3.
+> - **Barco (2.4, 4.4).** Só as rodas de pás: a hélice (`FonteHelice`) e o diesel marítimo não foram feitos.
+> - **Página (6).** A `vapor.html` não tem a cena 3D; os ambientes são os da Passagem (céu, corte, estação, túnel, ponte), não os de 4.5.
+> - **Gravações (7, passo 1).** `npm run gravacoes:vapor` precisa das gravações, que ficam fora do repositório; sem `--pasta` ele termina com erro.
+> - **Portão.** `npm run teste:vapor` passa com 28 medidas fora do alvo aceitas como desvio (a lista está em "Desvios conhecidos" do Vapor no `TECNICO.md`).
+
 Documento de projeto da etapa 5 (ver `PLANO.md`). Define a física do som a vapor que o `VaporDSP` sintetiza (um DSP novo: não há combustão no cilindro, então ele **não** é subclasse do `EngineDSP`), as máquinas que ele cobre (locomotivas, estacionárias, trator, carro, barco), os alvos numéricos medidos em gravações, as interfaces com a Cena e os portadores (`CENA.md`), os presets, a página e o plano de implementação com testes. A implementação segue este texto; o que estiver marcado **decisão** não se renegocia dentro da etapa sem anotar no relatório. Unidades: metros, segundos, rad/s, N·m, pascal (pressões de caldeira em bar **manométrico** quando dito "bar"; nas fórmulas, absoluto), kg. Som: 48 kHz, blocos de 128 amostras, controle a cada 64. Referencial do corpo como no `CENA.md`: `x` para a frente, `y` para a esquerda, `z` para cima.
 
 - [0. Decisões](#0-decisões)

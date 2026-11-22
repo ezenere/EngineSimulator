@@ -42,3 +42,7 @@ O Elétrico (`docs/ELETRICO.md` 3, `tools/eletrico/valida.ts`) foi comparado, at
 - **Wikimedia Commons**: Schwebebahn de Wuppertal (WWS, CC BY 4.0), metrô de Paris MP 73 (duas, CC BY 4.0), bonde de Lyon (Citadis, CC BY 3.0), bonde de West Midlands (Urbos 3, Andy Mabbett, CC BY-SA 4.0), Tesla Roadster (CC BY-SA 3.0).
 - **Vídeos públicos** (referência privada): Siemens Taurus ES64U2 partindo (quatro, o "do-re-mi"), CPTM Séries 9500 e 9000, Nissan Leaf e Tesla Model S Plaid acelerando, duas furadeiras sem fio e uma de rede, DJI Mavic Pro pairando e um drone menor.
 
+
+### Diesel, Radial, Rotativos e Vapor (etapas 2 a 5)
+
+Essas famílias também foram comparadas com gravações do Wikimedia Commons (licenças CC) e com vídeos públicos usados como referência privada. A lista de cada uma, com o trecho usado e o que foi medido, está no Apêndice A do documento de projeto: `docs/DIESEL.md`, `docs/RADIAL.md`, `docs/ROTATIVO.md` e `docs/VAPOR.md` (A.1). O autor e a licença de cada arquivo do Commons ainda não estão listados aqui, como estão os do Elétrico.

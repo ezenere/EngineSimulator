@@ -109,19 +109,19 @@ const car = (id: string, family: string, name: string, tag: string, base, o): Pr
 
 export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assign([
   // ---- Muscle americano
-  car('muscle', 'muscle', 'Chevrolet Camaro SS', '6.2 V8 LS3 · cross-plane', V8X, {
+  car('muscle', 'muscle', 'Chevrolet Camaro SS', '6.2 V8 LT1 · cross-plane', V8X, {
     displacement: 6.2, redline: 6600, idle: 780, cam: 0.5, inertia: 1.2,
     header: 'unequal', routing: 'dual', muffler: 'sport', pipeLen: 3.0, ...NA, intake: 'sport', overrun: 'cut', cat: true, ...CUT('ign'), gears: 6, transmission: 'manual',
     ...veh(339, 1690, [2.66, 1.78, 1.30, 1.00, 0.74, 0.50], 3.73, 0.35, 0.5) }),
   car('mustang', 'muscle', 'Ford Mustang GT', '5.0 V8 Coyote · DOHC 7500 rpm', V8X, {
     order: '1-8-7-2-6-5-4-3', displacement: 5.0, redline: 7500, idle: 700, cam: 0.35, inertia: 0.95,
     header: 'unequal', routing: 'xpipe', muffler: 'sport', pipeLen: 3.0, ...NA, intake: 'sport', overrun: 'cut', cat: true, ...DBW, gears: 10, transmission: 'auto', shiftTime: 0.3,
-    valve: 'sport', pipeD: 3, ...veh(343, 1750, [4.70, 2.99, 2.15, 1.80, 1.52, 1.28, 1.00, 0.85, 0.69, 0.64], 3.55, 0.35),
+    valve: 'sport', pipeD: 3, ...veh(343, 1750, [4.70, 2.99, 2.15, 1.77, 1.52, 1.28, 1.00, 0.85, 0.69, 0.64], 3.55, 0.35),
     bombaAr: 'sem' }), // (o Coyote esquenta o catalisador só com a centelha atrasada: não tem bomba de ar secundário, e a gravação do carro não tem o tom dela)
   car('gt500', 'muscle', 'Shelby GT500', '5.2 V8 com compressor', V8X, {
     order: '1-8-7-2-6-5-4-3', displacement: 5.2, redline: 7500, idle: 750, cam: 0.45, inertia: 0.9,
     header: 'equal', routing: 'xpipe', muffler: 'sport', pipeLen: 3.0, ...blower(0.83), scType: 'roots', scRatio: 2.4, scLobes: 4, scWhine: -9, intake: 'sport', overrun: 'cut', cat: true, ...DBW, gears: 7, transmission: 'auto', shiftTime: 0.12,
-    valve: 'auto', pipeD: 3, ...veh(567, 1900, [3.75, 2.44, 1.68, 1.26, 1.00, 0.85, 0.78], 3.73, 0.345) }),
+    valve: 'auto', pipeD: 3, ...veh(567, 1900, [3.14, 2.05, 1.43, 1.10, 0.86, 0.68, 0.56], 3.73, 0.345) }),
   car('gt350', 'muscle', 'Shelby GT350', '5.2 V8 Voodoo · flat-plane 8250 rpm', V8F, {
     displacement: 5.2, redline: 8250, idle: 800, cam: 0.45, inertia: 0.75,
     header: 'equal', routing: 'hpipe', muffler: 'sport', pipeLen: 3.0, ...NA, intake: 'sport', overrun: 'burble', cat: true, ...CUT('fuel'), gears: 6, transmission: 'manual',
@@ -133,7 +133,7 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
   car('corvette', 'muscle', 'Corvette Z06 C6', '7.0 V8 LS7 · 7100 rpm', V8X, {
     order: '1-8-7-2-6-5-4-3', displacement: 7.0, redline: 7100, idle: 750, cam: 0.5, inertia: 0.95,
     header: 'equal', routing: 'xpipe', muffler: 'sport', pipeLen: 2.8, ...NA, intake: 'sport', overrun: 'cut', cat: true, ...CUT('fuel'), gears: 6, transmission: 'manual',
-    valve: 'auto', pipeD: 3, ...veh(377, 1440, [2.97, 2.07, 1.43, 1.00, 0.71, 0.57], 3.42, 0.345) }),
+    valve: 'auto', pipeD: 3, ...veh(377, 1440, [2.66, 1.78, 1.30, 1.00, 0.74, 0.50], 3.42, 0.345) }),
   car('chevelle', 'muscle', 'Chevelle SS 454 (1970)', '7.4 big-block · comando bravo', V8X, {
     displacement: 7.4, redline: 5600, idle: 850, cam: 0.8, inertia: 1.5, fuel: 'carb',
     header: 'unequal', routing: 'dual', muffler: 'straight', pipeLen: 1.8, ...NA, intake: 'sport', overrun: 'lean', cat: false, ...NONE, gears: 4, transmission: 'manual', shiftTime: 0.45,
@@ -144,8 +144,8 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     ...veh(450, 1560, [2.66, 1.78, 1.30, 1.00, 0.74, 0.50], 3.07, 0.35) }),
   car('v6odd', 'muscle', 'Buick Century 3.8 (1976)', 'V6 90° moente comum · odd-fire', { layout: 'v', cylinders: 6, crank: 'odd90', bankAngle: 90, order: '1-6-5-4-3-2' }, {
     displacement: 3.8, redline: 5600, idle: 700, cam: 0.3, inertia: 1.1, fuel: 'carb',
-    header: 'short', routing: 'single', muffler: 'stock', pipeLen: 3.2, ...NA, intake: 'airbox', overrun: 'lean', cat: true, ...NONE, gears: 4, transmission: 'auto', shiftTime: 0.7,
-    ...veh(82, 1700, [2.74, 1.57, 1.00, 0.67], 2.73) }),
+    header: 'short', routing: 'single', muffler: 'stock', pipeLen: 3.2, ...NA, intake: 'airbox', overrun: 'lean', cat: true, ...NONE, gears: 3, transmission: 'auto', shiftTime: 0.7,
+    ...veh(82, 1700, [2.52, 1.52, 1.00], 2.73) }),
 
   // ---- Supercarros europeus
   car('flatplane', 'super', 'Ferrari 458 Italia', '4.5 V8 flat-plane · 9000 rpm', V8F, {
@@ -167,7 +167,7 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
   car('aventador', 'super', 'Lamborghini Aventador SVJ', '6.5 V12 60° · 8700 rpm', V12, {
     engine: 'mid', displacement: 6.5, redline: 8700, idle: 1000, cam: 0.4, inertia: 0.8,
     header: 'equal', routing: 'xpipe', muffler: 'sport', pipeLen: 2.2, ...NA, intake: 'sport', overrun: 'burble', cat: true, ...CUT('ign'), gears: 7, transmission: 'auto', shiftTime: 0.1,
-    valve: 'auto', pipeD: 3, ...veh(566, 1525, [3.91, 2.44, 1.81, 1.46, 1.19, 0.97, 0.84], 3.54, 0.36, 0.45) }),
+    valve: 'auto', pipeD: 3, ...veh(566, 1770, [3.91, 2.44, 1.81, 1.46, 1.19, 0.97, 0.84], 3.54, 0.36, 0.45) }),
   car('huracan', 'super', 'Lamborghini Huracán Performante', '5.2 V10 · 8500 rpm', V10, {
     engine: 'mid', displacement: 5.2, redline: 8500, idle: 950, cam: 0.4, inertia: 0.7,
     header: 'equal', routing: 'dual', muffler: 'sport', pipeLen: 2.2, ...NA, intake: 'itb', overrun: 'burble', cat: true, ...CUT('ign'), gears: 7, transmission: 'auto', shiftTime: 0.1,
@@ -211,11 +211,11 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
   car('i4', 'jdm', 'Honda S2000', '2.0 F20C · 9000 rpm', I4, {
     displacement: 2.0, redline: 9000, idle: 850, cam: 0.35, inertia: 0.7,
     header: 'equal', routing: 'single', muffler: 'sport', pipeLen: 2.6, ...NA, intake: 'sport', overrun: 'cut', cat: true, ...OLD('fuel'), gears: 6, transmission: 'manual',
-    ...veh(177, 1260, [3.13, 2.05, 1.48, 1.16, 0.97, 0.81], 4.10, 0.31) }),
+    ...veh(177, 1260, [3.13, 2.05, 1.48, 1.16, 0.97, 0.81], 4.76, 0.31) }),
   car('ek9', 'jdm', 'Honda Civic Type R EK9', '1.6 B16B · VTEC 8400 rpm', I4, {
     displacement: 1.6, redline: 8400, idle: 850, cam: 0.45, inertia: 0.65,
     header: 'equal', routing: 'single', muffler: 'sport', pipeLen: 2.4, ...NA, intake: 'sport', overrun: 'cut', cat: true, ...OLD('fuel'), gears: 5, transmission: 'manual',
-    ...veh(136, 1050, [3.23, 2.10, 1.46, 1.03, 0.79], 4.40, 0.30) }),
+    ...veh(136, 1050, [3.23, 2.11, 1.46, 1.11, 0.85], 4.40, 0.30) }),
   car('supra', 'jdm', 'Toyota Supra MK4', '3.0 2JZ-GTE biturbo', I6, {
     displacement: 3.0, redline: 7200, idle: 800, cam: 0.35, inertia: 0.85,
     header: 'equal', routing: 'single', muffler: 'straight', pipeLen: 2.8, ...turbo(1.4), intake: 'sport', overrun: 'cut', cat: false, ...OLD('ign'), gears: 6, transmission: 'manual',
@@ -239,7 +239,7 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
   car('mx5', 'jdm', 'Mazda MX-5 ND', '2.0 Skyactiv aspirado', I4, {
     displacement: 2.0, redline: 7500, idle: 750, cam: 0.25, inertia: 0.8,
     header: 'equal', routing: 'single', muffler: 'stock', pipeLen: 2.6, ...NA, intake: 'airbox', overrun: 'cut', cat: true, ...CUT('fuel'), gears: 6, transmission: 'manual',
-    ...veh(135, 1060, [5.09, 2.99, 2.04, 1.46, 1.00, 0.72], 2.87, 0.31) }),
+    ...veh(135, 1060, [5.09, 2.99, 2.04, 1.59, 1.29, 1.00], 2.87, 0.31) }),
 
   // ---- Alemães e esportivos
   car('i6', 'euro', 'BMW M3 E46', '3.2 S54 · borboletas · 8000 rpm', I6, {
@@ -249,7 +249,7 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
   car('m5e60', 'euro', 'BMW M5 E60', '5.0 V10 S85 · 8250 rpm', V10, {
     displacement: 5.0, redline: 8250, idle: 800, cam: 0.35, inertia: 0.8,
     header: 'equal', routing: 'dual', muffler: 'sport', pipeLen: 3.0, ...NA, intake: 'itb', overrun: 'cut', cat: true, ...CUT('fuel'), gears: 7, transmission: 'auto', shiftTime: 0.15,
-    ...veh(373, 1830, [4.08, 2.60, 1.80, 1.35, 1.08, 0.90, 0.78], 3.62, 0.34) }),
+    ...veh(373, 1830, [3.99, 2.65, 1.81, 1.39, 1.16, 1.00, 0.83], 3.62, 0.34) }),
   car('i5', 'euro', 'Audi RS3', '2.5 cinco cilindros turbo', I5, {
     displacement: 2.5, redline: 7000, idle: 850, cam: 0.35, inertia: 0.8,
     header: 'equal', routing: 'single', muffler: 'sport', pipeLen: 2.6, ...turbo(1.3), intake: 'sport', overrun: 'burble', cat: true, ...DBW, gears: 7, transmission: 'auto',
@@ -258,7 +258,7 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     displacement: 2.1, redline: 8000, idle: 1100, cam: 0.6, inertia: 0.6,
     header: 'equal', routing: 'single', muffler: 'straight', pipeLen: 1.8, ...turbo(1.6), intake: 'sport', overrun: 'antilag', cat: false, ...RACE('ign'), gears: 5, transmission: 'manual', shiftTime: 0.25,
     twoStep: 'cut', ...veh(350, 1090, [3.60, 2.13, 1.46, 1.07, 0.80], 4.10, 0.32, 0.5) }),
-  car('c63', 'euro', 'Mercedes-AMG C63', '6.2 V8 M156 aspirado', V8X, {
+  car('c63', 'euro', 'Mercedes-Benz C 63 AMG', '6.2 V8 M156 aspirado', V8X, {
     displacement: 6.2, redline: 7200, idle: 650, cam: 0.35, inertia: 1.0,
     header: 'unequal', routing: 'dual', muffler: 'sport', pipeLen: 3.0, ...NA, intake: 'sport', overrun: 'burble', cat: true, ...CUT('fuel'), gears: 7, transmission: 'auto', shiftTime: 0.25,
     valve: 'auto', ...veh(336, 1730, [4.38, 2.86, 1.92, 1.37, 1.00, 0.82, 0.73], 2.82, 0.34) }),
@@ -286,8 +286,8 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     ...veh(560, 640, [3.60, 2.85, 2.30, 1.85, 1.50, 1.22, 1.00], 6.22, 0.33, 0.78) }),
   car('f1v12', 'race', 'Ferrari 412 T2 (F1 1995)', '3.0 V12 75° · 17.000 rpm', V12, {
     bankAngle: 75, engine: 'mid', displacement: 3.0, redline: 17000, idle: 4000, cam: 0.5, inertia: 0.25,
-    header: 'equal', routing: 'dual', muffler: 'straight', pipeLen: 1.4, ...NA, intake: 'itb', overrun: 'cut', cat: false, ...SOFT(80), gears: 7, transmission: 'manual', shiftTime: 0.05,
-    ...veh(515, 595, [3.60, 2.85, 2.30, 1.85, 1.50, 1.22, 1.00], 5.87, 0.33, 0.8) }),
+    header: 'equal', routing: 'dual', muffler: 'straight', pipeLen: 1.4, ...NA, intake: 'itb', overrun: 'cut', cat: false, ...SOFT(80), gears: 6, transmission: 'manual', shiftTime: 0.05,
+    ...veh(515, 595, [3.60, 2.79, 2.16, 1.67, 1.29, 1.00], 5.87, 0.33, 0.8) }),
   car('nascar', 'race', 'NASCAR Cup', '5.86 V8 de varetas · 9500 rpm', V8X, {
     order: '1-8-7-2-6-5-4-3', displacement: 5.86, redline: 9500, idle: 1500, cam: 0.85, inertia: 0.7,
     header: 'equal', routing: 'dual', muffler: 'straight', pipeLen: 1.2, ...NA, intake: 'sport', overrun: 'lean', cat: false, ...RACE('ign'), gears: 4, transmission: 'manual', shiftTime: 0.2,
@@ -339,8 +339,8 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
   car('fusca', 'br', 'VW Fusca 1600', 'boxer 4 refrigerado a ar', B4, {
     order: '1-4-2-3', engine: 'rear', displacement: 1.6, compression: 7.5, redline: 4600, idle: 850, cam: 0.15, inertia: 1.4, fuel: 'carb',
     header: 'heater', breakout: 'old', routing: 'single', muffler: 'classic', pipeLen: 1.4, cooling: 'air', ...NA, intake: 'airbox', overrun: 'lean', cat: false, ...NONE, gears: 4, transmission: 'manual', shiftTime: 0.55,
-    ...veh(40, 820, [3.80, 2.06, 1.32, 0.89], 4.375, 0.30) }),
-  car('golgti', 'br', 'VW Gol GTI', '2.0 AP · injeção', I4, {
+    ...veh(40, 820, [3.80, 2.06, 1.32, 0.89], 4.125, 0.30) }),
+  car('golgti', 'br', 'VW Gol GTi', '2.0 AP · injeção', I4, {
     displacement: 2.0, redline: 6500, idle: 850, cam: 0.35, inertia: 0.9,
     header: 'equal', routing: 'single', muffler: 'sport', pipeLen: 2.8, ...NA, intake: 'sport', overrun: 'cut', cat: false, ...OLD('fuel'), gears: 5, transmission: 'manual',
     ...veh(90, 1020, [3.45, 2.12, 1.44, 1.13, 0.91], 3.67, 0.30) }),
@@ -394,7 +394,7 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     displacement: 1.05, redline: 10500, idle: 1100, cam: 0.4, inertia: 0.55,
     header: 'equal', routing: 'single', muffler: 'sport', pipeLen: 1.0, ...NA, intake: 'itb', overrun: 'burble', cat: true, ...MOTO('ign'), gears: 6, transmission: 'manual', shiftTime: 0.1,
     ...moto(103, 289, [2.31, 1.86, 1.57, 1.35, 1.24, 1.14], 4.30, 0.32, 0.36) }),
-  car('single', 'moto', 'KTM 450 SX-F', 'monocilíndrico de trilha', { layout: 'inline', cylinders: 1, crank: 'single', order: '1' }, {
+  car('single', 'moto', 'KTM 450 SX-F', 'monocilíndrico de motocross', { layout: 'inline', cylinders: 1, crank: 'single', order: '1' }, {
     displacement: 0.45, redline: 11500, idle: 1700, cam: 0.5, inertia: 0.7,
     header: 'equal', routing: 'single', muffler: 'straight', pipeLen: 1.0, ...NA, intake: 'sport', overrun: 'lean', cat: false, ...CUT('ign', 120, 0.05), gears: 5, transmission: 'manual', shiftTime: 0.15,
     ...moto(46, 178, [2.00, 1.62, 1.33, 1.10, 0.92], 12.0, 0.35, 0.45) }),
@@ -411,7 +411,7 @@ const AV = { aviation: true, partida: 'direta', cooling: 'air', ...NA, intake: '
 const hel = (B: number, D: number, J: number, passoFixo: boolean, extra = {}) => ({ helice: { B, D, J, passoFixo, ...extra }, portadores: ['helice', 'nenhum'] });
 const rot = (rotor: Record<string, any>) => ({ rotor, portadores: ['rotor', 'nenhum'] });
 export const PRESETS_AVIACAO: PresetRonco[] = [
-  car('c172', 'aviacao', 'Cessna 172 (Lycoming O-320)', 'boxer 4 · 5,2 L · 160 hp · passo fixo', B4, {
+  car('c172', 'aviacao', 'Cessna 172 (Lycoming O-320)', 'boxer 4 · 5,2 L · 150 hp · passo fixo', B4, {
     ...AV, ...avi(5.24, 0.3), compression: 7.0, redline: 2700, rpmMax: 2700, idle: 650, power: 112, fuel: 'carb',
     header: 'short', routing: 'single', muffler: 'classic', pipeLen: 0.8, pipeD: 1.75, breakout: 'old', ...hel(2, 1.93, 5, true), nivelEscape: 135 }),
   car('o360', 'aviacao', 'Piper Archer / RV-7 (Lycoming O-360)', 'boxer 4 · 5,9 L · 180 hp · passo fixo', B4, {
@@ -429,21 +429,22 @@ export const PRESETS_AVIACAO: PresetRonco[] = [
   car('rotax912', 'aviacao', 'Rotax 912 ULS', 'boxer 4 · 1,35 L · 100 hp · redutor 2,43:1', B4, {
     ...AV, ...avi(1.35, 0.08), compression: 10.8, redline: 5800, rpmMax: 5800, idle: 1400, power: 73, fuel: 'carb', cooling: 'water', reducao: 1 / 2.43,
     header: 'short', routing: 'single', muffler: 'sport', pipeLen: 0.6, pipeD: 1.5, breakout: 'old', ...hel(3, 1.7, 1.2, true), nivelEscape: 128 }),
-  car('bell47', 'aviacao', 'Bell 47G (Franklin 6V4)', 'boxer 6 · 5,7 L · 200 hp · rotor de 2 pás', B6, {
-    ...AV, ...avi(5.73, 0.4), compression: 7.0, redline: 3100, rpmMax: 3100, idle: 1500, power: 149, fuel: 'carb',
+  // (47G com o Franklin 6V4-200-C32: 335 pol³, rotor de 35 ft 1,5 in, 2350 lb, redução de 9:1 → 344 rpm de rotor a 3100 do motor)
+  car('bell47', 'aviacao', 'Bell 47G (Franklin 6V4)', 'boxer 6 · 5,5 L · 200 hp · rotor de 2 pás', B6, {
+    ...AV, ...avi(5.49, 0.4), compression: 7.0, redline: 3100, rpmMax: 3100, idle: 1500, power: 149, fuel: 'carb',
     header: 'short', routing: 'dual', muffler: 'straight', pipeLen: 0.6, pipeD: 1.75, breakout: 'old', nivelEscape: 136,
-    ...rot({ B: 2, R: 5.66, Nr: 370, sigma: 0.03, J_rot: 1100, Bc: 2, Rc: 0.89, ic: 1650 / 370, icx: 8.4, massa: 1340, engrenagens: [{ z: 43, rpm: 3100 }, { z: 9, rpm: 370 * 8 }],
+    ...rot({ B: 2, R: 5.35, Nr: 344, sigma: 0.03, J_rot: 1100, Bc: 2, Rc: 0.89, ic: 1650 / 344, icx: 9.0, massa: 1066, engrenagens: [{ z: 43, rpm: 3100 }, { z: 9, rpm: 344 * 8 }],
       posRotor: [0, 0, 2.8], posCauda: [-6.5, 0, 1.4], posCaixa: [0, 0, 2.0], posMotor: [-0.6, 0, 1.0], corpo: { comprimento: 13, largura: 2.3, altura: 2.8 } }) }),
   car('r22', 'aviacao', 'Robinson R22 (Lycoming O-360)', 'boxer 4 · 5,9 L · 124 hp · rotor de 2 pás', B4, {
     ...AV, ...avi(5.92, 0.35), compression: 8.5, redline: 2652, rpmMax: 2652, idle: 1500, power: 92, fuel: 'carb',
     header: 'short', routing: 'single', muffler: 'stock', pipeLen: 0.8, pipeD: 1.75, breakout: 'old', nivelEscape: 134,
     ...rot({ B: 2, R: 3.835, Nr: 530, sigma: 0.034, J_rot: 250, Bc: 2, Rc: 0.535, ic: 3330 / 530, icx: 5.0, massa: 620, engrenagens: [{ z: 57, rpm: 2652 }, { z: 9, rpm: 530 * 9.6 }],
       posRotor: [0.1, 0, 2.7], posCauda: [-5.3, 0, 1.6], posCaixa: [0, 0, 2.0], posMotor: [-0.5, 0, 1.0], corpo: { comprimento: 8.8, largura: 1.1, altura: 2.7 } }) }),
-  car('r44', 'aviacao', 'Robinson R44 (Lycoming O-540)', 'boxer 6 · 8,9 L · 245 hp · rotor de 2 pás', B6, {
-    ...AV, ...avi(8.87, 0.5), compression: 8.5, redline: 2718, rpmMax: 2718, idle: 1500, power: 183, fuel: 'carb',
+  car('r44', 'aviacao', 'Robinson R44 Raven II (Lycoming IO-540)', 'boxer 6 · 8,9 L · 245 hp · rotor de 2 pás', B6, {
+    ...AV, ...avi(8.87, 0.5), compression: 8.5, redline: 2718, rpmMax: 2718, idle: 1500, power: 183, fuel: 'efi',
     header: 'short', routing: 'single', muffler: 'stock', pipeLen: 0.9, pipeD: 2.0, breakout: 'old', nivelEscape: 137, ...rot({}) }),
   car('s300', 'aviacao', 'Schweizer 300C (Lycoming HIO-360)', 'boxer 4 · 5,9 L · 190 hp · rotor de 3 pás', B4, {
-    ...AV, ...avi(5.92, 0.35), compression: 8.5, redline: 3200, rpmMax: 3200, idle: 1500, power: 142, fuel: 'efi',
+    ...AV, ...avi(5.92, 0.35), compression: 10.0, redline: 3200, rpmMax: 3200, idle: 1500, power: 142, fuel: 'efi',
     header: 'short', routing: 'single', muffler: 'straight', pipeLen: 0.6, pipeD: 1.75, breakout: 'old', nivelEscape: 136,
     ...rot({ B: 3, R: 4.09, Nr: 471, sigma: 0.045, J_rot: 450, Bc: 2, Rc: 0.65, ic: 3000 / 471, icx: 6.8, massa: 930, engrenagens: [{ z: 51, rpm: 3200 }, { z: 11, rpm: 471 * 6.8 }],
       posRotor: [0, 0, 2.7], posCauda: [-5.8, 0, 1.4], posCaixa: [0, 0, 2.0], posMotor: [-0.4, 0, 0.9], corpo: { comprimento: 9.4, largura: 2.0, altura: 2.7 } }) }),

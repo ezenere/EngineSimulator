@@ -1,5 +1,18 @@
 # Cena e Portador: projeto das camadas de ouvinte e de carga
 
+> **O que mudou na implementação** (auditoria de 18/11/2026). Este documento é o projeto; o que está no código é o que o [`TECNICO.md`](TECNICO.md#cena-e-portadores) descreve. Os pontos em que os dois diferem:
+>
+> - **Onde moram os tipos (1.3, 1.4).** `Motor` e `Portador` estão em `src/carriers/tipos.ts`; `src/engines/motor.ts` e `src/carriers/portador.ts` não existem. As interfaces ganharam extensões que não estão aqui: `Motor.governadorProprio`, `ComandoMotor.rpmAlvo`, `ComandoPortador.rpmAlvo` (manete de passo), `FonteSonora.agudo` e `FonteSonora.vias`, `Corpo.cabine` ([Adaptadores de motor](TECNICO.md#adaptadores-de-motor)).
+> - **Tabela 1.6.** A que vale é `COMPAT` (e `USO_REAL`) em `src/carriers/compat.ts`: `TipoPortador` ganhou `aviao`, `trator`, `barco` e `drone`; o radial entrou no carro (Sherman), o rotativo no rotor e no gerador, o vapor no trator e no barco. O turboeixo não existe (não há preset `arch: 'turboeixo'`): o rotor leva pistão de aviação, radial, rotativo ou nenhum motor.
+> - **Gerador e locomotiva com diesel (1.6, 4.4, 4.5).** O portador não manda `combustivel`: manda `rpmAlvo` e o diesel usa o governador isócrono dele. Os ganhos do PI do portador de 4.4 (0,5 por % e 0,5/s) davam ciclo-limite; ficaram em 0,07 por % e 0,05/(%·s) ([Portadores](TECNICO.md#portadores)). A carenagem do gerador (lei da massa sobre as fontes de dentro) não foi implementada.
+> - **Nível de referência do Ronco (1.3).** 95 dB SPL a 5 m, não 100: com 100 o Camaro em carga a 6 m dava 94 dB(A) ([Nível absoluto](TECNICO.md#nível-absoluto)). A tabela de diretividade do escape de 1.3 é usada invertida (o eixo aponta para trás).
+> - **Absorção do ar (2.3).** Dois polos por fonte não chegam à ISO 9613 longe: a 1500 m a diferença 4 kHz − 500 Hz é de 22 dB, contra 46,6 (desvio documentado).
+> - **Cabine (3.3).** A lei da massa é realizada como `0,562·(LP₁(398/m_s) + 0,01)` mais a ressonância; os dois polos em `891/m_s` e `2,6×` do texto erravam 7 a 17 dB.
+> - **Trem (4.6).** Os níveis `L_W` foram refeitos contra gravações: rolamento 130 (era 123), aero do truque 105 (119), corpo 119 (122), nariz e cauda 116 (119); a forma do rolamento e o agudo acima de 6 kHz também mudaram ([Trem contra gravações reais](TECNICO.md#trem-contra-gravações-reais)).
+> - **Alvos de 2.9 e 2.11 trocados nos testes.** Balanço 60–150 Hz: +4 → −3 ± 4 dB. Profundidade da modulação dos vãos: ≥ 6 → ≥ 3 dB. Os pulsos de vão em 50–200 Hz, o L_AFmax (5 dB acima do L_Aeq) e o σ de 51 ms do nariz não saem do modelo e ficam como desvios (seção "Validação" de [Cena e portadores](TECNICO.md#cena-e-portadores)).
+> - **Túnel (2.10).** O envio para a reverberação no túnel cai com `1/r^0,8` (o texto dá `1/√r` para todos os ambientes) e o `wet` é 4: só assim os dois alvos do túnel de 2.10 saem juntos.
+> - **Página Passagem (3).** Tem 10 portadores e 29 presets, com motor em quase todos ([Página Passagem](TECNICO.md#página-passagem-e-modo-de-testes)); a seção 4 daqui descreve só os da etapa 1.
+
 Documento de projeto da etapa 1 (ver `PLANO.md`). Define as interfaces entre Motor, Portador e Cena, a Passagem universal, o modo de testes com ouvinte em gimbal e cena 3D, os portadores da etapa 1 e o plano de implementação com testes. A implementação segue este texto à letra; o que estiver marcado **decisão** não se renegocia dentro da etapa sem anotar no relatório. Unidades: metros, segundos, rad/s, N·m, pascal, kg. Referencial do corpo: `x` para a frente, `y` para a esquerda, `z` para cima, origem no centro do corpo ao nível do solo. Som: 48 kHz, blocos de 128 amostras no worklet, controle a cada 64 amostras.
 
 - [1. Interfaces entre camadas](#1-interfaces-entre-camadas)
