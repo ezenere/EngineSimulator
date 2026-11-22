@@ -550,11 +550,11 @@ ruído e o defeito `ar` contra o mesmo carro nos diâmetros do preset.
 | A velocidade na ponteira satura no escoamento sônico | Perto do sônico o sopro para de crescer |
 | Ponteira mais fina que o tubo é um bocal (Bernoulli) | Sobe a contrapressão e amolece o pulso em vez de criar chiado |
 
-**Resultado:** o jato não é a fonte dominante em nenhum dos 108 pontos (máximo 3% na lenta, 2% em carga parcial, 16% em
+**Resultado:** o jato não é a fonte dominante em nenhum dos 108 pontos (máximo 3% na lenta, 3% em carga parcial, 18% em
 plena carga, este no Golf com os diâmetros de fábrica, onde eram 37%). Nos diâmetros dos presets o chiado é o de antes
 (a menos de 0,5 dB na lenta e em carga parcial). Estreitar continua mudando o som: com 1,5" o carro fica 3 a 14 dB mais
 baixo e mais anasalado;
-a ponteira de 1,25" tira 3 a 6 dB em plena carga e comprime o pulso.
+a ponteira de 1,25" tira 3 a 7 dB em plena carga e comprime o pulso.
 
 **Lições:**
 
@@ -567,7 +567,7 @@ a ponteira de 1,25" tira 3 a 6 dB em plena carga e comprime o pulso.
   jato real, punha o ruído em 2,5–6 kHz. Foi medido antes de ficar e saiu.
 - **O defeito `ar` contra o próprio carro.** Sem gravação de cada condição, a régua foi o mesmo preset nos diâmetros de
   fábrica. Ela também mostrou o que não era o jato: no Fusca com tubo ou ponteira no mínimo, em plena carga, o `ar`
-  fica em 0,9–1,25 com ou sem o jato. É a rajada do vazamento do coletor pesando mais porque o tom ficou mais baixo.
+  fica em 1,0–1,7 com ou sem o jato. É a rajada do vazamento do coletor pesando mais porque o tom ficou mais baixo.
 
 **Pendente:** o vazamento do Fusca nos diâmetros mínimos em plena carga (acima); e a contrapressão quase não tira
 torque no modelo (a rede de tubos devolve ao motor pouco do que reflete depois do abafador).

@@ -326,17 +326,17 @@ Em nível absoluto por banda (o mesmo render, antes × agora): o grave até 400 
 | | Diâmetros do preset | Tubo de 1,5" | Ponteira de 1,25" | Os dois no mínimo |
 |---|---|---|---|---|
 | Camaro, lenta | 0,3% → 0,3% | 95% → 0,3% | 46% → 0,3% | 99% → 0,3% |
-| Camaro, carga parcial | 0,8% → 0,7% | 97% → 0,4% | 68% → 0,4% | 99% → 0,4% |
+| Camaro, carga parcial | 0,8% → 0,8% | 97% → 0,5% | 68% → 0,4% | 99% → 0,5% |
 | Camaro, plena carga | 1,1% → 0,8% | 96% → 0,2% | 73% → 0,2% | 99% → 0,1% |
-| S2000, lenta | 0,9% → 0,9% | 98% → 0,6% | 70% → 0,6% | 99% → 0,5% |
+| S2000, lenta | 0,9% → 0,8% | 98% → 0,6% | 70% → 0,6% | 99% → 0,6% |
 | S2000, plena carga | 0,6% → 0,4% | 94% → 0,1% | 60% → 0,1% | 98% → 0,1% |
-| Golf GTI, lenta | 2,0% → 1,9% | 99% → 2,8% | 84% → 1,9% | 100% → 2,7% |
-| Golf GTI, carga parcial | 2,6% → 2,0% | 99% → 1,7% | 87% → 1,3% | 100% → 1,6% |
-| Golf GTI, plena carga | 37% → 16% | 100% → 6% | 99% → 0,7% | 100% → 2% |
-| Fusca, carga parcial | 0,4% → 0,4% | 44% → 0% | 48% → 0,1% | 77% → 0% |
-| Fusca, plena carga | 1,1% → 0,7% | 84% → 0,1% | 74% → 0,1% | 96% → 0,1% |
+| Golf GTI, lenta | 2,0% → 1,9% | 99% → 3,2% | 84% → 1,9% | 100% → 3,1% |
+| Golf GTI, carga parcial | 2,6% → 2,1% | 99% → 2,0% | 87% → 1,4% | 100% → 1,8% |
+| Golf GTI, plena carga | 37% → 18% | 100% → 8% | 99% → 0,8% | 100% → 3% |
+| Fusca, carga parcial | 0,4% → 0,3% | 44% → 0% | 48% → 0,1% | 77% → 0% |
+| Fusca, plena carga | 1,1% → 0,6% | 84% → 0,1% | 74% → 0,1% | 96% → 0,1% |
 
-(antes → agora). Na lei antiga o jato era a fonte dominante do nível ponderado A em 9 de 36 pontos na lenta, 11 de 36 em carga parcial e 14 de 36 em plena carga, chegando a +32 dB sobre todo o resto (Golf, plena carga, os dois no mínimo); com a nova, em nenhum dos 108 (máximo 3% na lenta, 2% em carga parcial, 16% em plena carga, este no Golf com os diâmetros do preset, onde eram 37%).
+(antes → agora). Na lei antiga o jato era a fonte dominante do nível ponderado A em 9 de 36 pontos na lenta, 11 de 36 em carga parcial e 14 de 36 em plena carga, chegando a +32 dB sobre todo o resto (Golf, plena carga, os dois no mínimo); com a nova, em nenhum dos 108 (máximo 3% na lenta, 3% em carga parcial, 18% em plena carga, este no Golf com os diâmetros do preset, onde eram 37%).
 
 **A lei nova** (`jato: 'sonico'`, padrão dos carros; `montarMedios` em `src/engines/ronco/medios.ts` e o laço da ponteira no `dsp.ts`). O sopro de cada pulso foi afinado de ouvido num escape de 2,5": é o "puf" de cada explosão, e continua seguindo a onda de cada pulso. Três mudanças, todas da física do escoamento:
 
@@ -344,9 +344,9 @@ Em nível absoluto por banda (o mesmo render, antes × agora): o grave até 400 
 2. **A velocidade satura no escoamento sônico.** O número de Mach na ponteira é a vazão dividida pela área dela (`M = 0,25·u·área do tubo / (2,5·10⁴·área da ponteira)`: 25 kPa de onda num tubo de 2,5" são ~100 m/s, com o som a ~400 m/s na ponta), e o sopro usa `vel / (1 + M⁴)^¼`: longe do sônico não muda nada, perto dele para de crescer.
 3. **Ponteira mais fina que o tubo é um bocal.** A queda de pressão no estrangulamento é a de Bernoulli, `Δp = ½ρv²(1/σ² − 1)`, σ = área da ponteira ÷ área do tubo; na boca do tubo, em vez da boca aberta (que deixaria sair a vazão `w₀`), sai `w` com `w + κ·w·|w| = w₀`, `κ = (1/σ² − 1)/(2γp₀)`, limitada ao escoamento sônico na garganta. Em pulso fraco quase nada muda; em pulso forte a vazão cresce só com a raiz da pressão e o resto volta para o tubo como contrapressão (reflexão positiva). O pulso sai mais mole e mais baixo em vez de virar chiado. (Só a boca do tubo; a da válvula de escape não muda.)
 
-**O que estreitar faz agora.** O tubo fino continua mudando o tom como antes (admitância, perda nas paredes, irradiação), só que agora se ouve: com 1,5" o som fica 3 a 14 dB mais baixo e mais preso, com os médios 2 a 7 dB mais altos em relação ao grave (anasalado). A ponteira de 1,25" num tubo de 2,5" quase não muda a lenta (−0,4 a −1,3 dB) e tira 3 a 6 dB em plena carga, com o pulso comprimido (mais harmônicos: no Fusca e no Golf, +9 dB de médios em relação ao grave). O torque quase não muda: a rede de tubos devolve ao motor só uma fração pequena do que reflete depois do abafador.
+**O que estreitar faz agora.** O tubo fino continua mudando o tom como antes (admitância, perda nas paredes, irradiação), só que agora se ouve: com 1,5" o som fica 3 a 14 dB mais baixo e mais preso, com os médios 2 a 9 dB mais altos em relação ao grave (anasalado). A ponteira de 1,25" num tubo de 2,5" quase não muda a lenta (−0,4 a −1,3 dB) e tira 3 a 7 dB em plena carga, com o pulso comprimido (mais harmônicos: +10 dB de médios em relação ao grave no Golf, +5 no Fusca). O torque quase não muda: a rede de tubos devolve ao motor só uma fração pequena do que reflete depois do abafador.
 
-**Leito de ruído em plena carga** (o defeito `ar` do kit, contra o mesmo carro nos diâmetros do preset): antes chegava a 4,1; agora fica em até 0,54 em 33 dos 36 pontos. Os três que passam de 0,6 (0,9 a 1,25) são do Fusca com tubo ou ponteira no mínimo, e não são o jato (dão o mesmo sem ele; o jato é 0,1% do nível): é a rajada do vazamento do coletor (`breakout: 'old'`), que não depende do diâmetro, pesando mais porque o tom ficou 4 a 7 dB mais baixo.
+**Leito de ruído em plena carga** (o defeito `ar` do kit, contra o mesmo carro nos diâmetros do preset): antes chegava a 4,1; agora fica abaixo de 0,6 em 31 dos 36 pontos. Passam: o Golf com o tubo de 1,5" (0,62 e 0,66; aí é o jato, 3 a 8% do nível, porque o tom caiu 12 dB) e o Fusca com tubo ou ponteira no mínimo (1,0 a 1,7), que não são o jato (dão o mesmo sem ele; o jato é 0,1% do nível): é a rajada do vazamento do coletor (`breakout: 'old'`), que não depende do diâmetro, pesando mais porque o tom ficou 4 a 8 dB mais baixo. Em carga parcial o `ar` chega a 0,76 no Camaro com o tubo de 1,5" (o tom cai 14 dB e o jato, 0,5% do nível, passa a ser o que há em 2,5–6 kHz).
 
 **Chiado do vão da válvula de escape** nos extremos: desligá-lo muda de 0 a 1,5% do nível ponderado A, e até 12% na lenta do S2000 e 7% na do Camaro com o tubo de 1,5" (porque o tom caiu 10–12 dB); nunca domina. O chiado da borboleta fica 60 dB ou mais abaixo do total no `ext`.
 
