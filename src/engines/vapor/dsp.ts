@@ -317,9 +317,9 @@ export class VaporDSP implements Motor {
     });
     this.jato = new JatoBico(this.fs, P.escape.dBico, P.semente ^ 0x1e7);
     // ganho do ruído de mistura relativo ao tom da chaminé (unidades da linha: Pa por kg/s·M³), acertado contra as
-    // bandas de perto (3.3); o choque fica 6 dB acima da mistura quando pleno (controle "Ar")
+    // bandas de perto (3.3); o choque fica 1,2× a mistura quando pleno (controle "Ar"): é o estalo claro do corte longo
     this.jato.gMistura = (K_MISTURA * 0.0177) / this.rede.aBico;
-    this.jato.gChoque = 0.9 * this.jato.gMistura;
+    this.jato.gChoque = 1.2 * this.jato.gMistura;
     this.portico = new RuidoPortico(this.fs, P.semente ^ 0x9071); this.gPortico = K_PORTICO * this.jato.gMistura;
     this.gTiragem = this.jato.gMistura * K_TIRAGEM * (P.escape.tiragem ?? 1); this.gCondensador = K_CONDENSADOR * this.jato.gMistura;
     this.caixa = new CaixaRessonante(this.fs, P.escape.vCaixa, P.escape.tCauda ?? T_CAUDA, P.escape.nivelCauda ?? NIVEL_CAUDA);
