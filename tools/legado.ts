@@ -103,7 +103,7 @@ export const CORRECOES_RONCO: Correcoes = {
   // Skyactiv-MT do ND: 5,087/2,991/2,035/1,594/1,286/1,000 com 2,866: a 6ª é direta (mazdausa.com, especificações de 2018)
   mx5: { ratios: [5.09, 2.99, 2.04, 1.59, 1.29, 1.00] },
   // SMG III: 3,985/2,652/1,806/1,392/1,159/1,000/0,833 com 3,62 (ficha de imprensa da BMW, press.bmwgroup.com)
-  m5e60: { ratios: [3.99, 2.65, 1.81, 1.39, 1.16, 1.00, 0.83] },
+  m5e60: { ratios: [3.99, 2.65, 1.81, 1.39, 1.16, 1.00, 0.83], crank: 'odd90', bankAngle: 90, order: '1-8-7-4-3-10-9-6-5-2' },
   // o M156 6.2 é do C 63 AMG W204 (2008–2014); "Mercedes-AMG C 63" é o W205 em diante, com o 4.0 biturbo
   c63: { name: 'Mercedes-Benz C 63 AMG' },
   // a 412 T2 tinha câmbio transversal de 6 marchas (f1technical.net; Wikipedia, Ferrari 412 T2); mesma 1ª e mesma última
@@ -120,6 +120,13 @@ export const CORRECOES_RONCO: Correcoes = {
   // 'even72' (moente comum): nenhuma fonte diz se o 053 tem moente comum ou defasado. Com moente comum, um V10 a 90°
   // dispara a 54°/90° (é o que o 'even72' dá com o V a 90°) (F-RON-18)
   v10f1: { bankAngle: 90 },
+  // 5.2 FSI (Huracán, R8 de 2ª geração): V10 a 90° com moente comum, explosões alternadas a 54° e 90° (Audi,
+  // https://www.audi.com/en/the-audi-r8-until-2024-updated-dynamics-for-the-high-performance-sports-car-11734/engine-11738).
+  // A ordem é a do virabrequim 'odd90' do simulador (a do Viper); a da Audi, 1-6-5-10-2-7-3-8-4-9, pede outro arranjo
+  // de moentes, com os mesmos intervalos e 144° por bancada (F-RON-16)
+  huracan: { crank: 'odd90', bankAngle: 90, order: '1-8-7-4-3-10-9-6-5-2' },
+  r8: { crank: 'odd90', bankAngle: 90, order: '1-8-7-4-3-10-9-6-5-2' },
+  // S85 (M5 E60, linha acima com as relações): 90°, moentes compartilhados, 90°/54° (https://en.wikipedia.org/wiki/BMW_S85) (F-RON-17)
 };
 
 /** Turbina: id do preset → campos corrigidos (valor novo) */
