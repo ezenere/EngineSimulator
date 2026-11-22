@@ -108,7 +108,7 @@ try {
   const ini = await ev(`({ familias: document.querySelectorAll('.fam').length, carros: document.querySelectorAll('.preset').length, marcado: document.querySelector('.preset[aria-pressed=true]')?.dataset.id, placa: document.querySelector('.plate')?.textContent, secoes: [...document.querySelectorAll('.controls h2')].map((h) => h.textContent), sliders: document.querySelectorAll('.controls input[type=range]').length, ordem: document.getElementById('roOrder').textContent, bal: document.querySelectorAll('.bal').length })`);
   // (10 famílias: as 9 do legado e a Aviação da etapa 3, RADIAL.md 6)
   confere(ini.familias === 10 && ini.carros === 9 && ini.marcado === 'muscle', 'presets: 10 famílias, 9 muscle, Camaro marcado', JSON.stringify([ini.familias, ini.carros, ini.marcado]));
-  confere(ini.placa === 'V8 90° · Cross-plane · 6.2 L · aspirado · 1-8-4-3-6-5-7-2', 'placa', ini.placa);
+  confere(ini.placa === 'V8 90° · Cross-plane · 6,2 L · aspirado · 1-8-4-3-6-5-7-2', 'placa', ini.placa);
   confere(ini.secoes.join(',') === 'Escuta e ambiente,Motor,Características,Corte de giro,Temperatura do motor,Transmissão,Escapamento,Acessórios,Estalos no escape,Admissão', 'seções do painel', ini.secoes.join(','));
   confere(ini.ordem === '1-8-4-3-6-5-7-2' && ini.bal === 4, 'leitura da ordem e balanceamento');
   confere(ini.sliders >= 25, 'sliders no painel', String(ini.sliders));

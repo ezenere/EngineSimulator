@@ -152,7 +152,7 @@ const N_PRESETS = 13 + 5 + 3 + 3 + 5;
 confere(est.presets.length === N_PRESETS && !est.presets.some((p) => p.endsWith('(d)')), `presets: ${N_PRESETS}, todos habilitados (os com motor pelos adaptadores)`, est.presets);
 // (Trator e Barco: portadores do vapor, etapa 5; Drone: do elétrico, etapa 6)
 confere(est.portadores.join() === 'Trem,Helicóptero,Carro,Avião de hélice,Gerador,Locomotiva,Avião a jato,Trator,Barco,Drone', 'portadores pela tabela de compatibilidade e os adaptadores', est.portadores);
-confere(JSON.stringify(est.secoes) === JSON.stringify(['Portador', 'Passagem', 'Ambiente', 'Trajetória', 'Ouvinte', 'Trem', 'Ar', 'Escuta', 'Modo de testes']), 'seções do painel', est.secoes);
+confere(JSON.stringify(est.secoes) === JSON.stringify(['Portador', 'Passagem', 'Ambiente', 'Trajetória', 'Ouvinte', 'Trem', 'Ar', 'Volume', 'Modo de testes']), 'seções do painel', est.secoes);
 confere(['vKmh', 'x0', 'rtFator', 'tunelArea', 'tunelComp', 'tunelBoca', 'comprimento', 'lateral', 'altitude', 'ouvX', 'ouvZ', 'N', 'Lc', 'vao', 'truque', 'lNariz', 'ur', 'temperatura', 'master'].every((s) => est.sliders.includes(s)), 'parâmetros livres do modo de testes', est.sliders.length);
 confere(est.atalhos.join() === 'escape(d),ponteira(d),frente,lateral,atras,cabine,cofre(d),topo', 'atalhos do gimbal (sem motor: escape, ponteira e cofre desabilitados)', est.atalhos);
 confere(est.canvas.length === 4 && est.canvas.every((c) => !/:0x|x0$/.test(c)), 'canvas com tamanho', est.canvas);

@@ -119,7 +119,7 @@ try {
   confere((await ev('document.title')) === 'Rotativos', 'título');
   const ini = await ev(`({ familias: document.querySelectorAll('.fam').length, presets: document.querySelectorAll('.preset').length, marcado: document.querySelector('.preset[aria-pressed=true]')?.dataset.id, placa: document.querySelector('.plate')?.textContent, secoes: [...document.querySelectorAll('.controls h2')].map((h) => h.textContent), sliders: document.querySelectorAll('.controls input[type=range]').length, anel: !!document.getElementById('anel'), pAlfa: !!document.getElementById('pAlfa') })`);
   confere(ini.familias === 6 && ini.presets === 5 && ini.marcado === 'rx7fd', 'presets: 6 famílias, 5 Mazda de rua, RX-7 FD marcado', JSON.stringify([ini.familias, ini.presets, ini.marcado]));
-  confere(/^Wankel 2 rotores · 2 × 65[45] cm³ · CR 9,0 · lateral4 \/ periferico · biturbo sequencial/.test(ini.placa), 'placa', ini.placa);
+  confere(/^Wankel 2 rotores · 2 × 65[45] cm³ · CR 9,0 · admissão lateral 4 · escape periférico · biturbo sequencial/.test(ini.placa), 'placa', ini.placa);
   const esperadas = 'Escuta e ambiente,Motor,Características,Corte de giro,Temperatura do motor,Transmissão,Escapamento,Acessórios,Estalos no escape,Admissão';
   confere(ini.secoes.join(',') === esperadas, 'seções do painel (paridade com o Ronco: escuta, temperatura, transmissão, corte, acessórios)', ini.secoes.join(','));
   confere(ini.sliders >= 25 && ini.anel && ini.pAlfa, 'sliders, anel do ciclo e traço p–α', `${ini.sliders} sliders`);
