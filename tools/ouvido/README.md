@@ -250,8 +250,9 @@ preset como está (aprovado → novo; saída de `regua.py` em `referencias/_sim/
 | Mustang 2026, lenta quente (sem veredito) | 1,41 → 1,56 | 1,09 → 1,18 | 0,75 → 0,80 | 2,67 → 2,75 | 2,18 → 2,26 | **1,77 → 1,85** | 0,00 → 0,00 | 0,42 → 0,44 | 0,31 → 0,41 | 78% / 15% → 12% |
 
 Lido contra a faixa dos aprovados: `ar` cai onde existia (Mustang frio, 0,44–0,56 → 0,17–0,21) e segue zero no resto;
-`tom a menos` cai no Fusca (2,41 → 1,90) e `pulso a menos` no Mustang frio; o total melhora no Fusca a 1410 rpm e no
-Mustang frio em Track e piora de 0,02 a 0,28 nos outros. O que piora é simétrico: o simulado fica **mais tonal** que a
+`tom a menos` cai no Fusca (2,41 → 1,90) e `pulso a menos` no Mustang frio; o total melhora no Fusca a 1410 rpm (1,27 → 1,12)
+e no Mustang frio em Track (2,16 → 2,11), fica igual (±0,02) no Mustang frio em Sport e em duas das três Fórmulas 1, e
+piora de 0,04 a 0,28 nos outros. O que piora é simétrico: o simulado fica **mais tonal** que a
 gravação em 1–6 kHz (piso de ruído do Hellcat em lenta 2,88 → 3,10; modulação e eventos do Hellcat frio 1,43 → 1,92 e
 0,64 → 1,31), que é o lado que o viés do simulador pede (mais motor, menos ar) e que a distância simétrica conta como
 diferença. Três números passam por pouco do teto dos aprovados: o piso do Hellcat em lenta (3,10 contra 2,88), a
