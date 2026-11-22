@@ -1678,6 +1678,7 @@ Medidas e deixadas de fora (em `boca.ts`): a intensidade crescendo com o Mach² 
 - Reflexão do solo no ouvinte de fora da página (a Cena tem; é o que resta de diferença entre os dois caminhos).
 - Conteúdo tonal de 1–2,5 kHz na lenta: as linhas ficam 5 a 14 dB abaixo das da gravação no Rotec (−31,8 contra −23,9 dB da âncora) e no Sherman; é o pulso liso em carga leve do motor-base (TECNICO → Ronco → Médios), e a `batida` não resolve na lenta.
 - Os Verner de 3 e 5 cilindros: 7 picos/s na lenta (pulsos isolados por construção); falta gravação.
+- Aviação do Ronco (motores planos, flag `av`, que não passou por esta rodada): o O-200 na lenta a 609 rpm contra a gravação do Continental C-90 (`referencias/aviacao-pistao/continental-c90-lenta.wav`, 612 rpm pelo pente; o rastreador para na ignição, 4× o ciclo, porque os quatro cilindros saem iguais) tem 19,6 picos por segundo em 1–6 kHz (a gravação, 4,3), curtose 15,8 (4,0) e 400 Hz–1 kHz / 1–2,5 kHz / 2,5–6 kHz em +2,9 / +6,2 / +5,3 dB da âncora (a gravação, −4,6 / −9,2 / −21,0): 7 a 26 dB brilhante demais, todo em rajada por explosão. É defeito, e é o do chiado de jato na ponteira (o caminho do motor-base, `jato: 'sonico'`, ainda não ligado nesses presets).
 - Hélice na lenta com um termo de carga (o "canto" do DC-3 a 3 m).
 - Ford Trimotor com 3 instâncias (opcional no RADIAL.md) e a passagem com altitude no ouvinte `road` da página.
 - Som do rotor na página do Ronco (na Passagem o rotor é o do portador).
