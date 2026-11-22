@@ -23,6 +23,7 @@ import type { FonteSonora } from '../../scene/tipos';
 import { COR_TIPO } from './cena3d-cores';
 import { nomeFonte } from './mostradores';
 import { PontoVia } from '../../scene/trajetoria';
+import { secaoTunel } from '../../scene/ambientes';
 
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
 
@@ -217,11 +218,13 @@ export class Cena3D {
     }
     // ambientes
     if (amb.tunel) {
-      // tubo de seção quadrada da área do túnel, semitransparente, da boca até a outra boca
-      const a = Math.sqrt(amb.tunel.area), ta = amb.tunel.xEntrada, tb = ta + amb.tunel.comprimento, p = reta ? 25 : 5;
+      // tubo da seção do túnel (secaoTunel, a mesma da Cena: via dupla, o trem na via do lado oposto ao ouvinte),
+      // semitransparente, da boca até a outra boca
+      const sec = secaoTunel(amb.tunel.area), y0 = sec.paredeOuvinte, y1 = sec.paredeOposta, h = sec.altura;
+      const ta = amb.tunel.xEntrada, tb = ta + amb.tunel.comprimento, p = reta ? 25 : 5;
       const mat = 0x7f8794;
-      G.add(faixa(c, ta, tb, p, -a / 2, -a / 2, 0, a, mat, 0.28), faixa(c, ta, tb, p, a / 2, a / 2, 0, a, mat, 0.28), faixa(c, ta, tb, p, -a / 2, a / 2, a, a, mat, 0.18));
-      for (const sx of [ta, tb]) { const b = faixa(c, sx, sx + 3, 3, -a / 2 - 2, a / 2 + 2, a, a + 1.5, 0x59616e, 0.9); G.add(b); }
+      G.add(faixa(c, ta, tb, p, y0, y0, 0, h, mat, 0.28), faixa(c, ta, tb, p, y1, y1, 0, h, mat, 0.28), faixa(c, ta, tb, p, y0, y1, h, h, mat, 0.18));
+      for (const sx of [ta, tb]) { const b = faixa(c, sx, sx + 3, 3, y0 - 2, y1 + 2, h, h + 1.5, 0x59616e, 0.9); G.add(b); }
     } else if (amb.id === 'estacao') {
       // plataforma do lado do ouvinte, cobertura a 7 m e parede do fundo
       const lado = -(c.corpo.segmentos[0]?.largura ?? 3) / 2 - 0.35;

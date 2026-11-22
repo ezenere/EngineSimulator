@@ -275,7 +275,7 @@ await clicar('.camera [data-cam="ouvinte"]');
 await chip('portador', 'Helicóptero');
 await espera(800);
 const port3 = (await ultimos('portador')).at(-1);
-confereMsg(port3?.tipo === 'rotor' && port3.motor?.familia === 'pistao' && port3.motor.cfg.id === 'r44', 'helicóptero montado com o O-540 do R44 (família aviação do Ronco)', port3 && { tipo: port3.tipo, motor: port3.motor?.familia, id: port3.motor?.cfg.id });
+confereMsg(port3?.tipo === 'rotor' && port3.motor?.familia === 'pistao' && port3.motor.cfg.id === 'r44', 'helicóptero montado com o IO-540 do R44 (família aviação do Ronco)', port3 && { tipo: port3.tipo, motor: port3.motor?.familia, id: port3.motor?.cfg.id });
 confere((await ev(`${P}.traj.altitude`)) === 150, 'padrão do helicóptero: altitude 150 m');
 // ---- carro na rua a 6 m: Camaro SS (Ronco adaptado), 3ª, pé no fundo, 108 km/h
 await clicar('#ignicao');
