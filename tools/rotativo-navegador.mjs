@@ -174,9 +174,14 @@ try {
   // janelas, velas, pré-silencioso
   await chip('#admissao', 'Periférica');
   confere((await lerAte(() => ev(`window.__rotativo.estado.spec.janelas.admissao`), (v) => v === 'periferica', 3000)) === 'periferica', 'janela de admissão periférica');
+  // cada configuração nova afunda a lenta por um instante (de ~1 000 para ~600 rpm com a janela periférica, que já
+  // oscila); a próxima troca espera a lenta voltar, como os 1,2 s e 0,8 s de antes davam (três trocas seguidas
+  // apagavam o motor de vez em quando)
+  await teleAte((x) => x.state === 'run' && x.rpm > 800, 6000, 300);
   await chip('#trailing', 'Desligadas');
   t = await teleAte((x) => x.trailing === false, 6000);
   confere(t.trailing === false, 'velas trailing desligadas (telemetria)', String(t.trailing));
+  await teleAte((x) => x.state === 'run' && x.rpm > 800, 6000, 300);
   await chip('#presilencioso', 'Retirado');
   await espera(1500); // (o motor não pode apagar com o escape novo: a janela de observação é o teste)
   t = await tele();
