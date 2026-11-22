@@ -262,6 +262,23 @@ As três paridades foram rodadas no último commit (`dc54275`). Nenhum arquivo d
 
 **Testes atualizados de propósito** (a verificação continua a mesma, com o texto ou a ordem novos): Ronco (placa com vírgula), Diesel (placa com vírgula; a leitura do gerador agora é "210 kW · 60,0 Hz" com o nome "Alternador"), Rotativos (placa com os nomes das janelas), Turbina (ordem das seções, dos sliders e dos chips, com "Escuta e ambiente" primeiro), Elétrico (placa por extenso, seção "Escuta e ambiente", chip "Livre" no lugar de "Gimbal"), Passagem (seção "Volume"). Radial e Vapor não mudaram.
 
+### Rodada de 22/11 (pendências de interface, roteiros e documentação)
+
+Fechados I1 a I5, I9 (V6), I10 e F8 (E5 da auditoria de código), mais E4 (o `blur` do Elétrico; no Ronco e no Diesel o botão do freio também apaga), E6, F4 e F6. Os roteiros de navegador esperam pela condição em vez de dormir (ver `README.md`, Desenvolvimento): cada espera fixa depois de mexer num controle virou "ler até a condição valer, com limite folgado"; nas trocas de preset o roteiro espera o motor novo chegar ao DSP antes do próximo clique (um clique ou um controle mexido nos primeiros ~60 ms depois da troca era desfeito pela configuração nova, que sai depois de um atraso e da calibração); as janelas de medida da Passagem se estendem enquanto a condição de chegada não vale e o nível é o máximo do medidor da página (`med.maxA`). `MUDO=1` roda os oito em silêncio; por padrão eles tocam o som.
+
+| Portão | Resultado |
+|---|---|
+| `npm run typecheck`, `npm run build` | passam |
+| `npm run verificar:rapido` | 12/12, antes e depois de mesclar a `reestruturacao` do dia (Rotativos, Passagem e portadores, testes com teto) |
+| `paridade:ronco` (completa), `paridade:acoustics` | PARIDADE OK; 23 verificações idênticas bit a bit, antes e depois da mescla |
+| `navegador:*` (os oito), máquina já carregada por outros agentes (carga 10 a 36 em 32 núcleos), `MUDO=1` | 8/8 TUDO OK de primeira |
+| `navegador:*` com `npm run teste:radial` rodando ao lado (carga 43 a 76), `MUDO=1` | 8/8 TUDO OK de primeira |
+| `navegador:*` depois da mescla (carga 19 a 28), `MUDO=1` | 8/8 TUDO OK |
+| `navegador:*` com som, uma vez, no fim (carga 15 a 31) | 7/8; o dos Rotativos falhou uma vez (o motor apagou entre três trocas de configuração seguidas com a janela periférica; o roteiro passou a esperar a lenta voltar entre elas, e seis rodadas seguidas deram TUDO OK) |
+| `node tools/capturas.mjs --so-parado` (9 páginas × 4 larguras, antes e depois da mescla) | rolagem horizontal, elementos para fora, grupos de chips sem nome, controles e canvas sem nome, contraste abaixo de AA, alvos pequenos, ids repetidos e erros no console: todos em zero |
+
+As páginas que mudaram de aparência foram olhadas nas capturas: o Vapor (onda e espectro) em 1280, 1100 e 400 px e no notebook baixo (1200 e 1366 × 750, onde a onda vai para o lado dos escapes: numa linha a mais as leituras passavam por cima das faixas); os Rotativos ("fumaça azul da partida" na coluna da câmara e na seção de aviação, a dica `M` no AE50R) em 1280 e 400 px; a seção de aviação do Ronco e do Radial (sem a tecla nos rótulos) em 1280 e 400 px. `docs/ui/vapor.png` foi refeita; as outras imagens de `docs/ui/` não mudaram.
+
 ## O que ficou de fora
 
 - ~~**V6, onda e espectro no Vapor.**~~ Feito em 22/11.
