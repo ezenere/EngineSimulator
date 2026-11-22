@@ -35,11 +35,11 @@ O site é compilado com Vite (TypeScript + React) e publicado como páginas est�
 | `turbina.html`, `src/pages/turbina/` | Página da Turbina, migrada de `jato.html` + `jet-app.js`: `controle.ts` (estado e mensagens para o DSP, fora do React), `Painel.tsx` (controles), `Turbina.tsx` (barra, presets, manete, instrumentos, laço de desenho), `desenho.ts` (EICAS, fan, osciloscópio, mapa e leituras em canvas) |
 | `src/engines/turbina/` | DSP da Turbina em TypeScript: `dsp.ts` (`JetDSP`), `presets.ts` (os aviões, tipo `PresetTurbina`), `constantes.ts` (tabela de seno, diretividade, volta da passagem); o worklet é `src/worklet/processador-turbina.ts` (`turbina-engine`) |
 | `tools/turbina-paridade.ts`, `tools/turbina-testa-navegador.mjs` | Prova de som idêntico ao legado (todos os aviões) e teste da página no Chromium e no Firefox headless |
-| `src/pages/comum/` | `Aviacao.tsx`: os controles e as leituras de aviação (magnetos, mistura, partida, hélice, rotor) usados pelo Ronco, pelo Radial e pelos Rotativos. `Casca.tsx` e `ProvaDoWorklet.tsx` são a casca e a prova do worklet da etapa de base; nenhuma página os usa mais |
+| `src/pages/comum/` | `Aviacao.tsx`: os controles e as leituras de aviação (magnetos, mistura, partida, hélice, rotor) usados pelo Ronco, pelo Radial e pelos Rotativos. (A casca e a prova do worklet da etapa de base, `Casca.tsx`, `ProvaDoWorklet.tsx`, `casca.css` e `src/worklet/processador-tom.ts`, saíram em 22/11/2026: nenhuma página as usava) |
 | `src/ui/` | Componentes React compartilhados (`Slider`, `ChipGroup`, `Field`, `Section`, `FamilyNav`, `PresetNav`, `Barra`, `BotaoIgnicao`, `Manete`) e os estilos (`estilo.css`, ex-`style.css`; `turbina.css`, ex-`jet.css`; `manete.css`) |
 | `src/ui/audio/` | `AudioShell` (contexto React) e `CadeiaDeAudio`: AudioContext, carga do worklet e a cadeia compressor → EQ → seco/molhado → ambiente → analisador; ambientes e respostas ao impulso; perfis de Ronco e Turbina |
 | `src/acoustics/` | Blocos de acústica compartilhados: `RNG`, `Biquad`/`BiquadComPiso`, guias de onda (`Line`, `Junction`, `TwoPort`, `Radiator`, `Cutout`, `ClosedEnd`), escoamento compressível, constantes físicas |
-| `src/worklet/` | Pipeline do AudioWorklet: `registrar.ts` (envolve um DSP num `AudioWorkletProcessor`), `tipos.ts` (contrato do DSP), `processador-*.ts` (pontos de entrada) e o DSP de prova `tom.ts` |
+| `src/worklet/` | Pipeline do AudioWorklet: `registrar.ts` (envolve um DSP num `AudioWorkletProcessor`), `tipos.ts` (contrato do DSP), `processador-*.ts` (pontos de entrada, um por página) e o DSP de prova `tom.ts` (o tom de 440 Hz, usado só por `tools/render.ts tom` para provar o laço offline) |
 | `tools/ronco-paridade.ts`, `tools/ronco-navegador.mjs` | Prova de que o Ronco migrado soa igual ao legado (dados, WAV e bundle do worklet) e teste da página no Chromium e no Firefox headless |
 | `tools/legado.ts` | A referência do legado para as paridades: o commit fixo (`REF_LEGADO`), a leitura dos arquivos por `git show` e as correções de ficha declaradas (`CORRECOES_RONCO`, `CORRECOES_TURBINA`), aplicadas ao legado antes de comparar |
 | `tools/render.ts`, `tools/compare-wav.ts`, `tools/acoustics-paridade.ts` | Renderização offline para WAV, comparação amostra a amostra e conferência bit a bit do `acoustics/` contra o legado |
@@ -71,12 +71,13 @@ Os arquivos `*-dsp.js` legados ficavam dentro de uma função-fábrica (`EngineD
 O processador é importado pela página com o sufixo `?worker&url` do Vite:
 
 ```ts
-import urlTom from '../../worklet/processador-tom.ts?worker&url';
-await ctx.audioWorklet.addModule(urlTom);
+// src/pages/ronco/PaginaRonco.tsx (a URL vai para o AudioShell, que chama audioWorklet.addModule)
+import urlRonco from '../../worklet/processador-ronco.ts?worker&url';
+await ctx.audioWorklet.addModule(urlRonco);
 ```
 
-- **No build**, o Vite compila `processador-tom.ts` e tudo o que ele importa (DSP, `acoustics/`) num bundle separado, `dist/assets/processador-tom-<hash>.js`, formato ES (`worker.format: 'es'`), e a página recebe a URL como `new URL('processador-tom-<hash>.js', import.meta.url)`, relativa ao próprio chunk (por isso funciona em qualquer subpasta). O bundle do worklet **não é minificado** (`worker.rolldownOptions.output.minify: false`), para o código do DSP no navegador ser o mesmo, linha a linha, que roda no Node. (O Rolldown ainda dobra constantes, como `1 - 0.985` → `0.015000000000000013`, que dá o mesmo double.)
-- **No dev**, a URL aponta para o próprio `.ts` (`/src/worklet/processador-tom.ts?worker_file&type=module`); o Vite o transforma em módulo ES e os `import` dele são carregados pelo worklet como módulos. O Vite injeta `import "/@vite/env"` no topo, que só mexe em `globalThis` e funciona no escopo do worklet.
+- **No build**, o Vite compila `processador-ronco.ts` e tudo o que ele importa (DSP, `acoustics/`) num bundle separado, `dist/assets/processador-ronco-<hash>.js`, formato ES (`worker.format: 'es'`), e a página recebe a URL como `new URL('processador-ronco-<hash>.js', import.meta.url)`, relativa ao próprio chunk (por isso funciona em qualquer subpasta). O bundle do worklet **não é minificado** (`worker.rolldownOptions.output.minify: false`), para o código do DSP no navegador ser o mesmo, linha a linha, que roda no Node. (O Rolldown ainda dobra constantes, como `1 - 0.985` → `0.015000000000000013`, que dá o mesmo double.)
+- **No dev**, a URL aponta para o próprio `.ts` (`/src/worklet/processador-ronco.ts?worker_file&type=module`); o Vite o transforma em módulo ES e os `import` dele são carregados pelo worklet como módulos. O Vite injeta `import "/@vite/env"` no topo, que só mexe em `globalThis` e funciona no escopo do worklet.
 - O plugin do React exclui `src/worklet/`, `src/acoustics/`, `src/engines/`, `src/scene/` e `src/carriers/`: o React Refresh injetaria código que usa `window`, que não existe no worklet.
 - **three.js** (dependência `three`, tipos em `@types/three`) só entra na página Passagem, num chunk carregado sob demanda (`import('./cena3d')`, ~600 kB, 150 kB gzip; `chunkSizeWarningLimit` 700). Arquivos de `public/` (as texturas de `public/3d/`) vão para o `dist/` como estão e são lidos com `import.meta.env.BASE_URL`, relativo à página.
 - **Regra do DSP:** não usa nada do navegador nem o `sampleRate` global; recebe a taxa no construtor. Só `src/worklet/registrar.ts` toca nos globais do worklet:
@@ -88,7 +89,7 @@ await ctx.audioWorklet.addModule(urlTom);
 
   O contrato (`src/worklet/tipos.ts`) é o mesmo do `EngineDSP`/`JetDSP`: `process(L, R, n, envioL?, envioR?)`, `message(m)`, `post(m)`.
 - **Reserva:** se o worklet não carregar, `CadeiaDeAudio` roda o mesmo DSP num `ScriptProcessorNode` na thread principal, se a página passar `criarDspLocal`.
-- **Verificado** com Chromium e Firefox headless, em `npm run dev`, `npm run preview` e com o `dist/` servido em `/data/engine/`: o tom toca pelo worklet (modo `worklet`, não a reserva), a telemetria volta pela porta, troca de frequência e de ambiente funcionam, sem erros no console.
+- **Verificado** com Chromium e Firefox headless, em `npm run dev`, `npm run preview` e com o `dist/` servido em `/data/engine/`: na etapa de base com um worklet de prova (um tom, hoje removido), e desde então pelos roteiros `tools/*-navegador.mjs` de cada página, que conferem o som pelo worklet (modo `worklet`, não a reserva), a telemetria pela porta, a troca de ambiente e o console sem erros.
 
 ### Cadeia de áudio e `AudioShell`
 
