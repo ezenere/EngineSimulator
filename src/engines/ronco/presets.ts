@@ -84,6 +84,8 @@ const V8X = { layout: 'v', cylinders: 8, crank: 'cross', bankAngle: 90, order: '
 const V8F = { layout: 'v', cylinders: 8, crank: 'flat', bankAngle: 90, order: '1-6-5-8-7-4-3-2' };
 const V12 = { layout: 'v', cylinders: 12, crank: '120', bankAngle: 60, order: '1-10-9-8-7-12-11-4-3-6-5-2' };
 const V10 = { layout: 'v', cylinders: 10, crank: 'even72', bankAngle: 72, order: '1-10-9-8-7-6-5-4-3-2' };
+// V10 a 90° com moente comum (Audi/Lamborghini 5.2 FSI, BMW S85): explosões a 54° e 90° (AUDITORIA F-RON-16, F-RON-17)
+const V10_90 = { layout: 'v', cylinders: 10, crank: 'odd90', bankAngle: 90, order: '1-8-7-4-3-10-9-6-5-2' };
 const I4 = { layout: 'inline', cylinders: 4, crank: 'flat', order: '1-3-4-2' };
 const I6 = { layout: 'inline', cylinders: 6, crank: '120', order: '1-5-3-6-2-4' };
 const I5 = { layout: 'inline', cylinders: 5, crank: '144', order: '1-2-4-5-3' };
@@ -109,7 +111,8 @@ const car = (id: string, family: string, name: string, tag: string, base, o): Pr
 
 export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assign([
   // ---- Muscle americano
-  car('muscle', 'muscle', 'Chevrolet Camaro SS', '6.2 V8 LT1 · cross-plane', V8X, {
+  // (a ordem de ignição do LS/LT, 1-8-7-2-6-5-4-3; a do V8X é a do small-block antigo: AUDITORIA F-RON-19)
+  car('muscle', 'muscle', 'Chevrolet Camaro SS', '6.2 V8 LT1 · cross-plane', { ...V8X, order: '1-8-7-2-6-5-4-3' }, {
     displacement: 6.2, redline: 6600, idle: 780, cam: 0.5, inertia: 1.2,
     header: 'unequal', routing: 'dual', muffler: 'sport', pipeLen: 3.0, ...NA, intake: 'sport', overrun: 'cut', cat: true, ...CUT('ign'), gears: 6, transmission: 'manual',
     ...veh(339, 1690, [2.66, 1.78, 1.30, 1.00, 0.74, 0.50], 3.73, 0.35, 0.5) }),
@@ -168,7 +171,7 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     engine: 'mid', displacement: 6.5, redline: 8700, idle: 1000, cam: 0.4, inertia: 0.8,
     header: 'equal', routing: 'xpipe', muffler: 'sport', pipeLen: 2.2, ...NA, intake: 'sport', overrun: 'burble', cat: true, ...CUT('ign'), gears: 7, transmission: 'auto', shiftTime: 0.1,
     valve: 'auto', pipeD: 3, ...veh(566, 1770, [3.91, 2.44, 1.81, 1.46, 1.19, 0.97, 0.84], 3.54, 0.36, 0.45) }),
-  car('huracan', 'super', 'Lamborghini Huracán Performante', '5.2 V10 · 8500 rpm', V10, {
+  car('huracan', 'super', 'Lamborghini Huracán Performante', '5.2 V10 · 8500 rpm', V10_90, {
     engine: 'mid', displacement: 5.2, redline: 8500, idle: 950, cam: 0.4, inertia: 0.7,
     header: 'equal', routing: 'dual', muffler: 'sport', pipeLen: 2.2, ...NA, intake: 'itb', overrun: 'burble', cat: true, ...CUT('ign'), gears: 7, transmission: 'auto', shiftTime: 0.1,
     valve: 'auto', ...veh(470, 1500, [3.60, 2.52, 1.87, 1.47, 1.18, 0.96, 0.78], 4.20, 0.35, 0.42) }),
@@ -246,7 +249,7 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     displacement: 3.2, redline: 8000, idle: 750, cam: 0.35, inertia: 0.85,
     header: 'equal', routing: 'dual', muffler: 'sport', pipeLen: 2.8, ...NA, intake: 'itb', overrun: 'cut', cat: true, ...OLD('fuel'), gears: 6, transmission: 'manual',
     ...veh(252, 1570, [4.23, 2.53, 1.67, 1.23, 1.00, 0.83], 3.62) }),
-  car('m5e60', 'euro', 'BMW M5 E60', '5.0 V10 S85 · 8250 rpm', V10, {
+  car('m5e60', 'euro', 'BMW M5 E60', '5.0 V10 S85 · 8250 rpm', V10_90, {
     displacement: 5.0, redline: 8250, idle: 800, cam: 0.35, inertia: 0.8,
     header: 'equal', routing: 'dual', muffler: 'sport', pipeLen: 3.0, ...NA, intake: 'itb', overrun: 'cut', cat: true, ...CUT('fuel'), gears: 7, transmission: 'auto', shiftTime: 0.15,
     ...veh(373, 1830, [3.99, 2.65, 1.81, 1.39, 1.16, 1.00, 0.83], 3.62, 0.34) }),
@@ -262,7 +265,7 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     displacement: 6.2, redline: 7200, idle: 650, cam: 0.35, inertia: 1.0,
     header: 'unequal', routing: 'dual', muffler: 'sport', pipeLen: 3.0, ...NA, intake: 'sport', overrun: 'burble', cat: true, ...CUT('fuel'), gears: 7, transmission: 'auto', shiftTime: 0.25,
     valve: 'auto', ...veh(336, 1730, [4.38, 2.86, 1.92, 1.37, 1.00, 0.82, 0.73], 2.82, 0.34) }),
-  car('r8', 'euro', 'Audi R8 V10', '5.2 V10 · 8700 rpm', V10, {
+  car('r8', 'euro', 'Audi R8 V10', '5.2 V10 · 8700 rpm', V10_90, {
     engine: 'mid', displacement: 5.2, redline: 8700, idle: 1000, cam: 0.35, inertia: 0.7,
     header: 'equal', routing: 'dual', muffler: 'sport', pipeLen: 2.2, ...NA, intake: 'sport', overrun: 'burble', cat: true, ...CUT('fuel'), gears: 7, transmission: 'auto', shiftTime: 0.12,
     ...veh(456, 1595, [3.60, 2.52, 1.87, 1.47, 1.18, 0.96, 0.78], 4.44, 0.35, 0.4) }),
@@ -276,7 +279,9 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     ...veh(180, 1400, [3.40, 2.09, 1.40, 1.05, 0.82, 0.68, 0.57], 4.17, 0.32) }),
 
   // ---- Pista
-  car('v10f1', 'race', 'Ferrari F2004 (F1)', '3.0 V10 · 19.000 rpm', V10, {
+  // (o Tipo 053 é um V10 a 90°: AUDITORIA F-RON-18; o virabrequim continua o de antes, porque nenhuma fonte diz se o
+  // moente é comum ou defasado)
+  car('v10f1', 'race', 'Ferrari F2004 (F1)', '3.0 V10 · 19.000 rpm', { ...V10, bankAngle: 90 }, {
     engine: 'mid', displacement: 3.0, redline: 19000, idle: 4200, cam: 0.5, inertia: 0.25,
     header: 'equal', routing: 'dual', muffler: 'straight', pipeLen: 1.4, ...NA, intake: 'itb', overrun: 'cut', cat: false, ...SOFT(80), gears: 7, transmission: 'manual', shiftTime: 0.05,
     ...veh(640, 605, [3.60, 2.85, 2.30, 1.85, 1.50, 1.22, 1.00], 6.57, 0.33, 0.78) }),
@@ -358,8 +363,8 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     displacement: 1.0, redline: 14000, idle: 1300, cam: 0.4, inertia: 0.4,
     header: 'equal', routing: 'single', muffler: 'straight', pipeLen: 1.2, ...NA, intake: 'itb', overrun: 'lean', cat: true, ...MOTO('ign'), gears: 6, transmission: 'manual', shiftTime: 0.07,
     ...moto(147, 275, [2.60, 2.18, 1.84, 1.58, 1.38, 1.25], 4.19) }),
-  car('cbr', 'moto', 'Honda CBR1000RR', '1.0 4 em linha plano · 14.500 rpm', I4, {
-    displacement: 1.0, redline: 14500, idle: 1300, cam: 0.45, inertia: 0.35,
+  car('cbr', 'moto', 'Honda CBR1000RR', '1.0 4 em linha plano · 13.000 rpm', I4, {
+    displacement: 1.0, redline: 13000, idle: 1300, cam: 0.45, inertia: 0.35,
     header: 'equal', routing: 'single', muffler: 'sport', pipeLen: 1.2, ...NA, intake: 'itb', overrun: 'lean', cat: true, ...MOTO('fuel'), gears: 6, transmission: 'manual', shiftTime: 0.07,
     ...moto(141, 270, [2.29, 1.78, 1.50, 1.33, 1.21, 1.14], 4.50) }),
   car('zx10r', 'moto', 'Kawasaki Ninja ZX-10R', '1.0 4 em linha · 14.000 rpm · ordem 1-2-4-3', { layout: 'inline', cylinders: 4, crank: 'flat', order: '1-2-4-3' }, {
@@ -374,8 +379,9 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     displacement: 1.34, redline: 11000, idle: 1100, cam: 0.35, inertia: 0.45,
     header: 'equal', routing: 'single', muffler: 'sport', pipeLen: 1.3, ...NA, intake: 'itb', overrun: 'lean', cat: true, ...CUT('fuel', 70, 0.06), gears: 6, transmission: 'manual', shiftTime: 0.08,
     ...moto(140, 339, [2.62, 1.94, 1.53, 1.29, 1.14, 1.04], 3.72, 0.32, 0.27) }),
-  car('panigale', 'moto', 'Ducati Panigale V4', '1.1 V4 90°', { layout: 'v', cylinders: 4, crank: '180', bankAngle: 90, order: '1-3-2-4' }, {
-    displacement: 1.1, redline: 16000, idle: 1300, cam: 0.5, inertia: 0.35,
+  // (Twin Pulse: os dois pares a 90°, 270/90 no simulador contra 90/200/90/340 do motor; corte a 14.500: AUDITORIA F-RON-22)
+  car('panigale', 'moto', 'Ducati Panigale V4', '1.1 V4 90°', { layout: 'v', cylinders: 4, crank: '360', bankAngle: 90, order: '1-2-3-4' }, {
+    displacement: 1.1, redline: 14500, idle: 1300, cam: 0.5, inertia: 0.35,
     header: 'equal', routing: 'single', muffler: 'straight', pipeLen: 1.0, ...NA, intake: 'itb', overrun: 'burble', cat: true, ...MOTO('ign'), gears: 6, transmission: 'manual', shiftTime: 0.07,
     ...moto(158, 270, [2.67, 2.00, 1.62, 1.40, 1.27, 1.19], 4.60) }),
   car('monster', 'moto', 'Ducati Monster 1200', 'V2 90° (L-twin)', { layout: 'v', cylinders: 2, crank: 'shared', bankAngle: 90, order: '1-2' }, {
@@ -387,7 +393,7 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
     header: 'unequal', routing: 'dual', muffler: 'straight', pipeLen: 1.0, ...NA, intake: 'airbox', overrun: 'lean', cat: false, ...CUT('fuel', 90, 0.08), gears: 6, transmission: 'manual', shiftTime: 0.35,
     ...moto(70, 410, [3.23, 2.31, 1.72, 1.39, 1.18, 1.00], 2.88, 0.33, 0.42) }),
   car('mt07', 'moto', 'Yamaha MT-07', 'bicilíndrico 270°', { layout: 'inline', cylinders: 2, crank: '270', order: '1-2' }, {
-    displacement: 0.69, redline: 9000, idle: 1250, cam: 0.35, inertia: 0.6,
+    displacement: 0.69, redline: 10500, idle: 1250, cam: 0.35, inertia: 0.6,
     header: 'equal', routing: 'single', muffler: 'sport', pipeLen: 1.0, ...NA, intake: 'sport', overrun: 'lean', cat: true, ...MOTO('fuel'), gears: 6, transmission: 'manual', shiftTime: 0.15,
     ...moto(55, 259, [2.85, 2.13, 1.63, 1.30, 1.09, 0.96], 5.18, 0.31, 0.35) }),
   car('triumph', 'moto', 'Triumph Speed Triple', '1.05 três cilindros', { layout: 'inline', cylinders: 3, crank: '120', order: '1-2-3' }, {

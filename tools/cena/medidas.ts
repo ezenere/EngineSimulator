@@ -1,6 +1,7 @@
 // Medidas automáticas da Cena contra os números-alvo do CENA.md (2.11 e plano da seção 5).
-// Cada medida devolve linhas { passo, nome, alvo, medido, ok, desvio? }: `desvio` marca um alvo que o
-// projeto não deixa atingir, com o porquê (vai para o relatório e não derruba o valida.ts).
+// Cada medida devolve linhas { passo, nome, alvo, medido, ok, valor, unidade }. Um alvo que o projeto não deixa atingir
+// não é mais um texto anexado à linha (aceitava qualquer valor, AUDITORIA T-CEN-04): fica no retrato
+// tools/cena-desvios.json com o valor aceito, a folga e o porquê, e o valida.ts confere (tools/desvios.ts).
 import { renderPassagem, SR, type ResultadoPassagem } from './render-passagem';
 import * as A from './analise';
 import { PA_FS, C_SOM } from '../../src/scene/constantes';
@@ -11,14 +12,16 @@ import { CalculoSombra, maekawaDb } from '../../src/scene/sombra';
 import { atenuacaoIso } from '../../src/scene/ar';
 import { FonteVao } from '../../src/carriers/ruido';
 import { Trem } from '../../src/carriers/trem';
-import { laco, medirAlocacao } from './cpu';
+import { sementeAtual, semear } from '../desvios';
 import type { FonteTeste } from '../../src/carriers/teste';
 import type { IdAmbiente } from '../../src/scene/tipos';
 
-export interface Linha { passo: string; nome: string; alvo: string; medido: string; ok: boolean; desvio?: string; valor?: number }
+/** `valor`: o número (ou vetor) que o retrato de desvios guarda; `ordem`: o escalar que escolhe o caso mediano entre as
+ *  3 sementes quando `valor` é um vetor (padrão: o próprio valor, ou a maior componente em módulo) */
+export interface Linha { passo: string; nome: string; alvo: string; medido: string; ok: boolean; valor?: number | number[]; unidade?: string; ordem?: number }
 
 const f1 = (x: number, d = 1) => (Number.isFinite(x) ? x.toFixed(d) : String(x));
-const linha = (passo: string, nome: string, alvo: string, medido: string, ok: boolean, valor?: number, desvio?: string): Linha => ({ passo, nome, alvo, medido, ok, valor, desvio });
+const linha = (passo: string, nome: string, alvo: string, medido: string, ok: boolean, valor?: number | number[], unidade?: string, ordem?: number): Linha => ({ passo, nome, alvo, medido, ok, valor, unidade, ordem });
 const dentro = (x: number, c: number, tol: number) => Math.abs(x - c) <= tol;
 const mono = (r: { L: Float32Array; R: Float32Array }) => { const m = new Float32Array(r.L.length); for (let i = 0; i < m.length; i++) m[i] = 0.5 * (r.L[i] + r.R[i]); return m; };
 
@@ -27,11 +30,12 @@ export const V350 = 350 / 3.6;
 // ---------------------------------------------------------------- caso de validação: trem 10×25 m
 let cache: Record<string, ResultadoPassagem> = {};
 export function passagemTrem(amb: IdAmbiente, v = V350, d = 3, extra: Partial<Parameters<typeof renderPassagem>[0]> = {}, chave = '') {
-  const k = `${amb}|${v}|${d}|${chave}`;
-  if (!cache[k]) cache[k] = renderPassagem({ portador: 'trem', v, d, ambiente: amb, dur: 12, x0: 600, medirCpu: true, ...extra });
+  // (a chave leva a semente: cada uma das 3 sementes do ruído é uma passagem diferente)
+  const k = `${amb}|${v}|${d}|${chave}|${sementeAtual()}`;
+  if (!cache[k]) cache[k] = renderPassagem({ portador: 'trem', v, d, ambiente: amb, dur: 12, x0: 600, ...extra });
   return cache[k];
 }
-export function limparCache() { cache = {}; }
+export function limparCache() { cache = {}; _rolProf = new Map(); }
 
 /** passagem do corpo medida pela onda de nariz/cauda (cruzamentos por zero) */
 function tempoPassagem(r: ResultadoPassagem) {
@@ -54,7 +58,7 @@ export function medirTrem(): Linha[] {
   // passagem nariz → cauda
   const tp = tempoPassagem(ceu);
   const dur = tp.tC - tp.tN;
-  L.push(linha('2.11', 'passagem nariz→cauda abeam (onda de pressão)', '2,57 ± 0,05 s', `${f1(dur, 3)} s`, dentro(dur, 2.57, 0.05), dur));
+  L.push(linha('2.11', 'passagem nariz→cauda abeam (onda de pressão)', '2,57 ± 0,05 s', `${f1(dur, 3)} s`, dentro(dur, 2.57, 0.05), dur, 's'));
   // envoltória 1–4 kHz durante o corpo (túnel, como na tabela 2.11)
   for (const [nomeAmb, r] of [['túnel', tun], ['céu', ceu]] as const) {
     const env = A.envoltoriaEst(r.L, r.R, SR, 1000, 4000, 0.02, 0.005);
@@ -65,10 +69,8 @@ export function medirTrem(): Linha[] {
     // E5, Velaro E a 300 e 265, Velaro, Tohoku) dão p90−p10 de 2,4 a 5,6 dB em 1–4 kHz, com o pico em
     // v/L_c ± 4%; o ≥ 6 dB de 2.9 não aparece em nenhuma. A 3 m o simulado deve ficar ao menos no meio da faixa.
     const okF = dentro(fpk, 3.89, 0.1), okP = prof >= 3;
-    L.push(linha('2.11', `modulação 1–4 kHz (${nomeAmb}): frequência`, '3,89 ± 0,1 Hz', `${f1(fpk, 3)} Hz`, okF, fpk,
-      okF ? undefined : `Com ${f1(prof)} dB de profundidade o pico da envoltória se perde: no túnel o campo reverberante (RT60 2,8 s em 2 kHz, +7 dB sobre o direto) enche os vales. No céu aberto, com o mesmo trem, dá 3,9 Hz.`));
-    L.push(linha('2.11', `modulação 1–4 kHz (${nomeAmb}): profundidade p90−p10`, '≥ 3 dB (gravações: 2,4–5,6)', `${f1(prof)} dB`, okP, prof,
-      okP ? undefined : 'O campo reverberante do túnel (RT60 2,8 s em 2 kHz, +7 dB sobre o direto) enche os vales da envoltória; o rolamento sozinho, a céu aberto, modula ' + f1(rolamentoProf()) + ' dB.'));
+    L.push(linha('2.11', `modulação 1–4 kHz (${nomeAmb}): frequência`, '3,89 ± 0,1 Hz', `${f1(fpk, 3)} Hz`, okF, fpk, 'Hz'));
+    L.push(linha('2.11', `modulação 1–4 kHz (${nomeAmb}): profundidade p90−p10`, '≥ 3 dB (gravações: 2,4–5,6)', `${f1(prof)} dB${okP ? '' : ` (o rolamento sozinho, a céu aberto, modula ${f1(rolamentoProf())} dB)`}`, okP, prof, 'dB'));
   }
   // padrão duplo dos truques: envoltória do rolamento sozinho dobrada no passo do vagão (L_c/v);
   // os dois maiores picos da envoltória média ficam a 8 m/v um do outro
@@ -96,7 +98,8 @@ export function medirTrem(): Linha[] {
       prof = Math.min(db[pk[0]], db[pk[1]]) - v;
     }
     const ok = dentro(sep, 82, 10) && prof >= 1;
-    L.push(linha('2.11', 'padrão duplo dos truques (envoltória do rolamento dobrada a 257 ms)', 'dois picos a 82 ms (8 m/v)', `${f1(sep, 0)} ms, vale de ${f1(prof)} dB entre eles`, ok, sep));
+    // (o critério: 82 ± 10 ms com vale ≥ 1 dB, escrito na saída; AUDITORIA T-CEN-07)
+    L.push(linha('2.11', 'padrão duplo dos truques (envoltória do rolamento dobrada a 257 ms)', 'dois picos a 82 ms (8 m/v)', `${f1(sep, 0)} ms, vale de ${f1(prof)} dB entre eles (critério 72–92 ms, vale ≥ 1 dB)`, ok, sep, 'ms'));
   }
   // pulsos de vão (50–200 Hz): nível no instante de cada vão abeam contra o meio do vagão
   {
@@ -122,49 +125,49 @@ export function medirTrem(): Linha[] {
       if (dif >= 8) nOk++;
     }
     const ok = nOk === N - 1;
-    L.push(linha('2.11', 'pulsos de vão 50–200 Hz (túnel) ≥ 8 dB sobre o meio do vagão', `${N - 1} pulsos`, `${nOk} (${acima.map((x) => f1(x)).join(' ')} dB; −3 dB: ${larg.map((x) => x.toFixed(0)).join(' ')} ms)`, ok, nOk,
-      ok ? undefined : 'Na banda 50–200 Hz o corpo e o rolamento enchem o meio do vagão e a diferença fica abaixo de 8 dB. As gravações também não mostram pulsos de vão: em seis passagens a 265–320 km/h a envoltória de 50–200 Hz não tem pico em v/L_c (picos espalhados entre 2,3 e 5,3 Hz, p90−p10 de 6–8 dB, o que janelas de 20 ms dão com ruído estacionário nessa banda).'));
+    // (o teto do desvio vai na contagem e na diferença média: com a contagem em 0 ela não piora mais, a diferença sim)
+    const mAcima = acima.reduce((a, b) => a + b, 0) / acima.length;
+    L.push(linha('2.11', 'pulsos de vão 50–200 Hz (túnel) ≥ 8 dB sobre o meio do vagão', `${N - 1} pulsos`, `${nOk} (${acima.map((x) => f1(x)).join(' ')} dB, média ${f1(mAcima)}; −3 dB: ${larg.map((x) => x.toFixed(0)).join(' ')} ms)`, ok, [nOk, mAcima], '', mAcima));
   }
   // Doppler: tom de 1 kHz no nariz, só o tom, sem solo
   {
     const r = renderPassagem({ portador: 'trem', v: V350, d: 3, ambiente: 'ceu', solo: 'nenhum', dur: 12, x0: 600, reverb: false, semFundo: true, trem: { tom: { f: 1000, nivelDb: 90 }, soTom: true } });
     const m = mono(r), tN = r.tNarizAbeam + 3.0 / C_SOM;
     const fa = A.picoEm(m, SR, tN - 1.5, 0.02, 600, 2000), fi = A.picoEm(m, SR, tN + 1.5, 0.02, 400, 1500);
-    L.push(linha('2.11', 'Doppler 1 kHz no nariz: chegando', '1395 ± 5 Hz', `${f1(fa)} Hz`, dentro(fa, 1395, 5), fa));
-    L.push(linha('2.11', 'Doppler 1 kHz no nariz: indo', '779 ± 5 Hz', `${f1(fi)} Hz`, dentro(fi, 779, 5), fi));
+    L.push(linha('2.11', 'Doppler 1 kHz no nariz: chegando', '1395 ± 5 Hz', `${f1(fa)} Hz`, dentro(fa, 1395, 5), fa, 'Hz'));
+    L.push(linha('2.11', 'Doppler 1 kHz no nariz: indo', '779 ± 5 Hz', `${f1(fi)} Hz`, dentro(fi, 779, 5), fi, 'Hz'));
     // transição 45°→135°: f(θ) = 1000/(1 − M·cosθ)
     const M = V350 / C_SOM, f45 = 1000 / (1 - M * Math.SQRT1_2), f135 = 1000 / (1 + M * Math.SQRT1_2);
     const ts: number[] = [], fs: number[] = [];
     for (let t = tN - 0.25; t <= tN + 0.25; t += 0.001) { ts.push(t); fs.push(A.picoEm(m, SR, t, 0.02, 500, 1800)); }
     const cruza = (fx: number) => { for (let i = 0; i < fs.length - 1; i++) if ((fs[i] - fx) * (fs[i + 1] - fx) <= 0) return ts[i] + (ts[i + 1] - ts[i]) * ((fs[i] - fx) / (fs[i] - fs[i + 1])); return NaN; };
     const dt = (cruza(f135) - cruza(f45)) * 1000;
-    L.push(linha('2.11', 'Doppler: transição 45°→135°', '62 ± 5 ms', `${f1(dt)} ms`, dentro(dt, 62, 5), dt));
+    L.push(linha('2.11', 'Doppler: transição 45°→135°', '62 ± 5 ms', `${f1(dt)} ms`, dentro(dt, 62, 5), dt, 'ms'));
     // assimetria chegando/indo à mesma distância de emissão (30 m), expConv 2
     const re = 30, xe = Math.sqrt(re * re - 3.01 * 3.01);
     const tA = r.tNarizAbeam - xe / V350 + re / C_SOM, tI = r.tNarizAbeam + xe / V350 + re / C_SOM;
     // potência dos dois ouvidos (a soma mono cancela onde o ITD dá meia volta de fase)
     const rms = (t: number) => { const i0 = Math.round((t - 0.01) * SR); let s = 0; for (let i = 0; i < 960; i++) s += r.L[i0 + i] ** 2 + r.R[i0 + i] ** 2; return Math.sqrt(s / 1920); };
     const as = 20 * Math.log10(rms(tA) / rms(tI));
-    L.push(linha('2.11', 'assimetria chegando/indo (monopolo, 30 m)', '+10 ± 1 dB', `${f1(as)} dB`, dentro(as, 10, 1), as));
+    L.push(linha('2.11', 'assimetria chegando/indo (monopolo, 30 m)', '+10 ± 1 dB', `${f1(as)} dB`, dentro(as, 10, 1), as, 'dB'));
   }
   // onda de nariz e cauda (céu aberto)
   {
     const { t, p } = ceu.tele;
     const ext = (t0: number) => { let mx = -1e9, mn = 1e9, tmx = 0, tmn = 0; for (let i = 0; i < t.length; i++) if (Math.abs(t[i] - t0) < 0.4) { if (p[i] > mx) { mx = p[i]; tmx = t[i]; } if (p[i] < mn) { mn = p[i]; tmn = t[i]; } } return { pp: mx - mn, sig: Math.abs(tmn - tmx) / 2 }; };
     const n = ext(tN), c = ext(tC);
-    L.push(linha('2.11', 'onda de nariz: pico a pico', '150 ± 30 Pa', `${f1(n.pp)} Pa (fórmula ${f1(pressaoPP(V350, 3, 0.14))})`, dentro(n.pp, 150, 30), n.pp));
-    L.push(linha('2.11', 'onda de nariz: σ', '51 ± 5 ms', `${f1(n.sig * 1000)} ms`, dentro(n.sig * 1000, 51, 5), n.sig * 1000,
-      dentro(n.sig * 1000, 51, 5) ? undefined : 'σ = L_nariz/(3v) com L_nariz = 12 m (padrão de 4.6) dá 41 ms; os 51 ms de 2.6 saem de L_nariz = 15 m.'));
-    L.push(linha('2.11', 'onda de cauda / nariz', '0,70', f1(c.pp / n.pp, 2), dentro(c.pp / n.pp, 0.7, 0.05), c.pp / n.pp));
+    L.push(linha('2.11', 'onda de nariz: pico a pico', '150 ± 30 Pa', `${f1(n.pp)} Pa (fórmula ${f1(pressaoPP(V350, 3, 0.14))})`, dentro(n.pp, 150, 30), n.pp, 'Pa'));
+    L.push(linha('2.11', 'onda de nariz: σ', '51 ± 5 ms', `${f1(n.sig * 1000)} ms`, dentro(n.sig * 1000, 51, 5), n.sig * 1000, 'ms'));
+    L.push(linha('2.11', 'onda de cauda / nariz', '0,70', `${f1(c.pp / n.pp, 2)} (critério ±0,05)`, dentro(c.pp / n.pp, 0.7, 0.05), c.pp / n.pp, ''));
     // resíduo > 20 Hz
     const hp = [new Bq().hp(SR, 20, 0.7071), new Bq().hp(SR, 20, 0.7071)];
     let mx = 0;
     for (let i = 0; i < p.length - 1; i++) for (let k = 0; k < 128; k++) { const x = hp[1].run(hp[0].run(p[i] + (p[i + 1] - p[i]) * (k / 128))); if (Math.abs(x) > mx) mx = Math.abs(x); }
-    L.push(linha('5 #6', 'resíduo da pressão > 20 Hz no alto-falante (céu)', '≤ 20 Pa', `${f1(mx)} Pa`, mx <= 20, mx));
+    L.push(linha('5 #6', 'resíduo da pressão > 20 Hz no alto-falante (céu)', '≤ 20 Pa', `${f1(mx)} Pa`, mx <= 20, mx, 'Pa'));
     // vento
     const u = ceu.tele.u;
     const umax = Math.max(...u);
-    L.push(linha('5 #6', 'vento induzido a céu aberto (pico)', '5,4 ± 1 m/s', `${f1(umax, 2)} m/s`, dentro(umax, 5.4, 1), umax));
+    L.push(linha('5 #6', 'vento induzido a céu aberto (pico)', '5,4 ± 1 m/s', `${f1(umax, 2)} m/s`, dentro(umax, 5.4, 1), umax, 'm/s'));
   }
   // túnel: onda de compressão, vento do pistão
   {
@@ -173,14 +176,14 @@ export function medirTrem(): Linha[] {
     let pmax = 0; for (let i = 0; i < t.length; i++) if (t[i] < tNt - 1) pmax = Math.max(pmax, p[i]);
     let tch = NaN; for (let i = 0; i < t.length; i++) if (p[i] > 0.1 * pmax) { tch = t[i]; break; }
     const ant = tNt - tch;
-    L.push(linha('2.11', 'onda de compressão do túnel: Δp', '2,0 ± 0,4 kPa', `${f1(pmax / 1000, 2)} kPa`, dentro(pmax, 2000, 400), pmax));
-    L.push(linha('2.11', 'onda de compressão: antecedência (ouvinte 500 m dentro)', '3,7 ± 0,1 s', `${f1(ant, 2)} s`, dentro(ant, 3.7, 0.1), ant));
+    L.push(linha('2.11', 'onda de compressão do túnel: Δp', '2,0 ± 0,4 kPa', `${f1(pmax / 1000, 2)} kPa`, dentro(pmax, 2000, 400), pmax, 'Pa'));
+    L.push(linha('2.11', 'onda de compressão: antecedência (ouvinte 500 m dentro)', '3,7 ± 0,1 s', `${f1(ant, 2)} s`, dentro(ant, 3.7, 0.1), ant, 's'));
     let su = 0, nu = 0; for (let i = 0; i < t.length; i++) if (t[i] >= tNt && t[i] <= tCt) { su += u[i]; nu++; }
     const um = su / nu;
-    L.push(linha('2.11', 'vento no ouvinte durante o corpo (túnel)', '15 ± 2 m/s', `${f1(um, 1)} m/s`, dentro(um, 15, 2), um));
+    L.push(linha('2.11', 'vento no ouvinte durante o corpo (túnel)', '15 ± 2 m/s', `${f1(um, 1)} m/s`, dentro(um, 15, 2), um, 'm/s'));
     const iC = t.findIndex((x) => x >= tCt), i3 = t.findIndex((x) => x >= tCt + 3);
     const raz = u[i3] / u[iC];
-    L.push(linha('2.11', 'esteira: u(cauda + 3 s)/u(cauda)', 'e⁻¹ = 0,37 ± 0,05', f1(raz, 2), dentro(raz, 0.37, 0.05), raz));
+    L.push(linha('2.11', 'esteira: u(cauda + 3 s)/u(cauda)', 'e⁻¹ = 0,37 ± 0,05', f1(raz, 2), dentro(raz, 0.37, 0.05), raz, ''));
   }
   // níveis
   {
@@ -194,17 +197,15 @@ export function medirTrem(): Linha[] {
       return { mx, l100, leq, tmx: imx / 100 };
     };
     const nc = nivel(ceu), nt = nivel(tun);
-    const crista = `Com as fontes repetidas ao longo do corpo (rolamento dos 20 truques, aero dos vagões), o L_AF varia pouco na passagem: L_AFmax − L_Aeq,tp = ${f1(nc.mx - nc.leq)} dB, contra os 5 dB implícitos na tabela (113 − 108). As gravações a 265–320 km/h dão 0,7–1,8 dB (a do ICE 3, com rajadas de vento no microfone, 4,1). O L_Aeq,tp bate.`;
     const dCeu = nc.mx - nc.l100, dTun = nt.mx - nt.l100;
-    L.push(linha('2.11', 'pico − nariz a 100 m (céu aberto)', '23 ± 4 dB', `${f1(dCeu)} dB`, dentro(dCeu, 23, 4), dCeu));
-    L.push(linha('2.11', 'pico − nariz a 100 m (túnel)', '10–12 dB', `${f1(dTun)} dB`, dTun >= 10 && dTun <= 12, dTun));
+    L.push(linha('2.11', 'pico − nariz a 100 m (céu aberto)', '23 ± 4 dB', `${f1(dCeu)} dB`, dentro(dCeu, 23, 4), dCeu, 'dB'));
+    L.push(linha('2.11', 'pico − nariz a 100 m (túnel)', '10–12 dB', `${f1(dTun)} dB`, dTun >= 10 && dTun <= 12, dTun, 'dB'));
     const dt = nt.leq - nc.leq;
-    L.push(linha('2.11', 'túnel − céu aberto no L_Aeq,tp', '+7 ± 2 dB', `${f1(dt)} dB`, dentro(dt, 7, 2), dt));
-    L.push(linha('2.11', 'L_Aeq,tp céu aberto (3 m, 350 km/h)', '108 ± 3 dB(A)', `${f1(nc.leq)} dB(A)`, dentro(nc.leq, 108, 3), nc.leq));
-    L.push(linha('2.11', 'L_AFmax céu aberto', '113 ± 3 dB(A)', `${f1(nc.mx)} dB(A)`, dentro(nc.mx, 113, 3), nc.mx,
-      dentro(nc.mx, 113, 3) ? undefined : crista));
-    L.push(linha('2.11', 'L_Aeq,tp túnel', '115 ± 3 dB(A)', `${f1(nt.leq)} dB(A)`, dentro(nt.leq, 115, 3), nt.leq));
-    L.push(linha('2.11', 'L_AFmax túnel', '120 ± 3 dB(A)', `${f1(nt.mx)} dB(A)`, dentro(nt.mx, 120, 3), nt.mx, dentro(nt.mx, 120, 3) ? undefined : crista));
+    L.push(linha('2.11', 'túnel − céu aberto no L_Aeq,tp', '+7 ± 2 dB', `${f1(dt)} dB`, dentro(dt, 7, 2), dt, 'dB'));
+    L.push(linha('2.11', 'L_Aeq,tp céu aberto (3 m, 350 km/h)', '108 ± 3 dB(A)', `${f1(nc.leq)} dB(A)`, dentro(nc.leq, 108, 3), nc.leq, 'dB'));
+    L.push(linha('2.11', 'L_AFmax céu aberto', '113 ± 3 dB(A)', `${f1(nc.mx)} dB(A) (L_AFmax − L_Aeq,tp = ${f1(nc.mx - nc.leq)} dB)`, dentro(nc.mx, 113, 3), nc.mx, 'dB'));
+    L.push(linha('2.11', 'L_Aeq,tp túnel', '115 ± 3 dB(A)', `${f1(nt.leq)} dB(A)`, dentro(nt.leq, 115, 3), nt.leq, 'dB'));
+    L.push(linha('2.11', 'L_AFmax túnel', '120 ± 3 dB(A)', `${f1(nt.mx)} dB(A) (L_AFmax − L_Aeq,tp = ${f1(nt.mx - nt.leq)} dB)`, dentro(nt.mx, 120, 3), nt.mx, 'dB'));
     // balanço espectral no pico (céu aberto, mono, sem ponderação), 0,5 s em torno do L_AFmax
     const b = A.balanco([ceu.L, ceu.R], SR, Math.round((nc.tmx - 0.25) * SR), Math.round((nc.tmx + 0.25) * SR));
     // 60–150 Hz: −3 (o CENA dava +4). As quatro gravações sem vento no microfone (E5 a 320, Velaro E a 265,
@@ -214,22 +215,23 @@ export function medirTrem(): Linha[] {
     for (let i = 0; i < 6; i++) {
       if (i === 1) continue;
       const ok = dentro(b.rel[i], alvo[i], 4);
-      L.push(linha('2.11', `balanço no pico ${nomes[i]} Hz (rel. 150–400)`, `${alvo[i] > 0 ? '+' : ''}${alvo[i]} ± 4 dB`, `${f1(b.rel[i])} dB`, ok, b.rel[i],
-        ok ? undefined : 'O rolamento domina acima de 1 kHz e a sombra do piso (2.5) o atenua mais a 3 m (9,8 dB em 1 kHz) que a 7,5 m (5,8 dB): o pico a 3 m fica mais escuro que as gravações, feitas mais longe da via; a 7,5 m e 300 km/h o balanço fica dentro da faixa delas.'));
+      L.push(linha('2.11', `balanço no pico ${nomes[i]} Hz (rel. 150–400)`, `${alvo[i] > 0 ? '+' : ''}${alvo[i]} ± 4 dB`, `${f1(b.rel[i])} dB`, ok, b.rel[i], 'dB'));
     }
-    L.push(linha('2.11', 'centroide no pico', '≈ 1,2 kHz', `${f1(b.centroide, 0)} Hz`, b.centroide > 800 && b.centroide < 1800, b.centroide,
-      b.centroide > 800 && b.centroide < 1800 ? undefined : 'Idem (sombra do piso sobre o rolamento a 3 m).'));
+    L.push(linha('2.11', 'centroide no pico', '≈ 1,2 kHz', `${f1(b.centroide, 0)} Hz (critério 800–1800 Hz)`, b.centroide > 800 && b.centroide < 1800, b.centroide, 'Hz'));
   }
   return L;
 }
 
-let _rolProf = NaN;
+let _rolProf = new Map<number, number>();
 function rolamentoProf() {
-  if (!Number.isNaN(_rolProf)) return _rolProf;
+  const k = sementeAtual();
+  if (_rolProf.has(k)) return _rolProf.get(k)!;
   const r = passagemTrem('ceu', V350, 3, { trem: { tipos: ['rolamento'] } }, 'rol');
   const env = A.envoltoriaEst(r.L, r.R, SR, 1000, 4000, 0.02, 0.005);
   const seg = env.slice(Math.round(r.tNarizAbeam / 0.005), Math.round(r.tCaudaAbeam / 0.005));
-  return (_rolProf = A.percentil(seg, 90) - A.percentil(seg, 10));
+  const v = A.percentil(seg, 90) - A.percentil(seg, 10);
+  _rolProf.set(k, v);
+  return v;
 }
 
 // ---------------------------------------------------------------- passo 7: níveis do portador trem
@@ -245,21 +247,20 @@ export function medirNiveisTrem(): Linha[] {
     return A.leq(rr.L, rr.R, SR, PA_FS, Math.round(rr.tNarizAbeam * SR), Math.round(rr.tCaudaAbeam * SR));
   };
   const total = leq(v300);
-  L.push(linha('5 #7', 'L_Aeq,tp a 7,5 m e 300 km/h (céu aberto, brita)', '100 ± 3 dB(A)', `${f1(total)} dB(A)`, dentro(total, 100, 3), total));
+  L.push(linha('5 #7', 'L_Aeq,tp a 7,5 m e 300 km/h (céu aberto, brita)', '100 ± 3 dB(A)', `${f1(total)} dB(A)`, dentro(total, 100, 3), total, 'dB'));
   const r300 = leq(v300, ['rolamento']), r160 = leq(v160, ['rolamento']);
   const a300 = leq(v300, ['aero', 'vao', 'pantografo']), a160 = leq(v160, ['aero', 'vao', 'pantografo']);
-  const conv = 'A potência das fontes segue a lei de 4.6 à letra (30·log v, 60·log v: +8,2 e +16,4 dB); a Cena soma por cima a amplificação convectiva de 2.1 (|1 − M·cosθ|^−n), que entre M 0,13 e 0,24 acrescenta ~1 dB na energia da passagem. As leis de 4.6 vêm de níveis medidos, que já incluem esse efeito: para bater as duas, a lei da fonte teria de ser corrigida pela convecção média.';
-  L.push(linha('5 #7', 'lei de velocidade do rolamento 160 → 300 km/h', '+8 ± 1 dB', `${f1(r300 - r160)} dB (só rolamento: ${f1(r160)} → ${f1(r300)})`, dentro(r300 - r160, 8, 1), r300 - r160, dentro(r300 - r160, 8, 1) ? undefined : conv));
-  L.push(linha('5 #7', 'lei de velocidade do aero 160 → 300 km/h', '+16 ± 1 dB', `${f1(a300 - a160)} dB (${f1(a160)} → ${f1(a300)})`, dentro(a300 - a160, 16, 1), a300 - a160, dentro(a300 - a160, 16, 1) ? undefined : conv));
+  L.push(linha('5 #7', 'lei de velocidade do rolamento 160 → 300 km/h', '+8 ± 1 dB', `${f1(r300 - r160)} dB (só rolamento: ${f1(r160)} → ${f1(r300)})`, dentro(r300 - r160, 8, 1), r300 - r160, 'dB'));
+  L.push(linha('5 #7', 'lei de velocidade do aero 160 → 300 km/h', '+16 ± 1 dB', `${f1(a300 - a160)} dB (${f1(a160)} → ${f1(a300)})`, dentro(a300 - a160, 16, 1), a300 - a160, 'dB'));
   // trem com as duas faces (página Passagem): mesmo nível que a face única para o ouvinte fixo (sem o aero
   // dos truques, que fica 25 dB abaixo do rolamento e sai do orçamento de fontes)
   const duas = leq(v300, undefined, 'duas');
-  L.push(linha('5 #7', 'trem com duas faces: L_Aeq,tp a 7,5 m igual à face única', `${f1(total)} ± 0,3 dB(A)`, `${f1(duas)} dB(A)`, dentro(duas, total, 0.3), duas));
+  L.push(linha('5 #7', 'trem com duas faces: L_Aeq,tp a 7,5 m igual à face única', `${f1(total)} ± 0,3 dB(A)`, `${f1(duas)} dB(A)`, dentro(duas, total, 0.3), duas - total, 'dB'));
   // crossfade do lado do ouvinte: potência constante (cos/sen) em 50 ms
   {
     // dois trens iguais (mesmas sementes): um troca de lado no bloco 100, o outro não; a potência das duas
     // faces do primeiro, bloco a bloco, tem de ser a da face única do segundo (o ruído é o mesmo)
-    const t = new Trem(SR, { faces: 'duas', ladoOuvinte: -1 }), ref = new Trem(SR, { faces: 'duas', ladoOuvinte: -1 });
+    const t = semear(new Trem(SR, { faces: 'duas', ladoOuvinte: -1 })), ref = semear(new Trem(SR, { faces: 'duas', ladoOuvinte: -1 }));
     t.comandar({ pedal: 0, velocidadeFixa: v300 }); ref.comandar({ pedal: 0, velocidadeFixa: v300 });
     const F = t.fontes(), iD = F.findIndex((f) => f.id === 'corpo.0.d'), iE = F.findIndex((f) => f.id === 'corpo.0.e');
     const can = F.map(() => new Float32Array(128)), cr = F.map(() => new Float32Array(128));
@@ -274,7 +275,7 @@ export function medirNiveisTrem(): Linha[] {
     const dDb = pior;
     const fim = pe.findIndex((x, i) => i > 100 && x > 0.999);
     const ms = ((fim - 100) * 128 * 1000) / SR;
-    L.push(linha('3.3', 'lado do ouvinte: crossfade das faces (potência bloco a bloco; duração)', '±0,1 dB; 50 ms', `${f1(dDb, 2)} dB; ${f1(ms, 0)} ms`, dDb <= 0.1 && ms >= 40 && ms <= 60, ms));
+    L.push(linha('3.3', 'lado do ouvinte: crossfade das faces (potência bloco a bloco; duração)', '±0,1 dB; 50 ms', `${f1(dDb, 2)} dB; ${f1(ms, 0)} ms`, dDb <= 0.1 && ms >= 40 && ms <= 60, [dDb, ms], ''));
   }
   L.push(...medirAgudoTrem());
   return L;
@@ -295,7 +296,7 @@ export function medirAgudoTrem(): Linha[] {
     const env = A.nivelF(r.L, r.R, SR, 1, false, 480); let im = 0; for (let i = 0; i < env.length; i++) if (env[i] > env[im]) im = i;
     const t = im / 100, e = A.bandas([r.L, r.R], SR, Math.round((t - 1) * SR), Math.round((t + 1) * SR), F);
     const b1 = 10 * Math.log10(e[1] / e[0]), b2 = 10 * Math.log10(e[2] / e[0]);
-    out.push(linha('2.11', `agudo no pico a ${f1(d)} m, 300 km/h (rel. 150–400): 6–12 kHz / 12–24 kHz`, '≈ −10 ± 4 / ≈ −20 ± 4 dB', `${f1(b1)} / ${f1(b2)} dB`, Math.abs(b1 + 10) <= 4 && Math.abs(b2 + 20) <= 4, b1));
+    out.push(linha('2.11', `agudo no pico a ${f1(d)} m, 300 km/h (rel. 150–400): 6–12 kHz / 12–24 kHz`, '≈ −10 ± 4 / ≈ −20 ± 4 dB', `${f1(b1)} / ${f1(b2)} dB`, Math.abs(b1 + 10) <= 4 && Math.abs(b2 + 20) <= 4, [b1, b2], 'dB', Math.max(Math.abs(b1 + 10), Math.abs(b2 + 20))));
   }
   return out;
 }
@@ -312,8 +313,8 @@ export function medirPropagador(): Linha[] {
     const r = renderTeste([{ pos: [0, 0, 0.35], sinal: 'tom', f: 200, paRms: 1, refDist: 5 }], 30, 6, 8, { x0: 120, solo: 'asfalto' });
     const m = mono(r), t0 = 120 / 30;
     const fa = A.picoEm(m, SR, t0 - 1.5, 0.2, 150, 260), fi = A.picoEm(m, SR, t0 + 1.5, 0.2, 150, 260);
-    L.push(linha('5 #1', 'Doppler carro a 6 m, 200 Hz a 30 m/s: chegando', '219 ± 1 Hz', `${f1(fa)} Hz`, dentro(fa, 219, 1), fa));
-    L.push(linha('5 #1', 'idem: indo', '184 ± 1 Hz', `${f1(fi)} Hz`, dentro(fi, 184, 1), fi));
+    L.push(linha('5 #1', 'Doppler carro a 6 m, 200 Hz a 30 m/s: chegando', '219 ± 1 Hz', `${f1(fa)} Hz`, dentro(fa, 219, 1), fa, 'Hz'));
+    L.push(linha('5 #1', 'idem: indo', '184 ± 1 Hz', `${f1(fi)} Hz`, dentro(fi, 184, 1), fi, 'Hz'));
   }
   // passo 1: nível 1/r em 5, 10, 50 m (tom de 250 Hz parado, sem solo)
   {
@@ -325,25 +326,30 @@ export function medirPropagador(): Linha[] {
     };
     for (const d of [5, 10, 50]) {
       const med = nivel(d), teo = 20 * Math.log10(7.5 / d);
-      L.push(linha('5 #1', `nível 1/r a ${d} m (rel. refDist 7,5 m)`, `${f1(teo, 2)} ± 0,2 dB`, `${f1(med, 2)} dB`, dentro(med, teo, 0.2), med));
+      L.push(linha('5 #1', `nível 1/r a ${d} m (rel. refDist 7,5 m)`, `${f1(teo, 2)} ± 0,2 dB`, `${f1(med, 2)} dB`, dentro(med, teo, 0.2), med, 'dB'));
     }
   }
   // passo 2: pente do solo (fonte parada de ruído branco, solo água)
   {
     const casos: [string, number, number, number][] = [['escape do carro', 0.35, 1.6, 6], ['roda do trem', 0.3, 1.6, 3], ['pantógrafo', 5.0, 1.6, 3]];
     for (const [nome, zs, zo, d] of casos) {
-      const r = renderTeste([{ pos: [0, 0, zs], sinal: 'ruido', paRms: 1 }], 0, d, 2.5, { sCentro0: 0, solo: 'agua', ouvinte: { pos: [0, 0, zo] } });
+      // (16 s: com 2,5 s o espectro médio tinha 10 trechos e o mínimo do pantógrafo, largo a 63 Hz, ia de 60 a 66 Hz
+      // conforme a semente; com 16 s, 9 sementes ficam entre −2,9 e +2,0%)
+      const r = renderTeste([{ pos: [0, 0, zs], sinal: 'ruido', paRms: 1 }], 0, d, 16, { sCentro0: 0, solo: 'agua', ouvinte: { pos: [0, 0, zo] } });
       const r1 = Math.hypot(d, zo - zs), r2 = Math.hypot(d, zo + zs), fn = 343 / (2 * (r2 - r1));
-      // espectro médio do ouvido esquerdo de 0,5 a 2,5 s
+      // espectro médio do ouvido esquerdo de 0,5 s ao fim
       const nseg = 16384, acc = new Float64Array(nseg / 2); let q = 0;
       for (let i = Math.round(0.5 * SR); i + nseg < r.dL.length; i += nseg / 2) { const P = A.espectro(r.dL, i, nseg, nseg); for (let k = 0; k < P.length; k++) acc[k] += P[k]; q++; }
-      // suaviza e acha o mínimo em [0,6, 1,4]·fn
+      // suaviza e acha o mínimo em [0,6, 1,4]·fn; o mínimo entre os pontos da grade por uma parábola nos três vizinhos (a
+      // grade é de 2,93 Hz e a tolerância do pantógrafo, ±1,9 Hz: sem interpolar só dois valores passavam, e o nulo
+      // pulava de um ponto para o outro com a semente do ruído; AUDITORIA T-CEN-03)
+      const sm = (k: number) => { let s = 0; for (let j = -2; j <= 2; j++) s += acc[k + j]; return s; };
       let kb = -1, vb = Infinity;
-      for (let k = Math.round(0.6 * fn * nseg / SR); k <= Math.round(1.4 * fn * nseg / SR); k++) {
-        let s = 0; for (let j = -2; j <= 2; j++) s += acc[k + j]; if (s < vb) { vb = s; kb = k; }
-      }
-      const fm = (kb * SR) / nseg, err = (fm - fn) / fn;
-      L.push(linha('5 #2', `nulo do solo: ${nome}`, `${f1(fn, 0)} Hz ± 3%`, `${f1(fm, 0)} Hz (${f1(err * 100)}%)`, Math.abs(err) <= 0.03, fm));
+      for (let k = Math.round(0.6 * fn * nseg / SR); k <= Math.round(1.4 * fn * nseg / SR); k++) { const s = sm(k); if (s < vb) { vb = s; kb = k; } }
+      const ya = sm(kb - 1), yb = vb, yc = sm(kb + 1), den = ya - 2 * yb + yc;
+      const dk = den > 0 ? Math.max(-0.5, Math.min(0.5, (0.5 * (ya - yc)) / den)) : 0;
+      const fm = ((kb + dk) * SR) / nseg, err = (fm - fn) / fn;
+      L.push(linha('5 #2', `nulo do solo: ${nome}`, `${f1(fn, 0)} Hz ± 3%`, `${f1(fm, 1)} Hz (${f1(err * 100)}%)`, Math.abs(err) <= 0.03, fm, 'Hz'));
       void q;
     }
   }
@@ -358,29 +364,12 @@ export function medirPropagador(): Linha[] {
     const med = 10 * Math.log10(banda(500) / banda(4000)) - 10 * Math.log10(500 / 4000);   // ruído branco: corrige a largura da banda
     const iso = atenuacaoIso(4000, d) - atenuacaoIso(500, d);
     const ok = dentro(med, iso, 1.5);
-    L.push(linha('5 #2', `ar a ${d} m: atenuação 4 kHz − 500 Hz`, `${f1(iso)} ± 1,5 dB (ISO)`, `${f1(med)} dB`, ok, med,
-      ok ? undefined : 'Decisão de 2.3: dois polos de 1 polo por fonte. A 1500 m a ISO pede 46,7 dB entre 500 Hz e 4 kHz; dois polos dão no máximo 36 dB em qualquer corte, e com o −3 dB em f_c(r) dão ~22 dB. A tabela "não pode piorar" (avião a 1500 m: 4 kHz ≤ −20 dB rel. 500 Hz) é atendida.'));
+    L.push(linha('5 #2', `ar a ${d} m: atenuação 4 kHz − 500 Hz`, `${f1(iso)} ± 1,5 dB (ISO)`, `${f1(med)} dB`, ok, med, 'dB'));
   }
   return L;
 }
 
-/** passo 3: CPU com 48 fontes de ruído em movimento, 10 s */
-export function medirCpu(): Linha[] {
-  const fontes: FonteTeste[] = [];
-  for (let i = 0; i < 48; i++) fontes.push({ pos: [-i * 2, (i % 2) * 0.8 - 0.4, 0.3 + (i % 5) * 0.5], sinal: 'ruido', paRms: 0.5 });
-  const r = renderPassagem({ portador: 'teste', fontesTeste: fontes, corpoTeste: { largura: 3, altura: 3.5, zPiso: 0.4, comprimento: 100 }, v: 97.2, d: 3, ambiente: 'ceu', dur: 10, x0: 500, reverb: false, medirCpu: true });
-  const frac = r.cpuFracao!;
-  const tr = r.portador as unknown as object; void tr;
-  const trem = passagemTrem('tunel');
-  const la = laco(10), gc = medirAlocacao();
-  return [
-    linha('5 #3', 'CPU por bloco no laço do worklet (trem no túnel, só portador + cena)', '< 50% do quantum de 2,67 ms', `média ${f1(la.mediaMs * 1000, 0)} µs, p99 ${f1(la.p99Ms * 1000, 0)} µs, máx ${f1(la.maxMs * 1000, 0)} µs (${f1(100 * la.fracao)}%)`, la.fracao < 0.5, la.fracao),
-    linha('5 #3', 'alocação no laço (--trace-gc, 10 s)', 'sem alocação', `${gc.coletas} coletas jovens (${f1(gc.mbColetados, 0)} MB), pausa média ${f1(gc.pausaMediaMs, 2)} ms, máx ${f1(gc.pausaMaxMs, 2)} ms`, gc.coletas === 0, gc.coletas,
-      gc.coletas === 0 ? undefined : 'Os laços por amostra (anel, Hermite, filtros, fontes) não alocam. Sobra o encaixotamento de doubles uma vez por bloco de controle no Cena.processar (argumentos de funções que o V8 não embute, campos de objeto) e nos geradores de fundo: poucos MB/s, coletas de ~0,06 ms contra o quantum de 2,67 ms.'),
-    linha('5 #3', 'CPU: 48 fontes, 10 s (Node, render offline)', '< 25% do tempo real', `${f1(frac * 100)}% (${f1(r.cpuMsPorBloco! * 1000, 0)} µs por bloco de 128)`, frac < 0.25, frac),
-    linha('5 #3', 'CPU: trem 10×25 m no túnel (63 fontes + campo próximo)', '< 50% do quantum (5.1)', `${f1(trem.cpuFracao! * 100)}% (${f1(trem.cpuMsPorBloco! * 1000, 0)} µs por bloco)`, trem.cpuFracao! < 0.5, trem.cpuFracao!),
-  ];
-}
+// (passo 3, CPU e alocação no laço: saíram do teste para `npm run cpu:cena`, tools/cena/cpu.ts; AUDITORIA A8, T-CEN-05)
 
 /** passo 5: sombra do corpo */
 export function medirSombra(): Linha[] {
@@ -399,11 +388,11 @@ export function medirSombra(): Linha[] {
     return 10 * Math.log10(s / n);
   };
   const a100 = nivel(100, false) - nivel(100, true), a1k = nivel(1000, false) - nivel(1000, true);
-  L.push(linha('5 #5', 'sombra da roda oposta em 100 Hz (Maekawa, caminho por baixo)', `${f1(ref100)} ± 2 dB`, `${f1(a100)} dB`, dentro(a100, ref100, 2), a100));
-  L.push(linha('5 #5', 'sombra da roda oposta em 1 kHz', `${f1(ref1k)} ± 2 dB`, `${f1(a1k)} dB`, dentro(a1k, ref1k, 2), a1k));
+  L.push(linha('5 #5', 'sombra da roda oposta em 100 Hz (Maekawa, caminho por baixo)', `${f1(ref100)} ± 2 dB`, `${f1(a100)} dB`, dentro(a100, ref100, 2), a100, 'dB'));
+  L.push(linha('5 #5', 'sombra da roda oposta em 1 kHz', `${f1(ref1k)} ± 2 dB`, `${f1(a1k)} dB`, dentro(a1k, ref1k, 2), a1k, 'dB'));
   // por cima: fonte na face oposta alta, onde o caminho por cima é o mais curto
   c.calcular(1.69, 3.0, yo, 3.0, 0, 3.36, 3.6, 0.4);
-  L.push(linha('5 #5', 'caminho por cima (face oposta, z 3): δ e A(100)/A(1k)', 'Maekawa: 10·log(3+20N)', `δ ${f1(c.delta, 3)} m, ${f1(c.a100)} / ${f1(c.a1k)} dB (fórmula ${f1(maekawaDb(c.delta, 100))} / ${f1(maekawaDb(c.delta, 1000))})`, dentro(c.a100, maekawaDb(c.delta, 100), 0.01), c.a100));
+  L.push(linha('5 #5', 'caminho por cima (face oposta, z 3): δ e A(100)/A(1k)', 'Maekawa: 10·log(3+20N)', `δ ${f1(c.delta, 3)} m, ${f1(c.a100)} / ${f1(c.a1k)} dB (fórmula ${f1(maekawaDb(c.delta, 100))} / ${f1(maekawaDb(c.delta, 1000))})`, dentro(c.a100, maekawaDb(c.delta, 100), 0.01), c.a100, 'dB'));
   // continuidade: ouvinte no gimbal passando por cima do corpo (az 90 → −90 a el 60°) em 2 s
   {
     let maxSalto = 0;
@@ -422,37 +411,39 @@ export function medirSombra(): Linha[] {
         });
       },
     });
-    L.push(linha('5 #5', 'continuidade da sombra com o ouvinte cruzando y = 0 por cima', '< 1 dB por bloco', `${f1(maxSalto, 2)} dB`, maxSalto < 1, maxSalto));
+    L.push(linha('5 #5', 'continuidade da sombra com o ouvinte cruzando y = 0 por cima', '< 1 dB por bloco', `${f1(maxSalto, 2)} dB`, maxSalto < 1, maxSalto, 'dB'));
   }
   return L;
 }
 
 /** passo 6: vento (nível do gerador) */
 export function medirVento(): Linha[] {
-  const v = new RuidoVento(SR);
+  const v = semear(new RuidoVento(SR));
   v.uAlvo = 10; v.u = 10;
   const n = SR * 3, L = new Float64Array(n), R = new Float64Array(n);
   for (let i = 0; i < n; i += 128) v.somar(L.subarray(i, i + 128), R.subarray(i, i + 128), 128);
   let s = 0; for (let i = SR; i < n; i++) s += L[i] * L[i];
   const db = 10 * Math.log10(s / (n - SR) / 4e-10);
-  return [linha('5 #6', 'nível do vento a 10 m/s', '70 ± 2 dB', `${f1(db)} dB`, dentro(db, 70, 2), db)];
+  return [linha('5 #6', 'nível do vento a 10 m/s', '70 ± 2 dB', `${f1(db)} dB`, dentro(db, 70, 2), db, 'dB')];
 }
 
 /** passo 8: RT60 por banda das respostas geradas */
 export function medirAmbientes(): Linha[] {
   const L: Linha[] = [];
+  // (a resposta ao impulso de cada ambiente tem semente fixa, a mesma na página e aqui: não depende da semente do
+  // ruído dos portadores, e o RT60 dela é um só)
   for (const id of ['ceu', 'corte', 'estacao', 'tunel', 'ponte'] as const) {
     const amb = ambientePassagem(id), ir = gerarRespostaPorBanda(amb, SR), alvo = rt60Efetivo(amb);
     const med = BANDAS_RT.map((f) => A.rt60(ir.L, SR, f));
     const ok = med.every((m, i) => Math.abs(m - alvo[i]) <= 0.15 * alvo[i]);
-    L.push(linha('5 #8', `RT60 ${id} (125/500/2k/8k Hz)`, `${alvo.map((x) => f1(x, 1)).join(' / ')} s ± 15%`, `${med.map((x) => f1(x, 2)).join(' / ')} s`, ok, med[1]));
+    L.push(linha('5 #8', `RT60 ${id} (125/500/2k/8k Hz)`, `${alvo.map((x) => f1(x, 1)).join(' / ')} s ± 15%`, `${med.map((x) => f1(x, 2)).join(' / ')} s`, ok, med, 's'));
   }
   // ponte (2.10): o ronco estrutural soma +5 dB nas bandas 31–125 Hz durante a passagem do corpo
   {
     const com = passagemTrem('ponte'), sem = passagemTrem('ponte', V350, 3, { kPonte: 0 }, 'semPonte');
     const b = (r: ResultadoPassagem) => A.bandas([r.L, r.R], SR, Math.round(r.tNarizAbeam * SR), Math.round(r.tCaudaAbeam * SR), [[31, 125]])[0];
     const d = 10 * Math.log10(b(com) / b(sem));
-    L.push(linha('2.10', 'ponte: ronco estrutural em 31–125 Hz na passagem', '+5 ± 1 dB', `${d >= 0 ? '+' : ''}${f1(d)} dB`, dentro(d, 5, 1), d));
+    L.push(linha('2.10', 'ponte: ronco estrutural em 31–125 Hz na passagem', '+5 ± 1 dB', `${d >= 0 ? '+' : ''}${f1(d)} dB`, dentro(d, 5, 1), d, 'dB'));
   }
   return L;
 }
@@ -476,14 +467,14 @@ export function medirOuvinte(): Linha[] {
     const a = cc(lag - 1), b = cc(lag), c = cc(lag + 1), fr = (a - c) / (2 * (a - 2 * b + c));
     const itd = lag + fr;   // > 0: o direito atrasado (fonte à esquerda)
     const teo = 0.65e-3 * SR * Math.sin(az * D);
-    L.push(linha('5 #9', `ITD a ${az}°`, `${f1(teo, 2)} ± 1 amostra (0,65·sin az ms)`, `${f1(itd, 2)} amostras`, dentro(itd, teo, 1), itd));
+    L.push(linha('5 #9', `ITD a ${az}°`, `${f1(teo, 2)} ± 1 amostra (0,65·sin az ms)`, `${f1(itd, 2)} amostras`, dentro(itd, teo, 1), itd, 'amostras'));
     if (az === 90) {
       const nseg = 4096, accL = new Float64Array(nseg / 2), accR = new Float64Array(nseg / 2);
       for (let i = i0; i + nseg < r.dL.length; i += nseg / 2) { const P = A.espectro(r.dL, i, nseg, nseg), Q = A.espectro(r.dR, i, nseg, nseg); for (let k = 0; k < P.length; k++) { accL[k] += P[k]; accR[k] += Q[k]; } }
       const band = (acc: Float64Array, f: number) => { let s = 0; for (let k = Math.round(f / 1.12 * nseg / SR); k <= Math.round(f * 1.12 * nseg / SR); k++) s += acc[k]; return s; };
       const dHi = 10 * Math.log10(band(accR, 4000) / band(accL, 4000)), dLo = 10 * Math.log10(band(accR, 150) / band(accL, 150));
       const ild = dHi - dLo;
-      L.push(linha('5 #9', 'ILD em 4 kHz a 90° (além da panorâmica)', '−6 ± 1 dB', `${f1(ild)} dB (pan ${f1(dLo)} dB)`, dentro(ild, -6, 1), ild));
+      L.push(linha('5 #9', 'ILD em 4 kHz a 90° (além da panorâmica)', '−6 ± 1 dB', `${f1(ild)} dB (pan ${f1(dLo)} dB)`, dentro(ild, -6, 1), ild, 'dB'));
     }
   }
   return [...L, ...medirCabine()];
@@ -504,7 +495,7 @@ export function medirCabine(): Linha[] {
   const tl = fo.map((v, i) => 10 * Math.log10(v / ca[i]));
   // a ressonância do habitáculo (+7 dB em 45 Hz, Q 1,1) soma ~+0,5 dB em 125 Hz
   const ok = tl.every((x, i) => Math.abs(x - lei(fsb[i])) <= 3);
-  return [linha('5 #9', 'cabine do trem (m_s 25): perda de transmissão em 125 / 500 / 2k Hz', `lei da massa ${fsb.map((f) => f1(lei(f))).join(' / ')} dB ± 3`, `${tl.map((x) => f1(x)).join(' / ')} dB`, ok, tl[1])];
+  return [linha('5 #9', 'cabine do trem (m_s 25): perda de transmissão em 125 / 500 / 2k Hz', `lei da massa ${fsb.map((f) => f1(lei(f))).join(' / ')} dB ± 3`, `${tl.map((x) => f1(x)).join(' / ')} dB`, ok, tl, 'dB', Math.max(...tl.map((x, i) => Math.abs(x - lei(fsb[i])))))];
 }
 
 // constantes usadas pelos testes e pelo relatório

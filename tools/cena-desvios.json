@@ -1,0 +1,155 @@
+{
+  "ar a 1500 m: atenuação 4 kHz − 500 Hz": {
+    "grupo": "propagador",
+    "medido": 22.71,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "46.6 ± 1,5 dB (ISO)",
+    "motivo": "Decisão de 2.3: dois polos de 1 polo por fonte. A 1500 m a ISO pede 46,7 dB entre 500 Hz e 4 kHz; dois polos dão no máximo 36 dB em qualquer corte, e com o −3 dB em f_c(r) dão ~22 dB. A tabela \"não pode piorar\" (avião a 1500 m: 4 kHz ≤ −20 dB rel. 500 Hz) é atendida."
+  },
+  "modulação 1–4 kHz (túnel): profundidade p90−p10": {
+    "grupo": "trem",
+    "medido": 2.019,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "≥ 3 dB (gravações: 2,4–5,6)",
+    "motivo": "O campo reverberante do túnel (RT60 2,8 s em 2 kHz, +7 dB sobre o direto) enche os vales da envoltória; o rolamento sozinho, a céu aberto, modula ~8 dB."
+  },
+  "modulação 1–4 kHz (céu): frequência": {
+    "grupo": "trem",
+    "medido": 4.014,
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "alvo": "3,89 ± 0,1 Hz",
+    "motivo": "O pico da envoltória de 1–4 kHz durante o corpo fica em 3,97–4,03 Hz conforme a semente, 2–4% acima de v/L_c = 3,89 Hz (a tolerância é ±0,1 Hz, 2,6%). O corpo passa em 2,57 s: a série da envoltória tem resolução de ~0,4 Hz e o pico é interpolado; a semente de fábrica dava 3,97 e passava por 0,03 Hz. Com a mediana de 3 sementes (AUDITORIA A2, T-CEN-03) fica fora. Não é o som: o ritmo dos vãos é v/L_c por construção (a frequência dos truques sai da posição deles); é a medida curta. [Com as bases 1000 e 2000 a mediana passa (3,87 e 3,84 Hz): à beira.]",
+    "beira": true
+  },
+  "pulsos de vão 50–200 Hz (túnel) ≥ 8 dB sobre o meio do vagão": {
+    "grupo": "trem",
+    "medido": [
+      0,
+      2.441
+    ],
+    "unidade": "",
+    "folga": "±2",
+    "alvo": "9 pulsos",
+    "motivo": "Na banda 50–200 Hz o corpo e o rolamento enchem o meio do vagão e a diferença fica abaixo de 8 dB. As gravações também não mostram pulsos de vão: em seis passagens a 265–320 km/h a envoltória de 50–200 Hz não tem pico em v/L_c (picos espalhados entre 2,3 e 5,3 Hz, p90−p10 de 6–8 dB, o que janelas de 20 ms dão com ruído estacionário nessa banda). [O retrato guarda a contagem (0) e a diferença média sobre o meio do vagão, que vai de 0,6 a 3,1 dB conforme a semente.]",
+    "nota_folga": "folga absoluta: a diferença média vai de 0,6 a 3,1 dB conforme a semente; a contagem fica em 0"
+  },
+  "onda de nariz: σ": {
+    "grupo": "trem",
+    "medido": 41.33,
+    "unidade": "ms",
+    "folga": "±5 %",
+    "alvo": "51 ± 5 ms",
+    "motivo": "σ = L_nariz/(3v) com L_nariz = 12 m (padrão de 4.6) dá 41 ms; os 51 ms de 2.6 saem de L_nariz = 15 m."
+  },
+  "L_AFmax céu aberto": {
+    "grupo": "trem",
+    "medido": 107.3,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "113 ± 3 dB(A)",
+    "motivo": "Com as fontes repetidas ao longo do corpo (rolamento dos 20 truques, aero dos vagões), o L_AF varia pouco na passagem: L_AFmax − L_Aeq,tp ≈ 1–2 dB, contra os 5 dB implícitos na tabela (113 − 108). As gravações a 265–320 km/h dão 0,7–1,8 dB (a do ICE 3, com rajadas de vento no microfone, 4,1). O L_Aeq,tp bate."
+  },
+  "L_AFmax túnel": {
+    "grupo": "trem",
+    "medido": 114.9,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "120 ± 3 dB(A)",
+    "motivo": "Com as fontes repetidas ao longo do corpo (rolamento dos 20 truques, aero dos vagões), o L_AF varia pouco na passagem: L_AFmax − L_Aeq,tp ≈ 1–2 dB, contra os 5 dB implícitos na tabela (113 − 108). As gravações a 265–320 km/h dão 0,7–1,8 dB (a do ICE 3, com rajadas de vento no microfone, 4,1). O L_Aeq,tp bate."
+  },
+  "lei de velocidade do aero 160 → 300 km/h": {
+    "grupo": "niveis",
+    "medido": 17.63,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "+16 ± 1 dB",
+    "motivo": "A potência das fontes segue a lei de 4.6 à letra (30·log v, 60·log v: +8,2 e +16,4 dB); a Cena soma por cima a amplificação convectiva de 2.1 (|1 − M·cosθ|^−n), que entre M 0,13 e 0,24 acrescenta ~1 dB na energia da passagem. As leis de 4.6 vêm de níveis medidos, que já incluem esse efeito: para bater as duas, a lei da fonte teria de ser corrigida pela convecção média."
+  },
+  "R44: droop ao puxar o coletivo (0,75 → 1,0 em 0,2 s)": {
+    "grupo": "portadores",
+    "medido": [
+      1.056,
+      0.752
+    ],
+    "unidade": "",
+    "folga": "±5 %",
+    "alvo": "2–3% em ~1 s",
+    "motivo": "Até 22/11/2026 dava 2,35% (mínimo 1,33 s depois, volta em 2,97 s). Com a potência do rotor corrigida (a figura de mérito 0,72 do CENA 4.3 contava o perfil duas vezes; agora κ 1,15 da teoria do momento modificada) e a tração caindo com Nr² (o rotor que perde giro pede menos), o mesmo puxão pede menos potência a mais e o motor de bancada (Tmax 900 N·m, atraso de torque de 1,1 s, que imita o O-540 com o correlacionador) cai 1,1% e volta em 1,35 s. O droop de 2–3% de 5.10 é o do R44 de verdade; o atraso do motor de bancada não foi reacertado para ele. [O retrato guarda o droop (%) e o instante do mínimo (s).]"
+  },
+  "locomotiva EMD SD70ACe em N8, parada, a 15 m: L_Aeq": {
+    "grupo": "niveis-motores",
+    "medido": 88.56,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "~95 dB(A) (±3; 40 CFR 201: 87 dB(A) a 30 m parada)",
+    "motivo": "O escape está no L_W 128 dB(A) do DIESEL.md 6.3 (103 dB(A) a 5 m, conferido canal a canal). A 15 m a chaminé, 0,5 m acima do teto, fica rasante à borda da caixa (4,7 m): a sombra (Maekawa, 2.5) tira ~4 dB (sem sombra: 92,6 dB(A)); o resto é a distância real da chaminé (17 m) e o solo de brita, que reflete pouco acima de 800 Hz. O limite da 40 CFR 201 é medido a 30 m, onde o ângulo sobre a borda é mais aberto."
+  },
+  "ATR 72 em decolagem (manete 1, 60 m/s) a 100 m de altura: L_AFmax": {
+    "grupo": "niveis-motores",
+    "medido": 88.15,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "~85 dB(A) (±3; certificação de ruído ICAO/EASA do ATR 72: ~84 EPNdB no ponto lateral a 450 m)",
+    "motivo": "Na Cena a hélice do turboélice segue a física (tom de carga de Gutin com o torque dos 2 051 kW de decolagem do PW127M, e o ruído de vórtice; src/carriers/leis-helice.ts): 105 dB a 30 m por motor, contra os 113 da lei do JetDSP, que deu 95,0 dB(A) aqui até 22/11/2026. Fica 0,2 dB acima da faixa: o alvo vem de 84 EPNdB a 450 m, e a conversão de EPNdB para dB(A) numa hélice de tom grave tem uns ±3 dB; o resto do nível é o jato e o gerador de gás do JetDSP, que nunca foram calibrados em absoluto (o 737 no mesmo modelo dá 112,5 dB a 30 m por barramento). A página Turbina continua com a lei dela."
+  },
+  "modulação 1–4 kHz (túnel): frequência": {
+    "grupo": "trem",
+    "medido": 3.91,
+    "unidade": "Hz",
+    "folga": "±1.5",
+    "alvo": "3,89 ± 0,1 Hz",
+    "motivo": "Com 2,0 dB de profundidade (ver a profundidade no túnel) o pico da envoltória quase se perde no campo reverberante: com uma semente ele cai em 3,67, 3,91 ou 5,22 Hz (e, segundo a AUDITORIA T-CEN-03, em ~1,9 Hz com 2 de 3 outras). A mediana de 3 sementes passa com a base 0 e cai para 2,6 Hz com a base 2000: à beira, com folga larga. É o caso de validação da etapa 1 (PLANO): a céu aberto o ritmo dos vãos aparece (ver a frequência no céu).",
+    "beira": true,
+    "nota_folga": "folga absoluta: as sementes isoladas vão de 1,9 a 5,2 Hz, e a mediana de 3, de 2,6 (base 2000) a 3,9 Hz (base 0): o pico se perde no túnel; o teto que importa é o da profundidade"
+  },
+  "padrão duplo dos truques (envoltória do rolamento dobrada a 257 ms)": {
+    "grupo": "trem",
+    "medido": 79,
+    "unidade": "ms",
+    "folga": "±10 %",
+    "alvo": "dois picos a 82 ms (8 m/v)",
+    "motivo": "Os dois picos da envoltória do rolamento dobrada no passo do vagão ficam a 73–89 ms conforme a semente (o critério é 72–92 ms, vale ≥ 1 dB; a semente de fábrica dava 79). À beira do piso de 72 ms (AUDITORIA T-CEN-03 e T-CEN-08).",
+    "beira": true,
+    "nota_folga": "as sementes isoladas vão de 73 a 89 ms"
+  },
+  "lei de velocidade do rolamento 160 → 300 km/h": {
+    "grupo": "niveis",
+    "medido": 8.995,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "+8 ± 1 dB",
+    "motivo": "A potência das fontes segue a lei de 4.6 à letra (30·log v, 60·log v: +8,2 e +16,4 dB); a Cena soma por cima a amplificação convectiva de 2.1 (|1 − M·cosθ|^−n), que entre M 0,13 e 0,24 acrescenta ~1 dB na energia da passagem. As leis de 4.6 vêm de níveis medidos, que já incluem esse efeito: para bater as duas, a lei da fonte teria de ser corrigida pela convecção média. [No rolamento a soma dá +9,0 dB, no limite do +8 ± 1: com as sementes 8,9 a 9,1. À beira (AUDITORIA T-CEN-08); o do aero, +17,6, é desvio.]",
+    "beira": true
+  },
+  "R44 com coletivo 1,0: harmônicos 10–30": {
+    "grupo": "portadores",
+    "medido": 14.78,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "dentro de 15 dB",
+    "motivo": "Os harmônicos 10 a 30 da BPF do R44 com o coletivo em 1,0 ficam dentro de 14,8 dB (o teto é 15): passa por 0,2 dB, sem depender da semente (o tapa do rotor é determinístico). À beira (AUDITORIA T-CEN-08).",
+    "beira": true
+  },
+  "carro a 6 m: curva nível × x (relativa ao pico) contra o legado sem o som de fundo": {
+    "grupo": "motores",
+    "medido": 0.96,
+    "unidade": "dB",
+    "folga": "±0.2",
+    "alvo": "±1 dB (rms)",
+    "motivo": "A curva de nível da passagem do Camaro a 6 m fica a 0,94–0,98 dB (rms) da do road() do legado conforme a semente, contra o teto de 1 dB: a Cena soma a amplificação convectiva |1 − M·cosθ|^−2 (2.1), que o road() não tem, e ela sozinha dá +0,8 dB chegando e −0,75 indo (a medida mostra +1,4 chegando e −0,2 indo). À beira (passa por menos de 5% da tolerância).",
+    "beira": true,
+    "nota_folga": "folga absoluta: as sementes vão de 0,94 a 0,98 dB; com a ordem de ignição do LT1 no legado e na Cena (F-RON-19) a curva passou de 0,94 para 0,96"
+  },
+  "alocação no laço (--trace-gc, 10 s; mediana de 3 processos): MB coletados por segundo": {
+    "grupo": "cpu",
+    "medido": 5.86,
+    "unidade": "MB/s",
+    "folga": "±20 %",
+    "alvo": "sem alocação",
+    "motivo": "Os laços por amostra (anel, Hermite, filtros, fontes) não alocam. Sobra o encaixotamento de doubles uma vez por bloco de controle no Cena.processar (argumentos de funções que o V8 não embute, campos de objeto) e nos geradores de fundo: ~6 MB/s, 15 coletas jovens em 10 s, de ~0,1 ms cada contra o quantum de 2,67 ms. Antes o desvio era um texto sem teto e aceitaria 1 500 coletas (AUDITORIA T-CEN-04); agora o teto é este retrato em MB/s e a pausa máxima tem portão próprio (≤ 1 ms). Defeito de execução em src/scene/ (frente de robustez), não de som.",
+    "nota_folga": "a mediana de 3 processos vai de 5,9 a 6,3 MB/s entre execuções"
+  }
+}

@@ -17,6 +17,7 @@ import type { Portador } from '../../src/carriers/tipos';
 import type { Ambiente, Ouvinte, Trajetoria, IdAmbiente } from '../../src/scene/tipos';
 import { convoluir } from './analise';
 import { gravarWav } from '../wav';
+import { semear } from '../desvios';
 
 export const SR = 48000;
 export const BLOCO = 128;
@@ -48,6 +49,7 @@ export interface OpcoesPassagem {
   ur?: number;
   /** chamado depois de cada bloco */
   aoBloco?: (t: number, cena: CenaPassagem, p: Portador) => void;
+  /** tempo de CPU do processo (`process.cpuUsage()`) no laço portador + cena, por bloco */
   medirCpu?: boolean;
   semSombra?: boolean;
   kPonte?: number;
@@ -81,19 +83,22 @@ export function renderPassagem(o: OpcoesPassagem): ResultadoPassagem {
   const cena = new CenaPassagem({ ur: o.ur, semSombra: o.semSombra, kPonte: o.kPonte });
   cena.configurar(amb, traj, ouv, SR);
   if (o.temperatura != null) cena.definirTemperatura(o.temperatura);
+  // o ruído do portador (e do motor acoplado, já calibrado) e da cena na semente atual de tools/desvios.ts (0 = a de
+  // fábrica, nada muda): a fase do ruído no instante em que a passagem começa
+  semear(portador); semear(cena);
   const nF = portador.fontes().length;
   const canais = Array.from({ length: nF }, () => new Float32Array(BLOCO));
   const n = Math.round(o.dur * SR);
   const dL = new Float32Array(n), dR = new Float32Array(n), sL = new Float32Array(n), sR = new Float32Array(n);
   const bl = new Float32Array(BLOCO), br = new Float32Array(BLOCO), el = new Float32Array(BLOCO), er = new Float32Array(BLOCO);
   const tele = { t: [] as number[], s: [] as number[], p: [] as number[], u: [] as number[], spl: [] as number[] };
-  let cpu = 0n;
+  let cpu = 0;
   for (let i = 0; i < n; i += BLOCO) {
-    const t0 = o.medirCpu ? process.hrtime.bigint() : 0n;
+    const c0 = o.medirCpu ? process.cpuUsage() : null;
     o.antesBloco?.(i / SR, portador);
     portador.processar(canais, BLOCO, 1 / SR);
     cena.processar(portador, canais, bl, br, el, er, BLOCO);
-    if (o.medirCpu) cpu += process.hrtime.bigint() - t0;
+    if (c0) { const c = process.cpuUsage(c0); cpu += c.user + c.system; }
     const m = Math.min(BLOCO, n - i);
     dL.set(bl.subarray(0, m), i); dR.set(br.subarray(0, m), i); sL.set(el.subarray(0, m), i); sR.set(er.subarray(0, m), i);
     const tc = cena.telemetria();
@@ -114,7 +119,7 @@ export function renderPassagem(o: OpcoesPassagem): ResultadoPassagem {
   const tN = (-(s0 + L / 2)) / o.v, tC = (-(s0 - L / 2)) / o.v;
   const blocos = n / BLOCO;
   const r: ResultadoPassagem = { L: Lo, R: Ro, dL, dR, sL, sR, tele, L_corpo: L, tNarizAbeam: tN, tCaudaAbeam: tC, nFontes: nF, amb, portador, cena };
-  if (o.medirCpu) { r.cpuMsPorBloco = Number(cpu) / 1e6 / blocos; r.cpuFracao = r.cpuMsPorBloco / ((BLOCO / SR) * 1000); }
+  if (o.medirCpu) { r.cpuMsPorBloco = cpu / 1e3 / blocos; r.cpuFracao = r.cpuMsPorBloco / ((BLOCO / SR) * 1000); }
   return r;
 }
 

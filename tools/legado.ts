@@ -83,8 +83,10 @@ export type Correcoes = Record<string, Record<string, unknown>>;
 export const CORRECOES_RONCO: Correcoes = {
   // (docs/AUDITORIA.md, F-RON-01…15: nenhum destes campos muda o timbre; só o nome, o rótulo e como o carro anda)
   // potência (455 hp), relações e diferencial 3,73 são do Camaro SS de 6ª geração, que usa o LT1; o LS3 (426 hp) é o da 5ª,
-  // com 3,01/2,07/1,43/1,00/0,84/0,57 e 3,45 (gmauthority.com, especificações do Camaro 2016; Wikipedia, Tremec TR-6060)
-  muscle: { tag: '6.2 V8 LT1 · cross-plane' },
+  // com 3,01/2,07/1,43/1,00/0,84/0,57 e 3,45 (gmauthority.com, especificações do Camaro 2016; Wikipedia, Tremec TR-6060).
+  // A ordem de ignição (MUDA o timbre) é a do LT1 Gen V, 1-8-7-2-6-5-4-3 (gmauthority.com, ficha do LT1); a do legado era a
+  // do small-block antigo (F-RON-19). É o preset das referências de tools/cena/referencias/legado.json, que aplicam esta tabela
+  muscle: { tag: '6.2 V8 LT1 · cross-plane', order: '1-8-7-2-6-5-4-3' },
   // 10R80: a 4ª é 1,769 (Wikipedia, Ford–GM 10-speed automatic transmission)
   mustang: { ratios: [4.70, 2.99, 2.15, 1.77, 1.52, 1.28, 1.00, 0.85, 0.69, 0.64] },
   // Tremec TR-9070 DCT do GT500 2020: 3,14/2,05/1,43/1,10/0,86/0,68/0,56 (suplemento do manual da Ford, março de 2020)
@@ -103,7 +105,7 @@ export const CORRECOES_RONCO: Correcoes = {
   // Skyactiv-MT do ND: 5,087/2,991/2,035/1,594/1,286/1,000 com 2,866: a 6ª é direta (mazdausa.com, especificações de 2018)
   mx5: { ratios: [5.09, 2.99, 2.04, 1.59, 1.29, 1.00] },
   // SMG III: 3,985/2,652/1,806/1,392/1,159/1,000/0,833 com 3,62 (ficha de imprensa da BMW, press.bmwgroup.com)
-  m5e60: { ratios: [3.99, 2.65, 1.81, 1.39, 1.16, 1.00, 0.83] },
+  m5e60: { ratios: [3.99, 2.65, 1.81, 1.39, 1.16, 1.00, 0.83], crank: 'odd90', bankAngle: 90, order: '1-8-7-4-3-10-9-6-5-2' },
   // o M156 6.2 é do C 63 AMG W204 (2008–2014); "Mercedes-AMG C 63" é o W205 em diante, com o 4.0 biturbo
   c63: { name: 'Mercedes-Benz C 63 AMG' },
   // a 412 T2 tinha câmbio transversal de 6 marchas (f1technical.net; Wikipedia, Ferrari 412 T2); mesma 1ª e mesma última
@@ -114,6 +116,27 @@ export const CORRECOES_RONCO: Correcoes = {
   golgti: { name: 'VW Gol GTi' },
   // a 450 SX-F é de motocross; a de trilha (enduro) da KTM é a EXC-F
   single: { tag: 'monocilíndrico de motocross' },
+  // (docs/AUDITORIA.md, F-RON-16…23, bloco C: estes MUDAM o timbre; a paridade aplica a mesma ficha dos dois lados e
+  // continua amostra a amostra)
+  // Ferrari Tipo 053 (F2004): V10 a 90° (https://en.wikipedia.org/wiki/Ferrari_F2004). O virabrequim fica o que era,
+  // 'even72' (moente comum): nenhuma fonte diz se o 053 tem moente comum ou defasado. Com moente comum, um V10 a 90°
+  // dispara a 54°/90° (é o que o 'even72' dá com o V a 90°) (F-RON-18)
+  v10f1: { bankAngle: 90 },
+  // 5.2 FSI (Huracán, R8 de 2ª geração): V10 a 90° com moente comum, explosões alternadas a 54° e 90° (Audi,
+  // https://www.audi.com/en/the-audi-r8-until-2024-updated-dynamics-for-the-high-performance-sports-car-11734/engine-11738).
+  // A ordem é a do virabrequim 'odd90' do simulador (a do Viper); a da Audi, 1-6-5-10-2-7-3-8-4-9, pede outro arranjo
+  // de moentes, com os mesmos intervalos e 144° por bancada (F-RON-16)
+  huracan: { crank: 'odd90', bankAngle: 90, order: '1-8-7-4-3-10-9-6-5-2' },
+  r8: { crank: 'odd90', bankAngle: 90, order: '1-8-7-4-3-10-9-6-5-2' },
+  // S85 (M5 E60, linha acima com as relações): 90°, moentes compartilhados, 90°/54° (https://en.wikipedia.org/wiki/BMW_S85) (F-RON-17)
+  // CBR1000RR SC77 (141 kW): corte a 13 000 rpm; 14 500 é a rotação de potência da CBR1000RR-R (Ultimate Motorcycling,
+  // Motorcycle.com e MCNews, testes de 2017) (F-RON-21)
+  cbr: { tag: '1.0 4 em linha plano · 13.000 rpm', redline: 13000 },
+  // Desmosedici Stradale: Twin Pulse, explosões a 0°, 90°, 290° e 380° (Ducati); o '360' dá 0/90/360/450, os dois pares
+  // a 90°. Corte a 14 500 rpm (Cycle News, AMCN e Asphalt & Rubber, 2018; a Motorcycle.com de 2017 dá 14 000) (F-RON-22)
+  panigale: { crank: '360', order: '1-2-3-4', redline: 14500 },
+  // MT-07: 9 000 rpm é a rotação de potência; o limitador entra a ~10 500 (Ultimate Motorcycling, 2019) (F-RON-23)
+  mt07: { redline: 10500 },
 };
 
 /** Turbina: id do preset → campos corrigidos (valor novo) */
