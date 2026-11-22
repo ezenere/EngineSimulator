@@ -18,7 +18,7 @@ export const PISO_LINHA_DB = -60;
 export const F_MIN = 10;
 
 /** L_max por fonte (4.1) */
-export const LMAX = { motor: 96, inversor: 64, reducao: 32, escovas: 8, helice: 16, aux: 12, ventilador: 8, avas: 6 } as const;
+export const LMAX = { motor: 96, inversor: 64, reducao: 32, escovas: 8, helice: 16, aux: 24, ventilador: 8, avas: 6 } as const;
 
 /** curva da carcaça (1.1, decisão): passa-alta de 2 polos em f_carc + platô + passa-baixa de 1 polo em 8 kHz */
 export const F_CARC = { carro: 400, trem: 250, pequena: 1000 } as const;

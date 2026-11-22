@@ -95,12 +95,17 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
       tipo: 'gto', fc: PATAMAR_TAURUS, fcMax: 600, modo: 'escada',
       escada: { f0: ESCADA_F0, delta: ESCADA_DELTA, notas: NOTAS_TAURUS, patamar: PATAMAR_TAURUS },
       sincrona: [15, 11, 9, 7, 5, 3, 1],
-      // grupos 2f_c, 3f_c, 4f_c medidos no patamar (3.1: D −4/−9/−8, A −11/−15/−22): os do meio
-      // (≈ dali para cima: o GTO com poucos pulsos põe energia até 8·f_c; a gravação D tem 2996 Hz a −22)
-      perfilGrupos: [0, -6, -9, -9, -14, -17, -20, -23],
+      // grupos 2f_c, 3f_c, 4f_c medidos no patamar (3.1: D −4/−9/−8, A −11/−15/−22): os do meio. Dali para cima a única
+      // medida é 5·f_c na gravação D, 2996 Hz a −22 dB (a A não tem nada acima de 2,4 kHz): o 5º grupo fica nela e os
+      // seguintes caem 4 dB cada. Estavam em −14, −17, −20 e −23 (≈): no patamar, quatro tons puros de 3 a 4,8 kHz, 30 dB
+      // sobre o piso, onde a gravação não tem tom (o kit: HNR de 2,5–6 kHz +7 dB contra −24)
+      perfilGrupos: [0, -6, -9, -9, -22, -26, -30, -34],
     },
-    // linhas fixas da locomotiva parada (conversor auxiliar e ventilação, 3.1)
-    auxLinhas: [[176, 0], [527, 0], [688, -1]], auxRuido: -3,
+    // linhas fixas da locomotiva parada (conversor auxiliar e ventilação, 3.1); e, acima de 1 kHz, as do conversor de
+    // entrada em espera e do auxiliar, medidas na gravação A parada (3–12 s) em relação à de 526 Hz: 1660 Hz a −7 dB, com
+    // vizinhas a 34 Hz (2 × 16,7), 2000 e 2092 a −12 e −13, e os grupos de 3,7, 4,0 e 5,3 kHz a −13..−15. Sem elas a
+    // locomotiva parada não tinha tom nenhum acima de 1 kHz (HNR −13 e −18 dB em 1–2,5 e 2,5–6 kHz; a gravação, −5 e −2)
+    auxLinhas: [[176, 0], [527, 0], [688, -1], [1075, -13], [1660, -7], [1728, -14], [2000, -12], [2092, -13], [3669, -14], [3719, -14], [4000, -15], [5270, -13]], auxRuido: -3,
     // sopradores de 9 pás em motores de 2 polos a 60 Hz do conversor auxiliar: 58,5 Hz (3 510 rpm), passagem de pá em
     // 527 Hz, a linha fixa mais forte da locomotiva parada (gravação A: 58,3, 175,4 = 3× e 526,4 = 9×). Estava com 2 950 rpm
     // (motor de 50 Hz): passagem de pá em 442 Hz, um tom que nenhuma gravação tem
@@ -108,7 +113,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     // 15 kV, 16,7 Hz: o transformador zumbe em 33,4 Hz e múltiplos (gravação A parada: 33,7 Hz, 16 dB abaixo da banda de
     // 150–400 Hz: quase não se ouve, é infrassom; em dB(A) o número fica pequeno)
     auxiliares: { compressor: 62, transformador: 44, fTracao: 16.7 },
-    niveis: { motor: 100, inversor: 96, reducao: 96, ventilador: 91, aux: 77 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 2, detune: 0.003,
+    niveis: { motor: 100, inversor: 96, reducao: 96, ventilador: 91, aux: 79 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 2, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 230,
     aprox: ['Zs', 'Zr', 'reducao (3,69)', 'lista síncrona', 'Tn (300 kN de partida)'],
     portador: {
@@ -161,10 +166,11 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     inversor: { tipo: 'igbt', fc: 1500, modo: 'auto', sincrona: IGBT_TREM, fcAux: 1333, fRede: 60 },
     // engrenamento Z_p 16 (família 1) e ranhuras Z_s 36 (família 2): 36/16 = 2,25, medido 2,24 (3.2); barras não aparecem
     reducao: { estagios: [{ Zp: 16, Zc: 101 }], eta: 0.96 }, ventilacao: null, carcaca: 'trem',
-    auxLinhas: [[542, 0], [656, -12]], auxRuido: 6,
-    // (a ventilação mais baixa que nos outros metrôs: o largo dos dutos desta já está em `auxRuido`)
-    auxiliares: { compressor: 72, ventilacao: 72 },
-    niveis: { motor: 98, inversor: 92, reducao: 98, ventilador: 0, aux: 85 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
+    // 542 e 656 Hz em relação à de 1333 Hz (0 dB): medidas de dentro, parada (84–92 s): +6 e −6 dB (estavam em 0 e −12, e
+    // o auxiliar em 85 dB(A): com a de 542 Hz mais forte o canal vai a 89 para a de 1333 Hz ficar onde estava)
+    auxLinhas: [[542, 6], [656, -6]], auxRuido: 4,
+    auxiliares: { compressor: 74, ventilacao: 76 },
+    niveis: { motor: 98, inversor: 92, reducao: 98, ventilador: 0, aux: 89 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 90,
     aprox: ['reducao (6,3)', 'fc', 'Tn'],
     portador: {

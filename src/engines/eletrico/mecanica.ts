@@ -92,6 +92,13 @@ export class Reducao {
   cargaMalha = 1;
   /** folga dos dentes (0 = redução justa de carro; 1 = planetária folgada de ferramenta): até +22 dB de chocalho */
   kFolga = 1;
+  /**
+   * Pancadas por volta do pinhão e o intervalo até a próxima (em voltas). Um par de engrenagens bate uma vez por volta,
+   * no mesmo dente (1; periódico). Numa planetária folgada batem os planetas, cada um no seu dente e fora de compasso:
+   * 1 + 5·folga pancadas por volta em intervalos sorteados (0,3 a 1,7 da média). A furadeira em vazio tinha 42% da
+   * envoltória de 1–6 kHz presa à volta do eixo (um zumbido em f_rot); a gravação tem 1%.
+   */
+  nPanc = 1; private limC = 1; private nrmC = 1;
   /** relevo da carcaça da redução (modos): o uivo acende e apaga quando a ordem cruza uma ressonância */
   relevo: Relevo | null;
   // piso preso ao giro: o ruído dos rolamentos e dos flancos sobe e desce uma vez por volta do eixo (excentricidade,
@@ -104,6 +111,7 @@ export class Reducao {
     this.rol = new RuidoBanda(fs, semente, [new Bq().hp(fs, 2000, 0.7071), new Bq().lp(fs, 10000, 0.7071)]);
     this.choc = new RuidoBanda(fs, semente + 1, [new Bq().bp(fs, 2000, 1)]);
     this.kFolga = dB(22 * Math.max(0, Math.min(1, p.reducao.folga ?? 0)));
+    this.nPanc = 1 + 5 * Math.max(0, Math.min(1, p.reducao.folga ?? 0));
     this.cliq = new RuidoBanda(fs, semente + 2, [new Bq().bp(fs, 800, 1)]);
     this.rng = new RNG(semente + 3);
     this.kC = Math.exp(-1 / (0.0015 * fs));
@@ -162,6 +170,12 @@ export class Reducao {
     const fol = Math.max(0, Math.min(1, this.p.reducao.folga ?? 0)) * Math.max(0, 1 - tE / (0.5 * this.p.Tn));
     this.gChoc0 = this.gChoc; this.gChoc = ref * dB(-15) * this.kFolga * nRel * (solto > fol ? solto : fol) * (e.frot > 1 ? 1 : e.frot);
     this.fChoc = e.frot * det;
+    // mais pancadas por volta: a mesma potência média da pancada única (a envoltória recomeça a cada pancada e cai com
+    // τ = 1,5 ms; potência média ∝ (1 − e^(−2T/τ))/T, T = intervalo médio)
+    if (this.nPanc > 1 && this.fChoc > 1) {
+      const T1 = 1 / this.fChoc, Tm = T1 / this.nPanc, k2 = 2 / 0.0015;
+      this.nrmC = Math.sqrt(((1 - Math.exp(-k2 * T1)) / T1) / ((1 - Math.exp(-k2 * Tm)) / Tm));
+    } else this.nrmC = 1;
     // mudança de flanco: o torque troca de sinal (fora de ±2% de T_n)
     const s = e.T > 0.02 * this.p.Tn ? 1 : e.T < -0.02 * this.p.Tn ? -1 : 0;
     if (s !== 0 && this.sinalT !== 0 && s !== this.sinalT && e.frot > 1) this.cliqueRest = this.nCliq;
@@ -185,11 +199,15 @@ export class Reducao {
     }
     // chocalho: impactos a cada volta do pinhão, amplitude aleatória (curtose alta)
     if (this.gChoc > 0 || this.gChoc0 > 0) {
-      const r = this.choc.rng, b = this.choc.bq[0], nrm = this.choc.norm * escala * 2.2;
-      const d = this.fChoc / this.fs;
+      const r = this.choc.rng, b = this.choc.bq[0], nrm = this.choc.norm * escala * 2.2 * this.nrmC;
+      const d = this.fChoc / this.fs, np = this.nPanc;
       for (let k = 0; k < n; k++) {
         this.faseC += d;
-        if (this.faseC >= 1) { this.faseC -= 1; this.envC = 0.5 + this.rng.next(); }
+        if (this.faseC >= this.limC) {
+          this.faseC -= this.limC; this.envC = 0.5 + this.rng.next();
+          // (o par simples segue de volta em volta, sem sortear nada a mais: o som dele não muda)
+          if (np > 1) this.limC = (0.3 + 1.4 * this.rng.next()) / np;
+        }
         this.envC *= this.kC;
         const g = this.gChoc0 + ((this.gChoc - this.gChoc0) * (pos + k + 1)) / tot;
         // o impacto excita a carcaça: a envoltória entra ANTES do passa-banda (depois dele, o degrau de cada pancada

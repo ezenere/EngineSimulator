@@ -85,6 +85,14 @@ export function pesoLaterais(fe: number) { const x = (2 * Math.abs(fe) - 1.5) / 
 const W_M = [1, Math.pow(10, -10 / 20), Math.pow(10, -18 / 20)];        // m = 1, 2, 3
 const W_K = [1, 0.5, Math.pow(10, -14 / 20)];                            // k = 0, ±1, ±2
 const DOBRA = 2 * (W_K[1] * W_K[1] + W_K[2] * W_K[2]);
+/**
+ * Ondulação de torque (6f_e, 12f_e, 18f_e) da máquina de INDUÇÃO, relativa à lei de 1.1 (−12 dB). Numa síncrona de ímã
+ * ela nasce na própria máquina (ranhuras contra os ímãs); na de indução vem do 5º e do 7º harmônicos da corrente, que o
+ * PWM senoidal quase não tem e a onda quadrada tem (essa parte quem emite é o `Inversor`, no modo de bloco). As duas
+ * gravações de dentro de trem IGBT (CPTM 9500 e 9000, ELETRICO 3.2) têm o engrenamento e as ranhuras como as famílias
+ * que sobem e nenhuma em 12·f_rot; com a lei cheia, 6f_e era a linha mais forte da cabine.
+ */
+const K_6E_INDUCAO = 0.25;
 
 /** categorias de amplitude (uma por mecanismo; o fator é calculado uma vez por bloco) */
 const C2E = 0, C6E = 1, CRAN = 2, CBAR = 3, CCC = 4, CMAG = 5, CBLDC = 6, CEXT = 7;
@@ -172,7 +180,7 @@ export class ForcasMotor {
     const Ie = Math.max(e.I, I_VAZIO), gI = Math.sqrt(Ie), A2 = 2 * phi;
     const mod = p.maquina === 'inducao' ? 1 + 0.19 * Math.sin(fase) : 1;
     a[C2E] = A2;
-    a[C6E] = Math.min(A2, A2 * 0.1 * (Ie / I_VAZIO));
+    a[C6E] = Math.min(A2, A2 * 0.1 * (Ie / I_VAZIO)) * (p.maquina === 'inducao' ? K_6E_INDUCAO : 1);
     a[CRAN] = (p.maquina === 'inducao' ? 0.6 : 1) * phi * gI * mod;
     a[CBAR] = 1.5 * phi * gI * mod;
     a[CMAG] = A2 * 0.4 * (1 + 1.51 * Math.max(e.I, 0));

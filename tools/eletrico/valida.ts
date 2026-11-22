@@ -508,10 +508,10 @@ function gAuxiliares() {
     const trocas: number[] = []; for (let i = 1; i < est.length; i++) if (est[i].on !== est[i - 1].on) trocas.push(est[i].t);
     const liga = trocas.length >= 1 ? trocas[0] : NaN, para = trocas.length >= 2 ? trocas[1] - trocas[0] : NaN;
     caso('compressor do metrô parado: liga e desliga em 90 s', '≥ 3 trocas; 13–19 s ligado, 27–41 s parado', `${trocas.length} trocas (aos ${trocas.map((t) => f1(t, 0)).join(', ')} s): ${f1(liga, 1)} s ligado, ${f1(para, 1)} s parado`, trocas.length >= 3 && dentro(liga, 13, 19) && dentro(para, 27, 41), [trocas.length, liga, para], '');
-    // nível de 20–150 Hz (onde moram as ordens do compressor) ligado contra parado
-    const nv = (t0: number, t1: number) => { const [fw, P] = welch(x, Math.round(t0 * SR), Math.round(t1 * SR), 16384); return 10 * Math.log10(potFaixa(fw, P, 20, 150) / 4e-10 + 1e-30); };
+    // nível de 65–100 Hz (as ordens mais fortes do compressor, 78 e 88 Hz, onde a ventilação não tem linha) ligado contra parado
+    const nv = (t0: number, t1: number) => { const [fw, P] = welch(x, Math.round(t0 * SR), Math.round(t1 * SR), 16384); return 10 * Math.log10(potFaixa(fw, P, 65, 100) / 4e-10 + 1e-30); };
     const on = nv(2, liga - 1), off = nv(liga + 2, liga + para - 1);
-    caso('compressor: 20–150 Hz do canal auxiliar, ligado contra parado', '≥ +4 dB', `${sg(on - off)} dB (${f1(on)} e ${f1(off)} dB SPL a 7,5 m)`, on - off >= 4, on - off, 'dB');
+    caso('compressor: 65–100 Hz do canal auxiliar, ligado contra parado', '≥ +6 dB', `${sg(on - off)} dB (${f1(on)} e ${f1(off)} dB SPL a 7,5 m)`, on - off >= 6, on - off, 'dB');
   }
   // parado contra partindo, na plataforma (3 m da lateral, ao lado do 1º truque motor, estação sem o murmúrio): nas
   // gravações de plataforma (Frota J, Frota L, CPTM 9500) o trem parado fica 4 a 11 dB abaixo dele mesmo partindo ou
