@@ -69,6 +69,10 @@ export class MotorTurbina implements Motor {
     d.params = { ...d.params, listener: 'flyby', alt: 1e4, speed: 0, env: 'runway' };
     d.state = 'run'; d.lit = true; d.fuelOn = true; d.n2 = preset.n2Idle; d.u = 0; d.lightT = 10; d.np = d.prop ? 0.74 : 0;
     this.familia = d.prop ? 'turboelice' : 'turbina';
+    // na Cena o nível da hélice do turboélice sai da física (tom de carga de Gutin com o torque da potência de decolagem
+    // da ficha, ruído de vórtice): a lei do JetDSP, só Mach e diâmetro, punha o ATR 72 ~10 dB acima da certificação
+    // (AUDITORIA.md T-CEN-10). A página Turbina não passa por aqui e continua com a lei dela
+    d.leiCarga = !!d.prop && preset.propKW > 0; d.kwHelice = preset.propKW || 0;
     // posições dos barramentos (as do legado em solo: z do motor pela montagem)
     const zE = ({ wing: d.prop ? 3.2 : 2.6, rear: 3.4, fuselage: 2.1, nose: 2.2 } as Record<string, number>)[preset.mount] || 2.6;
     const jetOff = 3 + 4 * (d.Dj || 0.6);
@@ -88,7 +92,11 @@ export class MotorTurbina implements Motor {
     const d = this.dsp;
     if (c.partida && (d.state === 'off' || d.state === 'stop')) d.setRunning(true);
     if (!c.ignicao && d.state !== 'off') d.setRunning(false);
-    d.tla = Math.max(0, Math.min(1.3, c.combustivel ?? c.acelerador));
+    // o pedal da Cena vai de 0 a 1; a manete da Turbina vai a 1,3 com pós-combustão (a pós-combustão acende acima de 1).
+    // Com pós-combustão o curso inteiro do pedal é o da manete, 0–1,3 (MIL em 0,77, como o batente da manete de um caça);
+    // sem ela, 0–1. Antes nenhum caça acendia a pós-combustão na Passagem (AUDITORIA.md P-05)
+    const tlaMax = this.dsp.abOn ? 1.3 : 1;
+    d.tla = Math.max(0, Math.min(tlaMax, (c.combustivel ?? c.acelerador) * tlaMax));
   }
   acoplar(carga: Carga | null) { this.carga = carga; }
   processar(saidas: Float32Array[], n: number) {

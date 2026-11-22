@@ -32,6 +32,8 @@ export type PresetTurbina = {
   mount: 'wing' | 'rear' | 'fuselage' | 'nose'; span: number; cockpitX: number; length: number; shape: number;
   // hélice (turboélice)
   propB?: number; propD?: number; propRpm?: number;
+  /** potência de decolagem no eixo da hélice, kW por motor: só a Cena a usa (o nível da hélice pela carga, src/carriers/leis-helice.ts) */
+  propKW?: number;
   // acessórios
   ab: boolean; nozzle: 'conv' | 'cd'; suppressor: 'none' | 'chevrons' | 'hushkit'; liners: boolean; sync: boolean;
   gain?: number; // ganho calibrado (preenchido pela página antes de mandar a config)
@@ -140,17 +142,17 @@ const PRESETS: PresetTurbina[] = [
 
   // ---- Turboélices
   plane('regional', 'prop', 'ATR 72-600', '2× PW127 · hélice de 6 pás', TP, {
-    engines: 2, span: 4.1, cockpitX: 9, length: 27.2, thrust: 28, propB: 6, propD: 3.93, propRpm: 1200 }),
+    engines: 2, span: 4.1, cockpitX: 9, length: 27.2, thrust: 28, propB: 6, propD: 3.93, propRpm: 1200, propKW: 2051 }),
   plane('q400', 'prop', 'Dash 8 Q400', '2× PW150 · 6 pás a 1020 rpm', TP, {
-    engines: 2, span: 4.2, cockpitX: 11, length: 32.8, thrust: 37, propB: 6, propD: 4.11, propRpm: 1020 }),
+    engines: 2, span: 4.2, cockpitX: 11, length: 32.8, thrust: 37, propB: 6, propD: 4.11, propRpm: 1020, propKW: 3781 }),
   plane('c130', 'prop', 'Lockheed C-130J', '4× AE2100 · cimitarras de 6 pás', TP, {
-    engines: 4, span: 10.2, cockpitX: 9, length: 29.8, thrust: 34, propB: 6, propD: 4.11, propRpm: 1020 }),
+    engines: 4, span: 10.2, cockpitX: 9, length: 29.8, thrust: 34, propB: 6, propD: 4.11, propRpm: 1020, propKW: 3458 }),
   plane('kingair', 'prop', 'Beechcraft King Air 350', '2× PT6A-60 · 4 pás', TP, {
     engines: 2, span: 2.6, cockpitX: 4, length: 14.2, thrust: 8, propB: 4, propD: 2.67, propRpm: 1700,
-    fanB: 14, vanes: 22, fanD: 0.35, n1Max: 37500, hpcB: 14, n2Max: 37500, lptB: 40, jetV: 110, nozD: 0.3, n1Idle: 0.55, n2Idle: 0.55, spoolTime: 3 }),
-  plane('single', 'prop', 'Cessna Caravan', '1× PT6A-114 · 3 pás', PT6, { length: 11.5, thrust: 7, propB: 3, propD: 2.69, propRpm: 1900 }),
-  plane('pc12', 'prop', 'Pilatus PC-12', '1× PT6A-67 · 4 pás', PT6, { length: 14.4, thrust: 9, propB: 4, propD: 2.67, propRpm: 1700 }),
-  plane('stucano', 'prop', 'Embraer Super Tucano', '1× PT6A-68 · 5 pás a 2000 rpm', PT6, { length: 11.4, thrust: 11, propB: 5, propD: 2.38, propRpm: 2000 }),
+    fanB: 14, vanes: 22, fanD: 0.35, n1Max: 37500, hpcB: 14, n2Max: 37500, lptB: 40, jetV: 110, nozD: 0.3, n1Idle: 0.55, n2Idle: 0.55, spoolTime: 3, propKW: 783 }),
+  plane('single', 'prop', 'Cessna Caravan', '1× PT6A-114 · 3 pás', PT6, { length: 11.5, thrust: 7, propB: 3, propD: 2.69, propRpm: 1900, propKW: 447 }),
+  plane('pc12', 'prop', 'Pilatus PC-12', '1× PT6A-67 · 4 pás', PT6, { length: 14.4, thrust: 9, propB: 4, propD: 2.67, propRpm: 1700, propKW: 895 }),
+  plane('stucano', 'prop', 'Embraer Super Tucano', '1× PT6A-68 · 5 pás a 2000 rpm', PT6, { length: 11.4, thrust: 11, propB: 5, propD: 2.38, propRpm: 2000, propKW: 1193 }),
 
   // ---- Executivos
   plane('bizjet', 'biz', 'Embraer Phenom 300', '2× PW535 na cauda', FAN, {

@@ -95,6 +95,13 @@ export const CORRECOES_TURBINA: Correcoes = {
   // https://en.wikipedia.org/wiki/Embraer_Phenom_300 e relatório TAR 13/21B/3 da CAA da Nova Zelândia). A ficha tinha
   // 30 kN, que é a soma dos dois motores, num campo que é "kN por motor" (os outros três executivos estão por motor).
   bizjet: { thrust: 15 },
+  // `propKW` (campo novo, kW por motor): a potência de decolagem no eixo da hélice dos turboélices. Não entra no som da
+  // página Turbina (o JetDSP só a lê com `leiCarga`, que só o adaptador da Cena liga): é o torque do tom de carga de
+  // Gutin na Passagem (src/carriers/leis-helice.ts; AUDITORIA.md P-03 e T-CEN-10). Potência de decolagem das fichas dos
+  // fabricantes (Pratt & Whitney Canada, Rolls-Royce), shp × 0,7457: PW127M 2 750 shp, PW150A 5 071, AE 2100D3 4 637,
+  // PT6A-60A 1 050, PT6A-114 600, PT6A-67P 1 200, PT6A-68C 1 600.
+  regional: { propKW: 2051 }, q400: { propKW: 3781 }, c130: { propKW: 3458 }, kingair: { propKW: 783 },
+  single: { propKW: 447 }, pc12: { propKW: 895 }, stucano: { propKW: 1193 },
 };
 
 /** O arquivo de presets legado (CommonJS, `module.exports = PRESETS`) com as correções aplicadas no fim. */

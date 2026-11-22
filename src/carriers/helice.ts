@@ -8,6 +8,10 @@
 // Fonte `helice` (Pa a 30 m, como a Turbina): BPF = B·n_h, harmônicos a_h = exp(−(h−1)·κ),
 // κ = 0,1 + 2,6·(1 − M_t)^1,3, espessura ∝ M_t² e carga ∝ potência, a mesma tabela de `buildPropTab`
 // do jet-dsp; ruído largo de pá em 900 + 900·M_t Hz; reverso: ruído largo ×3 (1 + 2·rv).
+// Nível: com motor a pistão, radial ou rotativo, o da física (src/carriers/leis-helice.ts): o tom de carga de Gutin
+// com o torque que a hélice absorve (CargaHelice) e o ruído de vórtice pela área das pás e a velocidade a 70% do raio.
+// A lei do JetDSP, 9·(M/0,75)⁴·carga·(D/3,9) Pa a 30 m, só olha o Mach e o diâmetro: com ela o Cessna 172 de 90 kW
+// tocava no nível do ATR 72 e o ruído largo ×10 das hélices a pistão passava o tom (AUDITORIA.md P-03).
 // Hélice idêntica à da Turbina: com um turboélice acoplado (src/engines/turbina/motor.ts) a hélice é a do próprio
 // JetDSP (a fonte `helice.g` do motor substitui a `helice` daqui) e a física do portador só faz a telemetria; sem ele
 // (ou com outro motor), a `FonteHelice` abaixo é a mesma aritmética do JetDSP, conferida amostra a amostra.
@@ -17,6 +21,7 @@ import { PortadorComMotor, GovernadorPI, type GeradorCanal } from './base';
 import { RNG, BiquadComPiso, C0, clamp, smooth } from '../acoustics';
 import { sinr } from '../engines/turbina/constantes';
 import { RHO, C_SOM } from '../scene/constantes';
+import { escalaCarga } from './leis-helice';
 
 export interface ConfigHelice {
   B: number; D: number; i: number; nHelice: number;   // pás, m, rpm motor/rpm hélice, rpm governada
@@ -125,6 +130,16 @@ export class FonteHelice implements GeradorCanal {
   semRuido = false;
   /** piso da fonte na lenta (RADIAL.md 3.3; 0 = como no JetDSP), decaimento dos harmônicos e ruído largo (1 = JetDSP) */
   onLenta = 0; kapK = 1; largoK = 1;
+  /**
+   * Lei do nível: 'turbina' é a do JetDSP, 9·(M/0,75)⁴·carga·(D/3,9) Pa a 30 m (a página Turbina, a aviação do Ronco e a
+   * página Radial, e a prova da hélice idêntica). 'carga' é a física (src/carriers/leis-helice.ts): o nível do tom é o
+   * de carga de Gutin com o torque que a hélice absorve (`torque`, N·m no eixo da hélice, posto pelo portador a cada
+   * bloco), e o ruído largo de pá acompanha o tom (a mesma escala: o equilíbrio entre os dois, o `kapK` e o `largoK` são
+   * os acertados contra as gravações de decolagem no teste:radial). O portador Hélice da Cena usa 'carga' com motor a
+   * pistão, radial ou rotativo.
+   */
+  lei: 'turbina' | 'carga' = 'turbina';
+  torque = 0;
   /** abaixo de 10% da rotação, a contagem de pás (pulso de 20 ms de ruído grave por pá; RADIAL.md 3.3) */
   pasLentas = false; pPa = 0; envPa = 0; lpPa = 0; kPa = 0;
   constructor(fs: number, B: number, D: number, propRpm: number) { this.fs = fs; this.B = B; this.D = D; this.propHz = propRpm / 60; }
@@ -140,6 +155,11 @@ export class FonteHelice implements GeradorCanal {
     this.aPbb = 0.55 * Math.pow(Mh / 0.75, 5) * (1 + 2 * rv) * (this.D / 3.9) * on * this.fan;
     // (o ruído largo extra das pás finas é o do escoamento quase sônico na ponta: entra de M 0,5 a 0,85)
     if (this.largoK !== 1) this.aPbb *= 1 + (this.largoK - 1) * smooth(0.5, 0.85, Mh);
+    if (this.lei === 'carga') {
+      // o nível pela física: o tom de carga de Gutin com o torque absorvido, contra o da lei do JetDSP; o ruído largo vai junto
+      const g = escalaCarga(this.B, this.D, 2 * Math.PI * this.np * this.propHz, this.torque, C0, Mh, pload);
+      this.aProp *= g; this.aPbb *= g;
+    }
     this.fPbb = 900 + 900 * Mh;
     if (++this.propBuild >= 8) { this.propBuild = 0; tabelaPassagemPa(this.tabB, Mh, pload, this.kapK); const t = this.tab; this.tab = this.tabB; this.tabB = t; }
     this.pbb.bp(fs, this.fPbb, 0.7);
@@ -197,6 +217,12 @@ export class Helice extends PortadorComMotor {
   carga() { return this.cargaH; }
   /** o motor traz a hélice (turboélice do JetDSP: fonte `helice.g`) */
   get heliceDoMotor() { return !!this.motor && this.motor.fontes.some((f) => f.id.startsWith('helice.')); }
+  /** com um motor que gira a hélice deste portador (pistão, radial, rotativo, bancada) o nível sai da física: o torque
+   *  que a hélice absorve (Gutin) e a velocidade das pás (vórtice); sem motor, a rotação é imposta e fica a lei do JetDSP */
+  acoplar(motor: import('./tipos').Motor | null) {
+    super.acoplar(motor);
+    this.fonte.lei = motor && !this.heliceDoMotor ? 'carga' : 'turbina';
+  }
 
   protected fisica(n: number, dt: number) {
     const c = this.cfg, tb = n * dt, m = this.motor;
@@ -221,6 +247,8 @@ export class Helice extends PortadorComMotor {
     // fonte: as entradas do tique de controle da Turbina (fração da rotação governada, potência, reverso, avanço)
     const f = this.fonte;
     f.np = nh / c.nHelice; f.u = this.cmd.pedal; f.rv = this.reverso; f.vFly = this.cinematica.v;
+    // torque no eixo da hélice: o que o motor vê é Q_h/i
+    f.torque = this.cargaH.torque(w) * c.i;
   }
 
   telemetria(): TelemetriaPortador {
