@@ -758,8 +758,9 @@ if (args[0] === '--grupo') {
     const q = [...fila];
     await Promise.all(Array.from({ length: Math.min(J, q.length) }, async () => { while (q.length) await rodar(q.shift()!); }));
     const r = avaliarDesvios(RETRATO, fila.flatMap((g) => res[g] || []), { atualizar: op.atualizar, grupos: fila });
-    imprimirAvaliacao(r, { motivo: true });
+    // (o tempo antes da contagem: o verificar mostra a última linha)
     console.log(`(${((Date.now() - t0) / 1000).toFixed(0)} s)`);
+    imprimirAvaliacao(r, { motivo: true });
     process.exitCode = r.contagem.falha ? 1 : 0;
   })();
 }
