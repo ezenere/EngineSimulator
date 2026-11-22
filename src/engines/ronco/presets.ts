@@ -19,6 +19,9 @@ export type PresetRonco = {
   header: 'equal' | 'unequal' | 'short' | 'heater' | string; routing: 'single' | 'dual' | 'xpipe' | 'hpipe' | string;
   muffler: 'straight' | 'sport' | 'stock' | 'classic' | string; pipeLen: number; pipeD?: number; tipD?: number;
   breakout?: 'sealed' | 'old' | 'leaky' | string; valve?: 'none' | 'closed' | 'auto' | 'sport' | 'open' | string; reso?: boolean;
+  // médios e jato da ponteira (docs/TECNICO.md → Ronco): irradiação da carcaça do escape e batida periódica da mecânica, em dB
+  // (−30 = desligada), a lei do jato e a bomba de ar secundário. Sem o campo vale o som legado (MODO_LEGADO_RONCO em tools/legado.ts)
+  carcaca?: number; batida?: number; jato?: 'legado' | 'sonico' | string; bombaAr?: 'tom' | 'larga' | 'sem' | string;
   twoStep?: 'off' | 'cut' | 'soft' | boolean | string; launchRpm?: number;
   // estalos e corte de giro
   overrun?: 'cut' | 'lean' | 'burble' | 'popbang' | 'antilag' | string; cat?: boolean;
@@ -37,7 +40,13 @@ export type FamiliaRonco = { id: string; name: string };
 
 // Cada carro vem com o próprio escape: acessórios que ele não define voltam a estes valores ao
 // escolher o preset (STOCK de loadPreset() em src/app.js). `undefined` = o DSP usa o padrão dele.
-export const ACESSORIOS_PADRAO: Partial<PresetRonco> = { valve: 'none', pipeD: 2.5, reso: false, twoStep: 'off', launchRpm: undefined, fuel: 'efi', shiftTime: undefined, driveMode: 'auto', limiter: 'ign', limiterBand: 70, limiterHold: 0.07, power: undefined, mass: undefined, wheelR: undefined, drag: undefined, ratios: undefined, finalDrive: undefined, overrun: 'cut', cat: true, tipD: undefined, cooling: 'water', engine: undefined, breakout: 'sealed', compression: undefined, scType: undefined, scRatio: undefined, scLobes: undefined, scWhine: undefined };
+export const ACESSORIOS_PADRAO: Partial<PresetRonco> = { valve: 'none', pipeD: 2.5, reso: false, twoStep: 'off', launchRpm: undefined, fuel: 'efi', shiftTime: undefined, driveMode: 'auto', limiter: 'ign', limiterBand: 70, limiterHold: 0.07, power: undefined, mass: undefined, wheelR: undefined, drag: undefined, ratios: undefined, finalDrive: undefined, overrun: 'cut', cat: true, tipD: undefined, cooling: 'water', engine: undefined, breakout: 'sealed', compression: undefined, scType: undefined, scRatio: undefined, scLobes: undefined, scWhine: undefined,
+  // médios e jato (rodada de som de 18/11/2026): os carros saem com os mecanismos novos; o som de antes é `MEDIOS_LEGADO`
+  carcaca: 0, batida: 0, jato: 'sonico', bombaAr: 'larga' };
+
+// Valor legado de cada mecanismo novo: com eles o EngineDSP toca exatamente como antes (é o que tools/ronco-paridade.ts
+// força ao comparar com o legado, e o que as famílias que herdam do motor-base usam até cada uma ligar o seu)
+export const MEDIOS_LEGADO: Partial<PresetRonco> = { carcaca: undefined, batida: undefined, jato: undefined, bombaAr: undefined };
 
 // Carros reais, um preset por carro, agrupados em famílias. Cada um preenche todos os
 // parâmetros do simulador (o que aparece no painel é exatamente o que o preset definiu).
@@ -107,7 +116,8 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
   car('mustang', 'muscle', 'Ford Mustang GT', '5.0 V8 Coyote · DOHC 7500 rpm', V8X, {
     order: '1-8-7-2-6-5-4-3', displacement: 5.0, redline: 7500, idle: 700, cam: 0.35, inertia: 0.95,
     header: 'unequal', routing: 'xpipe', muffler: 'sport', pipeLen: 3.0, ...NA, intake: 'sport', overrun: 'cut', cat: true, ...DBW, gears: 10, transmission: 'auto', shiftTime: 0.3,
-    valve: 'sport', pipeD: 3, ...veh(343, 1750, [4.70, 2.99, 2.15, 1.77, 1.52, 1.28, 1.00, 0.85, 0.69, 0.64], 3.55, 0.35) }),
+    valve: 'sport', pipeD: 3, ...veh(343, 1750, [4.70, 2.99, 2.15, 1.77, 1.52, 1.28, 1.00, 0.85, 0.69, 0.64], 3.55, 0.35),
+    bombaAr: 'sem' }), // (o Coyote esquenta o catalisador só com a centelha atrasada: não tem bomba de ar secundário, e a gravação do carro não tem o tom dela)
   car('gt500', 'muscle', 'Shelby GT500', '5.2 V8 com compressor', V8X, {
     order: '1-8-7-2-6-5-4-3', displacement: 5.2, redline: 7500, idle: 750, cam: 0.45, inertia: 0.9,
     header: 'equal', routing: 'xpipe', muffler: 'sport', pipeLen: 3.0, ...blower(0.83), scType: 'roots', scRatio: 2.4, scLobes: 4, scWhine: -9, intake: 'sport', overrun: 'cut', cat: true, ...DBW, gears: 7, transmission: 'auto', shiftTime: 0.12,
@@ -396,7 +406,8 @@ export const PRESETS: PresetRonco[] & { families: FamiliaRonco[] } = Object.assi
 export const FAMILIA_AVIACAO: FamiliaRonco = { id: 'aviacao', name: 'Aviação' };
 // `inertia` sai do J do motor sozinho (kg·m²): J = (0,05 + 0,045·L)·inertia (a hélice ou o rotor entram pela carga)
 const avi = (L: number, J: number) => ({ displacement: L, inertia: J / (0.05 + 0.045 * L) });
-const AV = { aviation: true, partida: 'direta', cooling: 'air', ...NA, intake: 'airbox', overrun: 'lean', cat: false, ...NONE, gears: 0, transmission: 'manual', cam: 0.15, engine: 'front' };
+// (os mecanismos de médios e o jato novo ficam no valor legado na aviação: a família é afinada à parte e o som dela não muda aqui)
+const AV = { aviation: true, partida: 'direta', cooling: 'air', ...NA, intake: 'airbox', overrun: 'lean', cat: false, ...NONE, gears: 0, transmission: 'manual', cam: 0.15, engine: 'front', ...MEDIOS_LEGADO };
 const hel = (B: number, D: number, J: number, passoFixo: boolean, extra = {}) => ({ helice: { B, D, J, passoFixo, ...extra }, portadores: ['helice', 'nenhum'] });
 const rot = (rotor: Record<string, any>) => ({ rotor, portadores: ['rotor', 'nenhum'] });
 export const PRESETS_AVIACAO: PresetRonco[] = [
