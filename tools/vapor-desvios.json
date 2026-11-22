@@ -250,11 +250,12 @@
   },
   "ataque 10–90%, 9/s corte 40% (k4s)": {
     "grupo": "forma",
-    "medido": 27,
+    "medido": 26,
     "unidade": "ms",
     "folga": "±10 %",
     "alvo": "37 ms ± 30%",
     "beira": true,
-    "motivo": "Era 24 ms (o chuff abria seco em velocidade média). [Som, 22/11/2026] com o coletor de escape entre os pórticos e o bico e o jato da fresta do pórtico no ataque dá 28 / 26 / 26 ms nas bases 0, 1000 e 2000, contra 37 ± 30 % (≥ 25,9): à beira."
+    "motivo": "Era 24 ms (o chuff abria seco em velocidade média). [Som, 22/11/2026] com o coletor de escape entre os pórticos e o bico e o jato da fresta do pórtico no ataque dá 28 / 26 / 24 ms nas bases 0, 1000 e 2000, contra 37 ± 30 % (≥ 25,9): à beira.",
+    "nota_folga": "folga alargada: a mediana de 3 sementes vai de 24 a 28 ms entre as bases 0, 1000 e 2000"
   }
 }

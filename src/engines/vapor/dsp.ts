@@ -41,7 +41,7 @@ const K_PORTICO = 0.04;
 /** quanto do tom da chaminé (o "hoot", que nasce na base dela, do lado da caixa) entra na cavidade junto com o ruído do jato */
 const K_TOM_CAIXA = 0.5;
 /** cauda de cada chuff: tempo de queda da caixa de fumaça como cavidade (s, −60 dB) e nível do campo dela (dB re o jato) */
-export const T_CAUDA = 0.8, NIVEL_CAUDA = -3;
+export const T_CAUDA = 0.8, NIVEL_CAUDA = -4;
 /** chiado do vapor entrando no condensador, na escala do ruído de mistura, por kg/s */
 const K_CONDENSADOR = 0.8;
 /** inércia térmica da fornalha e da água (s) */
@@ -128,6 +128,7 @@ export class VaporDSP implements Motor {
   thM!: Float64Array; wM!: Float64Array; JM!: Float64Array; wAd!: Float64Array; patM!: Uint8Array; epsM!: Float64Array; tqM!: Float64Array;
   /** por motor: fração da aderência que sobra patinando (cai com a velocidade de deslizamento) */
   kAtM = new Float64Array(2).fill(1);
+  trilhoDeAco = true;
   /** ω da roda se não patinasse (= v/r) */
   wTrem = 0;
   omegaImposto: number | null = null;
@@ -204,6 +205,7 @@ export class VaporDSP implements Motor {
     this.condensador = P.escape.destino === 'condensador' || P.escape.destino === 'abafador';
     this.pCond = P.escape.pCondensador ?? P0;
     this.governadorProprio = P.familia === 'estacionaria';
+    this.trilhoDeAco = P.familia === 'locomotiva';
     this.rpmAlvo = P.rpmGovernado ?? 0;
     this.montarCilindros(P);
     this.montarFontes(P);
@@ -738,7 +740,8 @@ export class VaporDSP implements Motor {
       // mais patina, menos o trilho segura, a máquina pede mais vapor do que o regulador entrega, a caixa de válvulas cai
       // e cada chuff sai mais fraco e mais curto
       const wDes = Math.abs(wM[m] - this.wTrem * k) * r;
-      const kAt = ATRITO_A + (1 - ATRITO_A) * Math.exp(-ATRITO_B * wDes);
+      // (roda de aço em trilho; no trator de rodas de ferro com garras e no carro de pneus fica o 0,9 da aderência)
+      const kAt = this.trilhoDeAco ? ATRITO_A + (1 - ATRITO_A) * Math.exp(-ATRITO_B * wDes) : 0.9;
       this.kAtM[m] = kAt;
       const Fat = this.wAd[m] * kAt * s;
       wM[m] += ((T - Fat * r) / this.JM[m]) * dt;
