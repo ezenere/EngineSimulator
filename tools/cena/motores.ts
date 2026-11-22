@@ -12,6 +12,7 @@ import type { Linha } from './medidas';
 import { CarroLegado } from '../../src/carriers/carro';
 import { MotorRonco, prepararMotorRonco } from '../../src/engines/ronco/motor';
 import { PRESETS as PRESETS_RONCO, ACESSORIOS_PADRAO } from '../../src/engines/ronco/presets';
+import { MODO_LEGADO_RONCO } from '../legado';
 import { PRESETS_TURBINA as PRESETS_JATO } from '../../src/engines/turbina/presets';
 import { MotorTurbina } from '../../src/engines/turbina/motor';
 import { FonteHelice } from '../../src/carriers/helice';
@@ -62,7 +63,9 @@ export function motorRonco(id: string, extra: Record<string, any> = {}) {
 
 /** o cenário do legado (legado.ts): Camaro SS, 3000 rpm travado, ponto morto, borboleta 0,5, v = 30 m/s, 6 m do eixo */
 export function passagemCarroLegado(x0 = 180, dur = 12, ouvinte?: any) {
-  const m = motorRonco('muscle');
+  // (comparação com o road() do legado: o motor vai com os mecanismos novos do Ronco no valor legado, como na paridade;
+  // com a carcaça e a batida ligadas os médios sobem 1–2 dB e a comparação deixava de ser do adaptador)
+  const m = motorRonco('muscle', MODO_LEGADO_RONCO);
   const c = new CarroLegado();
   c.acoplar(m);
   const d = m.dsp, w = (3000 * 2 * Math.PI) / 60;
