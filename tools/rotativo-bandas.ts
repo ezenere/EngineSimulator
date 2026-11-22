@@ -132,7 +132,8 @@ export function medirRot(seg0: ArrayLike<number>, sr: number, op: { rotores: num
   const abs = BANDAS.map(([lo, hi]) => { let q = 0; for (let k = 0; k < f8.length; k++) if (f8[k] >= lo && f8[k] < hi) q += P8[k]; return 10 * Math.log10(q + 1e-30); });
   const [f2, P2] = welch(seg, sr, 32768);
   const M2 = medfilt(P2, 61), Wdb = Float64Array.from(P2, (p, k) => 10 * Math.log10(p / (M2[k] + 1e-30) + 1e-12));
-  const linha = (fx: number, tol = 0.04) => { let mx = -Infinity; for (let k = 0; k < f2.length; k++) if (f2[k] > fx * (1 - tol) && f2[k] < fx * (1 + tol)) mx = Math.max(mx, Wdb[k]); return mx; };
+  // (sem ponto do espectro na janela a medida não existe: `NaN`, que reprova qualquer comparação, e não −∞, que passava)
+  const linha = (fx: number, tol = 0.04) => { let mx = NaN; for (let k = 0; k < f2.length; k++) if (f2[k] > fx * (1 - tol) && f2[k] < fx * (1 + tol)) mx = mx > Wdb[k] ? mx : Wdb[k]; return mx; };
   const o1 = fi / op.rotores;
   const y = passaFaixa(seg, sr, 0.7 * fi, Math.min(4 * fi, 0.45 * sr));
   const cv = (n: number) => { const q = Math.floor(y.length / n), r: number[] = []; for (let k = 0; k < q; k++) { let s = 0; for (let j = 0; j < n; j++) s += y[k * n + j] ** 2; r.push(Math.sqrt(s / n)); } const mm = r.reduce((a, c) => a + c, 0) / r.length; return Math.sqrt(r.reduce((a, c) => a + (c - mm) ** 2, 0) / r.length) / mm; };
@@ -148,6 +149,39 @@ export function medirRot(seg0: ArrayLike<number>, sr: number, op: { rotores: num
     o13: linha(o1 / 3), o23: linha((2 * o1) / 3), o1: linha(o1), ign: linha(fi), ign2: linha(2 * fi), ign3: linha(3 * fi),
     cvCiclo: cv(Math.max(8, Math.floor(sr / fi))), cvLento: cv(Math.floor(0.25 * sr)), p9010, pops: pk.length / dur, linha,
   };
+}
+
+/**
+ * Meia-ordem: a marca do ciclo de 720° de um 4 tempos de pistão (rpm/120), que o Wankel não tem (o ciclo da câmara é de
+ * 1 080°e, rpm/180, e as linhas dele caem a 1/3 e 2/3 da rotação). Mede a banda lateral a ±rpm/120 em volta de 2·ign e
+ * de 3·ign, em dB sobre o piso. O espectro é fino, por Goertzel com janela de Hann no trecho inteiro (resolução ~2/T:
+ * 0,25 Hz em 8 s); o Welch de 32 768 pontos tem 1,5 Hz por ponto e não separa a meia-ordem das linhas da câmara, que
+ * ficam a 1/6 da rotação dela (2 Hz na lenta). A rotação é afinada no próprio trecho (±2%, pelo pente das duas
+ * portadoras). `banda` é a potência média numa janela de ±1/18 da rotação em volta de cada um dos quatro pontos; o piso,
+ * a mesma média nos pontos sem linha nenhuma (a ±1/6 e ±5/6 da rotação de cada portadora: tão longe das linhas vizinhas
+ * quanto a meia-ordem). `portadora` é a linha de 2·ign sobre o mesmo piso: sem ela bem acima do piso a medida não vale.
+ * `NaN` se o trecho for curto para separar (T < 24/f_rot).
+ */
+export function meiaOrdem(seg0: ArrayLike<number>, sr: number, rpm0: number, rotores: number): { db: number; portadora: number; rpm: number } {
+  const N = seg0.length, T = N / sr, fr0 = rpm0 / 60;
+  if (!(fr0 > 0) || T < 24 / fr0) return { db: NaN, portadora: NaN, rpm: NaN };
+  const x = new Float64Array(N); let m = 0; for (let k = 0; k < N; k++) m += seg0[k]; m /= N;
+  for (let k = 0; k < N; k++) x[k] = (seg0[k] - m) * (0.5 - 0.5 * Math.cos((2 * Math.PI * k) / (N - 1)));
+  const pot = (f: number) => { const c = 2 * Math.cos((2 * Math.PI * f) / sr); let s1 = 0, s2 = 0; for (let k = 0; k < N; k++) { const s0 = x[k] + c * s1 - s2; s2 = s1; s1 = s0; } return s1 * s1 + s2 * s2 - c * s1 * s2; };
+  // a rotação pelo pente de 2·ign e 3·ign (o passo é o da resolução do trecho na portadora mais alta)
+  let fr = fr0, melhor = -1;
+  const dfr = 1 / (4 * T * 3 * rotores);
+  for (let f = fr0 * 0.98; f <= fr0 * 1.02; f += dfr) { const q = pot(2 * rotores * f) + pot(3 * rotores * f); if (q > melhor) { melhor = q; fr = f; } }
+  const tol = fr / 18, passo = 1 / (2 * T);
+  const media = (fc: number) => { let s = 0, n = 0; for (let f = fc - tol; f <= fc + tol + 1e-9; f += passo) { s += pot(f); n++; } return s / n; };
+  let banda = 0, piso = 0;
+  for (const k of [2, 3]) for (const sn of [-1, 1]) {
+    const fc = k * rotores * fr;
+    banda += media(fc + (sn * fr) / 2);
+    piso += media(fc + (sn * fr) / 6) + media(fc + (sn * 5 * fr) / 6);
+  }
+  banda /= 4; piso /= 8;
+  return { db: 10 * Math.log10(banda / (piso + 1e-300) + 1e-30), portadora: 10 * Math.log10(media(2 * rotores * fr) / (piso + 1e-300) + 1e-30), rpm: fr * 60 };
 }
 
 /** estouros por janela (pops.py): [início (s), estouros/s, altura mediana (dB)] */

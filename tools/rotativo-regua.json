@@ -1,0 +1,274 @@
+{
+ "_": "Casos da régua dos Rotativos (tools/rotativo-regua.py). As gravações ficam em referencias/rotativo/ do checkout principal, fora do git: fonte, trechos e rotação de cada uma no INDEX.md de lá. A rotação de cada trecho foi conferida com tools/ouvido/f0.py (a linha mais forte, a dobra em N períodos e o pente); 'nota' diz o que a gravação tem de diferente do preset.",
+ "casos": [
+  {
+   "id": "fc-lenta",
+   "titulo": "RX-7 FC 13B-T · lenta quente (traseira)",
+   "preset": "rx7fc",
+   "rotores": 2,
+   "real": "rx7-fc3s-13b-turbo-lenta-aceleradas.wav",
+   "trecho": [
+    27,
+    37
+   ],
+   "rpm": 750,
+   "render": [
+    "--lenta"
+   ],
+   "nota": "FC3S turbo com escape de rua, microfone atrás do carro; ignição em 24,8–25,1 Hz (743–754 rpm), conferida pela dobra"
+  },
+  {
+   "id": "fc-3550",
+   "titulo": "RX-7 FC 13B-T · ~3 550 rpm segurados, carga leve (traseira)",
+   "preset": "rx7fc",
+   "rotores": 2,
+   "real": "rx7-fc3s-13b-turbo-lenta-aceleradas.wav",
+   "trecho": [
+    2,
+    14
+   ],
+   "rpm": 3545,
+   "folga": 0.1,
+   "render": [
+    "--rpm",
+    "3545"
+   ],
+   "nota": "começo do vídeo: uma linha forte em 118 Hz caindo devagar, tomada pela ignição (3 545 rpm); a dobra não distingue (é quase um tom só) e a gravação é baixa (−26 dBFS): rotação menos confiável que a dos outros casos"
+  },
+  {
+   "id": "bridge-lenta",
+   "titulo": "13B bridgeport turbo · lenta \"brap\" (de fora)",
+   "preset": "rx7fc",
+   "rotores": 2,
+   "real": "rx7-13b-bridgeport-lenta.wav",
+   "trecho": [
+    2,
+    14
+   ],
+   "rpm": 1980,
+   "folga": 0.1,
+   "voltas": 6,
+   "render": [
+    "--lenta",
+    "--campo",
+    {
+     "janelas": {
+      "admissao": "bridge"
+     },
+     "idle": 1950,
+     "muffler": "straight",
+     "escape": {
+      "presilencioso": false,
+      "cat": false
+     },
+     "cat": false
+    }
+   ],
+   "nota": "RX-7 com 13B bridgeport e turbo único (não é preset: o FC com a janela Bridge port do painel, sem pré-silencioso nem catalisador, abafador direto); rajadas a 5,5 Hz com a linha mais forte em 71,5 Hz = ignição de 66 Hz + 5,5 Hz, o padrão de 6 voltas (rpm/360) a ~1 980 rpm"
+  },
+  {
+   "id": "fd-carga-cabine",
+   "titulo": "RX-7 FD 13B-REW · 4 850 rpm em carga (cabine)",
+   "preset": "rx7fd",
+   "rotores": 2,
+   "real": "rx7-fd-13b-turbo-bordo.wav",
+   "trecho": [
+    150,
+    160
+   ],
+   "rpm": 4846,
+   "render": [
+    "--rpm",
+    "4846",
+    "--pedal",
+    "1",
+    "--ouvinte",
+    "int"
+   ],
+   "nota": "FD de turbo único grande e escape preparado, a bordo: ignição em 161,5 Hz, volta do eixo em 80,8 Hz (a dobra em 2 ignições explica mais: rotores desiguais)"
+  },
+  {
+   "id": "fd-carga-ext",
+   "titulo": "RX-7 FD 13B-REW · 4 850 rpm em carga (gravação na cabine × ouvinte de fora)",
+   "preset": "rx7fd",
+   "rotores": 2,
+   "real": "rx7-fd-13b-turbo-bordo.wav",
+   "trecho": [
+    150,
+    160
+   ],
+   "rpm": 4846,
+   "render": [
+    "--rpm",
+    "4846",
+    "--pedal",
+    "1"
+   ],
+   "nota": "a mesma gravação de bordo contra o ouvinte de fora do simulador: tira da conta o filtro da cabine do Ronco (compartilhado) para ver as linhas do pulso"
+  },
+  {
+   "id": "rx8-lenta-esportivo",
+   "titulo": "RX-8 Renesis · lenta com escape esportivo (traseira)",
+   "preset": "rx8hp",
+   "rotores": 2,
+   "real": "rx8-original-lenta-aceleradas.wav",
+   "trecho": [
+    27,
+    33
+   ],
+   "rpm": 923,
+   "render": [
+    "--lenta",
+    "--campo",
+    {
+     "muffler": "sport",
+     "idle": 920
+    }
+   ],
+   "nota": "RX-8 com abafador traseiro esportivo (cat-back); ignição em 30,76 Hz; a dobra em 3 voltas explica mais a envoltória (uma câmara diferente)"
+  },
+  {
+   "id": "20b-lenta",
+   "titulo": "20B de 3 rotores · lenta (de fora, perto)",
+   "preset": "cosmo20b",
+   "rotores": 3,
+   "real": "rx7-20b-3rotores-lenta.wav",
+   "trecho": [
+    50,
+    64
+   ],
+   "rpm": 879,
+   "render": [
+    "--lenta",
+    "--campo",
+    {
+     "idle": 880
+    }
+   ],
+   "nota": "RX-7 FD com um 20B no lugar do 13B (escape não informado); volta do eixo em 14,65 Hz, ignição em 43,9 Hz"
+  },
+  {
+   "id": "787b-lenta",
+   "titulo": "787B R26B · lenta periférica caçando (~5 m)",
+   "preset": "r26b",
+   "rotores": 4,
+   "real": "787b-lenta-acelerada-desaceleracao.wav",
+   "trecho": [
+    26,
+    36
+   ],
+   "rpm": 1890,
+   "folga": 0.12,
+   "render": [
+    "--lenta"
+   ],
+   "nota": "a lenta caminha de 1 600 a 1 980 rpm em rajadas a 5,2 Hz (uma a cada ~6 voltas do eixo: rpm/360); gravação com clipping de 0,38% e chiado de câmera em 6–12 kHz",
+   "voltas": 6
+  },
+  {
+   "id": "787b-7700",
+   "titulo": "787B R26B · 7 700 rpm segurados em ponto morto (~5 m)",
+   "preset": "r26b",
+   "rotores": 4,
+   "real": "787b-lenta-acelerada-desaceleracao.wav",
+   "trecho": [
+    89,
+    92
+   ],
+   "rpm": 7708,
+   "render": [
+    "--rpm",
+    "7708",
+    "--dur",
+    "8"
+   ],
+   "nota": "ignição em 513,7 Hz, volta do eixo em 128,4 Hz; trecho de 3 s"
+  },
+  {
+   "id": "787b-bordo",
+   "titulo": "787B R26B · 8 150 rpm em carga (a bordo)",
+   "preset": "r26b",
+   "rotores": 4,
+   "real": "787b-le-mans-bordo.wav",
+   "trecho": [
+    106,
+    116
+   ],
+   "rpm": 8160,
+   "render": [
+    "--rpm",
+    "8160",
+    "--pedal",
+    "1",
+    "--ouvinte",
+    "int",
+    "--dur",
+    "8"
+   ],
+   "nota": "a bordo em Le Mans (som estrutural): ignição em 544 Hz, volta do eixo em 136 Hz"
+  },
+  {
+   "id": "787b-bordo-ext",
+   "titulo": "787B R26B · 8 150 rpm em carga (gravação a bordo × ouvinte de fora)",
+   "preset": "r26b",
+   "rotores": 4,
+   "real": "787b-le-mans-bordo.wav",
+   "trecho": [
+    106,
+    116
+   ],
+   "rpm": 8160,
+   "render": [
+    "--rpm",
+    "8160",
+    "--pedal",
+    "1",
+    "--dur",
+    "8"
+   ],
+   "nota": "a mesma gravação de bordo contra o ouvinte de fora: o carro de corrida não tem a cabine fechada do filtro do Ronco"
+  },
+  {
+   "id": "norton-lenta",
+   "titulo": "Norton Classic · lenta a 1 850 rpm (~2 m)",
+   "preset": "norton",
+   "rotores": 2,
+   "real": "norton-classic-lenta.wav",
+   "trecho": [
+    22,
+    36
+   ],
+   "rpm": 1846,
+   "render": [
+    "--lenta",
+    "--campo",
+    {
+     "idle": 1850
+    }
+   ],
+   "nota": "Norton Classic refrigerada a ar, celular a ~2 m: ignição em 61,5 Hz (linhas em 30,8 / 61,5 / 92,3 / 123 Hz)"
+  },
+  {
+   "id": "ro80-lenta",
+   "titulo": "NSU Ro80 · lenta quente a 1 100 rpm (cofre aberto)",
+   "preset": "ro80",
+   "rotores": 2,
+   "real": "ro80-partida-lenta.wav",
+   "trecho": [
+    18,
+    24
+   ],
+   "rpm": 1105,
+   "render": [
+    "--lenta",
+    "--ouvinte",
+    "bay",
+    "--campo",
+    {
+     "idle": 1100
+    }
+   ],
+   "nota": "microfone no cofre aberto, gravação baixa (−23 dBFS): série fraca de 73 / 110 / 149 / 185 Hz"
+  }
+ ]
+}

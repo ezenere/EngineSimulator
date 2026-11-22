@@ -83,7 +83,7 @@ export class EngineDSP implements DSPDeAudio {
   // rotativo (ROTATIVO.md 1.6; src/engines/rotativo/dsp.ts, RotativoDSP): flag, ciclo da câmara (720 no pistão, 1080 no
   // Wankel) e o que os ganchos `if (this.rot)` leem (o EngineDSP só os declara; a subclasse os põe na instância)
   declare rot: any; declare cyc: any; declare kBurn: any; declare falhaRot: any; declare prRot: any; declare Vh: any; declare kVol: any; declare runRot: any;
-  declare rotQueima: any; declare rotJanelas: any; declare rotEscape: any; declare rotAdmissao: any; declare rotDens: any; declare posQueima: any; declare mechRot: any; declare rotTBurn: any; declare rotTelemetria: any;
+  declare rotQueima: any; declare rotJanelas: any; declare rotEscape: any; declare rotAdmissao: any; declare rotDens: any; declare posQueima: any; declare mechRot: any; declare rotTBurn: any; declare rotTelemetria: any; declare rotApito: any;
   // médios e jato da ponteira (docs/TECNICO.md → Ronco → "Médios" e "Jato da ponteira"): tudo nasce no valor legado (desligado)
   // e quem liga é o preset (`carcaca`, `batida`, `jato`, `bombaAr`); as famílias que herdam não mudam sem eles
   declare carcK: any; declare carcSrc: any; declare carcF: any; declare carcOut: any; declare carcS: any; declare carcKp: any; declare batK: any; declare batF: any; declare batW: any; declare batC: any; declare batV: any; declare batQ0: any;
@@ -944,7 +944,7 @@ export class EngineDSP implements DSPDeAudio {
           // (e na desaceleração, com o vácuo alto, a mistura rala falha muito mais: até ~15% das explosões)
           let misfire = rng.next() < this.cam * this.cam * 0.02 * idleness + 0.5 * float + (this.fuelVar > 1 ? (this.carbMis * idleness + 0.15 * clamp((0.3 - this.pMan / P0) / 0.15, 0, 1)) * this.varScale : 0);
           if (this.av) misfire = misfire || rng.next() < this.falhaAv(c); // (gancho 5: encharque, mistura, magnetos)
-          if (this.rot) misfire = misfire || rng.next() < this.falhaRot; // (rotativo, gancho 6: sobreposição, velas T, vedações)
+          if (this.rot) misfire = misfire || rng.next() < this.falhaRot[c]; // (rotativo, gancho 6: por câmara: diluição pela sobreposição, velas T, vedações)
           if (combust && !misfire) {
             this.burnHeat += (1 - this.burnHeat) * 0.05;
             // carburador em carga leve: com a borboleta quase fechada a mistura chega mal vaporizada e mal dividida
@@ -1294,7 +1294,8 @@ export class EngineDSP implements DSPDeAudio {
         const f = 500 + 6200 * tw;
         this.phT += TAU * f * dt; if (this.phT > TAU) this.phT -= TAU;
         const lvl = tw * tw * (0.2 + 0.8 * clamp(pMan / pUp, 0, 1));
-        tur += (Math.sin(this.phT) + 0.25 * Math.sin(2 * this.phT + 0.7)) * 0.02 * lvl;
+        if (this.rot) tur += this.rotApito(lvl); // (rotativo: o mesmo apito, atenuado por `kApito`)
+        else tur += (Math.sin(this.phT) + 0.25 * Math.sin(2 * this.phT + 0.7)) * 0.02 * lvl;
         tur += this.turboHiss.run(rng.bi()) * 0.02 * lvl * (0.3 + this.boost) * P.air;
         if (this.bovEnv > 0.002) {
           const nz = rng.bi();

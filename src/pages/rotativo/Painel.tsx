@@ -173,6 +173,8 @@ function Caracteristicas({ k, e }: P) {
         <ChipGroup id="vedacoes" opcoes={[{ valor: 'novas', rotulo: 'Novas' }, { valor: 'gastas', rotulo: 'Gastas', titulo: 'Folga ×3: menos compressão, partida demorada, a lenta fria falha mais' }]}
           atual={s.vedacoes || 'novas'} aoEscolher={(v) => k.setSpec({ vedacoes: v as any }, { structural: false })} />
       </Field>
+      <Slider id="variacao" rotulo="Variação entre explosões" min={0.5} max={5} passo={0.1} valor={s.variacao ?? 3.5} formatar={(v) => `${virgula(v, 1)}×`} aoMudar={(v) => k.setSpec({ variacao: v }, { structural: false, render: false })} />
+      <Slider id="kVed" rotulo="Chiado das vedações (fundo mecânico)" min={0} max={2} passo={0.05} valor={s.kVed ?? 0.5} formatar={pct} aoMudar={(v) => k.setSpec({ kVed: v }, { structural: false, render: false })} />
     </Section>
   );
 }
@@ -334,8 +336,10 @@ function Estalos({ k, e }: P) {
         <ChipGroup id="cat" opcoes={[{ valor: true, rotulo: 'Com' }, { valor: false, rotulo: 'Sem' }]} atual={s.cat !== false} aoEscolher={(v) => k.setSpec({ cat: v }, { structural: false })} />
       </Field>
       <Slider id="fHCextra" rotulo="Pós-queima extra (HC no escape)" min={0} max={0.1} passo={0.005} valor={s.fHCextra || 0} formatar={pct} aoMudar={(v) => k.setSpec({ fHCextra: v }, { structural: false, render: false })} />
+      <Slider id="hcTurb" rotulo="Chiado da pós-queima (chama turbulenta)" min={0} max={1} passo={0.05} valor={s.hcTurb ?? 0.2} formatar={pct} aoMudar={(v) => k.setSpec({ hcTurb: v }, { structural: false, render: false })} />
+      <Slider id="kBoca" rotulo="Chama na boca (escape curto e aberto)" min={0} max={1} passo={0.05} valor={s.kBoca ?? 0} formatar={pct} aoMudar={(v) => k.setSpec({ kBoca: v }, { structural: false, render: false })} />
       <Slider id="hcEspalha" rotulo="Espalhamento da pós-queima" min={0} max={20} passo={1} valor={s.hcEspalha ?? 9} formatar={(v) => `${v} ms`} aoMudar={(v) => k.setSpec({ hcEspalha: v }, { structural: false, render: false })} />
-      <p className="note">O Wankel manda 3–5× mais HC ao escape que um pistão (a chama apaga nas vedações e nos cantos da câmara): em lenta ~8% do calor queima no escape, o "chiado quente" de cada pulso; com a mistura crua de uma falha, estoura. O espalhamento é quanto o gás de cada evento se mistura até queimar na boca: 0 ms deixa cada pulso com o seu chiado e o vão quieto; mais que ~12 ms emenda os pulsos num chiado contínuo.</p>
+      <p className="note">O Wankel manda 3–5× mais HC ao escape que um pistão (a chama apaga nas vedações e nos cantos da câmara): em lenta ~8% do calor queima no escape, logo depois da janela, e reforça cada pulso. O chiado é só a flutuação da chama, dentro do tubo: passa pelo turbo, pelo pré-silencioso e pelo abafador. Na boca de um escape de rua o gás já chegou frio e não queima nada: a chama na boca é do escape curto e aberto de corrida, e soa como ar (deixe em 0 para ouvir o motor). O espalhamento é quanto o gás de cada evento se mistura até o ponto quente e a boca.</p>
     </Section>
   );
 }
@@ -354,6 +358,7 @@ function Admissao({ k, e }: P) {
             <ChipGroup id="sequencial" opcoes={[{ valor: true, rotulo: 'Ligado', titulo: 'Primário pequeno até a troca; o secundário entra com o "soluço" de 0,1–0,2 bar' }, { valor: false, rotulo: 'Desligado' }]} atual={!!t.sequencial} aoEscolher={(v) => k.setTurbo({ sequencial: v })} />
           </Field>
           {t.sequencial && <Slider id="trocaRpm" rotulo="Rotação da troca" min={3000} max={6000} passo={50} valor={t.trocaRpm ?? 4500} formatar={(v) => `${br(v)} rpm`} aoSoltar={(v) => k.setTurbo({ trocaRpm: v })} />}
+          <Slider id="kApito" rotulo="Som do turbo (apito e sopro)" min={0} max={1} passo={0.05} valor={s.kApito ?? 0.3} formatar={pct} aoMudar={(v) => k.setSpec({ kApito: v }, { structural: false, render: false })} />
         </>
       )}
       <Field rotulo="Entrada de ar">

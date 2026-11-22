@@ -7,6 +7,7 @@
 // `velas` (1–3) e `trailingOn`, `rpmMax`, `power` (kW), `torque` (N·m), `J` (kg·m² do motor sozinho), `turbo`
 // ({ sequencial, boost, trocaRpm }), `escape` (2.1), `fHCextra`, `vedacoes`, `nivelEscape` (L_W dB re 1 pW: aviação, UAV,
 // gerador), `reducao`/`helice`/`rotor` (como no radial), `portadores`, `aproximacao`, `palhetas` (5.3), `gerador`.
+// Som de ar (rodada de 11/2026): `hcTurb`, `kBoca`, `kVed`, `kApito`, todos com controle no painel e padrão do lado baixo.
 // `displacement` é a cilindrada NOMINAL (Mazda: uma câmara por rotor; 13B = 1,308 L): o Ronco a usa para escalar
 // dinâmica e atrito; o volume termodinâmico vem de (R, e, b).
 import type { PresetRonco } from '../ronco/presets';
@@ -55,6 +56,14 @@ export type PresetRotativo = Partial<PresetRonco> & {
   fHCextra?: number;
   /** espalhamento da pós-queima até o ponto quente e a boca (ms; 9 se ausente): 0 = cada evento com o seu chiado */
   hcEspalha?: number;
+  /** flutuação turbulenta da pós-queima (0–1; 0,2 se ausente ≈ 10% rms da taxa de queima): o chiado de cada pulso, dentro do tubo */
+  hcTurb?: number;
+  /** parte da pós-queima que queima como chama na boca (0–1; 0 se ausente): só no escape curto e aberto de corrida */
+  kBoca?: number;
+  /** chiado contínuo das vedações (× o de referência; 0,5 se ausente) e apito do turbo (× o do Ronco; 0,3 se ausente) */
+  kVed?: number; kApito?: number;
+  /** variação da queima de explosão para explosão (× a do Ronco; 3,5 se ausente: CV 0,22 na lenta dos Mazda) */
+  variacao?: number;
   vedacoes?: 'novas' | 'gastas';
   nivelEscape?: number;
   reducao?: number; helice?: HelicePreset; rotor?: Record<string, any>;
@@ -100,7 +109,7 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     janelas: { admissao: 'lateral4', escape: 'periferico', apv: [3750] }, velas: 2, idle: 750, rpmMax: 8000, power: 206, torque: 314, J: 0.25,
     aspiration: 'turbo', boost: 0.7, turbo: { sequencial: true, boost: 0.7, trocaRpm: 4500 },
     escape: { tipo: 'serie', Lp: 0.3, Dp: 55, presilencioso: true, cat: true, downpipe: { L: 1.0, D: 76 }, saidas: [{ L: 3.4, D: 76, phi: 30 }] },
-    muffler: 'sport', pipeD: pol(76), gears: 5, ratios: [3.483, 2.015, 1.391, 1.0, 0.761], finalDrive: 4.1, mass: 1300, wheelR: 0.316, drag: 0.37,
+    muffler: 'sport', pipeD: pol(76), gears: 5, ratios: [3.483, 2.015, 1.391, 1.0, 0.762], finalDrive: 4.3, mass: 1300, wheelR: 0.316, drag: 0.37,
     overrun: 'burble', cat: true, limiter: 'fuel', limiterBand: 70, limiterHold: 0.07, portadores: carro },
   { id: 'rx7fc', family: 'mazda', name: 'Mazda RX-7 FC 13B-T', tag: 'S5 1989–91 · 2 rotores · turbo HT-18 · 200 hp',
     tipo: 'wankel', rotores: 2, geo: G['13B'], cilindradaCamara: 654, displacement: 1.308, cr: 9.0,
@@ -140,17 +149,21 @@ export const PRESETS_ROTATIVO: PresetRotativo[] & { families: FamiliaRotativo[] 
     janelas: { admissao: 'periferica', escape: 'periferico' }, velas: 3, idle: 1900, rpmMax: 9000, power: 522, torque: 608, J: 0.3,
     escape: { tipo: 'megafone', Lp: 0.9, Dp: 60, presilencioso: false, cat: false, megafone: { L: 0.5, Dboca: 120 }, saidas: [{ L: 0.5, D: 120, phi: 5 }] },
     muffler: 'straight', pipeD: pol(60), intake: 'sport', engine: 'mid', gears: 5, ratios: [2.8, 1.96, 1.53, 1.24, 1.04], finalDrive: 3.0, mass: 900, wheelR: 0.33, drag: 0.3,
-    overrun: 'burble', cat: false, limiter: 'fuel', limiterBand: 60, limiterHold: 0.05, portadores: carro, vPassagem: 340, dispersao: 1, dispersaoRotor: 3 },
+    overrun: 'burble', cat: false, limiter: 'fuel', limiterBand: 60, limiterHold: 0.05, portadores: carro, vPassagem: 340, dispersao: 1, dispersaoRotor: 1.5 },
   // ---- Europeus e clássicos (8–10): Ro80, Norton e o Cosmo 110S (Mazda de 1967, o clássico do grupo)
   { id: 'ro80', family: 'europeus', name: 'NSU Ro80 KKM 612', tag: '1967–77 · 2 rotores · uma vela · semiautomático',
     tipo: 'wankel', rotores: 2, geo: G.KKM612, cilindradaCamara: 497.5, displacement: 0.995, cr: 9.0,
+    // (a admissão do KKM 612 é periférica, e a ficha usa a lateral: com uma periférica de rua de eventos estimados, o modelo
+    // de diluição põe a lenta a queimar em 51% das explosões, um "brap" de bridge port que o carro não tem; falta ao modelo o
+    // estrangulamento entre as duas janelas pela cintura da carcaça, e os tempos reais da janela: TECNICO.md, Pendente)
     janelas: { admissao: 'lateral4', escape: 'periferico' }, velas: 1, idle: 900, rpmMax: 6500, power: 85, torque: 162, J: 0.2, fuel: 'carb',
     escape: { tipo: 'duplo', Lp: 0.3, Dp: 45, presilencioso: false, cat: false, downpipe: { L: 1.5, D: 50 }, saidas: [{ L: 1.5, D: 50, phi: 30 }] },
     muffler: 'stock', pipeD: pol(50), gears: 3, transmission: 'auto', shiftTime: 0.6, ratios: [2.056, 1.208, 0.788], finalDrive: 4.857, mass: 1280, wheelR: 0.31,
-    overrun: 'lean', cat: false, limiter: 'fuel', limiterBand: 120, portadores: carro, aproximacao: 'corte de giro (carburado, sem central)' },
+    overrun: 'lean', cat: false, limiter: 'fuel', limiterBand: 120, portadores: carro,
+    aproximacao: 'corte de giro (carburado, sem central); admissão lateral no lugar da periférica do KKM 612' },
   { id: 'norton', family: 'europeus', name: 'Norton F1 / Commander', tag: 'moto 1988–92 · 2 rotores refrigerados pela carga · 95 hp',
     tipo: 'wankel', rotores: 2, geo: G.sachs294, cilindradaCamara: 294, displacement: 0.588, cr: 9.0,
-    janelas: { admissao: 'sachs', escape: 'sachs' }, velas: 1, idle: 1200, rpmMax: 10000, power: 70, torque: 76, J: 0.04, fuel: 'carb',
+    janelas: { admissao: 'sachs', escape: 'sachs' }, velas: 1, idle: 1200, rpmMax: 10000, power: 70, torque: 76, J: 0.04, fuel: 'carb', variacao: 1.5,
     escape: { tipo: '2em1', Lp: 0.5, Dp: 42, presilencioso: false, cat: false, saidas: [{ L: 0.6, D: 50, phi: 120 }] },
     muffler: 'sport', pipeD: pol(50), engine: 'mid', gears: 5, ratios: [2.846, 1.947, 1.545, 1.333, 1.153], finalDrive: 5.0, mass: 272, wheelR: 0.32, drag: 0.3,
     overrun: 'lean', cat: false, limiter: 'fuel', limiterBand: 60, limiterHold: 0.05, portadores: carro },
