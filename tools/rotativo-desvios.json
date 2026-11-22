@@ -10,23 +10,24 @@
   "bandas 7 700 rpm em neutro, 4 rotores megafone (r26b)": {
     "grupo": "bandas-b",
     "medido": [
-      -9.585,
-      12.84,
-      2.544,
-      -4.152
+      -9.54,
+      12.7,
+      3.66,
+      -3.96
     ],
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "-6.5 / +20.0 / +19.0 / +6.7 ±4",
-    "motivo": "Em carga leve o pulso é fraco (a câmara chega à abertura a ~1,6 bar) e os harmônicos 2 a 4 da ignição ficam 5–9 dB abaixo do vídeo (6VCl, a 5 m): 400–1k 7 dB e 1–2,5k 16 dB abaixo do alvo relativo a 150–400 (metade disso é o 150–400, ordens 2 e 3 do eixo, mais forte que na gravação). Em plena carga a janela de 33°e e o afiamento nos primários já dão o dente de serra (1–2,5k a −3 dB e 2,5–6k a −11 dB da banda da ignição; as passagens em Le Mans dão −2 a −3 e −7 a −14). O timbre tonal do kit ouvido neste caso é 0,8 tolerância; o que falta é médio de carga leve: ver \"Pendente\"."
+    "motivo": "Em carga leve o pulso é fraco (a câmara chega à abertura a ~1,6 bar) e os harmônicos 2 a 4 da ignição ficam 5–9 dB abaixo do vídeo (6VCl, a 5 m): 400–1k 7 dB e 1–2,5k 16 dB abaixo do alvo relativo a 150–400 (metade disso é o 150–400, ordens 2 e 3 do eixo, mais forte que na gravação). Em plena carga a janela de 33°e e o afiamento nos primários já dão o dente de serra (1–2,5k a −3 dB e 2,5–6k a −11 dB da banda da ignição; as passagens em Le Mans dão −2 a −3 e −7 a −14). O timbre tonal do kit ouvido neste caso é 0,8 tolerância; o que falta é médio de carga leve: ver \"Pendente\". [22/11/2026, depois da segunda passada dos Rotativos (eb0b584): o 1–2,5 kHz subiu 1,1 dB (+2,5 → +3,7); retrato regravado.]"
   },
   "centroide 7 700 rpm em neutro, 4 rotores megafone (r26b)": {
     "grupo": "bandas-b",
-    "medido": 622.4,
+    "medido": 652.0,
     "unidade": "Hz",
     "folga": "±5 %",
     "alvo": "930–930 Hz ±30%",
-    "motivo": "Consequência dos harmônicos 2 a 4 da ignição fracos em carga leve (ver as bandas): 627 Hz, 4% abaixo do limite de 651 Hz. Sem o ruído que a pós-queima na boca punha em 2,5–12 kHz o centroide perdeu o que o segurava artificialmente (era 704 Hz)."
+    "motivo": "Consequência dos harmônicos 2 a 4 da ignição fracos em carga leve (ver as bandas): 627 Hz, 4% abaixo do limite de 651 Hz. Sem o ruído que a pós-queima na boca punha em 2,5–12 kHz o centroide perdeu o que o segurava artificialmente (era 704 Hz). [Depois da segunda passada dos Rotativos (eb0b584) o centroide passou a 652 Hz e passa por 1 Hz (o limite é 651): à beira.]",
+    "beira": true
   },
   "bandas lenta 4 rotores periférica (r26b)": {
     "grupo": "bandas-b",
