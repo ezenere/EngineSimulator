@@ -109,22 +109,24 @@ export class Mostradores {
         g.fillText(String(r / 1000), cx + Math.cos(a) * R * 0.66, cy + Math.sin(a) * R * 0.66);
       }
     }
-    g.font = `500 ${Math.round(R * 0.055)}px ${C.mono}`;
+    // letras miúdas do mostrador: nunca abaixo de 10 px
+    const miudo = Math.max(10, Math.round(R * 0.06));
+    g.font = `500 ${miudo}px ${C.mono}`;
     g.fillStyle = C.faint;
     g.fillText('× 1000 rpm', cx, cy - R * 0.38);
 
-    // turbo
+    // turbo: arco no vão de baixo do mostrador (onde não há escala), fora das leituras
     if (spec.aspiration === 'turbo') {
       const bmax = Math.max(0.5, spec.boost);
-      const ba0 = Math.PI * 0.22, ba1 = Math.PI * 0.78;
+      const ba0 = Math.PI * 0.31, ba1 = Math.PI * 0.69;
       g.lineWidth = R * 0.03;
       g.strokeStyle = C.raise;
-      g.beginPath(); g.arc(cx, cy, R * 0.58, ba1, ba0, true); g.stroke();
+      g.beginPath(); g.arc(cx, cy, R * 0.88, ba1, ba0, true); g.stroke();
       g.strokeStyle = C.blue;
-      g.beginPath(); g.arc(cx, cy, R * 0.58, ba1, ba1 - (ba1 - ba0) * clamp(tele.boost / bmax, 0, 1), true); g.stroke();
-      g.font = `500 ${Math.round(R * 0.06)}px ${C.mono}`;
+      g.beginPath(); g.arc(cx, cy, R * 0.88, ba1, ba1 - (ba1 - ba0) * clamp(tele.boost / bmax, 0, 1), true); g.stroke();
+      g.font = `500 ${miudo}px ${C.mono}`;
       g.fillStyle = C.blue;
-      g.fillText(`+${(tele.boost || 0).toFixed(2)} bar`, cx, cy + R * 0.72);
+      g.fillText(`turbo +${(tele.boost || 0).toFixed(2).replace('.', ',')} bar`, cx, cy + R * 0.76);
     }
 
     // ponteiro
@@ -137,25 +139,30 @@ export class Mostradores {
     g.fillStyle = tele.limiter ? C.hot : C.ink;
     g.font = `800 ${Math.round(R * 0.3)}px ${C.display}`;
     g.fillText(Math.round(shownRpm / 10) * 10 + '', cx, cy + R * 0.3);
-    g.font = `500 ${Math.round(R * 0.06)}px ${C.mono}`;
+    g.font = `500 ${miudo}px ${C.mono}`;
     g.fillStyle = C.muted;
-    const kmh = Math.round(tele.kmh || 0);
-    g.fillText(`${kmh} km/h  ·  ${Math.round(tele.torque || 0)} N·m`, cx, cy + R * 0.5);
+    // segunda linha: velocidade e torque onde há rodas; rotação da hélice ou do rotor na aviação; só o torque no resto
+    const n0 = (x: number) => Math.round(x).toLocaleString('pt-BR');
+    const torque = `${n0(tele.torque || 0)} N·m`;
+    const rodas = spec.portadores ? spec.portadores.includes('carro') : !spec.aviation;
+    const eixo = tele.Nr !== undefined ? `rotor ${n0(tele.Nr)} rpm` : tele.rpmHelice !== undefined ? `hélice ${n0(tele.rpmHelice)} rpm` : '';
+    const linha2 = rodas ? `${Math.round(tele.kmh || 0)} km/h  ·  ${torque}` : eixo ? `${eixo}  ·  ${torque}` : torque;
+    // (em mostrador pequeno a linha comprida encostaria nos algarismos da escala: fica só a rotação da hélice)
+    g.fillText(eixo && !rodas && g.measureText(linha2).width > R * 0.84 ? eixo : linha2, cx, cy + R * 0.5);
+    // temperatura: a água nos motores com radiador; a cabeça dos cilindros nos refrigerados a ar
     const wt = tele.coolant ?? 20;
+    const rotT = (k as any).rotuloTemp ?? (spec.cooling === 'air' ? 'cabeça' : 'água');
     g.fillStyle = wt < 60 ? C.blue : wt > 105 ? C.hot : C.muted;
-    g.fillText(`água ${Math.round(wt)} °C${tele.fan ? '  ·  ventoinha' : ''}${tele.secAir ? '  ·  bomba de ar' : ''}`, cx, cy + R * 0.62);
-    if (tele.limiter) {
-      g.fillStyle = C.hot;
-      g.font = `600 ${Math.round(R * 0.07)}px ${C.mono}`;
-      g.fillText(tele.launch ? '2-STEP' : 'CORTE', cx, cy - R * 0.22);
-    } else if (tele.launch) {
-      g.fillStyle = C.gold;
-      g.font = `600 ${Math.round(R * 0.07)}px ${C.mono}`;
-      g.fillText('LARGADA', cx, cy - R * 0.22);
-    } else if (tele.state === 'crank') {
-      g.fillStyle = C.gold;
-      g.font = `600 ${Math.round(R * 0.07)}px ${C.mono}`;
-      g.fillText('PARTIDA', cx, cy - R * 0.22);
+    g.fillText(`${rotT} ${Math.round(wt)} °C${tele.fan ? '  ·  ventoinha' : ''}${tele.secAir ? '  ·  bomba de ar' : ''}`, cx, cy + R * 0.63);
+    // aviso no alto do mostrador: corte, largada e as fases da partida
+    const aviso: [string, string] | null = tele.limiter ? [tele.launch ? '2-STEP' : 'CORTE', C.hot]
+      : tele.launch ? ['LARGADA', C.gold]
+      : tele.fase === 'energizar' ? [`ENERGIZANDO${tele.apito ? ` · ${n0(tele.apito)} Hz` : ''}`, C.gold]
+      : tele.state === 'crank' ? [tele.fase === 'girar' && tele.pas !== undefined ? `GIRANDO · ${Math.floor(tele.pas)} PÁS` : 'PARTIDA', C.gold] : null;
+    if (aviso) {
+      g.fillStyle = aviso[1];
+      g.font = `600 ${Math.max(11, Math.round(R * 0.07))}px ${C.mono}`;
+      g.fillText(aviso[0], cx, cy - R * 0.22);
     }
     const gr = document.getElementById('gearRead');
     if (gr) {
@@ -177,9 +184,22 @@ export class Mostradores {
     const { C, k, glow } = this, tele = k.tele, engine = k.estado.motor;
     const [g, w, h] = fit(canvas);
     g.clearRect(0, 0, w, h);
-    const cx = w / 2, cy = h / 2, R = Math.min(w * 0.42, h * 0.37);
-    const two = engine.banks === 2;
-    const radius = (b: number) => (two ? (b === 0 ? R : R * 0.72) : R * 0.86);
+    // O raio deixa lugar para os graus do lado de fora. Cada bancada (ou fileira do radial) tem a sua trilha, e os
+    // cilindros encolhem quando ficam perto demais uns dos outros (V16, radial de 28), para não se cobrirem.
+    const cx = w / 2, cy = h / 2, R = Math.max(30, Math.min(w / 2 - 50, h / 2 - 36));
+    const nb = Math.max(1, Math.min(4, engine.banks || 1));
+    const passoTrilha = nb === 1 ? 0 : nb === 2 ? 0.28 : 0.19;
+    const radius = (b: number) => R * (1 - Math.min(b, nb - 1) * passoTrilha);
+    let size = Math.min(14, Math.max(9, R * 0.1));
+    if (nb > 1) size = Math.min(size, (R * passoTrilha) / 2 - 1);
+    for (let b = 0; b < nb; b++) {
+      const fs = engine.fire.filter((_: number, c: number) => engine.bank[c] === b).sort((x: number, y: number) => x - y);
+      for (let i = 0; i < fs.length && fs.length > 1; i++) {
+        const gap = i + 1 < fs.length ? fs[i + 1] - fs[i] : fs[0] + 720 - fs[i];
+        size = Math.min(size, ((gap / 720) * Math.PI * 2 * radius(b)) / 2 - 0.5);
+      }
+    }
+    size = Math.max(3.5, size);
     const running = tele.rpm > 60;
     if (running) {
       const age = Math.min(0.05, Math.max(0, (now - (tele.t || now)) / 1000));
@@ -198,17 +218,18 @@ export class Mostradores {
     }
     // graus
     g.font = `500 10px ${C.mono}`; g.fillStyle = C.faint; g.textAlign = 'center'; g.textBaseline = 'middle';
+    const fora = R + size + 3;
     for (let d = 0; d < 720; d += 90) {
       const a = toA(d);
       g.strokeStyle = C.line;
-      g.beginPath(); g.moveTo(cx + Math.cos(a) * R * 1.04, cy + Math.sin(a) * R * 1.04); g.lineTo(cx + Math.cos(a) * R * 1.1, cy + Math.sin(a) * R * 1.1); g.stroke();
-      g.fillText(`${d}°`, cx + Math.cos(a) * R * 1.2, cy + Math.sin(a) * R * 1.2);
+      g.beginPath(); g.moveTo(cx + Math.cos(a) * fora, cy + Math.sin(a) * fora); g.lineTo(cx + Math.cos(a) * (fora + 5), cy + Math.sin(a) * (fora + 5)); g.stroke();
+      g.fillText(`${d}°`, cx + Math.cos(a) * (fora + 21), cy + Math.sin(a) * (fora + 13));
     }
 
     // arcos dos intervalos por bancada (onde os pulsos de cada coletor caem)
     for (let b = 0; b < engine.banks; b++) {
       const angs = engine.fire.map((f, c) => [f, c]).filter(([, c]) => engine.bank[c] === b).sort((x, y) => x[0] - y[0]);
-      g.strokeStyle = b === 0 ? C.gold : C.blue;
+      g.strokeStyle = b % 2 === 0 ? C.gold : C.blue;
       for (let i = 0; i < angs.length; i++) {
         const fa = angs[i][0], fb = i + 1 < angs.length ? angs[i + 1][0] : angs[0][0] + 720;
         const gap = fb - fa;
@@ -230,8 +251,7 @@ export class Mostradores {
       const b = engine.bank[c];
       const a = toA(f), r = radius(b);
       const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
-      const col = b === 0 ? C.gold : C.blue;
-      const size = Math.max(9, Math.min(14, R * 0.09));
+      const col = b % 2 === 0 ? C.gold : C.blue;
       if (glow[c] > 0.02) {
         g.fillStyle = col; g.globalAlpha = glow[c] * 0.35;
         g.beginPath(); g.arc(x, y, size * (1.6 + glow[c]), 0, Math.PI * 2); g.fill();
@@ -240,9 +260,11 @@ export class Mostradores {
       g.fillStyle = glow[c] > 0.5 ? col : C.panel;
       g.strokeStyle = col; g.lineWidth = 1.5;
       g.beginPath(); g.arc(x, y, size, 0, Math.PI * 2); g.fill(); g.stroke();
-      g.fillStyle = glow[c] > 0.5 ? C.bg : C.ink;
-      g.font = `500 ${Math.round(size * 0.95)}px ${C.mono}`;
-      g.fillText(String(c + 1), x, y + 0.5);
+      if (size >= 6.5) {
+        g.fillStyle = glow[c] > 0.5 ? C.bg : C.ink;
+        g.font = `500 ${Math.round(size * (c >= 9 ? 0.82 : 0.95))}px ${C.mono}`;
+        g.fillText(String(c + 1), x, y + 0.5);
+      }
     }
 
     // virabrequim
@@ -255,18 +277,20 @@ export class Mostradores {
       else g.arc(cx, cy, R * 0.98, toA(start), ha);
       g.closePath(); g.fill();
     }
+    // o ponteiro do virabrequim sai de fora do miolo, para não riscar o número do centro
+    const miolo = Math.max(12, Math.min(R * 0.4, radius(nb - 1) - size - 5));
     g.globalAlpha = clamp(40 / Math.max(ringSweep, 1), 0.25, 1);
     g.strokeStyle = C.muted; g.lineWidth = 1.5;
-    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(ha) * R * 0.98, cy + Math.sin(ha) * R * 0.98); g.stroke();
+    g.beginPath(); g.moveTo(cx + Math.cos(ha) * miolo, cy + Math.sin(ha) * miolo); g.lineTo(cx + Math.cos(ha) * R * 0.98, cy + Math.sin(ha) * R * 0.98); g.stroke();
     g.globalAlpha = 1;
     g.fillStyle = C.ink;
-    g.font = `800 ${Math.round(R * 0.22)}px ${C.display}`;
-    g.fillText(`${engine.N}`, cx, cy - R * 0.06);
-    g.font = `500 10px ${C.mono}`; g.fillStyle = C.muted;
-    g.fillText(engine.N === 1 ? 'cilindro' : 'cilindros', cx, cy + R * 0.13);
-    if (R > 110) {
-      g.fillStyle = C.faint;
-      g.fillText('ciclo de 720° · tempo real', cx, cy + R * 0.27);
+    const fn = Math.round(clamp(miolo * 0.8, 13, 42));
+    const comNome = miolo >= 30;
+    g.font = `800 ${fn}px ${C.display}`;
+    g.fillText(`${engine.N}`, cx, comNome ? cy - 6 : cy + 1);
+    if (comNome) {
+      g.font = `500 10px ${C.mono}`; g.fillStyle = C.muted;
+      g.fillText(engine.N === 1 ? 'cilindro' : 'cilindros', cx, cy + fn * 0.5 + 2);
     }
   }
 
@@ -277,9 +301,19 @@ export class Mostradores {
     const mid = h * 0.32;
     g.strokeStyle = C.line; g.lineWidth = 1;
     g.beginPath(); g.moveTo(0, mid); g.lineTo(w, mid); g.stroke();
-    g.font = `500 10px ${C.mono}`; g.fillStyle = C.faint; g.textAlign = 'left'; g.textBaseline = 'top';
-    g.fillText('pressão no ouvido do observador', 10, 8);
-    if (!audio) { g.fillText('ligue o motor para ver a onda e o espectro', 10, h - 18); return; }
+    g.font = `500 10px ${C.mono}`; g.textAlign = 'left'; g.textBaseline = 'top';
+    // legenda com fundo, para a onda não passar por cima das letras
+    const legenda = (t: string, x: number, y: number, cor: string) => {
+      const lw = g.measureText(t).width, x0 = g.textAlign === 'right' ? x - lw : x;
+      g.fillStyle = C.panel; g.globalAlpha = 0.82; g.fillRect(x0 - 3, y - 2, lw + 6, 14); g.globalAlpha = 1;
+      g.fillStyle = cor; g.fillText(t, x, y);
+    };
+    if (!audio) {
+      legenda('pressão no ouvido do observador', 10, 8, C.faint);
+      g.fillStyle = C.muted; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('ligue o motor para ver a onda e o espectro', w / 2, h * 0.66);
+      return;
+    }
     const an = audio.analyser;
     if (!this.tBuf) { this.tBuf = new Float32Array(an.fftSize); this.fBuf = new Float32Array(an.frequencyBinCount); }
     const tBuf = this.tBuf, fBuf = this.fBuf!;
@@ -312,16 +346,18 @@ export class Mostradores {
     // frequência de ignição
     const ff = (tele.rpm / 60) * (engine.N / 2);
     const ro = document.getElementById('roFreq');
-    if (ro) ro.textContent = tele.rpm > 60 ? `${ff.toFixed(0)} Hz · meia-ordem ${(tele.rpm / 120).toFixed(1)} Hz` : '—';
-    if (ff > f0 && ff < f1) {
+    if (ro) ro.textContent = tele.rpm > 60 ? `${ff.toFixed(0)} Hz · meia-ordem ${(tele.rpm / 120).toFixed(1).replace('.', ',')} Hz` : '—';
+    if (ff > f0 && ff < f1 && engine.N > 0) {
       const x = fx(ff);
       g.strokeStyle = C.gold; g.setLineDash([3, 3]);
       g.beginPath(); g.moveTo(x, top - h * 0.28); g.lineTo(x, bot); g.stroke(); g.setLineDash([]);
-      g.fillStyle = C.gold; g.textAlign = x > w - 90 ? 'right' : 'left';
-      g.fillText(`ignição ${ff.toFixed(0)} Hz`, x + (x > w - 90 ? -6 : 6), top - h * 0.26);
+      g.textAlign = x > w - 110 ? 'right' : 'left';
+      legenda(`${(k as any).rotuloEvento ?? 'ignição'} ${ff.toFixed(0)} Hz`, x + (x > w - 110 ? -6 : 6), top - h * 0.26, C.gold);
     }
     g.fillStyle = C.faint; g.textAlign = 'right';
-    for (const f of [50, 100, 200, 500, 1000, 2000, 5000]) g.fillText(f >= 1000 ? `${f / 1000}k` : String(f), fx(f) - 2, bot - 12);
+    for (const f of [50, 100, 200, 500, 1000, 2000, 5000]) if (fx(f) > 24) g.fillText(f >= 1000 ? `${f / 1000}k` : String(f), fx(f) - 2, bot - 12);
+    g.textAlign = 'left';
+    legenda('pressão no ouvido do observador', 10, 8, C.faint);
   }
 
   // Vista de cima da via: observador embaixo, carro andando da esquerda para a direita.
@@ -354,7 +390,7 @@ export class Mostradores {
       const ratio = 343 / (343 + (tele.vRad || 0));
       const pct = (ratio - 1) * 100;
       note.textContent = moving
-        ? `${dist} m · ${pct > 0 ? 'aproximando' : 'afastando'} · Doppler ${pct > 0 ? '+' : ''}${pct.toFixed(1)}% no tom · volta de ${tele.loop} m`
+        ? `${dist} m · ${pct > 0 ? 'aproximando' : 'afastando'} · Doppler ${pct > 0 ? '+' : '−'}${Math.abs(pct).toFixed(1).replace('.', ',')}% no tom · volta de ${tele.loop} m`
         : `${dist} m de você · carro parado. Engate e acelere para ele passar.`;
     }
   }

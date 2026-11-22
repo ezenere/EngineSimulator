@@ -21,11 +21,16 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { ControlePassagem } from './controle';
 import type { FonteSonora } from '../../scene/tipos';
 import { COR_TIPO } from './cena3d-cores';
+import { nomeFonte } from './mostradores';
 import { PontoVia } from '../../scene/trajetoria';
 
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
 
-const COR_SOLO: Record<string, number> = { asfalto: 0x3a3d42, concreto: 0x8d8b85, brita: 0x9a8a72, grama: 0x4f7a3a, agua: 0x2d5a78, nenhum: 0x1a1f26 };
+const COR_SOLO: Record<string, number> = { asfalto: 0x3a3d42, concreto: 0x85837d, brita: 0x8f8069, grama: 0x47603d, agua: 0x2a5068, nenhum: 0x1a1f26 };
+// céu de fim de tarde: escuro no alto (combina com a página), claro no horizonte, para o corpo e a via se recortarem
+const CEU_ZENITE = 0x0f1828, CEU_HORIZONTE = 0x56667e;
+/** nome curto de cada portador, para o rótulo do corpo na cena */
+const NOME_CORPO: Record<string, string> = { trem: 'trem', rotor: 'helicóptero', carro: 'carro', helice: 'avião', gerador: 'gerador', locomotiva: 'locomotiva', aviao: 'avião', trator: 'trator', barco: 'barco', drone: 'drone' };
 export type ModoCamera = 'ouvinte' | 'corpo' | 'livre';
 export const NOME_CAMERA: Record<ModoCamera, string> = { ouvinte: 'orbital no ouvinte', corpo: 'segue o corpo', livre: 'livre' };
 
@@ -55,6 +60,10 @@ export class Cena3D {
   private cabeca: THREE.Mesh; private narizCab: THREE.Mesh;
   private anelAz: THREE.Mesh; private arcoEl: THREE.Mesh; private linhaR: THREE.Line; private pegaR: THREE.Mesh;
   private rotuloR: THREE.Sprite; private textoR = '';
+  private rotuloVoce: THREE.Sprite; private rotuloCorpo: THREE.Sprite; private textoCorpo = '';
+  private rotuloFonte: THREE.Sprite; private textoFonte = '';
+  private ceu: THREE.Mesh; private sombra: THREE.Mesh; private prumo: THREE.Line;
+  private chaveQuadro = '';
   private alcaLateral: THREE.Mesh; private alcaAltitude: THREE.Mesh; private marcaProximo: THREE.Mesh;
   private rotores: THREE.Object3D[] = [];
   private chaveEstatico = ''; private chaveCorpo = '';
@@ -73,16 +82,31 @@ export class Cena3D {
     this.c = c; this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-    this.scene.background = new THREE.Color(0x0d1015);
-    this.scene.fog = new THREE.Fog(0x0d1015, 400, 2600);
+    // céu: cúpula com degradê do horizonte ao zênite, que anda com a câmera; a neblina tem a cor do horizonte
+    this.scene.background = new THREE.Color(CEU_HORIZONTE);
+    this.scene.fog = new THREE.Fog(CEU_HORIZONTE, 700, 7000);
+    {
+      const g = new THREE.SphereGeometry(9000, 32, 20), p = g.attributes.position as THREE.BufferAttribute;
+      const cores = new Float32Array(p.count * 3), a = new THREE.Color(CEU_HORIZONTE), b = new THREE.Color(CEU_ZENITE), k = new THREE.Color();
+      for (let i = 0; i < p.count; i++) {
+        // (a esfera do three.js tem o eixo em y; a cúpula é girada para o z do mundo)
+        const h = Math.max(0, p.getY(i) / 9000);
+        k.copy(a).lerp(b, Math.pow(h, 0.45)); cores[3 * i] = k.r; cores[3 * i + 1] = k.g; cores[3 * i + 2] = k.b;
+      }
+      g.setAttribute('color', new THREE.BufferAttribute(cores, 3));
+      this.ceu = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+      this.ceu.rotation.x = Math.PI / 2; this.ceu.renderOrder = -10;
+      this.scene.add(this.ceu);
+    }
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.05, 20000);
     this.camera.up.set(0, 0, 1);
     this.camera.position.set(-14, -28, 9);
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true; this.controls.dampingFactor = 0.12;
     this.controls.maxDistance = 4000; this.controls.minDistance = 0.5;
-    this.scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x3a3328, 1.6));
-    const sol = new THREE.DirectionalLight(0xffffff, 1.6); sol.position.set(-300, -500, 800); this.scene.add(sol);
+    // luz do céu e um sol baixo do lado do ouvinte (a face do corpo que ele vê fica iluminada)
+    this.scene.add(new THREE.HemisphereLight(0xcfdcf2, 0x4a4338, 1.25));
+    const sol = new THREE.DirectionalLight(0xfff0dc, 1.9); sol.position.set(-350, -600, 520); this.scene.add(sol);
     this.scene.add(this.estatico, this.corpoG, this.fantasmaG, this.fontesG, this.ouvinteG, this.gimbalG);
 
     // ouvinte: cabeça (0,25 m) e nariz (cone) para o alvo
@@ -102,6 +126,15 @@ export class Cena3D {
     this.pegaR.userData.pega = 'r';
     this.rotuloR = rotulo('');
     this.gimbalG.add(this.anelAz, this.arcoEl, this.linhaR, this.pegaR, this.rotuloR);
+    // rótulos: o ouvinte, o corpo (quando fica pequeno na tela) e a fonte escolhida
+    this.rotuloVoce = rotulo('você'); this.rotuloCorpo = rotulo(''); this.rotuloFonte = rotulo('');
+    this.rotuloCorpo.visible = false; this.rotuloFonte.visible = false;
+    this.scene.add(this.rotuloVoce, this.rotuloCorpo, this.rotuloFonte);
+    // corpo no ar: a sombra no chão e o prumo até ele, para se ver por onde ele passa mesmo fora do quadro
+    this.sombra = new THREE.Mesh(new THREE.CircleGeometry(1, 40), new THREE.MeshBasicMaterial({ color: 0x05070a, transparent: true, opacity: 0.42, depthWrite: false }));
+    this.prumo = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, 1)]), new THREE.LineDashedMaterial({ color: 0xa8c4ff, dashSize: 3, gapSize: 3, transparent: true, opacity: 0.6 }));
+    this.sombra.visible = false; this.prumo.visible = false;
+    this.scene.add(this.sombra, this.prumo);
     // alças: lateral da via (no chão, entre a via e o ouvinte), altitude (acima do corpo), ponto mais próximo
     this.alcaLateral = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.9, 4), new THREE.MeshStandardMaterial({ color: 0x48c26a, emissive: 0x123018 }));
     this.alcaLateral.geometry.rotateX(Math.PI / 2); this.alcaLateral.userData.pega = 'lateral';
@@ -125,7 +158,7 @@ export class Cena3D {
     for (const [k, arq] of [['brita', 'brita_1k.jpg'], ['concreto', 'concreto_1k.jpg']] as const) {
       this.texturas[k] = null;
       ld.load(`${base}3d/texturas/${arq}`, (t) => {
-        t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+        t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
         this.texturas[k] = t; this.chaveEstatico = '';    // remonta o chão com a textura
       }, undefined, () => { /* sem textura: fica a cor lisa */ });
     }
@@ -147,15 +180,17 @@ export class Cena3D {
     const cy = reta ? 0 : 0;
     {
       const tex = solo === 'brita' ? this.texturas.brita : solo === 'concreto' || solo === 'asfalto' ? this.texturas.concreto : null;
-      const mat = new THREE.MeshStandardMaterial({ color: ponte ? 0x22303a : tex ? 0xffffff : COR_SOLO[solo] ?? 0x555555, roughness: 0.95 });
-      if (tex && !ponte) { const tt = tex.clone(); tt.needsUpdate = true; tt.repeat.set(ext / 4, larg / 4); mat.map = tt; if (solo === 'asfalto') mat.color.set(0x55585e); }
+      // (com a textura a cor é um cinza médio: em branco o chão estourava com a luz do céu e do sol)
+      const mat = new THREE.MeshStandardMaterial({ color: ponte ? 0x22303a : tex ? 0xd6d2ca : COR_SOLO[solo] ?? 0x555555, roughness: 0.95 });
+      if (tex && !ponte) { const tt = tex.clone(); tt.needsUpdate = true; tt.repeat.set(ext / 6, larg / 6); mat.map = tt; if (solo === 'asfalto') mat.color.set(0x70737a); }
       const chao = new THREE.Mesh(new THREE.PlaneGeometry(ext, larg), mat);
       chao.position.set(0, cy, ponte ? -28 : -0.01);
       G.add(chao);
-      const g1 = new THREE.GridHelper(1000, 100, 0x3a434f, 0x2a313b); g1.rotateX(Math.PI / 2); g1.position.z = ponte ? -27.98 : 0.005;
-      const g2 = new THREE.GridHelper(4000, 40, 0x59616e, 0x434b57); g2.rotateX(Math.PI / 2); g2.position.z = ponte ? -27.97 : 0.01;
-      (g1.material as THREE.Material).transparent = true; (g1.material as THREE.Material).opacity = 0.45;
-      (g2.material as THREE.Material).transparent = true; (g2.material as THREE.Material).opacity = 0.6;
+      // grades de 10 m e de 100 m: dão a escala do lugar
+      const g1 = new THREE.GridHelper(1000, 100, 0x1c2128, 0x1c2128); g1.rotateX(Math.PI / 2); g1.position.z = ponte ? -27.98 : 0.005;
+      const g2 = new THREE.GridHelper(4000, 40, 0x14181e, 0x14181e); g2.rotateX(Math.PI / 2); g2.position.z = ponte ? -27.97 : 0.01;
+      (g1.material as THREE.Material).transparent = true; (g1.material as THREE.Material).opacity = 0.22;
+      (g2.material as THREE.Material).transparent = true; (g2.material as THREE.Material).opacity = 0.4;
       G.add(g1, g2);
     }
     const s0 = reta ? -Lv / 2 : 0, s1 = reta ? Lv / 2 : Lv;
@@ -269,6 +304,28 @@ export class Cena3D {
       for (const o of [prin, cauda, lanca, mastro, esqui]) this.anexar(o, 0);
       this.rotores = [prin, cauda];
     }
+    // silhueta: asas e empenagem nos aviões, hélice no nariz dos de hélice, rodas nos carros (medidas aproximadas,
+    // tiradas do comprimento; a fuselagem e a carroceria são as do portador)
+    const s0 = corpo.segmentos[0];
+    if (s0 && (c.portador === 'helice' || c.portador === 'aviao')) {
+      const L = corpo.comprimento, H = s0.altura - s0.zPiso, jato = c.portador === 'aviao', caca = jato && c.vKmh > 1100;
+      const env = L * (caca ? 0.66 : jato ? 0.9 : 1.1), corda = L * (caca ? 0.32 : 0.14), zAsa = s0.zPiso + H * (jato ? 0.3 : 0.75);
+      const asa = new THREE.Mesh(new THREE.BoxGeometry(corda, env, Math.max(0.06, H * 0.07)), corM); asa.position.set(caca ? -L * 0.12 : L * 0.04, 0, zAsa);
+      const estab = new THREE.Mesh(new THREE.BoxGeometry(corda * 0.55, env * 0.36, Math.max(0.05, H * 0.05)), corM); estab.position.set(-L / 2 + corda * 0.4, 0, s0.zPiso + H * 0.7);
+      const deriva = new THREE.Mesh(new THREE.BoxGeometry(corda * 0.75, Math.max(0.05, s0.largura * 0.06), L * 0.16), corM); deriva.position.set(-L / 2 + corda * 0.5, 0, s0.altura + L * 0.06);
+      for (const o of [asa, estab, deriva]) this.anexar(o, 0);
+      if (!jato) {
+        const disco = new THREE.Mesh(new THREE.CircleGeometry(Math.max(0.9, H * 0.85), 40), new THREE.MeshBasicMaterial({ color: 0xbfd3ff, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false }));
+        disco.rotation.y = Math.PI / 2; disco.position.set(L / 2 + 0.05, 0, s0.zPiso + H * 0.5);
+        this.anexar(disco, L / 2);
+      }
+    } else if (s0 && c.portador === 'carro') {
+      const L = corpo.comprimento, r = Math.min(0.55, Math.max(0.3, s0.altura * 0.24));
+      for (const sx of [-0.31, 0.31]) for (const sy of [-1, 1]) {
+        const roda = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.24, 20), escM); roda.position.set(sx * L, sy * (s0.largura / 2 - 0.06), r);
+        this.anexar(roda, sx * L);
+      }
+    }
     // fontes: esferas de 0,2 m por tipo (o raio segue o ganho)
     const geo = new THREE.SphereGeometry(1, 16, 12);
     c.fontes.forEach((f) => {
@@ -376,11 +433,89 @@ export class Cena3D {
     }
     const cc = c.corpoNoMundo(s, [0, 0, (c.corpo.segmentos[0]?.altura ?? 2) + 2.5], tmp);
     this.alcaAltitude.position.set(cc[0], cc[1], cc[2]);
+    // corpo no ar: sombra no chão e prumo até ele
+    const noAr = c.traj.altitude > 2 && c.ambienteCena().id !== 'ponte';
+    this.sombra.visible = noAr; this.prumo.visible = noAr;
+    if (noAr) {
+      const rs = Math.max(1.2, c.corpo.comprimento * 0.3);
+      this.sombra.position.set(cc[0], cc[1], 0.06); this.sombra.scale.setScalar(rs);
+      const pp = this.prumo.geometry.attributes.position as THREE.BufferAttribute;
+      pp.setXYZ(0, cc[0], cc[1], 0.06); pp.setXYZ(1, cc[0], cc[1], c.traj.altitude); pp.needsUpdate = true;
+      this.prumo.computeLineDistances(); this.prumo.geometry.computeBoundingSphere();
+    }
     // câmera
+    this.enquadrar(s);
     this.seguirCamera(gimbal ? null : o, s);
     this.controls.update();
+    // marcas com tamanho mínimo na tela: longe, a cabeça do ouvinte, as alças e a sombra não somem
+    const mPorPx = (p: THREE.Vector3) => (2 * this.camera.position.distanceTo(p) * Math.tan((this.camera.fov * Math.PI) / 360)) / Math.max(1, this.canvas.clientHeight);
+    this.cabeca.scale.setScalar(Math.max(1, (mPorPx(this.cabeca.position) * 7) / 0.25));
+    this.alcaLateral.scale.setScalar(Math.max(1, (mPorPx(this.alcaLateral.position) * 9) / 0.45));
+    this.alcaAltitude.scale.setScalar(Math.max(1, (mPorPx(this.alcaAltitude.position) * 9) / 0.5));
+    this.marcaProximo.scale.setScalar(Math.max(1, (mPorPx(this.marcaProximo.position) * 9) / 1.15));
+    if (noAr) this.sombra.scale.setScalar(Math.max(this.sombra.scale.x, mPorPx(this.sombra.position) * 6));
+    // rótulos (sprites de tamanho fixo na tela)
+    const porRotulo = (sp: THREE.Sprite, p: THREE.Vector3, acima: number) => {
+      const u = mPorPx(p);
+      sp.position.set(p.x, p.y, p.z + acima + u * 16); sp.scale.set(u * 96, u * 24, 1);
+    };
+    porRotulo(this.rotuloVoce, this.cabeca.position, 0.25 * this.cabeca.scale.x);
+    // (colado numa fonte, o nome dela é que importa: os dois rótulos ficariam um por cima do outro)
+    this.rotuloVoce.visible = !(gimbal && c.fonteFicha && c.ouv.gimbal.r < 4);
+    const centro = w.set(cc[0], cc[1], cc[2] - 2.5);
+    const compPx = c.corpo.comprimento / mPorPx(centro);
+    this.rotuloCorpo.visible = compPx < 140;
+    if (this.rotuloCorpo.visible) {
+      const txt = `${NOME_CORPO[c.portador] ?? c.portador}${c.traj.altitude > 2 ? ` · ${Math.round(c.traj.altitude)} m` : ''}`;
+      if (txt !== this.textoCorpo) { this.textoCorpo = txt; trocarRotulo(this.rotuloCorpo, txt); }
+      porRotulo(this.rotuloCorpo, centro, 2.5);
+    }
+    const f3 = c.fonteFicha ? this.fontes3d.find((x) => x.f.id === c.fonteFicha) : null;
+    this.rotuloFonte.visible = !!f3;
+    if (f3) {
+      if (f3.f.id !== this.textoFonte) { this.textoFonte = f3.f.id; trocarRotulo(this.rotuloFonte, nomeFonte(c, f3.f.id)); }
+      porRotulo(this.rotuloFonte, f3.m.position, f3.m.scale.x);
+    }
+    this.ceu.position.copy(this.camera.position);
     this.renderer.render(this.scene, this.camera);
     this.quadros++;
+  }
+
+  /** alvo da câmera "no ouvinte": a cabeça; com o corpo no ar e o ouvinte parado, o meio entre a cabeça e o ponto da
+   *  trajetória mais perto dele, para os dois caberem no quadro */
+  private alvoOuvinte(alvo: THREE.Vector3) {
+    const c = this.c;
+    alvo.copy(this.cabeca.position);
+    if (c.ouv.modo === 'fixo' && c.traj.altitude > 5) {
+      const p = c.via.ponto(c.sOuvinte(), this.pv);
+      alvo.set((alvo.x + p.x) / 2, (alvo.y + p.y) / 2, (alvo.z + c.traj.altitude) / 2);
+    }
+    return alvo;
+  }
+  /** põe a câmera "no ouvinte" no enquadramento padrão quando o portador, a altitude ou o modo do ouvinte mudam */
+  private enquadrar(s: number) {
+    const c = this.c;
+    const chave = `${c.portador}|${c.ouv.modo}|${Math.round(c.traj.altitude / 20)}|${Math.round(c.traj.lateral / 20)}`;
+    if (chave === this.chaveQuadro) return;
+    const primeira = this.chaveQuadro === '';
+    this.chaveQuadro = chave;
+    if (this.modo !== 'ouvinte' || (!primeira && this.arrasto)) return;
+    void s;
+    this.posicionarNoOuvinte();
+  }
+  private posicionarNoOuvinte() {
+    const c = this.c, h = this.cabeca.position, alvo = this.alvoOuvinte(new THREE.Vector3());
+    if (c.ouv.modo === 'fixo' && c.traj.altitude > 5) {
+      // de longe e de baixo, olhando para cima: o chão, o ouvinte e o corpo lá no alto
+      const D = 1.7 * Math.hypot(c.traj.altitude, c.traj.lateral) + 25;
+      this.camera.position.set(alvo.x - 0.4 * D, alvo.y - D, Math.max(1.5, 0.1 * D));
+      (this.scene.fog as THREE.Fog).far = Math.max(7000, 5 * D);
+    } else {
+      this.camera.position.set(h.x - 14, h.y - 22, h.z + 8);
+      (this.scene.fog as THREE.Fog).far = 7000;
+    }
+    this.controls.target.copy(alvo);
+    this.temAlvoAnt = false;
   }
 
   private rumo(s: number) { const p = this.c.via.ponto(s, this.pv); return Math.atan2(p.ty, p.tx); }
@@ -390,7 +525,7 @@ export class Cena3D {
     const c = this.c;
     if (this.modo === 'livre') { this.temAlvoAnt = false; return; }
     const alvo = new THREE.Vector3();
-    if (this.modo === 'ouvinte') alvo.copy(this.cabeca.position);
+    if (this.modo === 'ouvinte') this.alvoOuvinte(alvo);
     else { const p = c.corpoNoMundo(s, [0, 0, 2]); alvo.set(p[0], p[1], p[2]); }
     if (this.temAlvoAnt) {
       const d = alvo.clone().sub(this.alvoAnt);
@@ -409,8 +544,9 @@ export class Cena3D {
   definirCamera(m: ModoCamera) {
     this.modo = m; this.temAlvoAnt = false;
     this.controls.enablePan = m === 'livre';
-    if (m === 'corpo') { const p = this.c.corpoNoMundo(this.c.estimativa().s, [0, 0, 2]); this.camera.position.set(p[0] - 40, p[1] - 45, p[2] + 18); }
-    if (m === 'ouvinte') { const h = this.cabeca.position; this.camera.position.set(h.x - 14, h.y - 22, h.z + 8); }
+    // (segue o corpo: a distância acompanha o tamanho dele, para um carro de 4 m não ficar um ponto)
+    if (m === 'corpo') { const p = this.c.corpoNoMundo(this.c.estimativa().s, [0, 0, 2]), d = Math.min(60, Math.max(9, this.c.corpo.comprimento * 1.1)); this.camera.position.set(p[0] - 0.65 * d, p[1] - 0.75 * d, p[2] + 0.3 * d); }
+    if (m === 'ouvinte') this.posicionarNoOuvinte();
     this.aoMudarCamera?.();
   }
 
@@ -618,9 +754,16 @@ function rotulo(texto: string) {
 function trocarRotulo(s: THREE.Sprite, texto: string) {
   const t = (s.material as THREE.SpriteMaterial).map as THREE.CanvasTexture, cv = t.image as HTMLCanvasElement, g = cv.getContext('2d')!;
   g.clearRect(0, 0, cv.width, cv.height);
-  g.fillStyle = 'rgba(13,16,21,0.75)'; g.fillRect(0, 8, cv.width, 48);
-  g.font = '500 30px "IBM Plex Mono", ui-monospace, monospace'; g.fillStyle = '#e9e4d8'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText(texto, cv.width / 2, 33);
+  if (!texto) { t.needsUpdate = true; return; }
+  // (o fundo acompanha a largura do texto: uma tarja de ponta a ponta tapava a cena em volta)
+  g.font = '500 30px "IBM Plex Mono", ui-monospace, monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const lw = Math.min(cv.width - 4, g.measureText(texto).width + 26);
+  g.fillStyle = 'rgba(13,16,21,0.8)';
+  g.beginPath();
+  if (g.roundRect) g.roundRect((cv.width - lw) / 2, 9, lw, 46, 10); else g.rect((cv.width - lw) / 2, 9, lw, 46);
+  g.fill();
+  g.fillStyle = '#e9e4d8';
+  g.fillText(texto, cv.width / 2, 33, cv.width - 12);
   t.needsUpdate = true;
 }
 

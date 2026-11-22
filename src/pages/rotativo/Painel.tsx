@@ -45,22 +45,27 @@ export function Painel({ k }: { k: ControleRotativo }) {
 // ---- Escuta e ambiente (igual ao Ronco)
 function Escuta({ k, e }: P) {
   const { params, eq } = e;
+  const carro = (e.spec.portadores || []).includes('carro'), aviacao = !!e.spec.aviation;
   const mix = (id: string, rotulo: string, chave: 'exhaust' | 'intake' | 'mech' | 'air' | 'master', max = 2) => (
     <Slider id={id} rotulo={rotulo} min={0} max={max} passo={0.01} valor={params[chave]} formatar={pct} aoMudar={(v) => k.setParams({ [chave]: v })} />
   );
   return (
     <Section titulo="Escuta e ambiente">
-      <Field rotulo="Onde você está">
-        <ChipGroup id="observer" opcoes={[{ valor: 'car', rotulo: 'No carro' }, { valor: 'road', rotulo: 'Na rua' }]} atual={e.observer} aoEscolher={(v) => k.setObserver(v as 'car' | 'road')} />
-      </Field>
+      {/* os mesmos nomes do Ronco; a via só faz sentido no carro (o campo fica à vista se o observador já estiver nela) */}
+      {(carro || e.observer === 'road') && (
+        <Field rotulo="Observador">
+          <ChipGroup id="observer" opcoes={[{ valor: 'car', rotulo: 'Junto com o carro' }, { valor: 'road', rotulo: 'Parado na via' }]} atual={e.observer} aoEscolher={(v) => k.setObserver(v as 'car' | 'road')} />
+        </Field>
+      )}
       {e.observer === 'car' ? (
-        <Field rotulo="Microfone (C)">
+        <Field rotulo="Microfone">
           <ChipGroup id="mic" opcoes={[
-            { valor: 'pipe', rotulo: 'Na ponteira' }, { valor: 'ext', rotulo: 'Atrás do carro' }, { valor: 'int', rotulo: 'Cabine' }, { valor: 'bay', rotulo: 'Cofre' },
+            { valor: 'pipe', rotulo: 'Ao lado do escape' }, { valor: 'ext', rotulo: carro ? 'Câmera atrás' : aviacao ? 'De fora, a 5 m da hélice' : 'De fora, a alguns metros' },
+            { valor: 'int', rotulo: 'Cabine' }, { valor: 'bay', rotulo: carro ? 'Cofre' : aviacao ? 'Dentro da carenagem' : 'Junto ao motor' },
           ]} atual={e.carMic} aoEscolher={(v) => k.setCarMic(v)} />
         </Field>
       ) : (
-        <Slider id="roadDist" rotulo="Distância da via" min={2} max={60} passo={0.5} valor={params.roadDist} formatar={(v) => `${virgula(v, 1)} m`} aoMudar={(v) => k.setParams({ roadDist: v })} />
+        <Slider id="roadDist" rotulo="Distância até a via" min={2} max={60} passo={0.5} valor={params.roadDist} formatar={(v) => `${virgula(v, 1)} m`} aoMudar={(v) => k.setParams({ roadDist: v })} />
       )}
       <Field rotulo="Ambiente">
         <ChipGroup id="env" opcoes={Object.entries(AMBIENTES_RONCO).map(([kk, v]) => ({ valor: kk, rotulo: v.name }))} atual={params.env} aoEscolher={(v) => k.setEnvironment(v)} />
@@ -105,17 +110,17 @@ function Motor({ k, e }: P) {
             aoEscolher={(n) => k.setSpec({ rotores: n, displacement: (n * Vc) / 1000 })} />
         </Field>
       )}
-      <p className="note mono">{x ? 'X-Engine: rotor de 2 lobos em alojamento de 3, câmaras a 0/240/480° (ciclo de 720°)' : `Fases dos rotores: ${m.fases.map((f) => `${f}°`).join(' / ')} · câmaras a 360° (ciclo de 1 080°)`}</p>
+      <p className="note">{x ? 'X-Engine: rotor de 2 lobos em alojamento de 3, câmaras a 0° / 240° / 480° (ciclo de 720°).' : `Rotores defasados de ${m.fases.map((f) => `${f}°`).join(' / ')}; as três câmaras de cada rotor queimam a cada 360° do eixo (ciclo de 1 080°).`}</p>
       {!x ? (
         <>
-          <Slider id="geoR" rotulo="Raio gerador R" min={50} max={130} passo={0.5} valor={geo.R} formatar={(v) => `${virgula(v, 1)} mm`} aoSoltar={(v) => k.setGeo({ R: v })} />
-          <Slider id="geoE" rotulo="Excentricidade e" min={7} max={20} passo={0.1} valor={geo.e} formatar={(v) => `${virgula(v, 1)} mm · R/e ${virgula(geo.R / v, 2)}`} aoSoltar={(v) => k.setGeo({ e: v })} />
-          <Slider id="geoB" rotulo="Largura b" min={30} max={110} passo={0.5} valor={geo.b} formatar={(v) => `${virgula(v, 1)} mm`} aoSoltar={(v) => k.setGeo({ b: v })} />
+          <Slider id="geoR" rotulo="Raio do rotor (R)" min={50} max={130} passo={0.5} valor={geo.R} formatar={(v) => `${virgula(v, 1)} mm`} aoSoltar={(v) => k.setGeo({ R: v })} />
+          <Slider id="geoE" rotulo="Excentricidade do eixo (e)" min={7} max={20} passo={0.1} valor={geo.e} formatar={(v) => `${virgula(v, 1)} mm · R/e ${virgula(geo.R / v, 2)}`} aoSoltar={(v) => k.setGeo({ e: v })} />
+          <Slider id="geoB" rotulo="Largura do rotor (b)" min={30} max={110} passo={0.5} valor={geo.b} formatar={(v) => `${virgula(v, 1)} mm`} aoSoltar={(v) => k.setGeo({ b: v })} />
         </>
       ) : (
         <Slider id="vcam" rotulo="Volume da câmara" min={10} max={120} passo={0.5} valor={Vc} formatar={(v) => `${virgula(v, 1)} cm³`} aoSoltar={(v) => k.setSpec({ Vcam: v, cilindradaCamara: v, displacement: (3 * v) / 1000 })} />
       )}
-      <p className="note mono">V_cam = 3√3·e·R·b = {virgula(Vc, 1)} cm³ por câmara · V_min = {virgula(Vc / (s.cr - 1), 1)} cm³ · nominal {virgula(s.displacement, 3)} L</p>
+      <p className="note" title="Volume varrido por câmara = 3√3 · e · R · b">{virgula(Vc, 1)} cm³ por câmara (3√3·e·R·b) · câmara mínima de {virgula(Vc / (s.cr - 1), 1)} cm³ · cilindrada nominal {virgula(s.displacement, 3)} L</p>
       <Slider id="cr" rotulo="Taxa de compressão" min={7} max={x ? 20 : 11} passo={0.1} valor={s.cr} formatar={(v) => `${virgula(v, 1)}:1`} aoSoltar={(v) => k.setSpec({ cr: v })} />
       {!x && (
         <>
@@ -129,7 +134,7 @@ function Motor({ k, e }: P) {
               { valor: 'sachs', rotulo: 'Sachs', titulo: 'Periférica da linhagem Sachs/Norton' },
             ]} atual={s.janelas.escape} aoEscolher={(v) => k.setJanelas({ escape: v as any })} />
           </Field>
-          <p className="note">Sobreposição das janelas: {ov > 0 ? `${ov}°e` : 'nenhuma'}{ov > 90 ? ' · competição: a lenta caça e estala' : ''}</p>
+          <p className="note">Sobreposição das janelas (admissão e escape abertas juntas): {ov > 0 ? `${ov}° do eixo` : 'nenhuma'}{ov > 90 ? ' · de competição: a lenta caça e estala' : ''}</p>
           {(s.janelas.admissao === 'lateral4' || s.janelas.admissao === 'lateral6') && (
             <Slider id="apv" rotulo="Abertura da janela secundária" min={2500} max={6000} passo={50} valor={s.janelas.apv?.[0] ?? 3750} formatar={(v) => `${br(v)} rpm`}
               aoSoltar={(v) => k.setJanelas({ apv: [v, ...(s.janelas.apv?.slice(1) || [])] })} />
@@ -206,7 +211,7 @@ function Temperatura({ k, e }: P) {
         <ChipGroup id="tempMode" opcoes={[{ valor: 'real', rotulo: 'Esquentando de verdade' }, { valor: 'fixed', rotulo: 'Fixa' }]} atual={e.tempMode} aoEscolher={(v) => k.setTempMode(v as 'real' | 'fixed')} />
       </Field>
       <Slider id="coolant" rotulo="Água do motor (alojamentos)" min={-10} max={120} passo={1} valor={agua} formatar={(v) => `${v} °C`} aoMudar={(v) => k.setCoolant(v)} />
-      <div className="chips">
+      <div className="chips" role="group" aria-label="Temperaturas prontas">
         <button type="button" className="chip" onClick={() => k.setCoolant(20)}>Partida a frio (20 °C)</button>
         <button type="button" className="chip" onClick={() => k.setCoolant(90)}>Motor quente (90 °C)</button>
       </div>
@@ -236,10 +241,10 @@ function Transmissao({ k, e }: P) {
       </Field>
       <Slider id="shiftTime" rotulo="Tempo de troca" min={0.04} max={1} passo={0.01} valor={s.shiftTime || (s.transmission === 'auto' ? 0.36 : 0.26)} formatar={(v) => `${virgula(v, 2)} s`} aoMudar={(v) => k.setSpec({ shiftTime: v }, nt)} />
       {ratios.map((r, i) => (
-        <Slider key={`ratio${i + 1}`} id={`ratio${i + 1}`} rotulo={`${i + 1}ª marcha`} min={0.4} max={5.5} passo={0.01} valor={r} formatar={(v) => `${v.toFixed(2)} : 1 · ${vmax(v)} km/h`}
+        <Slider key={`ratio${i + 1}`} id={`ratio${i + 1}`} rotulo={`${i + 1}ª marcha`} min={0.4} max={5.5} passo={0.01} valor={r} formatar={(v) => `${virgula(v, 2)} : 1 · ${vmax(v)} km/h`}
           aoMudar={(v) => { const next = k.currentRatios(); next[i] = v; k.setSpec({ ratios: next }, nt); }} />
       ))}
-      <Slider id="final" rotulo="Diferencial" min={1.5} max={8} passo={0.01} valor={fin} formatar={(v) => `${v.toFixed(2)} : 1`} aoMudar={(v) => k.setSpec({ finalDrive: v }, nt)} />
+      <Slider id="final" rotulo="Diferencial" min={1.5} max={8} passo={0.01} valor={fin} formatar={(v) => `${virgula(v, 2)} : 1`} aoMudar={(v) => k.setSpec({ finalDrive: v }, nt)} />
       <Slider id="mass" rotulo="Massa (com motorista)" min={150} max={2200} passo={10} valor={s.mass || 1300} formatar={(v) => `${v} kg`} aoMudar={(v) => k.setSpec({ mass: v }, nt)} />
       <Slider id="wheelR" rotulo="Raio da roda" min={0.25} max={0.45} passo={0.005} valor={rw} formatar={(v) => `${Math.round(v * 1000)} mm`} aoMudar={(v) => k.setSpec({ wheelR: v }, nt)} />
       <Slider id="drag" rotulo="Arrasto aerodinâmico (½·ρ·Cd·A)" min={0.1} max={1.2} passo={0.01} valor={s.drag ?? 0.42} formatar={(v) => `${virgula(v, 2)} N/(m/s)²`} aoMudar={(v) => k.setSpec({ drag: v }, nt)} />

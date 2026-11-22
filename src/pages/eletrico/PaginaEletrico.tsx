@@ -22,12 +22,16 @@ export function PaginaEletrico() {
   );
 }
 
-const MAQ: Record<string, string> = { pmsm: 'PMSM', pmsrm: 'PMSRM', inducao: 'indução', 'sincrona-excitada': 'síncrona', 'cc-serie': 'CC série', universal: 'universal', bldc: 'BLDC' };
+// "Tesla Model 3 Long Range AWD · motor PMSRM de 6 polos · 54 ranhuras · inversor SiC 10 kHz · redução 9,06:1"
+const MAQ: Record<string, string> = { pmsm: 'PMSM', pmsrm: 'PMSRM', inducao: 'de indução', 'sincrona-excitada': 'síncrono', 'cc-serie': 'CC série', universal: 'universal', bldc: 'BLDC' };
+const TIPO_INV: Record<string, string> = { sic: 'SiC', igbt: 'IGBT', gto: 'GTO', mosfet: 'MOSFET' };
 function placa(c: ControleEletrico) {
   const p = c.preset(), inv = p.inversor;
   const i = p.reducao.estagios.reduce((a, s) => (a * s.Zc) / s.Zp, 1);
-  const invT = inv ? (inv.tipo === 'csi' ? 'CSI' : inv.tipo === 'chopper' ? `chopper ${inv.fc} Hz` : `${inv.tipo.toUpperCase()} ${inv.fc >= 1000 ? `${(inv.fc / 1000).toLocaleString('pt-BR')} kHz` : `${inv.fc} Hz`}`) : p.fRede ? `rede ${p.fRede} Hz` : 'sem inversor';
-  return `${p.nome} · ${MAQ[p.maquina]} ${2 * p.p} polos · Z_s ${p.Zs}${p.Zr ? ` / Z_r ${p.Zr}` : ''}${p.Zc ? ` / Z_c ${p.Zc}` : ''} · ${invT} · i ${i.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}${c.presetId ? '' : ' · editado'}`;
+  const invT = inv ? (inv.tipo === 'csi' ? 'inversor de corrente' : inv.tipo === 'chopper' ? `chopper de ${inv.fc} Hz` : `inversor ${TIPO_INV[inv.tipo] ?? inv.tipo.toUpperCase()} ${inv.fc >= 1000 ? `${(inv.fc / 1000).toLocaleString('pt-BR')} kHz` : `${inv.fc} Hz`}`) : p.fRede ? `rede de ${p.fRede} Hz` : 'sem inversor';
+  const ranhuras = `${p.Zs} ranhuras${p.Zr ? ` (${p.Zr} no rotor)` : ''}${p.Zc ? ` · ${p.Zc} lâminas no comutador` : ''}`;
+  const red = Math.abs(i - 1) < 1e-6 ? 'acionamento direto' : `redução ${i.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}:1`;
+  return `${p.nome} · motor ${MAQ[p.maquina]} de ${2 * p.p} polos · ${ranhuras} · ${invT} · ${red}${c.presetId ? '' : ' · editado'}`;
 }
 
 function Conteudo({ c }: { c: ControleEletrico }) {
@@ -61,8 +65,14 @@ function Conteudo({ c }: { c: ControleEletrico }) {
       <main className="palco">
         <Instrumentos c={c} leituras={leituras} teclado={teclado} />
         <section className="graficos" aria-label="Espectro e espectrograma">
-          <figure><figcaption>Espectro (20 Hz–12 kHz, linhas anotadas)</figcaption><canvas id="espectro" ref={cvE} /></figure>
-          <figure><figcaption>Espectrograma (10 s)</figcaption><canvas id="espectrograma" ref={cvS} /></figure>
+          <figure className="grafico">
+            <figcaption className="legenda">Espectro de 20 Hz a 12 kHz, com o nome de cada linha</figcaption>
+            <div className="quadro"><canvas id="espectro" ref={cvE} role="img" aria-label="Espectro do som com as linhas do motor, do inversor e da redução anotadas" /></div>
+          </figure>
+          <figure className="grafico">
+            <figcaption className="legenda">Espectrograma dos últimos 10 s</figcaption>
+            <div className="quadro"><canvas id="espectrograma" ref={cvS} role="img" aria-label="Espectrograma rolante dos últimos 10 segundos" /></div>
+          </figure>
         </section>
         <p className="hints"><kbd>Espaço</kbd> liga e desliga · <kbd>↑</kbd>/<kbd>↓</kbd> acelerador · <kbd>R</kbd> regeneração (segure) · <kbd>M</kbd> modo de modulação</p>
       </main>
@@ -75,7 +85,8 @@ function Placa({ c }: { c: ControleEletrico }) { useTopico(c, 'presets', 'painel
 
 function Ignicao({ c }: { c: ControleEletrico }) {
   useTopico(c, 'estado');
-  return <BotaoIgnicao id="ignicao" ligado={c.ign} rotulo={c.erro ? `Erro no áudio: ${c.erro}` : c.ign ? 'Desligar' : 'Ligar'} aoClicar={() => { c.ligar().catch((e) => console.error('Elétrico: áudio não iniciou', e)); }} />;
+  return <BotaoIgnicao id="ignicao" ligado={c.ign} rotulo={c.erro ? `Erro no áudio: ${c.erro}` : c.ign ? 'Desligar' : 'Ligar motor'} estado={c.erro ? 'erro' : undefined}
+    aoClicar={() => { c.ligar().catch((e) => console.error('Elétrico: áudio não iniciou', e)); }} />;
 }
 
 function Presets({ c }: { c: ControleEletrico }) {
@@ -90,8 +101,8 @@ function Presets({ c }: { c: ControleEletrico }) {
 
 const Instrumentos = memo(function Instrumentos({ c, leituras, teclado }: { c: ControleEletrico; leituras: { current: Leituras }; teclado: { current: HTMLDivElement | null } }) {
   useTopico(c, 'presets');
-  const linha = (k: string, id: string, grande = false) => (
-    <div className={`ro-row${grande ? ' grande' : ''}`}><span className="k">{k}</span><span className="v mono" id={`ro-${id}`} ref={(e) => { if (e) leituras.current[id] = e; }}>—</span></div>
+  const linha = (k: string, id: string, grande = false, dica?: string) => (
+    <div className={`ro-row${grande ? ' grande' : ''}`} title={dica}><span className="k">{k}</span><span className="v mono" id={`ro-${id}`} ref={(e) => { if (e) leituras.current[id] = e; }}>—</span></div>
   );
   const escada = !!c.base.inversor?.escada;
   return (
@@ -99,17 +110,20 @@ const Instrumentos = memo(function Instrumentos({ c, leituras, teclado }: { c: C
       {linha('Rotação', 'rpm', true)}
       {linha('Velocidade', 'v', true)}
       {linha('No ouvido', 'nivel', true)}
-      {linha('f_e', 'fe')}
-      {linha('f_c · N', 'fc')}
-      {linha('Modulação', 'modo')}
-      {linha('Corrente', 'corrente')}
+      {linha('Freq. elétrica', 'fe', false, 'Frequência da corrente do motor (f_e) e a rotação do eixo em voltas por segundo')}
+      {linha('Portadora', 'fc', false, 'Frequência de chaveamento do inversor (f_c); no modo síncrono, quantos pulsos por ciclo')}
+      {linha('Modulação', 'modo', false, 'Como o inversor desenha a tensão: é o que dá as “marchas” e o do-re-mi')}
+      {linha('Corrente', 'corrente', false, 'Corrente em relação à nominal e o torque no eixo (negativos na regeneração)')}
       {linha('Potência', 'potencia')}
-      {linha('M · fluxo', 'mfluxo')}
-      {linha('AVAS', 'avas')}
-      <div className="teclado" id="teclado" ref={teclado} hidden={!escada} aria-label="Escada do inversor (do-re-mi)">
-        {NOMES_NOTAS.map((n, i) => <span key={n} className={`tecla${/^[A-G]\d$/.test(n) ? '' : ''}`} data-i={i}>{n}</span>)}
-        <span className="tecla patamar" data-i={12}>598</span>
-      </div>
+      {linha('Tensão e fluxo', 'mfluxo', false, 'Índice de modulação (quanto da tensão o inversor usa) e fluxo do motor')}
+      {linha('Som de aviso', 'avas', false, 'AVAS: o som que o carro elétrico emite em baixa velocidade')}
+      <figure className="escada" hidden={!escada}>
+        <figcaption className="legenda">Escada do inversor: o do-re-mi</figcaption>
+        <div className="teclado" id="teclado" ref={teclado} hidden={!escada} role="img" aria-label="Teclado com as notas da escada do inversor; a nota de agora fica acesa">
+          {NOMES_NOTAS.map((n, i) => <span key={n} className="tecla" data-i={i}>{n}</span>)}
+          <span className="tecla patamar" data-i={12} title="Patamar: a portadora para em 598 Hz">598</span>
+        </div>
+      </figure>
     </section>
   );
 });

@@ -22,40 +22,59 @@ function prepararCanvas(cv: HTMLCanvasElement) {
   return { g, w, h };
 }
 
-/** manômetro: 0 … 1,35·p_nom, arco de 270° */
+/** manômetro: 0 … 1,35·p_nom, arco de 270°, no mesmo desenho do conta-giros das outras páginas (trilho grosso, faixa
+ *  vermelha, algarismos na fonte de mostrador, leitura grande no meio). O ponteiro fino dourado é a caixa de vapor. */
 export function desenharManometro(c: ControleVapor, cv: HTMLCanvasElement) {
   const { g, w, h } = prepararCanvas(cv);
   const P = c.P, pMax = Math.ceil((P.pNominal * 1.35) / 2) * 2;
-  const cx = w / 2, cy = h / 2 + 6, R = Math.min(w, h) / 2 - 12;
+  const cx = w / 2, cy = h * 0.54, R = Math.min(w * 0.46, h * 0.5);
   const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25, ang = (p: number) => a0 + (a1 - a0) * Math.min(1.02, Math.max(0, p / pMax));
-  const ink = cor('--ink'), muted = cor('--muted'), hot = cor('--hot') || '#e5533c', gold = cor('--gold') || '#d9a441';
-  g.lineWidth = 2; g.strokeStyle = muted;
-  g.beginPath(); g.arc(cx, cy, R, a0, a1); g.stroke();
-  // zona vermelha: a segurança abre em p_nom + 0,3
-  g.lineWidth = 6; g.strokeStyle = hot;
-  g.beginPath(); g.arc(cx, cy, R - 4, ang(P.pNominal + 0.3), a1); g.stroke();
-  // marcas a cada 2 bar
-  g.fillStyle = muted; g.font = '10px "IBM Plex Mono", monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.lineWidth = 1.5; g.strokeStyle = muted;
-  for (let p = 0; p <= pMax; p += 2) {
-    const a = ang(p), x = Math.cos(a), y = Math.sin(a);
-    g.beginPath(); g.moveTo(cx + x * (R - 10), cy + y * (R - 10)); g.lineTo(cx + x * R, cy + y * R); g.stroke();
-    if (p % 4 === 0) g.fillText(String(p), cx + x * (R - 22), cy + y * (R - 22));
-  }
+  const ink = cor('--ink'), muted = cor('--muted'), faint = cor('--faint'), raise = cor('--raise'), hot = cor('--hot'), gold = cor('--gold'), violet = cor('--violet');
+  const display = cor('--f-display'), mono = cor('--f-mono');
   const m = c.tele?.motor;
-  const pc = m ? m.pCaldeira : P.pNominal, pch = m ? m.pChest : 0;
+  const pc = m ? m.pCaldeira : P.pNominal, pch = m ? m.pChest : 0, seg = P.pNominal + 0.3;
+  // trilho, faixa vermelha (a segurança abre em p_nom + 0,3) e arco da pressão da caldeira
+  g.lineCap = 'butt'; g.lineWidth = R * 0.07;
+  g.strokeStyle = raise; g.beginPath(); g.arc(cx, cy, R * 0.92, a0, a1); g.stroke();
+  const grad = g.createLinearGradient(cx - R, 0, cx + R, 0);
+  grad.addColorStop(0, violet); grad.addColorStop(1, hot);
+  g.strokeStyle = grad; g.beginPath(); g.arc(cx, cy, R * 0.92, ang(seg), a1); g.stroke();
+  g.strokeStyle = pc >= seg ? hot : gold; g.globalAlpha = 0.85;
+  g.beginPath(); g.arc(cx, cy, R * 0.92, a0, ang(pc)); g.stroke(); g.globalAlpha = 1;
+  // marcas a cada 1 bar, algarismos a cada 2 (ou 4, nas caldeiras de pressão alta)
+  const passo = pMax > 16 ? 4 : 2;
+  g.font = `600 ${Math.round(R * 0.11)}px ${display}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (let p = 0; p <= pMax; p++) {
+    const a = ang(p), x = Math.cos(a), y = Math.sin(a), maior = p % 2 === 0;
+    g.lineWidth = maior ? 2 : 1; g.strokeStyle = p >= seg ? violet : maior ? ink : faint;
+    g.beginPath(); g.moveTo(cx + x * R * (maior ? 0.78 : 0.82), cy + y * R * (maior ? 0.78 : 0.82)); g.lineTo(cx + x * R * 0.86, cy + y * R * 0.86); g.stroke();
+    if (p % passo === 0) { g.fillStyle = p >= seg ? violet : muted; g.fillText(String(p), cx + x * R * 0.66, cy + y * R * 0.66); }
+  }
+  const miudo = Math.max(10, Math.round(R * 0.06));
+  g.font = `500 ${miudo}px ${mono}`; g.fillStyle = faint;
+  g.fillText('bar', cx, cy - R * 0.38);
+  // ponteiros: caixa de vapor (fino, dourado) e caldeira
   const ponteiro = (p: number, comp: number, larg: number, cc: string) => {
     const a = ang(p);
     g.strokeStyle = cc; g.lineWidth = larg; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * comp, cy + Math.sin(a) * comp); g.stroke();
+    g.beginPath(); g.moveTo(cx - Math.cos(a) * R * 0.08, cy - Math.sin(a) * R * 0.08); g.lineTo(cx + Math.cos(a) * comp, cy + Math.sin(a) * comp); g.stroke();
   };
   ponteiro(pch, R * 0.62, 2, gold);
   ponteiro(pc, R * 0.86, 3, ink);
-  g.fillStyle = ink; g.beginPath(); g.arc(cx, cy, 4, 0, TAU); g.fill();
-  g.font = '600 15px "IBM Plex Mono", monospace'; g.fillStyle = ink;
-  g.fillText(`${fmt(pc, 1)} bar`, cx, cy + R * 0.42);
-  g.font = '11px "IBM Plex Mono", monospace'; g.fillStyle = muted;
-  g.fillText(`${fmt(pc * 14.5038)} psi · caixa ${fmt(pch, 1)}`, cx, cy + R * 0.42 + 16);
+  g.fillStyle = ink; g.beginPath(); g.arc(cx, cy, R * 0.035, 0, TAU); g.fill();
+  // leituras
+  g.fillStyle = pc >= seg ? hot : ink; g.font = `800 ${Math.round(R * 0.3)}px ${display}`;
+  g.fillText(fmt(pc, 1), cx, cy + R * 0.3);
+  g.font = `500 ${miudo}px ${mono}`; g.fillStyle = muted;
+  // (em mostrador pequeno a linha comprida encostaria nos algarismos da escala: fica só a pressão em psi)
+  const psi = `${fmt(pc * 14.5038)} psi`, linha2 = `caldeira  ·  ${psi}`;
+  g.fillText(g.measureText(linha2).width > R * 0.84 ? psi : linha2, cx, cy + R * 0.5);
+  g.fillStyle = gold;
+  g.fillText(`caixa de vapor ${fmt(pch, 1)} bar`, cx, cy + R * 0.63);
+  if (m?.seguranca) {
+    g.fillStyle = hot; g.font = `600 ${Math.max(11, Math.round(R * 0.07))}px ${mono}`;
+    g.fillText('SEGURANÇA ABERTA', cx, cy - R * 0.22);
+  }
 }
 
 /** fita de escapes: as luzes acendem quando a fase da manivela passa pela batida */
@@ -100,7 +119,6 @@ export class MedidorPico {
 }
 
 const cents = (r: number) => 1200 * Math.log2(Math.max(1e-6, r));
-const sim = (b: unknown) => (b ? 'sim' : '—');
 
 /** leituras em texto (só escreve no DOM quando muda) */
 export function escreverLeituras(c: ControleVapor, L: Leituras, pico: number) {
@@ -111,22 +129,25 @@ export function escreverLeituras(c: ControleVapor, L: Leituras, pico: number) {
   if (!m) {
     set('roda', p ? `${fmt(p.rpmEixo)} rpm` : '—');
     // (o portador gerador não repassa a telemetria do motor: na estacionária só a rotação do eixo)
-    set('corte', c.audio && p ? 'governador de esferas (o portador não repassa a telemetria do motor)' : '—');
+    set('corte', c.audio && p ? 'governador de esferas (sem leitura do motor nesta máquina)' : '—');
     for (const id of ['chuffs', 'release', 'esforco', 'estados', 'vapor', 'apito']) set(id, '—');
   } else {
     set('roda', `${fmt(m.rpm)} rpm · ${fmt(m.voltasPorS as number, 2)} voltas/s`);
     const sentido = (m.reverser as number) < -0.02 ? 'ré' : 'frente';
     set('corte', `${fmt(m.corte * 100)}% · ${sentido} · regulador ${fmt((m.regulador as number) * 100)}%`);
     set('chuffs', `${fmt(m.chuffsPorS, 1)} /s`);
-    set('release', `${fmt(m.pRelease, 1)} bar abs · ${m.engasgado ? 'engasgado' : 'subsônico'}`);
+    set('release', `${fmt(m.pRelease, 1)} bar · ${m.engasgado ? 'jato sônico' : 'jato subsônico'}`);
     const fr = m.adesao > 0 ? Math.min(1.2, Math.abs(m.esforco) / m.adesao) : 0;
-    set('esforco', `${fmt(Math.abs(m.esforco) / 1000)} / ${fmt(m.adesao / 1000)} kN${m.patinando ? ' · PATINANDO' : ''}`);
+    set('esforco', `${fmt(Math.abs(m.esforco) / 1000)} de ${fmt(m.adesao / 1000)} kN${m.patinando ? ' · PATINANDO' : ''}`);
     const barra = L['barraEsforco'];
     if (barra) { barra.style.width = `${Math.round((fr / 1.2) * 100)}%`; barra.classList.toggle('patina', !!m.patinando); }
-    set('estados', `segurança ${sim(m.seguranca)} · injetor ${sim(m.injetor)} · bomba ${sim(m.bombaAr)} · torneiras ${sim(m.torneiras)} · soprador ${sim(m.soprador)} · fogo ${fmt((m.fogo as number) * 100)}%`);
+    // só o que está funcionando agora (uma lista de "sim" e "—" não se lia)
+    const ativos = [m.seguranca && 'válvula de segurança', m.injetor && 'injetor', m.bombaAr && 'bomba de ar', m.torneiras && 'torneiras abertas', m.soprador && 'soprador'].filter(Boolean);
+    set('estados', `${ativos.length ? ativos.join(', ') : 'nenhum ligado'} · fogo ${fmt((m.fogo as number) * 100)}%`);
     set('vapor', `evaporação ${fmt(m.evaporacao, 2)} · consumo ${fmt(m.vapor, 2)} kg/s · água ${fmt((m.nivelAgua as number) * 100)}%`);
     const f = (m.fApito || []).filter((x: number) => x > 0);
-    set('apito', f.length ? `${f.map((x: number) => fmt(x)).join(' · ')} Hz · ${fmt(cents(m.aquecimentoApito as number))} cents` : `mudo · tubo ${fmt(cents(m.aquecimentoApito as number))} cents`);
+    const ct = cents(m.aquecimentoApito as number), frio = Math.abs(ct) < 3 ? 'tubo quente' : `tubo frio, ${fmt(ct)} cents`;
+    set('apito', f.length ? `${f.map((x: number) => fmt(x)).join(' · ')} Hz · ${frio}` : `calado · ${frio}`);
   }
   set('nivel', ce ? `${fmt(ce.splDbA, 1)} dB(A)` : '—');
   set('pico', Number.isFinite(pico) ? `pico ${fmt(pico, 1)} dB` : '—');

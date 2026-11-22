@@ -37,6 +37,46 @@ function Conteudo({ c, refs }: { c: ControleTurbina; refs: RefsDoMapa }) {
 
   return (
     <>
+      {/* de onde se ouve e o lugar: primeiro, como nas outras páginas */}
+      <Section titulo="Escuta e ambiente">
+        <Field rotulo="Observador">
+          <ChipGroup id="observer" opcoes={[{ valor: 'board', rotulo: 'A bordo' }, { valor: 'ground', rotulo: 'No solo' }]} atual={c.observer} aoEscolher={(v) => c.setObserver(v)} />
+        </Field>
+        {c.observer === 'board' ? <>
+          <Field rotulo="Posição">
+            <ChipGroup id="board" opcoes={[
+              { valor: 'cabin', rotulo: 'Cabine de passageiros', desabilitado: spec.mount === 'fuselage' }, { valor: 'cockpit', rotulo: 'Cockpit' },
+              { valor: 'wingcam', rotulo: spec.mount === 'wing' ? 'Câmera na asa' : 'Câmera externa' },
+            ]} atual={c.board} aoEscolher={(v) => { c.board = v; c.setListener(); }} />
+          </Field>
+          {c.board === 'cabin' && (
+            <Field rotulo="Assento">
+              <ChipGroup id="seat" opcoes={[{ valor: 'fwd', rotulo: 'Dianteiro' }, { valor: 'wing', rotulo: 'Sobre a asa' }, { valor: 'aft', rotulo: 'Traseiro' }]}
+                atual={params.seat} aoEscolher={(v) => { params.seat = v; c.sendParams(); c.renderControls(); }} />
+            </Field>
+          )}
+        </> : <>
+          <Field rotulo="Situação">
+            <ChipGroup id="groundMode" opcoes={[{ valor: 'ground', rotulo: 'Ao redor do motor' }, { valor: 'flyby', rotulo: 'Passagem' }]}
+              atual={c.groundMode} aoEscolher={(v) => { c.groundMode = v; c.setListener(); }} />
+          </Field>
+          {c.groundMode === 'ground' ? <SlidersDoSolo c={c} /> : <>
+            <Slider id="alt" rotulo="Altura da passagem" min={20} max={1500} passo={5} valor={params.alt} formatar={(v) => `${fmt(v)} m`} aoMudar={(v) => c.setParam({ alt: v })} />
+            <Slider id="speed" rotulo="Velocidade" min={150} max={2500} passo={10} valor={params.speed} formatar={(v) => `${fmt(v)} km/h · Mach ${fmt(v / 3.6 / 340, 2)}`} aoMudar={(v) => c.setParam({ speed: v })} />
+          </>}
+          <Mapa c={c} refs={refs} />
+          <p className="note" id="obsNote" ref={refs.nota} />
+        </>}
+        <Field rotulo="Ambiente">
+          <ChipGroup id="env" opcoes={Object.entries(AMBIENTES_TURBINA).map(([k, v]) => ({ valor: k, rotulo: v.name }))} atual={c.environment}
+            aoEscolher={(v) => { c.setEnvironment(v); c.renderControls(); }} />
+        </Field>
+        <Slider id="mxFan" rotulo={prop ? 'Hélice e fan' : 'Fan'} min={0} max={2} passo={0.01} valor={params.fan} formatar={pct} aoMudar={(v) => c.setParam({ fan: v })} />
+        <Slider id="mxCore" rotulo="Núcleo (compressor, turbina, combustão)" min={0} max={2} passo={0.01} valor={params.core} formatar={pct} aoMudar={(v) => c.setParam({ core: v })} />
+        <Slider id="mxJet" rotulo="Jato" min={0} max={2} passo={0.01} valor={params.jet} formatar={pct} aoMudar={(v) => c.setParam({ jet: v })} />
+        <Slider id="mxVol" rotulo="Volume" min={0} max={1.5} passo={0.01} valor={params.master} formatar={pct} aoMudar={(v) => c.setParam({ master: v })} />
+      </Section>
+
       <Section titulo="Motor">
         <Field rotulo="Arquitetura">
           <ChipGroup id="arch" opcoes={Object.entries(ARCH).map(([v, rotulo]) => ({ valor: v, rotulo }))} atual={spec.arch} aoEscolher={(v) => {
@@ -86,7 +126,7 @@ function Conteudo({ c, refs }: { c: ControleTurbina; refs: RefsDoMapa }) {
           </Field>
           <Slider id="propD" rotulo="Diâmetro" min={1.5} max={5} passo={0.05} valor={spec.propD} formatar={(v) => `${fmt(v, 2)} m`} aoMudar={live('propD')} aoSoltar={() => c.renderControls()} />
           <Slider id="propRpm" rotulo="Rotação da hélice" min={800} max={2700} passo={10} valor={spec.propRpm} formatar={(v) => `${fmt(v)} rpm`} aoMudar={live('propRpm')} aoSoltar={() => c.renderControls()} />
-          <p className={Mh > 0.9 ? 'note warn' : 'note'}>{`Ponta da pá a Mach ${fmt(Mh, 2)} parado. Passagem de pá: ${fmt((spec.propB * spec.propRpm) / 60)} Hz. ${Mh > 0.85 ? 'Perto do som: o ronco vira um rasgado cheio de harmônicos.' : 'Quanto mais perto de Mach 1, mais harmônicos e mais alto.'}`}</p>
+          <p className={Mh > 0.9 ? 'note destaque' : 'note'}>{`Ponta da pá a Mach ${fmt(Mh, 2)} parado. Passagem de pá: ${fmt((spec.propB * spec.propRpm) / 60)} Hz. ${Mh > 0.85 ? 'Perto do som: o ronco vira um rasgado cheio de harmônicos.' : 'Quanto mais perto de Mach 1, mais harmônicos e mais alto.'}`}</p>
         </Section>
       )}
 
@@ -97,7 +137,7 @@ function Conteudo({ c, refs }: { c: ControleTurbina; refs: RefsDoMapa }) {
           <Slider id="fanD" rotulo="Diâmetro" min={0.3} max={3.5} passo={0.01} valor={spec.fanD} formatar={(v) => `${fmt(v, 2)} m`} aoMudar={live('fanD')} aoSoltar={() => c.renderControls()} />
           <Slider id="n1Max" rotulo="Rotação máxima (N1)" min={1500} max={16000} passo={10} valor={spec.n1Max} formatar={(v) => `${fmt(v)} rpm`} aoMudar={live('n1Max')} aoSoltar={() => c.renderControls()} />
           {spec.arch === 'geared' && <Slider id="gear" rotulo="Redução turbina → fan" min={1.5} max={4} passo={0.01} valor={spec.gear} formatar={(v) => `${fmt(v, 2)} : 1`} aoMudar={live('gear')} />}
-          <p className={f.Mt > 1 ? 'note warn' : 'note'}>{`A 100%: ponta a Mach ${fmt(f.Mt, 2)}${f.Mt > 1 ? ' (supersônica: choques nas pás e buzz-saw)' : ''}. BPF ${fmt(f.bpf)} Hz. ${f.cutSub ? `Com ${spec.vanes} palhetas para ${spec.fanB} pás o BPF fica preso no duto enquanto a ponta for subsônica.` : `Com ${spec.vanes} palhetas para ${spec.fanB} pás o BPF sai do duto em qualquer rotação.`}`}</p>
+          <p className={f.Mt > 1 ? 'note destaque' : 'note'}>{`A 100%: ponta a Mach ${fmt(f.Mt, 2)}${f.Mt > 1 ? ' (supersônica: choques nas pás e buzz-saw)' : ''}. BPF ${fmt(f.bpf)} Hz. ${f.cutSub ? `Com ${spec.vanes} palhetas para ${spec.fanB} pás o BPF fica preso no duto enquanto a ponta for subsônica.` : `Com ${spec.vanes} palhetas para ${spec.fanB} pás o BPF sai do duto em qualquer rotação.`}`}</p>
         </>}
         <Slider id="hpcB" rotulo="Pás do compressor de alta" min={12} max={80} passo={1} valor={spec.hpcB} formatar={String} aoMudar={live('hpcB')} />
         <Slider id="lptB" rotulo="Pás da turbina de baixa" min={20} max={140} passo={1} valor={spec.lptB} formatar={String} aoMudar={live('lptB')} />
@@ -146,44 +186,6 @@ function Conteudo({ c, refs }: { c: ControleTurbina; refs: RefsDoMapa }) {
         <p className="note">{prop ? 'Reversor (R): a hélice inverte o passo e chicoteia o ar.' : 'Reversor (R): as cascatas jogam o jato para frente. Ruge bem mais alto na lateral e na frente.'}</p>
       </Section>
 
-      <Section titulo="Escuta">
-        <Field rotulo="Observador">
-          <ChipGroup id="observer" opcoes={[{ valor: 'board', rotulo: 'A bordo' }, { valor: 'ground', rotulo: 'No solo' }]} atual={c.observer} aoEscolher={(v) => c.setObserver(v)} />
-        </Field>
-        {c.observer === 'board' ? <>
-          <Field rotulo="Posição">
-            <ChipGroup id="board" opcoes={[
-              { valor: 'cabin', rotulo: 'Cabine de passageiros', desabilitado: spec.mount === 'fuselage' }, { valor: 'cockpit', rotulo: 'Cockpit' },
-              { valor: 'wingcam', rotulo: spec.mount === 'wing' ? 'Câmera na asa' : 'Câmera externa' },
-            ]} atual={c.board} aoEscolher={(v) => { c.board = v; c.setListener(); }} />
-          </Field>
-          {c.board === 'cabin' && (
-            <Field rotulo="Assento">
-              <ChipGroup id="seat" opcoes={[{ valor: 'fwd', rotulo: 'Dianteiro' }, { valor: 'wing', rotulo: 'Sobre a asa' }, { valor: 'aft', rotulo: 'Traseiro' }]}
-                atual={params.seat} aoEscolher={(v) => { params.seat = v; c.sendParams(); c.renderControls(); }} />
-            </Field>
-          )}
-        </> : <>
-          <Field rotulo="Situação">
-            <ChipGroup id="groundMode" opcoes={[{ valor: 'ground', rotulo: 'Ao redor do motor' }, { valor: 'flyby', rotulo: 'Passagem' }]}
-              atual={c.groundMode} aoEscolher={(v) => { c.groundMode = v; c.setListener(); }} />
-          </Field>
-          {c.groundMode === 'ground' ? <SlidersDoSolo c={c} /> : <>
-            <Slider id="alt" rotulo="Altura da passagem" min={20} max={1500} passo={5} valor={params.alt} formatar={(v) => `${fmt(v)} m`} aoMudar={(v) => c.setParam({ alt: v })} />
-            <Slider id="speed" rotulo="Velocidade" min={150} max={2500} passo={10} valor={params.speed} formatar={(v) => `${fmt(v)} km/h · Mach ${fmt(v / 3.6 / 340, 2)}`} aoMudar={(v) => c.setParam({ speed: v })} />
-          </>}
-          <Mapa c={c} refs={refs} />
-          <p className="note" id="obsNote" ref={refs.nota} />
-        </>}
-        <Field rotulo="Ambiente">
-          <ChipGroup id="env" opcoes={Object.entries(AMBIENTES_TURBINA).map(([k, v]) => ({ valor: k, rotulo: v.name }))} atual={c.environment}
-            aoEscolher={(v) => { c.setEnvironment(v); c.renderControls(); }} />
-        </Field>
-        <Slider id="mxFan" rotulo={prop ? 'Hélice e fan' : 'Fan'} min={0} max={2} passo={0.01} valor={params.fan} formatar={pct} aoMudar={(v) => c.setParam({ fan: v })} />
-        <Slider id="mxCore" rotulo="Núcleo (compressor, turbina, combustão)" min={0} max={2} passo={0.01} valor={params.core} formatar={pct} aoMudar={(v) => c.setParam({ core: v })} />
-        <Slider id="mxJet" rotulo="Jato" min={0} max={2} passo={0.01} valor={params.jet} formatar={pct} aoMudar={(v) => c.setParam({ jet: v })} />
-        <Slider id="mxVol" rotulo="Volume" min={0} max={1.5} passo={0.01} valor={params.master} formatar={pct} aoMudar={(v) => c.setParam({ master: v })} />
-      </Section>
     </>
   );
 }
