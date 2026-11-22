@@ -489,6 +489,8 @@ O dono ouviu os Rotativos e reprovou duas vezes: "apenas ar". A regra de gosto d
 
 **Campos novos de preset** (todos com controle no painel, todos do lado baixo de fábrica): `hcTurb` (chiado da pós-queima, 0,2), `kBoca` (chama na boca, 0), `kVed` (chiado das vedações, 0,5), `kApito` (som do turbo, 0,3), `variacao` (variação entre explosões, 3,5; a Norton usa 1,5). Parâmetros internos, sem campo de preset: os limiares de diluição (`xFalha0`/`xFalha1`, 0,44–0,48), `kCru` (0,05), `kChama` (0,015), `kPlenum` (0,6; 0,15 com admissão periférica) e `tetoJato` (0,1).
 
+**Segunda passada (mecanismos do motor-base).** Dois campos a mais, com controle no painel: `carcaca` (a parede do abafador irradia em linhas a onda que chega a ele; −16 dB de fábrica, acertado pelas linhas da passagem do RX-8 original) e `batida` (o que no Wankel se repete igual em todo ciclo: a vedação de ápice na borda das janelas e a folga da engrenagem de fase a cada explosão; −12 dB). O `jato: 'sonico'` do motor-base não vale aqui: a `BocaRot` é o caminho único do jato. Trocar a configuração com o motor funcionando já não recomeça as câmaras (o estado passa de uma para a outra), e a página sobe a lenta junto com a janela de bridge (1 500 rpm) ou periférica (1 800). Medidas em `TECNICO.md` → Rotativos → Segunda passada.
+
 **Critérios de aceite da rodada** (PLANO, viés do simulador), medidos em `npm run teste:rotativo` (grupo `ar`) e em `tools/rotativo-regua.py`: defeito `ar` ≤ 0,6 e leito de ruído ≤ o da gravação casada até 6 kHz; as fontes de ar contínuas juntas mudam o nível ponderado A em menos de 1,5 dB na lenta e em carga parcial; em nenhuma posição de Ø e ponteira o jato é a fonte dominante; tom a menos ≤ 2,4 e pulso a menos ≤ 1,3.
 
 ---

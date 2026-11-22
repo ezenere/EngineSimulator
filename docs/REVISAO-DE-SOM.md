@@ -473,6 +473,9 @@ ouvido discordam, ponha o parâmetro no painel e deixe o ouvido decidir.
 - **Calibração por sorte.** O reforço da lenta era medido numa janela de 0,4 s de um laço que oscila em 0,8 s: mexer em qualquer coisa mudava o volume da lenta em até 4 dB. Medidas de calibração precisam cobrir o período do que oscila.
 - **Ritmo antes de textura.** O "brap" não é chiado nem estalo sorteado: é quais explosões acontecem. A dobra do sinal em N períodos (`f0.py`) achou o padrão de 6 voltas; a linha mais forte do bridgeport (71,5 Hz) era a ignição de 66 Hz mais o ritmo de 5,5 Hz.
 
+- **"Falta nível" não é "faltam linhas"** (segunda passada). A primeira rodada concluiu que o RX-8 original em giro alto tinha "20 dB a menos de 1 a 6 kHz, em linhas" olhando só o nível das bandas. O painel das aceleradas paradas mostrou leito liso em 96–100% dessas bandas; na passagem, as linhas de 1–2,5 kHz estavam a 3 dB das do simulado. A carcaça do escape foi acertada pelas linhas (−16 dB), não pelo nível: repor em tom os 10 dB de leito da gravação daria um carro mais tonal que o real, e repor em ruído é o "ar" que o dono reprovou. Antes de dizer o que falta numa banda, abra o painel e veja se ali há linha ou leito.
+- **Um mecanismo que passa por fora de outro muda as medidas dele.** A carcaça irradia a onda de antes do abafador e não passa pela ponteira: com ela forte, a ponteira fina deixava de amolecer o som em plena carga (queda de 18 dB para 9). O nível escolhido teve de respeitar isso também.
+
 ## Caso: os pipocos do radial
 
 **Queixa:** "tem muito pipoco nos motores radiais".
