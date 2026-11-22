@@ -1,9 +1,10 @@
-// Página do Vapor (docs/VAPOR.md 6): famílias e máquinas em chips, manômetro, fita de escapes e leituras, cenários e o
+// Página do Vapor (docs/VAPOR.md 6): famílias e máquinas em chips, manômetro, fita de escapes e leituras, onda e
+// espectro (o instrumento comum das páginas de motor, src/ui/onda.ts, com as notas do apito marcadas), cenários e o
 // painel. O som é a Cena (processador `vapor` = CenaDSP com o portador do preset e o VaporDSP), com a cadeia da Passagem
 // (escala absoluta, reverberação por banda). O React monta a estrutura; o estado fica em ControleVapor e os mostradores
 // são desenhados num só requestAnimationFrame lendo a telemetria de um campo.
 import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { AudioShell, Barra, BotaoIgnicao, FamilyNav, PresetNav, PERFIL_PASSAGEM, useAudioShell } from '../../ui';
+import { AudioShell, Barra, BotaoIgnicao, FamilyNav, OndaEEspectro, PresetNav, PERFIL_PASSAGEM, useAudioShell } from '../../ui';
 import { CenaDSP } from '../../scene/dsp-cena';
 import urlVapor from '../../worklet/processador-vapor.ts?worker&url';
 import { PRESETS_VAPOR, FAMILIAS_VAPOR, type FamiliaVapor } from '../../engines/vapor/presets';
@@ -29,14 +30,14 @@ function Interior({ k }: { k: ControleVapor }) {
   const { iniciar, estado, erro } = useAudioShell();
   k.iniciar = iniciar;
   const e = useSyncExternalStore(k.assinar, k.obter);
-  const cvM = useRef<HTMLCanvasElement>(null), cvF = useRef<HTMLCanvasElement>(null);
+  const cvM = useRef<HTMLCanvasElement>(null), cvF = useRef<HTMLCanvasElement>(null), cvS = useRef<HTMLCanvasElement>(null);
   const leituras = useRef<Leituras>({});
   usarTeclado(k);
 
   useEffect(() => {
     // alça para os testes no navegador (tools/vapor-navegador.mjs)
     (window as any).__vapor = k;
-    const pico = new MedidorPico();
+    const pico = new MedidorPico(), onda = new OndaEEspectro();
     let id = 0, n = 0;
     const quadro = (agora: number) => {
       k.quadro(agora);
@@ -46,6 +47,14 @@ function Interior({ k }: { k: ControleVapor }) {
         escreverLeituras(k, leituras.current, pk);
       }
       if (cvF.current) desenharFita(k, cvF.current);
+      if (cvS.current) {
+        // as notas do apito, quando ele soa (a batida do escape, de 1 a 20 por segundo, fica abaixo do eixo)
+        const fa = (k.tele?.motor?.fApito || []).filter((f: number) => f > 0);
+        onda.desenhar(cvS.current, k.audio?.analyser, k.audio?.ctx.sampleRate ?? 48000, {
+          vazio: 'ligue o som para ver a onda e o espectro', escala: 'pico',
+          marcas: fa.map((f: number, i: number) => ({ f, rotulo: i === 0 ? 'apito' : '', cor: 'gold' as const })),
+        });
+      }
       id = requestAnimationFrame(quadro);
     };
     id = requestAnimationFrame(quadro);
@@ -81,6 +90,9 @@ function Interior({ k }: { k: ControleVapor }) {
             <figcaption className="legenda">Tração usada da adesão (vermelho: patinando)</figcaption>
             <div className="esforco" role="img" aria-label="Fração da adesão usada pelo esforço de tração"><i id="barraEsforco" ref={(el) => { if (el) leituras.current.barraEsforco = el; }} /></div>
           </figure>
+        </section>
+        <section className="scope-wrap" aria-label="Forma de onda e espectro">
+          <canvas id="scope" ref={cvS} role="img" aria-label="Forma de onda e espectro do som no ouvido do observador" />
         </section>
         <section className="drive">
           <div className="gearbox" id="cenarios" role="group" aria-label="Cenários">

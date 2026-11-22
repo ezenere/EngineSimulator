@@ -8,7 +8,8 @@
 //   node tools/vapor-navegador.mjs [url da vapor.html] [chromium|firefox] [porta]
 //   sem url: serve o dist/ em http://127.0.0.1:<porta+1>/data/engine/ (rode npm run build antes)
 //
-// CHROMIUM=/caminho e FIREFOX=/caminho trocam os executáveis; SHOT=arquivo.png grava uma captura (Chromium);
+// CHROMIUM=/caminho e FIREFOX=/caminho trocam os executáveis; MUDO=1 roda sem tocar nas caixas (o som continua sendo
+// medido); SHOT=arquivo.png grava uma captura (Chromium);
 // RESERVA=1 bloqueia o AudioWorklet para testar a reserva na thread principal. Sai com código ≠ 0 se algo falhar.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -22,6 +23,10 @@ let url = process.argv[2];
 const nav = process.argv[3] || 'chromium';
 const porta = +(process.argv[4] || (nav === 'firefox' ? 9590 : 9470));
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+// MUDO=1: o teste roda sem tocar nas caixas (o áudio continua rodando e sendo medido no analisador): --mute-audio no
+// Chromium; no Firefox, media.volume_scale 0 (o fluxo vai em silêncio ao servidor de áudio)
+const MUDO_CR = process.env.MUDO ? ['--mute-audio'] : [];
+const MUDO_FF = process.env.MUDO ? 'user_pref("media.volume_scale", "0.0");\n' : '';
 const perfil = fs.mkdtempSync(path.join(os.tmpdir(), `vapor-${nav}-`));
 const logs = [];
 let falhas = 0;
@@ -47,7 +52,7 @@ if (!url || url === 'dist') {
 // ------------------------------------------------------------------ drivers (os de ronco-navegador.mjs)
 async function abrirChromium() {
   const bin = process.env.CHROMIUM || '/usr/bin/chromium';
-  const proc = spawn(bin, ['--headless=new', `--remote-debugging-port=${porta}`, '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check', `--user-data-dir=${perfil}`, 'about:blank'], { stdio: 'ignore' });
+  const proc = spawn(bin, ['--headless=new', `--remote-debugging-port=${porta}`, '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check', ...MUDO_CR, `--user-data-dir=${perfil}`, 'about:blank'], { stdio: 'ignore' });
   let alvo;
   for (let i = 0; i < 50 && !alvo; i++) { await espera(200); try { alvo = (await (await fetch(`http://127.0.0.1:${porta}/json`)).json()).find((t) => t.type === 'page'); } catch {} }
   const ws = new WebSocket(alvo.webSocketDebuggerUrl);
@@ -76,7 +81,7 @@ async function abrirChromium() {
 
 async function abrirFirefox() {
   const bin = process.env.FIREFOX || '/usr/bin/firefox';
-  fs.writeFileSync(path.join(perfil, 'user.js'), 'user_pref("media.autoplay.default", 0);\nuser_pref("media.autoplay.blocking_policy", 0);\n');
+  fs.writeFileSync(path.join(perfil, 'user.js'), 'user_pref("media.autoplay.default", 0);\nuser_pref("media.autoplay.blocking_policy", 0);\n' + MUDO_FF);
   const proc = spawn(bin, ['--headless', '--remote-debugging-port', String(porta), '--profile', perfil, '--no-remote', '--width', '1400', '--height', '900'], { stdio: 'ignore' });
   let ws;
   for (let i = 0; i < 60; i++) { await espera(300); try { ws = new WebSocket(`ws://127.0.0.1:${porta}/session`); await new Promise((ok, err) => { ws.onopen = ok; ws.onerror = err; }); break; } catch { ws = null; } }
@@ -114,11 +119,14 @@ const tele = () => ev(`(() => { const k = window.__vapor; const t = k.tele; cons
 const rms = () => ev(`(() => { const an = window.__vapor.audio?.analyser; if (!an) return -999; const x = new Float32Array(an.fftSize); an.getFloatTimeDomainData(x); let s = 0; for (const v of x) s += v * v; return 10 * Math.log10(s / x.length + 1e-20); })()`);
 const deslizar = (id, v) => ev(`(() => { const r = document.getElementById(${JSON.stringify(id)}); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(r, String(${v})); r.dispatchEvent(new Event('input', { bubbles: true })); r.dispatchEvent(new Event('change', { bubbles: true })); return r.closest('.field').querySelector('output').textContent; })()`);
 const esperaAte = async (f, ms = 8000) => { const t0 = Date.now(); let v; while (Date.now() - t0 < ms) { v = await f(); if (v) return v; await espera(250); } return v; };
+// lê até a condição valer ou o limite passar e devolve a última leitura (no lugar de dormir um tempo fixo depois de mexer
+// num controle: com a máquina carregada a página ainda não respondeu)
+const lerAte = async (f, ok, ms = 6000) => { const t0 = Date.now(); let v; for (;;) { v = await f(); if (ok(v) || Date.now() - t0 >= ms) return v; await espera(150); } };
 const r1 = (x) => Math.round(x * 10) / 10;
 
 try {
   await b.ir(url);
-  await espera(2500);
+  await esperaAte(() => ev(`document.readyState === 'complete' && !!window.__vapor && !!document.querySelector('.preset[aria-pressed=true]')`), 15000);
   confere((await ev('document.title')) === 'Vapor', 'título');
   const ini = await ev(`({ familias: document.querySelectorAll('.fam').length, presets: document.querySelectorAll('.preset').length, marcado: document.querySelector('.preset[aria-pressed=true]')?.dataset.id, secoes: [...document.querySelectorAll('.controls h2')].map((h) => h.textContent), sliders: document.querySelectorAll('.controls input[type=range]').length, cenarios: document.querySelectorAll('[data-cenario]').length, manometro: !!document.getElementById('manometro'), fita: !!document.getElementById('fita') })`);
   confere(ini.familias === 5 && ini.presets === 10 && ini.marcado === 'k4s', 'famílias e locomotivas nos chips', `${ini.familias} famílias, ${ini.presets} presets, ${ini.marcado}`);
@@ -126,18 +134,21 @@ try {
 
   // liga o som: sonda, portador e telemetria
   await clicar('#ignicao');
-  let t = await esperaAte(async () => { const x = await tele(); return x.motor && x.idade < 500 && !x.calibrando ? x : null; }, 15000);
+  let t = await esperaAte(async () => { const x = await tele(); return x.motor && x.idade < 500 && !x.calibrando ? x : null; }, 25000);
   confere(!!t, 'som ligado, motor calibrado e telemetria chegando', t ? `${t.modo}, ${t.estadoCtx}, caldeira ${r1(t.pCal)} bar` : '');
   confere(t?.modo === (process.env.RESERVA ? 'script' : 'worklet'), 'modo do áudio', t?.modo);
   confere(t && t.chuffs < 0.05 && t.v < 0.5, 'parado: sem chuff', t ? `${r1(t.chuffs)}/s, ${r1(t.v)} km/h` : '');
 
   // regulador (slider) e W: a composição sai andando
   await deslizar('regulador', 0.7);
-  await tecla('KeyW'); await espera(300); await tecla('KeyW', 'keyup');
+  await tecla('KeyW'); await espera(300); await tecla('KeyW', 'keyup'); // (o tempo com a tecla apertada: é a ação)
   t = await esperaAte(async () => { const x = await tele(); return x.chuffs > 0.5 && x.v > 1 ? x : null; }, 15000);
   confere(!!t, 'regulador aberto: anda e solta chuffs', t ? `${r1(t.v)} km/h, ${r1(t.chuffs)} chuffs/s` : JSON.stringify(await tele()));
   const nivelSom = await rms();
   confere(nivelSom > -80, 'som na saída', `${r1(nivelSom)} dBFS`);
+  // onda e espectro (o instrumento comum, src/ui/onda.ts): o canvas desenha a janela do analisador
+  const onda = await lerAte(() => ev(`document.getElementById('scope')?.dataset.rms ?? null`), (v) => v != null && +v > -90, 4000);
+  confere(onda != null && +onda > -90, 'onda e espectro desenhando', `${onda} dBFS na janela da onda`);
 
   // apito segurável (H)
   await tecla('KeyH');
@@ -148,30 +159,30 @@ try {
   confere(!!t, 'H solto: o apito cala');
 
   // sino (B)
-  await tecla('KeyB'); await espera(300);
-  t = await tele();
-  confere(t.sino && (await ev(`document.getElementById('botaoSino').getAttribute('aria-pressed')`)) === 'true', 'B toca o sino');
+  await tecla('KeyB');
+  const sino = await lerAte(async () => [(await tele()).sino, await ev(`document.getElementById('botaoSino').getAttribute('aria-pressed')`)], (x) => x[0] && x[1] === 'true', 4000);
+  confere(sino[0] && sino[1] === 'true', 'B toca o sino');
   await tecla('KeyB');
 
   // ambiente
-  await chip('#ambiente', 'Túnel'); await espera(500);
-  t = await tele();
+  await chip('#ambiente', 'Túnel');
+  t = await lerAte(tele, (x) => x.amb === 'tunel', 4000);
   confere(t.amb === 'tunel', 'troca o ambiente (resposta por banda)', t.amb);
 
   // cenário de cruzeiro a 60 km/h
   await clicar('[data-cenario=cruzeiro60]');
-  t = await esperaAte(async () => { const x = await tele(); return Math.abs(x.v - 60) < 2 && x.chuffs > 5 ? x : null; }, 8000);
+  t = await esperaAte(async () => { const x = await tele(); return Math.abs(x.v - 60) < 2 && x.chuffs > 5 ? x : null; }, 15000);
   confere(!!t, 'cenário cruzeiro: 60 km/h fixos', t ? `${r1(t.v)} km/h, ${r1(t.chuffs)} chuffs/s (K4s: 10,4)` : JSON.stringify(await tele()));
   await clicar('[data-cenario=cruzeiro60]');
 
   // articulada: Big Boy, dois motores
   await clicar('.preset[data-id=bigboy]');
-  t = await esperaAte(async () => { const x = await tele(); return x.preset === 'bigboy' && !x.calibrando && x.motores === 2 && x.idade < 500 ? x : null; }, 15000);
+  t = await esperaAte(async () => { const x = await tele(); return x.preset === 'bigboy' && !x.calibrando && x.motores === 2 && x.idade < 500 ? x : null; }, 25000);
   confere(!!t, 'Big Boy: dois motores na telemetria', t ? `${t.motores} motores` : '');
 
   // família estacionária: Corliss no portador gerador, governado a 75 rpm
   await ev(`(() => { const el = [...document.querySelectorAll('.fam')].find((c) => c.textContent.startsWith('Estacionárias')); el.click(); return true; })()`);
-  t = await esperaAte(async () => { const x = await tele(); return x.preset === 'corliss' && !x.calibrando && Math.abs(x.rpmEixo - 75) < 6 ? x : null; }, 20000);
+  t = await esperaAte(async () => { const x = await tele(); return x.preset === 'corliss' && !x.calibrando && Math.abs(x.rpmEixo - 75) < 6 ? x : null; }, 30000);
   confere(!!t, 'Corliss governado a 75 rpm (família Estacionárias)', t ? `${r1(t.rpmEixo)} rpm` : JSON.stringify(await tele()));
 
   if (process.env.SHOT) await b.foto(process.env.SHOT);

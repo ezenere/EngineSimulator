@@ -1,13 +1,15 @@
 // Capturas de tela de todas as páginas, em várias larguras e estados, para a auditoria visual (docs/AUDITORIA-UI.md).
 // Fala CDP direto com o Chromium headless, sem dependências (o padrão de tools/*-navegador.mjs).
 //
-//   node tools/capturas.mjs [--saida pasta] [--paginas menu,ronco,…] [--larguras 1440,1100,768,400]
+//   node tools/capturas.mjs [--saida pasta] [--paginas menu,ronco,…] [--larguras 1440,1100,768,400] [--altura N]
 //                           [--estados regex] [--so-parado] [--url http://…/] [--porta N] [--sem-auditoria]
 //
 // Sem --url, serve o dist/ (rode npm run build antes) em http://127.0.0.1:<porta+1>/data/engine/, como no site.
 // --saida: pasta dos PNG (padrão .claude/capturas/agora/, fora do git). --estados filtra os estados pelo nome (o roteiro
 // roda inteiro, só as capturas são filtradas); --so-parado para depois do primeiro estado de cada página (uns 5 minutos
-// para as 36 combinações: serve para refazer só a auditoria automática).
+// para as 36 combinações: serve para refazer só a auditoria automática). --altura fixa a altura da janela em todas as
+// larguras (padrão: 900 em 1440, 800 em 1100, 1024 em 768, 800 em 400, 900 nas outras); as imagens de docs/ui/ são
+// 1200 × 750 (`--larguras 1200 --altura 750`).
 //
 // Para cada página × largura o roteiro da página passa pelos estados (parado, motor ligado em lenta, acelerando, painel
 // rolado, um preset de cada família e os estados próprios de cada página) e grava `<página>-<largura>-<estado>.png`:
@@ -35,6 +37,7 @@ const semAuditoria = args.includes('--sem-auditoria');
 const soParado = args.includes('--so-parado');
 const FIM = '__fim do roteiro__';
 const ALTURAS = { 1440: 900, 1100: 800, 768: 1024, 400: 800 };
+const alturaFixa = opc('--altura') ? +opc('--altura') : 0;
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 fs.mkdirSync(saida, { recursive: true });
 
@@ -171,7 +174,7 @@ function contexto(pagina, largura) {
   };
   const quer = (estado) => !filtroEstados || filtroEstados.test(estado);
   const c = {
-    pagina, largura, altura: ALTURAS[largura] || 900, estreita: largura <= 1100,
+    pagina, largura, altura: alturaFixa || ALTURAS[largura] || 900, estreita: largura <= 1100,
     /** captura da janela; `auditar` guarda a auditoria automática deste estado */
     foto: async (estado, { auditar = false } = {}) => {
       if (!quer(estado)) return;
