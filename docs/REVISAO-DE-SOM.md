@@ -496,6 +496,11 @@ cinco hipóteses em `TECNICO.md` → Médios):
 | Golf GTI, 2500 rpm em carga parcial | −20,2 → −18,1 | −35,6 → −24,9 | −51,1 → −42,2 |
 | S2000, plena carga a 6500 rpm | +8,5 → +7,4 | +7,1 → +9,9 | −7,4 → −7,3 |
 
+Na régua do kit ouvido (tabela aprovado → novo no `README` do kit; painéis em `docs/ouvido/ronco/`): o total do Fusca a
+1410 rpm vai de 1,27 para 1,12 e o `tom a menos` de 2,41 para 1,90; o `ar` do Mustang frio cai de 0,44–0,56 para
+0,17–0,21; a Fórmula 1 não muda (±0,04); o Hellcat piora (lenta 1,79 → 1,86, frio 1,12 → 1,40) por ficar mais tonal que
+a gravação em 1–6 kHz.
+
 **Erros que quase custaram rodadas:**
 
 - **"Carga parcial" pelo pedal.** 30% de pedal a 2500 rpm dava 0,95 bar no coletor: era quase plena carga, e a primeira
