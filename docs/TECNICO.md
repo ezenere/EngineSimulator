@@ -1669,6 +1669,8 @@ Medidas e deixadas de fora (em `boca.ts`): a intensidade crescendo com o Mach² 
 
 **Limitador em decolagem** (grupo `limitador` do teste: manete toda, hélice no alvo, volume padrão): de 10 presets com mais de 1 % das amostras acima de 0,7 (R-4360 63 %, Verner 5S 38 %, Rotec R3600 32 %, M-14PF 25 %, Rotec R2800 19 %, R-1340 18 %) para nenhum (o maior, R-1830, 0,36 %). Metade veio de tirar o chiado de jato dos estaques e de a hélice da página usar a lei de carga; o resto, da margem.
 
+**Partida com o motor ainda girando** (achado pelo roteiro de navegador). Trocar de preset com o motor funcionando e engatar o arranque em menos de 1 s deixava o motor novo no estado "funcionando" sem centelha: o giro que sobrava do anterior passava do limite antes da 9ª pá, e a regra dos magnetos automáticos só valia no estado de arranque. O motor parava. O roteiro passava por acaso (lia 449 rpm e 6 pás do giro que sobrava); com a calibração 0,2 s mais longa da margem de decolagem deixou de passar. Agora, no automático, os magnetos ligam quando o giro passa do limite (`controleRadial`).
+
 **A gravação do T-6G está a 525 rpm, não a 916.** A linha mais forte do trecho (70 Hz) foi tomada pela ignição no RADIAL.md; a dobra do `f0.py` dá o ciclo em 4,38 Hz (as linhas de 39,4, 78,8 e 157,7 Hz são a ignição e os harmônicos dela; 70 Hz é o 16º harmônico do ciclo, a 8ª ordem), e o agudo vem numa rajada por ciclo. É a armadilha do Mustang ("a linha mais forte não é a ignição"). A régua usa 525 rpm; os cenários do `teste:radial` que citam o T-6G continuam a 891–916 rpm (pendente).
 
 ### Pendente (TODO)
