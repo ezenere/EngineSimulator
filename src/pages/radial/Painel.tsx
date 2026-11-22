@@ -117,10 +117,18 @@ function Temperatura({ k, e }: P) {
       <Field rotulo="Cabeça dos cilindros (CHT)">
         <ChipGroup id="tempMode" opcoes={[{ valor: 'real', rotulo: 'Real (começa fria)' }, { valor: 'fixed', rotulo: 'Fixa' }]} atual={e.tempMode} aoEscolher={(v) => k.setTempMode(v as 'real' | 'fixed')} />
       </Field>
-      {e.tempMode === 'fixed' && <Slider id="coolant" rotulo="Temperatura" min={-10} max={230} passo={1} valor={90} formatar={(v) => `${v} °C`} aoMudar={(v) => k.setCoolant(v)} />}
+      {e.tempMode === 'fixed' && <TemperaturaFixa k={k} />}
       <p className="note">Motor frio: os cilindros de baixo têm óleo (encharque) e falham nos primeiros segundos, com estouros no escape; a lenta fica mais alta até esquentar.</p>
     </Section>
   );
+}
+
+// a temperatura nasce da telemetria e a acompanha, como a "Água do motor" do Ronco (os mostradores do Ronco, que esta
+// página usa, escrevem `k.lento.agua` a partir de `tele.coolant`, menos enquanto o usuário mexe no controle). O motor
+// aceita a temperatura fixa de −20 a 130 °C (`m.temp` em src/engines/ronco/dsp.ts); o controle vai até onde ela vale.
+function TemperaturaFixa({ k }: { k: ControleRadial }) {
+  const { agua } = useSyncExternalStore(k.assinarLento, k.obterLento);
+  return <Slider id="coolant" rotulo="Temperatura" min={-10} max={130} passo={1} valor={agua} formatar={(v) => `${v} °C`} aoMudar={(v) => k.setCoolant(v)} />;
 }
 
 function Escapamento({ k, e }: P) {

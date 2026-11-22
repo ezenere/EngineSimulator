@@ -1,9 +1,10 @@
 /* Página do Vapor: manômetro (solto, como os outros mostradores redondos) e leituras em cima, a faixa dos escapes e da
-   tração no meio, os cenários embaixo. Peças e tokens de src/ui/estilo.css. */
+   tração, a onda e o espectro (a `.scope-wrap` das outras páginas, na mesma altura), os cenários embaixo. Peças e
+   tokens de src/ui/estilo.css. */
 .vapor .painel-vapor {
   grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto auto;
-  grid-template-areas: "mano tele" "fita fita" "drive drive";
+  grid-template-rows: minmax(0, 1fr) auto 150px auto;
+  grid-template-areas: "mano tele" "fita fita" "scope scope" "drive drive";
 }
 .manometro { grid-area: mano; min-height: 260px; min-width: 0; }
 #manometro { width: 100%; height: 100%; display: block; }
@@ -14,11 +15,20 @@
 .esforco i { display: block; height: 100%; width: 0%; background: var(--gold); transition: width .1s; }
 .esforco i.patina { background: var(--hot); }
 .vapor .drive { display: grid; gap: var(--e-2); justify-content: stretch; }
+/* (notebook de 768 px de altura: numa linha a mais a onda tiraria do manômetro a altura das leituras, que passavam por
+   cima das faixas; ela vai para o lado dos escapes, que ficam um sobre o outro, numa linha de altura fixa) */
+@media (min-width: 1101px) and (max-height: 820px) {
+  .vapor .painel-vapor { grid-template-rows: minmax(0, 1fr) 120px auto; grid-template-areas: "mano tele" "fita scope" "drive drive"; gap: var(--e-3); }
+  .fita { grid-template-columns: minmax(0, 1fr); gap: var(--e-2); align-items: start; }
+  .fita .quadro { height: 44px; }
+  .esforco { margin-block: 4px; }
+  .manometro { min-height: 220px; }
+}
 @media (max-width: 1100px) {
-  .vapor .painel-vapor { grid-template-rows: 340px auto auto; }
+  .vapor .painel-vapor { grid-template-rows: 340px auto 150px auto; }
 }
 @media (max-width: 720px) {
-  .vapor .painel-vapor { grid-template-columns: minmax(0, 1fr); grid-template-rows: 280px auto auto auto; grid-template-areas: "mano" "tele" "fita" "drive"; }
+  .vapor .painel-vapor { grid-template-columns: minmax(0, 1fr); grid-template-rows: 280px auto auto 130px auto; grid-template-areas: "mano" "tele" "fita" "scope" "drive"; }
   .fita { grid-template-columns: minmax(0, 1fr); gap: var(--e-3); }
   .esforco { margin-block: 4px; }
 }

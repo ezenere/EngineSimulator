@@ -6,6 +6,7 @@
 //   (ex.: npm run dev → http://localhost:5173/ronco.html; npm run build && npm run preview → :4173)
 //
 // CHROMIUM=/caminho e FIREFOX=/caminho trocam os executáveis (padrão /usr/bin/chromium, /usr/bin/firefox).
+// MUDO=1 roda sem tocar nas caixas (o som continua sendo medido no analisador da página).
 // SHOT=arquivo.png grava uma captura da página no fim (só Chromium); RESERVA=1 bloqueia o AudioWorklet
 // para testar a reserva na thread principal (só Chromium). Sai com código ≠ 0 se algo falhar.
 import { spawn } from 'node:child_process';
@@ -18,6 +19,10 @@ const nav = process.argv[3] || 'chromium';
 const porta = +(process.argv[4] || (nav === 'firefox' ? 9460 : 9340));
 if (!url) { console.error('uso: node tools/ronco-navegador.mjs <url> [chromium|firefox] [porta]'); process.exit(2); }
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+// MUDO=1: o teste roda sem tocar nas caixas (o áudio continua rodando e sendo medido no analisador): --mute-audio no
+// Chromium; no Firefox, media.volume_scale 0 (o fluxo vai em silêncio ao servidor de áudio)
+const MUDO_CR = process.env.MUDO ? ['--mute-audio'] : [];
+const MUDO_FF = process.env.MUDO ? 'user_pref("media.volume_scale", "0.0");\n' : '';
 const perfil = fs.mkdtempSync(path.join(os.tmpdir(), `ronco-${nav}-`));
 const logs = [];
 let falhas = 0;
@@ -26,7 +31,7 @@ const confere = (ok, msg, extra = '') => { console.log(`${ok ? 'ok   ' : 'FALHA'
 // ------------------------------------------------------------------ drivers
 async function abrirChromium() {
   const bin = process.env.CHROMIUM || '/usr/bin/chromium';
-  const proc = spawn(bin, ['--headless=new', `--remote-debugging-port=${porta}`, '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check', `--user-data-dir=${perfil}`, 'about:blank'], { stdio: 'ignore' });
+  const proc = spawn(bin, ['--headless=new', `--remote-debugging-port=${porta}`, '--autoplay-policy=no-user-gesture-required', '--no-first-run', '--no-default-browser-check', ...MUDO_CR, `--user-data-dir=${perfil}`, 'about:blank'], { stdio: 'ignore' });
   let alvo;
   for (let i = 0; i < 50 && !alvo; i++) { await espera(200); try { alvo = (await (await fetch(`http://127.0.0.1:${porta}/json`)).json()).find((t) => t.type === 'page'); } catch {} }
   const ws = new WebSocket(alvo.webSocketDebuggerUrl);
@@ -58,7 +63,7 @@ async function abrirChromium() {
 
 async function abrirFirefox() {
   const bin = process.env.FIREFOX || '/usr/bin/firefox';
-  fs.writeFileSync(path.join(perfil, 'user.js'), 'user_pref("media.autoplay.default", 0);\nuser_pref("media.autoplay.blocking_policy", 0);\n');
+  fs.writeFileSync(path.join(perfil, 'user.js'), 'user_pref("media.autoplay.default", 0);\nuser_pref("media.autoplay.blocking_policy", 0);\n' + MUDO_FF);
   const proc = spawn(bin, ['--headless', '--remote-debugging-port', String(porta), '--profile', perfil, '--no-remote', '--width', '1400', '--height', '900'], { stdio: 'ignore' });
   let ws;
   for (let i = 0; i < 60; i++) { await espera(300); try { ws = new WebSocket(`ws://127.0.0.1:${porta}/session`); await new Promise((ok, err) => { ws.onopen = ok; ws.onerror = err; }); break; } catch { ws = null; } }
@@ -99,11 +104,19 @@ const tele = () => ev(`(() => { const k = window.__ronco; return { ...k.tele, mo
 const rms = () => ev(`(() => { const an = window.__ronco.audio?.analyser; if (!an) return -999; const x = new Float32Array(an.fftSize); an.getFloatTimeDomainData(x); let s = 0; for (const v of x) s += v * v; return 10 * Math.log10(s / x.length + 1e-20); })()`);
 // valor de slider (evento input e change, como o usuário arrastando e soltando)
 const deslizar = (id, v) => ev(`(() => { const r = document.getElementById(${JSON.stringify(id)}); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(r, String(${v})); r.dispatchEvent(new Event('input', { bubbles: true })); r.dispatchEvent(new Event('change', { bubbles: true })); return r.closest('.field').querySelector('output').textContent; })()`);
+// Esperas: em vez de dormir um tempo fixo depois de mexer num controle (com a máquina carregada a página ainda não
+// respondeu), lê até a condição valer ou o limite passar e devolve a última leitura, que a conferência julga e mostra.
+// `min` espera pelo menos isso antes de olhar, onde o estado de antes já satisfaria a condição (troca de carro com o
+// motor ligado). O limite é folgado: só pesa quando algo está errado.
+const lerAte = async (f, ok, ms = 6000, min = 0) => { const t0 = Date.now(); if (min) await espera(min); let v; for (;;) { v = await f(); if (ok(v) || Date.now() - t0 >= ms) return v; await espera(150); } };
+const esperaAte = (f, ms = 8000, min = 0) => lerAte(f, Boolean, ms, min);
+const teleAte = (ok, ms = 8000, min = 0) => lerAte(tele, ok, ms, min);
 const pressionado = (sel) => ev(`[...document.querySelectorAll(${JSON.stringify(sel + ' [aria-pressed=true]')})].map((x) => x.textContent).join('|')`);
+const manete = () => ev(`(() => { const l = document.getElementById('lever'); return l ? +l.getAttribute('aria-valuenow') : null; })()`);
 
 try {
   await b.ir(url);
-  await espera(2500);
+  await esperaAte(() => ev(`document.readyState === 'complete' && !!window.__ronco && !!document.querySelector('.preset[aria-pressed=true]')`), 15000);
   confere((await ev('document.title')) === 'Ronco', 'título');
   const ini = await ev(`({ familias: document.querySelectorAll('.fam').length, carros: document.querySelectorAll('.preset').length, marcado: document.querySelector('.preset[aria-pressed=true]')?.dataset.id, placa: document.querySelector('.plate')?.textContent, secoes: [...document.querySelectorAll('.controls h2')].map((h) => h.textContent), sliders: document.querySelectorAll('.controls input[type=range]').length, ordem: document.getElementById('roOrder').textContent, bal: document.querySelectorAll('.bal').length })`);
   // (10 famílias: as 9 do legado e a Aviação da etapa 3, RADIAL.md 6)
@@ -115,8 +128,9 @@ try {
 
   // liga o motor
   await clicar('.bar .ignition');
-  await espera(3000);
-  let t = await tele();
+  // pegou e assentou na lenta: os 3 s de antes viram o mínimo (na subida o giro passa pela faixa antes do pico da
+  // partida, e a lenta medida aqui é a referência do "soa mais alto" abaixo) e a espera segue até a condição
+  let t = await teleAte((x) => x.state === 'run' && x.rpm > 500 && x.rpm < 1300 && !!x.modo, 20000, 3000);
   if (process.env.RESERVA) confere(t.modo === 'script', 'áudio pela reserva (ScriptProcessorNode)', `${t.modo} · ${t.sr} Hz · ${t.estadoCtx}`);
   else confere(t.modo === 'worklet', 'áudio pelo AudioWorklet (não a reserva)', `${t.modo} · ${t.sr} Hz · ${t.estadoCtx}`);
   confere(t.state === 'run' && t.rpm > 500 && t.rpm < 1300, 'pegou e está em marcha lenta', `${t.state} ${Math.round(t.rpm)} rpm`);
@@ -127,66 +141,66 @@ try {
 
   // acelera em neutro (W segurado)
   await tecla('KeyW');
-  await espera(1500);
-  t = await tele();
-  const pedal = await ev(`document.getElementById('pedalFill').style.height`);
+  t = await teleAte((x) => x.rpm > 3000 && x.thr > 0.5, 10000);
+  const pedal = await lerAte(() => ev(`document.getElementById('pedalFill').style.height`), (v) => v === '100%', 3000);
   const alto = await rms();
   confere(t.rpm > 3000 && t.thr > 0.5, 'W acelera', `${Math.round(t.rpm)} rpm, borboleta ${t.thr.toFixed(2)}`);
   confere(pedal === '100%', 'pedal na tela acompanha o teclado', pedal);
   confere(alto > lenta + 3, 'acelerando soa mais alto que a lenta', `${alto.toFixed(1)} vs ${lenta.toFixed(1)} dBFS`);
   await tecla('KeyW', 'keyup');
-  await espera(1500);
+  await teleAte((x) => x.rpm < 1500, 10000); // volta perto da lenta antes de engatar
 
   // engata a 1ª (E), anda um pouco com meio pé (Shift + W), freia (S), volta ao neutro (Q)
   await tecla('KeyE');
-  await espera(600);
-  confere((await texto('#gearRead')) === '1', 'E engata a 1ª', await texto('#gearRead'));
+  confere((await lerAte(() => texto('#gearRead'), (v) => v === '1', 4000)) === '1', 'E engata a 1ª', await texto('#gearRead'));
   await tecla('KeyW', 'keydown', { shiftKey: true });
-  await espera(2000);
-  t = await tele();
+  t = await teleAte((x) => x.kmh > 3, 12000);
   confere(t.kmh > 3 && t.thr < 0.5, 'meio pé anda devagar', `${t.kmh.toFixed(1)} km/h, borboleta ${t.thr.toFixed(2)}`);
   await tecla('KeyW', 'keyup');
   await tecla('KeyS');
-  confere(await ev(`document.getElementById('brakeBtn').classList.contains('on')`), 'S acende o freio');
-  await espera(1500);
+  confere(await esperaAte(() => ev(`document.getElementById('brakeBtn').classList.contains('on')`), 3000), 'S acende o freio');
+  await espera(1500); // (o tempo que o pé fica no freio: é a ação, não uma espera por resposta)
   await tecla('KeyS', 'keyup');
   await tecla('KeyQ');
-  await espera(500);
-  confere((await texto('#gearRead')) === 'N', 'Q volta ao neutro', await texto('#gearRead'));
+  confere((await lerAte(() => texto('#gearRead'), (v) => v === 'N', 4000)) === 'N', 'Q volta ao neutro', await texto('#gearRead'));
+  // S segurado e a janela perde o foco (o keyup não chega): o freio solta e o botão da tela apaga
+  await tecla('KeyS');
+  const acendeu = await esperaAte(() => ev(`document.getElementById('brakeBtn').classList.contains('on')`), 2000);
+  await ev(`window.dispatchEvent(new Event('blur'))`);
+  const apagou = await esperaAte(() => ev(`!document.getElementById('brakeBtn').classList.contains('on')`), 2000);
+  confere(acendeu && apagou && (await ev(`window.__ronco.input.brake`)) === 0, 'S segurado e a janela perde o foco: o freio solta e o botão apaga');
 
   // pedal na tela com o ponteiro: aperta no meio do curso, solta
   const r = await ev(`(() => { const r = document.getElementById('pedal').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  const fill = () => ev(`document.getElementById('pedalFill').style.height`);
   await b.mouse('down', r.x, r.y);
-  await espera(150);
-  const meio = await ev(`document.getElementById('pedalFill').style.height`);
+  const meio = await lerAte(fill, (v) => /^(49|50)(\.\d+)?%$/.test(v), 3000);
   await b.mouse('up', r.x, r.y);
-  await espera(150);
-  const solto = await ev(`document.getElementById('pedalFill').style.height`);
+  const solto = await lerAte(fill, (v) => v === '0%', 3000);
   confere(/^(49|50)(\.\d+)?%$/.test(meio) && solto === '0%', 'pedal com o ponteiro (meio curso, solta)', `${meio} → ${solto}`);
 
   // troca de carro com o motor ligado: Fusca dá a partida do zero
   await clicar('.fam:nth-child(8)');
   await clicar('.preset[data-id=fusca]');
-  await espera(400);
-  confere((await ev(`document.querySelector('.plate').textContent`)).startsWith('Boxer 4'), 'placa do Fusca', await texto('.plate'));
-  await espera(3500);
-  t = await tele();
+  confere(((await lerAte(() => texto('.plate'), (v) => !!v?.startsWith('Boxer 4'), 4000)) || '').startsWith('Boxer 4'), 'placa do Fusca', await texto('.plate'));
+  // (o Camaro em lenta também passaria nesta condição: os 3,5 s de antes viram o mínimo)
+  t = await teleAte((x) => x.state === 'run' && x.rpm > 600 && x.rpm < 1600 && x.gear === 0, 20000, 3500);
   confere(t.state === 'run' && t.rpm > 600 && t.rpm < 1600 && t.gear === 0, 'Fusca ligou do zero (fresh) e está na lenta', `${t.state} ${Math.round(t.rpm)} rpm, marcha ${t.gear}`);
   confere(await ev(`!!document.getElementById('ring') && window.__ronco.estado.motor.N === 4`), 'ciclo de ignição com 4 cilindros');
 
   // ambiente: troca a acústica e manda params ao DSP
   await clicar('#env .chip:nth-child(3)');
-  await espera(800);
-  const amb = await ev(`({ chip: document.querySelector('#env [aria-pressed=true]').textContent, env: window.__ronco.estado.params.env, cadeia: window.__ronco.audio.ambiente, loop: window.__ronco.tele.loop })`);
+  const amb = await lerAte(() => ev(`({ chip: document.querySelector('#env [aria-pressed=true]').textContent, env: window.__ronco.estado.params.env, cadeia: window.__ronco.audio.ambiente, loop: window.__ronco.tele.loop })`),
+    (a) => a.chip === 'Túnel' && a.env === 'tunnel' && a.cadeia === 'tunnel' && a.loop === 500);
   confere(amb.chip === 'Túnel' && amb.env === 'tunnel' && amb.cadeia === 'tunnel' && amb.loop === 500, 'ambiente Túnel (cadeia + DSP: volta de 500 m na telemetria)', JSON.stringify(amb));
 
   // ouvinte: C troca o microfone, V põe o observador na via
   await tecla('KeyC');
-  await espera(300);
-  confere((await pressionado('#mic')) === 'Cabine' && (await ev(`window.__ronco.audio.ouvinte`)) === 'int', 'C: microfone na cabine', await pressionado('#mic'));
+  const mic = await lerAte(async () => [await pressionado('#mic'), await ev(`window.__ronco.audio.ouvinte`)], (m) => m[0] === 'Cabine' && m[1] === 'int', 4000);
+  confere(mic[0] === 'Cabine' && mic[1] === 'int', 'C: microfone na cabine', mic.join(' · '));
   await tecla('KeyV');
-  await espera(800);
-  const via = await ev(`({ obs: document.querySelector('#observer [aria-pressed=true]').textContent, canvas: !!document.getElementById('passby'), nota: document.getElementById('passNote')?.textContent, ouvinte: window.__ronco.audio.ouvinte })`);
+  const via = await lerAte(() => ev(`({ obs: document.querySelector('#observer [aria-pressed=true]')?.textContent, canvas: !!document.getElementById('passby'), nota: document.getElementById('passNote')?.textContent, ouvinte: window.__ronco.audio.ouvinte })`),
+    (v) => v.obs === 'Parado na via' && v.canvas && /m de você/.test(v.nota) && v.ouvinte === 'road');
   confere(via.obs === 'Parado na via' && via.canvas && /m de você/.test(via.nota) && via.ouvinte === 'road', 'V: observador parado na via, vista de cima e nota', JSON.stringify(via));
   confere((await deslizar('roadDist', 20)) === '20 m', 'distância até a via');
   await tecla('KeyV');
@@ -197,15 +211,18 @@ try {
   confere((await deslizar('mxVol', 1.2)) === '120%', 'volume 120%');
   confere((await deslizar('eqLo', 4.5)) === '+4,5 dB', 'EQ grave +4,5 dB');
   await ev(`[...document.querySelectorAll('.controls .chip')].find((c) => c.textContent === 'Zerar').click()`);
-  await espera(100);
-  confere((await ev(`document.getElementById('eqLo').closest('.field').querySelector('output').textContent`)) === '0 dB', 'Zerar a equalização');
+  confere((await lerAte(() => ev(`document.getElementById('eqLo').closest('.field').querySelector('output').textContent`), (v) => v === '0 dB', 3000)) === '0 dB', 'Zerar a equalização');
 
   // motor: ordem de ignição digitada, inválida e sorteada; cilindros; ângulo do V
-  const ordem = await ev(`(async () => { const i = document.getElementById('orderInput'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, '1 2 4 3'); i.dispatchEvent(new Event('input', { bubbles: true })); await new Promise((r) => setTimeout(r, 100)); const a = [document.getElementById('roOrder').textContent, document.getElementById('orderNote').textContent, i.value]; set.call(i, '1 2 2'); i.dispatchEvent(new Event('input', { bubbles: true })); await new Promise((r) => setTimeout(r, 100)); return [...a, i.className, document.getElementById('orderNote').className]; })()`);
+  const digitar = (txt) => ev(`(() => { const i = document.getElementById('orderInput'); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(i, ${JSON.stringify(txt)}); i.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+  await digitar('1 2 4 3');
+  const valida = await lerAte(() => ev(`[document.getElementById('roOrder').textContent, document.getElementById('orderNote').textContent, document.getElementById('orderInput').value]`), (a) => a[0] === '1-2-4-3', 3000);
+  await digitar('1 2 2');
+  const invalida = await lerAte(() => ev(`[document.getElementById('orderInput').className, document.getElementById('orderNote').className]`), (a) => a[0] === 'bad' && a[1] === 'note warn', 3000);
+  const ordem = [...valida, ...invalida];
   confere(ordem[0] === '1-2-4-3' && ordem[2] === '1 2 4 3' && ordem[3] === 'bad' && ordem[4] === 'note warn', 'ordem digitada: válida muda o motor, inválida avisa', JSON.stringify(ordem));
   await clicar('#cyl .chip:nth-child(8)'); // 10 cilindros: o boxer não tem, vira V
-  await espera(100);
-  confere((await texto('.plate')).startsWith('V10 72°'), 'Cilindros: 10 → V10', await texto('.plate'));
+  confere(((await lerAte(() => texto('.plate'), (v) => !!v?.startsWith('V10 72°'), 3000)) || '').startsWith('V10 72°'), 'Cilindros: 10 → V10', await texto('.plate'));
   confere((await deslizar('bank', 90)) === '90°' && (await texto('.plate')).startsWith('V10 90°'), 'ângulo entre bancadas');
   await ev(`[...document.querySelectorAll('.controls .chip')].find((c) => c.textContent === 'Sortear').click()`);
   confere(/^1(-\d+){9}$/.test(await texto('#roOrder')), 'Sortear ordem', await texto('#roOrder'));
@@ -214,15 +231,13 @@ try {
   // transmissão: automático, modo (M), relações
   await clicar('#trans .chip:nth-child(2)');
   await tecla('KeyM');
-  await espera(100);
-  confere((await pressionado('#driveMode')) === 'Pista', 'M troca o modo do câmbio (Automático → Pista)', await pressionado('#driveMode'));
+  confere((await lerAte(() => pressionado('#driveMode'), (v) => v === 'Pista', 3000)) === 'Pista', 'M troca o modo do câmbio (Automático → Pista)', await pressionado('#driveMode'));
   confere(/ : 1 · \d+ km\/h$/.test(await deslizar('ratio1', 3.2)), 'relação da 1ª com a velocidade máxima');
   confere((await deslizar('power', 300)) === '300 kW · 408 cv', 'potência (recalibra ao soltar)');
 
   // acessórios: B instala a válvula e troca o modo; turbo; compressor
   await tecla('KeyB');
-  await espera(300);
-  const v1 = await ev(`({ chip: document.querySelector('#valve [aria-pressed=true]').textContent, tag: !document.getElementById('valveTag').hidden, txt: document.getElementById('valveTag').textContent })`);
+  const v1 = await lerAte(() => ev(`({ chip: document.querySelector('#valve [aria-pressed=true]')?.textContent, tag: !document.getElementById('valveTag').hidden, txt: document.getElementById('valveTag').textContent })`), (v) => v.chip === 'Pista' && v.tag, 4000);
   confere(v1.chip === 'Pista' && v1.tag, 'B instala o escape ativo aberto', JSON.stringify(v1));
   await clicar('#asp .chip:nth-child(3)');
   confere((await ev(`!!document.getElementById('scRatio')`)) && /O uivo fica em/.test(await ev(`[...document.querySelectorAll('.note')].map((n) => n.textContent).join('|')`)), 'compressor mecânico com relação, lóbulos e nota do uivo');
@@ -232,25 +247,24 @@ try {
   // temperatura: fixa e partida a frio
   await clicar('#tempMode .chip:nth-child(2)');
   await ev(`[...document.querySelectorAll('.controls .chip')].find((c) => c.textContent.startsWith('Partida a frio')).click()`);
-  await espera(1200);
-  t = await tele();
+  t = await teleAte((x) => Math.round(x.coolant) === 20, 6000);
   confere(Math.round(t.coolant) === 20, 'temperatura fixa em 20 °C', String(t.coolant));
-  confere((await ev(`document.getElementById('coolant').value`)) === '20', 'controle da água acompanha a telemetria');
-  confere(/Escape a \d+ °C/.test(await texto('#exhNote')), 'temperatura do escape na nota', await texto('#exhNote'));
+  confere((await lerAte(() => ev(`document.getElementById('coolant').value`), (v) => v === '20', 3000)) === '20', 'controle da água acompanha a telemetria');
+  const nota = await lerAte(() => texto('#exhNote'), (v) => /Escape a \d+ °C/.test(v), 3000);
+  confere(/Escape a \d+ °C/.test(nota), 'temperatura do escape na nota', nota);
 
   // I desliga
   await tecla('KeyI');
-  await espera(1500);
-  t = await tele();
-  confere(t.state === 'off' && (await texto('.bar .ignition')).includes('Ligar motor'), 'I desliga o motor', t.state);
+  t = await teleAte((x) => x.state === 'off', 8000);
+  const botaoLigar = await lerAte(() => texto('.bar .ignition'), (v) => !!v?.includes('Ligar motor'), 3000);
+  confere(t.state === 'off' && botaoLigar.includes('Ligar motor'), 'I desliga o motor', `${t.state} · ${botaoLigar}`);
 
-  const esperaAte = async (f, ms = 8000) => { const t0 = Date.now(); let v; while (Date.now() - t0 < ms) { v = await f(); if (v) return v; await espera(250); } return v; };
   // família aviação (RADIAL.md 7.2): Cessna 172 com magnetos e mistura no lugar do corte de giro, sem transmissão, com
   // partida e hélice; o botão vira "Magnetos + partida" e o motor pega e gira a hélice
   await clicar('.fam:nth-child(10)');
   await clicar('.preset[data-id=c172]');
-  await espera(1200);
-  const av = await ev(`({ secoes: [...document.querySelectorAll('.controls h2')].map((h) => h.textContent), botao: document.querySelector('.bar .ignition')?.textContent })`);
+  const av = await lerAte(() => ev(`({ secoes: [...document.querySelectorAll('.controls h2')].map((h) => h.textContent), botao: document.querySelector('.bar .ignition')?.textContent })`),
+    (a) => a.secoes.includes('Magnetos e mistura') && !!a.botao?.includes('Magnetos + partida'), 5000);
   confere(av.secoes.includes('Magnetos e mistura') && av.secoes.includes('Hélice') && av.secoes.includes('Partida') && !av.secoes.includes('Transmissão') && !av.secoes.includes('Corte de giro'),
     'aviação: Magnetos e mistura, Partida e Hélice; sem Transmissão e Corte de giro', av.secoes.join(','));
   confere(av.botao.includes('Magnetos + partida'), 'botão "Magnetos + partida"', av.botao);
@@ -258,29 +272,27 @@ try {
   t = await esperaAte(async () => { const x = await ev(`(() => { const t = window.__ronco.tele; return { state: t.state, rpm: t.rpm, rpmHelice: t.rpmHelice }; })()`); return x.state === 'run' && x.rpm > 450 ? x : null; }, 12000);
   confere(!!t && t.rpmHelice > 300, 'Cessna pegou e gira a hélice', t ? `${Math.round(t.rpm)} rpm · hélice ${Math.round(t.rpmHelice)} rpm` : 'não pegou');
   // manete de potência (a da Turbina) no lugar do pedal: fica onde foi deixada
-  const manete = () => ev(`(() => { const l = document.getElementById('lever'); return l ? +l.getAttribute('aria-valuenow') : null; })()`);
   const lv = await ev(`({ lever: !!document.getElementById('lever'), pedal: !!document.getElementById('pedal'), marcas: [...document.querySelectorAll('#leverMarks span')].map((s) => s.textContent), posicoes: document.querySelectorAll('#detents button').length })`);
   confere(lv.lever && !lv.pedal && lv.marcas.join(',') === 'lenta,cruzeiro,subida,deco' && lv.posicoes === 4, 'aviação: manete de potência com as marcas e as 4 posições, sem o pedal', JSON.stringify(lv));
+  // W segurado até a manete andar (a velocidade é por quadro, e com a máquina carregada há menos quadros por segundo)
   await tecla('KeyW');
-  await espera(800);
+  await lerAte(manete, (v) => v > 15, 5000);
   await tecla('KeyW', 'keyup');
   const mw = await manete();
-  await espera(600);
+  await espera(600); // (ela não pode se mexer depois de solta: a janela de observação é o teste)
   confere(mw > 15 && mw < 80 && (await manete()) === mw, 'W segurado avança a manete e ela fica onde foi solta', `${mw}% → ${await manete()}%`);
   await tecla('Digit3');
-  await espera(2500);
-  t = await ev(`(() => { const t = window.__ronco.tele; return { rpm: t.rpm, thr: t.thr }; })()`);
-  confere((await manete()) === 85 && Math.abs(t.thr - 0.85) < 0.03 && t.rpm > 1500, 'tecla 3 → manete em subida (85%): o acelerador fica lá e o giro sobe', `${await manete()}% · thr ${t.thr?.toFixed(2)} · ${Math.round(t.rpm)} rpm`);
+  t = await lerAte(async () => ({ m: await manete(), ...(await ev(`(() => { const t = window.__ronco.tele; return { rpm: t.rpm, thr: t.thr }; })()`)) }), (x) => x.m === 85 && Math.abs(x.thr - 0.85) < 0.03 && x.rpm > 1500, 10000);
+  confere(t.m === 85 && Math.abs(t.thr - 0.85) < 0.03 && t.rpm > 1500, 'tecla 3 → manete em subida (85%): o acelerador fica lá e o giro sobe', `${t.m}% · thr ${t.thr?.toFixed(2)} · ${Math.round(t.rpm)} rpm`);
   await tecla('KeyS');
-  await espera(500);
+  await lerAte(manete, (v) => v < 85, 5000);
   await tecla('KeyS', 'keyup');
   confere((await manete()) < 85 && (await manete()) > 40, 'S segurado recua a manete', `${await manete()}%`);
   await clicar('#detents [data-manete="0"]');
-  await espera(300);
-  confere((await manete()) === 0, 'botão 1 · lenta', String(await manete()));
+  confere((await lerAte(manete, (v) => v === 0, 3000)) === 0, 'botão 1 · lenta', String(await manete()));
   await tecla('KeyM');
-  await espera(400);
-  confere((await ev(`window.__ronco.tele.magnetos`)) === 'desligado', 'M cicla os magnetos', await ev(`window.__ronco.tele.magnetos`));
+  const mag = await lerAte(() => ev(`window.__ronco.tele.magnetos`), (v) => v === 'desligado', 4000);
+  confere(mag === 'desligado', 'M cicla os magnetos', mag);
   await tecla('KeyI');
   if (process.env.SHOT) await b.foto(process.env.SHOT);
 } catch (e) {

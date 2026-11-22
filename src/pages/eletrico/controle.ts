@@ -269,10 +269,14 @@ export class ControleEletrico {
     if (e.code === 'Space') { if (alvo?.tagName === 'BUTTON' || e.repeat) return; e.preventDefault(); this.ligar(); }
     else if (e.code === 'ArrowUp') { e.preventDefault(); this.setAcel(this.acel + 0.1); }
     else if (e.code === 'ArrowDown') { e.preventDefault(); this.setAcel(this.acel - 0.1); }
-    else if (e.code === 'KeyR' && !e.repeat) this.setFreio(1);
+    else if (e.code === 'KeyR' && !e.repeat) { this.freioNaTecla = true; this.setFreio(1); }
     else if (e.code === 'KeyM' && !e.repeat) this.ciclarModo();
   };
-  keyup = (e: KeyboardEvent) => { if (e.code === 'KeyR') this.setFreio(0); };
+  keyup = (e: KeyboardEvent) => { if (e.code === 'KeyR') { this.freioNaTecla = false; this.setFreio(0); } };
+  // perder o foco da janela solta a regeneração segurada no R (o keyup não chega a quem trocou de janela); o freio posto
+  // pelo controle deslizante fica como está
+  private freioNaTecla = false;
+  blur = () => { if (this.freioNaTecla) { this.freioNaTecla = false; this.setFreio(0); } };
 }
 
 export const FAMILIAS = FAMILIAS_ELETRICO;

@@ -107,7 +107,7 @@ function Interior({ k, e }: { k: ControleRotativo; e: EstadoRot }) {
               <button type="button" className="key" aria-label="Subir marcha" onClick={() => k.shift(1)}>E</button>
             </div>
           )}
-          <p className="hints"><kbd>W</kbd>/<kbd>↑</kbd> {pal ? 'gatilho' : 'acelerador'} · <kbd>Shift</kbd> meio · <kbd>I</kbd> {pal ? 'ar' : 'ignição'} · <kbd>C</kbd> microfone{carro ? <> · <kbd>Q</kbd>/<kbd>E</kbd> câmbio · <kbd>S</kbd> freio</> : null}{pal ? <> · <kbd>[</kbd>/<kbd>]</kbd> carga</> : null}</p>
+          <p className="hints"><kbd>W</kbd>/<kbd>↑</kbd> {pal ? 'gatilho' : 'acelerador'} · <kbd>Shift</kbd> meio · <kbd>I</kbd> {pal ? 'ar' : 'ignição'} · <kbd>C</kbd> microfone{carro ? <> · <kbd>Q</kbd>/<kbd>E</kbd> câmbio · <kbd>S</kbd> freio</> : null}{e.spec.aviation ? <> · <kbd>M</kbd> magnetos</> : null}{pal ? <> · <kbd>[</kbd>/<kbd>]</kbd> carga</> : null}</p>
         </section>
       </main>
 
@@ -126,7 +126,7 @@ const LEITURAS_CAMARA: [string, string, string][] = [
   ['roEst', 'Estouros', 'Estouros por segundo no escape'],
   ['roSeq', 'Turbo', 'Pressão do turbo e, no sequencial, quanto o turbo secundário já entrou'],
   ['roApv', 'Janelas', 'Janelas secundária e auxiliar da admissão (abrem com o giro)'],
-  ['roFumaca', 'Óleo', 'Fumaça azul do óleo de lubrificação das vedações'],
+  ['roFumaca', 'Óleo', 'Fumaça azul do óleo das vedações, nos primeiros 20 s depois da partida (mais forte com o motor frio)'],
 ];
 
 function Leitura({ e }: { e: EstadoRot }) {

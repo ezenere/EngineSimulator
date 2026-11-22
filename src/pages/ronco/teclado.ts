@@ -49,7 +49,7 @@ export function usarTeclado(k: ControleRonco, setFreio: (on: boolean) => void) {
       else if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { input.half = false; k.sendInput(); }
       else if (e.code === 'KeyS' || e.code === 'ArrowDown') { input.brake = 0; k.sendInput(); setFreio(false); }
     };
-    const blur = () => { k.teclas.up = 0; k.teclas.down = 0; k.input.key = 0; k.input.pad = 0; k.input.brake = 0; k.sendInput(); };
+    const blur = () => { k.teclas.up = 0; k.teclas.down = 0; k.input.key = 0; k.input.pad = 0; k.input.brake = 0; k.sendInput(); setFreio(false); };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     window.addEventListener('blur', blur);

@@ -1,7 +1,9 @@
-// Seções de aviação comuns às páginas do Ronco (família aviação) e do Radial (RADIAL.md 7.1 e 7.2): magnetos e mistura,
-// partida, hélice (manete de passo) e rotor (coletivo, embreagem). Cada controle chama `aoMudar` com o pedaço do estado;
-// a página manda `{ type: 'av', … }` ao DSP. As leituras que mudam a cada quadro têm ids e são escritas pelo laço dos
-// mostradores (src/pages/comum/aviacao-leituras.ts), fora do React.
+// Seções de aviação comuns às páginas do Ronco (família aviação), do Radial (RADIAL.md 7.1 e 7.2) e dos Rotativos de
+// avião e de helicóptero: magnetos e mistura, partida, hélice (manete de passo) e rotor (coletivo, embreagem). Cada
+// controle chama `aoMudar` com o pedaço do estado; a página manda `{ type: 'av', … }` ao DSP. As leituras que mudam a
+// cada quadro têm ids e são escritas por `escreverLeiturasAv` (no fim deste arquivo), chamada pelo laço dos mostradores,
+// fora do React. As teclas (M magnetos; [ e ] mistura, onde a página tem) ficam nas dicas de teclado de cada página
+// (`.hints`), não nos rótulos.
 import { ChipGroup, Field, Section, Slider } from '../../ui';
 
 export type EstadoAv = { magnetos: string; mistura: number; rpmAlvo: number; coletivo: number; engatar: boolean; prime: number; blower: 'baixa' | 'alta' };
@@ -19,11 +21,11 @@ export const proximoMagneto = (m: string) => MAGNETOS[(MAGNETOS.findIndex((x) =>
 export function MagnetosEMistura({ av, aoMudar, duasVelocidades }: { av: EstadoAv; aoMudar: (p: Partial<EstadoAv>) => void; duasVelocidades?: boolean }) {
   return (
     <Section titulo="Magnetos e mistura">
-      <Field rotulo="Magnetos (tecla M)">
+      <Field rotulo="Magnetos">
         <ChipGroup id="magnetos" opcoes={MAGNETOS} atual={av.magnetos} aoEscolher={(v) => aoMudar({ magnetos: v })} />
       </Field>
       <p className="note">Com um magneto só cada cilindro tem uma vela: a queima fica 20% mais lenta e o giro cai 40–120 rpm (o "mag check" a 1 700 rpm). OFF corta a ignição.</p>
-      <Slider id="mistura" rotulo={`Mistura (teclas [ e ]) · ${marcaMistura(av.mistura)}`} min={0} max={1} passo={0.01} valor={av.mistura} formatar={pct} aoMudar={(v) => aoMudar({ mistura: v })} />
+      <Slider id="mistura" rotulo={`Mistura · ${marcaMistura(av.mistura)}`} min={0} max={1} passo={0.01} valor={av.mistura} formatar={pct} aoMudar={(v) => aoMudar({ mistura: v })} />
       <p className="note">Corte de lenta (0) é como se desliga um motor de avião: ele para em poucos segundos com a hélice girando. Pobre (55–65%) esquenta o escape e perde 3–7%; auto-rica (80%) é o ponto de potência; rica (100%) perde 8% e esfria.</p>
       {duasVelocidades && (
         <Field rotulo="Superalimentador">
@@ -79,6 +81,10 @@ export function RotorAv({ av, aoMudar }: { av: EstadoAv; aoMudar: (p: Partial<Es
   );
 }
 
+/** a fumaça dos Rotativos (`t.fumaca` do DSP) é a baforada azul da partida: cai a zero em 20 s, mais forte com o motor
+ *  frio. Não é uma medida do óleo queimado, por isso a leitura diz o que é, sem porcentagem (I2 da auditoria visual) */
+export const fumacaDaPartida = (f: number) => (f > 0.02 ? 'fumaça azul da partida' : '—');
+
 /** escreve as leituras de aviação no DOM a partir da telemetria (chamado a cada quadro pelos mostradores) */
 export function escreverLeiturasAv(t: Record<string, any>) {
   const set = (id: string, v: string) => { const el = document.getElementById(id); if (el && el.textContent !== v) el.textContent = v; };
@@ -91,7 +97,8 @@ export function escreverLeiturasAv(t: Record<string, any>) {
   if (t.torqueCarga !== undefined) set('avCarga', `${n0(t.torqueCarga)} N·m`);
   if (t.Nr !== undefined) set('avNr', `${n0(t.Nr)} rpm${t.nrPct ? ` · ${n0(t.nrPct)}%` : ''}${t.engate !== undefined && t.engate < 1 ? ` · engate ${n0(100 * t.engate)}%` : ''}`);
   if (t.egt !== undefined) set('avEgt', `${n0(t.egt)} °C`);
-  if (t.fumaca !== undefined) set('avFumaca', `${n0(100 * t.fumaca)}%`);
+  // (no Radial a fumaça é a média das falhas, uma medida; nos Rotativos, os de telemetria com `rotores`, é a da partida)
+  if (t.fumaca !== undefined) set('avFumaca', t.rotores !== undefined ? fumacaDaPartida(t.fumaca) : `${n0(100 * t.fumaca)}%`);
   if (t.fase !== undefined) set('avFase', { parado: 'parado', energizar: 'energizando', girar: 'girando', pegou: 'funcionando' }[t.fase as string] ?? t.fase);
   if (t.pas !== undefined) set('avPas', n1(t.pas));
   if (t.apito !== undefined) set('avApito', t.apito ? `${n0(t.apito)} Hz` : '—');
