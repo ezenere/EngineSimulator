@@ -35,6 +35,7 @@
     "navegador:radial": "node tools/radial-navegador.mjs",
     "teste:rotativo": "tsx tools/rotativo-valida.ts",
     "lenta:rotativo": "tsx tools/rotativo-lenta.ts",
+    "cpu:rotativo": "tsx tools/rotativo-cpu.ts",
     "navegador:rotativo": "node tools/rotativo-navegador.mjs",
     "teste:eletrico": "tsx tools/eletrico/valida.ts",
     "lenta:eletrico": "tsx tools/eletrico/lenta.ts",
