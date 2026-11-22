@@ -3,7 +3,7 @@
 // Mesmo DOM e classes do index.html legado, para o estilo (src/ui/estilo.css) valer igual. Na família aviação o pedal dá
 // lugar à manete de potência da Turbina (src/ui/Manete.tsx), que fica onde foi deixada.
 import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react';
-import { AudioShell, Barra, BotaoIgnicao, FamilyNav, Manete, PresetNav, PERFIL_RONCO, useAudioShell } from '../../ui';
+import { AudioShell, Barra, BotaoIgnicao, FamilyNav, Manete, PresetNav, PERFIL_RONCO, useAudioShell, dec, resumoGraus, listaGraus } from '../../ui';
 import { EngineDSP } from '../../engines/ronco/dsp';
 import { PRESETS_PAGINA as PRESETS } from '../../engines/ronco/presets';
 import urlRonco from '../../worklet/processador-ronco.ts?worker&url';
@@ -26,12 +26,12 @@ export function PaginaRonco() {
   );
 }
 
-// "V8 90° · Cross-plane · 6.2 L · aspirado · 1-8-4-3-6-5-7-2" (updatePlate)
+// "V8 90° · Cross-plane · 6,2 L · aspirado · 1-8-4-3-6-5-7-2" (updatePlate)
 function placa({ spec }: EstadoRonco) {
   const fam = familyFor(spec.layout, spec.cylinders);
   const crank = fam.find((x) => x.id === spec.crank) || fam[0];
   const lay = spec.layout === 'inline' ? `${spec.cylinders} em linha` : spec.layout === 'boxer' ? `Boxer ${spec.cylinders}` : `V${spec.cylinders} ${spec.bankAngle}°`;
-  return `${lay} · ${crank.name} · ${spec.displacement.toFixed(1)} L · ${spec.aspiration === 'na' ? 'aspirado' : `${spec.aspiration === 'turbo' ? 'turbo' : 'compressor'} ${spec.boost.toFixed(1)} bar`} · ${spec.order}`;
+  return `${lay} · ${crank.name} · ${dec(spec.displacement, 1)} L · ${spec.aspiration === 'na' ? 'aspirado' : `${spec.aspiration === 'turbo' ? 'turbo' : 'compressor'} ${dec(spec.boost, 1)} bar`} · ${spec.order}`;
 }
 
 function Interior({ k, e }: { k: ControleRonco; e: EstadoRonco }) {
@@ -68,7 +68,8 @@ function Interior({ k, e }: { k: ControleRonco; e: EstadoRonco }) {
   return (
     <div className="app">
       <Barra logo="Ronco" placa={placa(e)}>
-        <BotaoIgnicao id="ignition" ligado={e.ignicao} rotulo={e.ignicao ? 'Desligar' : e.spec.aviation ? 'Magnetos + partida' : 'Ligar motor'} aoClicar={ligar} />
+        <BotaoIgnicao id="ignition" ligado={e.ignicao} rotulo={e.ignicao ? 'Desligar' : e.spec.aviation ? 'Magnetos + partida' : 'Ligar motor'} aoClicar={ligar}
+          estado={erro ? 'erro' : estado === 'carregando' ? 'ocupado' : undefined} />
       </Barra>
 
       <nav className="presets" id="presets" aria-label="Motores prontos">
@@ -78,7 +79,7 @@ function Interior({ k, e }: { k: ControleRonco; e: EstadoRonco }) {
 
       <main className="cluster">
         <section className="tach-wrap" aria-label="Conta-giros">
-          <canvas id="tach" />
+          <canvas id="tach" role="img" aria-label="Conta-giros: rotação, velocidade, torque e temperatura do motor" />
           {aviao ? <ManeteAv k={k} /> : (
             <div className="pedal" id="pedal" ref={pedal} role="slider" tabIndex={0} aria-label="Acelerador" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}
               onPointerDown={(ev) => { pedal.current!.setPointerCapture(ev.pointerId); k.input.pad = padFrom(ev); k.sendInput(); }}
@@ -91,12 +92,12 @@ function Interior({ k, e }: { k: ControleRonco; e: EstadoRonco }) {
         </section>
 
         <section className="firing" aria-label="Ciclo de ignição">
-          <canvas id="ring" />
+          <canvas id="ring" role="img" aria-label="Ciclo de ignição de 720 graus: cada cilindro acende quando queima" />
           <Leitura e={e} />
         </section>
 
         <section className="scope-wrap" aria-label="Forma de onda e espectro">
-          <canvas id="scope" />
+          <canvas id="scope" role="img" aria-label="Forma de onda e espectro do som no ouvido do observador" />
         </section>
 
         <section className="drive">
@@ -105,7 +106,7 @@ function Interior({ k, e }: { k: ControleRonco; e: EstadoRonco }) {
             <button type="button" className="key" id="gDown" aria-label="Reduzir marcha" onClick={() => k.shift(-1)}>Q</button>
             <div className="gear-read"><span className="k">Marcha</span><span className="gear mono" id="gearRead">N</span></div>
             <button type="button" className="key" id="gUp" aria-label="Subir marcha" onClick={() => k.shift(1)}>E</button>
-            <button type="button" className={`key wide${freio ? ' on' : ''}`} id="brakeBtn"
+            <button type="button" className={`key wide${freio ? ' on' : ''}`} id="brakeBtn" title="Freio (segure)"
               onPointerDown={() => freia(true)} onPointerUp={() => freia(false)} onPointerLeave={() => freia(false)} onPointerCancel={() => freia(false)}>S · freio</button>
             {/* o texto, o `hidden` e o estado "aberta" vêm da telemetria, no laço dos mostradores */}
             <button type="button" className="valve-tag" id="valveTag" title="Troca o modo do escape ativo (B)" onClick={() => k.cycleValve()} hidden>válvula fechada</button>
@@ -136,7 +137,7 @@ function PosicoesAv({ k }: { k: ControleRonco }) {
   return (
     <div className="gearbox detentes" id="detents">
       {POSICOES_MANETE.map(([x, , texto]) => (
-        <button key={texto} type="button" className={`key${Math.abs(x - v) < 0.01 ? ' at' : ''}`} data-manete={x} onClick={() => k.setManete(x)}>{texto}</button>
+        <button key={texto} type="button" className={`key wide${Math.abs(x - v) < 0.01 ? ' at' : ''}`} data-manete={x} onClick={() => k.setManete(x)}>{texto}</button>
       ))}
     </div>
   );
@@ -145,16 +146,15 @@ function PosicoesAv({ k }: { k: ControleRonco }) {
 // ordem, intervalos (total e por bancada), frequência de ignição e balanceamento (renderReadout)
 function Leitura({ e }: { e: EstadoRonco }) {
   const engine = e.motor;
-  const graus = (xs: number[]) => xs.map((x) => `${Math.round(x)}°`).join(' ');
   const twoBanks = engine.banks === 2;
   const b = engine.balance;
   const items: [string, number][] = [['Força 1ª', b.f1], ['Força 2ª', b.f2], ['Momento 1ª', b.m1], ['Momento 2ª', b.m2]];
   return (
     <div className="readout">
       <div className="ro-row"><span className="k">Ordem</span><span className="v mono" id="roOrder">{engine.order.join('-')}</span></div>
-      <div className="ro-row"><span className="k">Intervalos</span><span className="v mono" id="roIntervals">{graus(engine.intervals)}</span></div>
-      <div className="ro-row bankA" hidden={!twoBanks}><span className="k">Bancada A</span><span className="v mono" id="roBankA">{twoBanks ? graus(engine.perBank[0]) : ''}</span></div>
-      <div className="ro-row bankB" hidden={!twoBanks}><span className="k">Bancada B</span><span className="v mono" id="roBankB">{twoBanks ? graus(engine.perBank[1]) : ''}</span></div>
+      <div className="ro-row"><span className="k">Intervalos</span><span className="v mono" id="roIntervals" title={listaGraus(engine.intervals)}>{resumoGraus(engine.intervals)}</span></div>
+      <div className="ro-row bankA" hidden={!twoBanks}><span className="k">Bancada A</span><span className="v mono" id="roBankA">{twoBanks ? resumoGraus(engine.perBank[0]) : ''}</span></div>
+      <div className="ro-row bankB" hidden={!twoBanks}><span className="k">Bancada B</span><span className="v mono" id="roBankB">{twoBanks ? resumoGraus(engine.perBank[1]) : ''}</span></div>
       {/* atualizado pelo laço dos mostradores */}
       <div className="ro-row"><span className="k">Ignição</span><span className="v mono" id="roFreq">—</span></div>
       <div className="balance" id="balance">
@@ -164,7 +164,7 @@ function Leitura({ e }: { e: EstadoRonco }) {
             <div key={kk} className="bal" title="Desbalanceamento das massas alternativas, em múltiplos de um cilindro. Zero = cancelamento perfeito.">
               <span className="k">{kk}</span>
               <div className="meter"><i className={v === 0 ? 'zero' : ''} style={{ width: `${w}%` }} /></div>
-              <span className="val">{v === 0 ? 'zero' : v.toFixed(2)}</span>
+              <span className="val">{v === 0 ? 'zero' : dec(v, 2)}</span>
             </div>
           );
         })}

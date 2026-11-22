@@ -124,8 +124,8 @@ try {
   confere((await ev('document.title')) === 'Elétrico', 'título');
   const ini = await ev(`({ familias: document.querySelectorAll('.fam').length, presets: document.querySelectorAll('.preset').length, marcado: document.querySelector('.preset[aria-pressed=true]')?.dataset.id, placa: document.querySelector('.plate')?.textContent, secoes: [...document.querySelectorAll('.controls h2')].map((h) => h.textContent.trim()) })`);
   confere(ini.familias === 6 && ini.presets === 4 && ini.marcado === 'model3', 'presets: 6 famílias, 4 carros, Model 3 marcado', JSON.stringify([ini.familias, ini.presets, ini.marcado]));
-  confere(/Tesla Model 3 .* PMSRM 6 polos · Z_s 54 · SIC 10 kHz/.test(ini.placa), 'placa', ini.placa);
-  confere(ini.secoes.join('|').startsWith('Comando|Carga e velocidade|Ouvinte e ambiente|Avançado'), 'seções do painel', ini.secoes.join('|'));
+  confere(/Tesla Model 3 .* motor PMSRM de 6 polos · 54 ranhuras · inversor SiC 10 kHz/.test(ini.placa), 'placa', ini.placa);
+  confere(ini.secoes.join('|').startsWith('Comando|Carga e velocidade|Escuta e ambiente|Avançado'), 'seções do painel', ini.secoes.join('|'));
   const ids = ['acelerador', 'freio', 'modulacao', 'avas', 're', 'carga', 'velocidade', 'impor', 'pneus', 'ouvinte', 'ambiente', 'master', 'avancado', 'espectro', 'espectrograma', 'ro-rpm', 'ro-v', 'ro-fe', 'ro-fc', 'ro-corrente', 'ro-potencia', 'ro-mfluxo', 'ro-nivel', 'teclado'];
   const falta = await ev(`${JSON.stringify(ids)}.filter((i) => !document.getElementById(i))`);
   confere(falta.length === 0, 'controles e mostradores da seção 6 presentes', falta.join(', ') || `${ids.length} ids`);
@@ -187,7 +187,7 @@ try {
   confere(await ultima('cena', '.ouv.local') === 'cabine', 'ouvinte na cabine');
   await chip('#ouvinte', 'Cofre');
   confere(await ultima('cena', '.ouv.local') === 'cofre' && /^motor/.test(await ultima('cena', '.ouv.gimbal.alvo')), 'ouvinte no cofre, junto ao motor', await ultima('cena', '.ouv.gimbal.alvo'));
-  await chip('#ouvinte', 'Gimbal');
+  await chip('#ouvinte', 'Livre');
   await espera(200);
   await deslizar('gAz', 30);
   confere(await ultima('cena', '.ouv.gimbal.az') === 30, 'gimbal: azimute');

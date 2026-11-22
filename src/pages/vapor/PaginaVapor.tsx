@@ -3,7 +3,7 @@
 // (escala absoluta, reverberação por banda). O React monta a estrutura; o estado fica em ControleVapor e os mostradores
 // são desenhados num só requestAnimationFrame lendo a telemetria de um campo.
 import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { AudioShell, Barra, FamilyNav, PresetNav, PERFIL_PASSAGEM, useAudioShell } from '../../ui';
+import { AudioShell, Barra, BotaoIgnicao, FamilyNav, PresetNav, PERFIL_PASSAGEM, useAudioShell } from '../../ui';
 import { CenaDSP } from '../../scene/dsp-cena';
 import urlVapor from '../../worklet/processador-vapor.ts?worker&url';
 import { PRESETS_VAPOR, FAMILIAS_VAPOR, type FamiliaVapor } from '../../engines/vapor/presets';
@@ -58,9 +58,8 @@ function Interior({ k }: { k: ControleVapor }) {
   return (
     <div className="app vapor">
       <Barra logo="Vapor" placa={`${P.nome} · ${P.rodeiro ?? P.tag} · ${fmt(P.pNominal, 1)} bar · ${P.cilindros.n}${P.motores === 2 ? ' × 2' : ''} cil.${P.compound ? ' compound' : ''}`}>
-        <button id="ignicao" className="ignition" type="button" aria-pressed={ligado} onClick={() => { k.ligar().catch((err) => console.error('Vapor: áudio não iniciou', err)); }}>
-          <span className="dot" /><span>{rotulo}</span>
-        </button>
+        <BotaoIgnicao id="ignicao" ligado={ligado} rotulo={rotulo} aoClicar={() => { k.ligar().catch((err) => console.error('Vapor: áudio não iniciou', err)); }}
+          estado={erro ? 'erro' : e.calibrando || estado === 'carregando' ? 'ocupado' : undefined} />
       </Barra>
 
       <nav className="presets" id="presets" aria-label="Máquinas">
@@ -68,24 +67,31 @@ function Interior({ k }: { k: ControleVapor }) {
         <PresetNav presets={PRESETS_NAV} familia={e.familia} atual={e.presetId} aoEscolher={(p) => k.setPreset(p.id)} />
       </nav>
 
-      <main className="cluster painel-vapor">
+      <main className="palco painel-vapor">
         <section className="manometro" aria-label="Manômetro">
-          <canvas id="manometro" ref={cvM} />
+          <canvas id="manometro" ref={cvM} role="img" aria-label="Manômetro: pressão da caldeira e da caixa de vapor" />
         </section>
         <Telemetria leituras={leituras} />
-        <section className="fita" aria-label="Escapes">
-          <canvas id="fita" ref={cvF} />
-          <div className="esforco" title="esforço de tração × adesão"><i id="barraEsforco" ref={(el) => { if (el) leituras.current.barraEsforco = el; }} /></div>
+        <section className="fita" aria-label="Escapes e tração">
+          <figure className="grafico">
+            <figcaption className="legenda">Escapes de cada volta da roda (acendem na batida)</figcaption>
+            <div className="quadro"><canvas id="fita" ref={cvF} role="img" aria-label="Uma luz por escape da volta da roda, acesa na batida" /></div>
+          </figure>
+          <figure className="grafico">
+            <figcaption className="legenda">Tração usada da adesão (vermelho: patinando)</figcaption>
+            <div className="esforco" role="img" aria-label="Fração da adesão usada pelo esforço de tração"><i id="barraEsforco" ref={(el) => { if (el) leituras.current.barraEsforco = el; }} /></div>
+          </figure>
         </section>
         <section className="drive">
-          <div className="acoes" id="cenarios" role="group" aria-label="Cenários">
+          <div className="gearbox" id="cenarios" role="group" aria-label="Cenários">
+            <div className="gear-read"><span className="k">Cenários</span></div>
             {CENARIOS.map((c) => (
               <button key={c.id} type="button" className="key wide" data-cenario={c.id} aria-pressed={e.cenario === c.id} title={c.titulo}
                 onClick={() => (e.cenario === c.id ? k.pararCenario() : void k.cenario(c.id).catch((err) => console.error(err)))}>{c.nome}</button>
             ))}
           </div>
           {P.nota && <p className="note">{P.nota}</p>}
-          <p className="hints"><kbd>W</kbd>/<kbd>S</kbd> regulador · <kbd>X</kbd> fecha · <kbd>A</kbd>/<kbd>D</kbd> reverser · <kbd>H</kbd> apito (segure) · <kbd>B</kbd> sino · <kbd>E</kbd> areia (segure) · <kbd>T</kbd> torneiras · <kbd>Espaço</kbd> freio · <kbd>I</kbd> injetor</p>
+          <p className="hints"><kbd>W</kbd>/<kbd>S</kbd> regulador · <kbd>X</kbd> fecha · <kbd>A</kbd>/<kbd>D</kbd> reversão · <kbd>H</kbd> apito (segure) · <kbd>B</kbd> sino · <kbd>E</kbd> areia (segure) · <kbd>T</kbd> torneiras · <kbd>Espaço</kbd> freio · <kbd>I</kbd> injetor</p>
         </section>
       </main>
 
@@ -97,20 +103,20 @@ function Interior({ k }: { k: ControleVapor }) {
 }
 
 const Telemetria = memo(function Telemetria({ leituras }: { leituras: { current: Leituras } }) {
-  const linha = (rot: string, id: string, grande = false) => (
-    <div className={`ro-row${grande ? ' grande' : ''}`}><span className="k">{rot}</span><span className="v mono" id={`ro-${id}`} ref={(el) => { if (el) leituras.current[id] = el; }}>—</span></div>
+  const linha = (rot: string, id: string, grande = false, dica?: string) => (
+    <div className={`ro-row${grande ? ' grande' : ''}${rot ? '' : ' sem-nome'}`} title={dica}><span className="k">{rot || '·'}</span><span className="v mono" id={`ro-${id}`} ref={(el) => { if (el) leituras.current[id] = el; }}>—</span></div>
   );
   return (
     <section className="telemetria readout" aria-label="Leituras">
       {linha('Velocidade', 'v', true)}
       {linha('Roda', 'roda')}
-      {linha('Corte', 'corte')}
-      {linha('Chuffs', 'chuffs', true)}
-      {linha('Release', 'release')}
-      {linha('Esforço', 'esforco')}
-      {linha('Estados', 'estados')}
-      {linha('Vapor', 'vapor')}
-      {linha('Apito', 'apito')}
+      {linha('Corte', 'corte', false, 'Fração do curso em que o cilindro recebe vapor, sentido de marcha e abertura do regulador')}
+      {linha('Escapes', 'chuffs', true, 'Batidas do escape pela chaminé por segundo (os “chuffs”)')}
+      {linha('No escape', 'release', false, 'Pressão no cilindro quando o escape abre; acima de ~1,9 bar o jato sai na velocidade do som')}
+      {linha('Tração', 'esforco', false, 'Esforço de tração e o máximo que a adesão das rodas aguenta')}
+      {linha('Auxiliares', 'estados', false, 'O que está funcionando agora e a taxa de fogo')}
+      {linha('Caldeira', 'vapor', false, 'Evaporação, consumo de vapor e nível de água')}
+      {linha('Apito', 'apito', false, 'Notas do apito e quanto o tubo ainda está frio (desafina para baixo)')}
       {linha('No ouvido', 'nivel', true)}
       {linha('', 'pico')}
     </section>

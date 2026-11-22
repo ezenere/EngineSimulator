@@ -9,7 +9,28 @@ import { fmt } from './controle';
 import { ganhoA } from '../../scene/filtros';
 import { C_SOM } from '../../scene/constantes';
 
-const COR = { ink: '#e9e4d8', muted: '#8b93a1', faint: '#59616e', line: '#29313d', gold: '#dca54c', blue: '#7398e6', violet: '#a57ad8', hot: '#ff5b3d', bg: '#0d1015', panel: '#141920' };
+// cores e fontes do tema, lidas dos tokens de src/ui/estilo.css (os valores abaixo valem até a primeira leitura)
+const COR = { ink: '#e9e4d8', muted: '#9aa2b0', faint: '#838c9b', line: '#29313d', gold: '#dca54c', blue: '#7398e6', violet: '#a57ad8', hot: '#ff5b3d', bg: '#0d1015', panel: '#141920', mono: '"IBM Plex Mono", monospace' };
+let coresLidas = false;
+function lerCores() {
+  if (coresLidas || typeof document === 'undefined') return;
+  const css = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  for (const k of ['ink', 'muted', 'faint', 'line', 'gold', 'blue', 'violet', 'hot', 'bg', 'panel'] as const) COR[k] = css(`--${k}`) || COR[k];
+  COR.mono = css('--f-mono') || COR.mono;
+  coresLidas = true;
+}
+
+/** nome de cada tipo de fonte para quem lê (os ids da Cena não têm acento: "pa", "vao", "admissao") */
+export const NOME_TIPO: Record<string, string> = {
+  escape: 'escape', admissao: 'admissão', mecanica: 'mecânica', compressor: 'compressor', pa: 'pás', rolamento: 'rolamento', aero: 'ar no corpo',
+  vao: 'vãos', pantografo: 'pantógrafo', eletrica: 'motor elétrico', pressao: 'pressão', vento: 'vento',
+};
+/** nome de uma fonte: o tipo por extenso e o que a distingue (truque 3, vão 2, face direita…) */
+export function nomeFonte(c: ControlePassagem, id: string) {
+  const f = c.fontes.find((x) => x.id === id);
+  const resto = id.split('.').slice(1).filter((p) => p !== '0' || id.split('.').length > 2).join('.');
+  return `${NOME_TIPO[f?.tipo ?? ''] ?? id.split('.')[0]}${resto ? ` ${resto}` : ''}`;
+}
 
 // ------------------------------------------------------------------ nível no ouvido (FFT própria)
 /** FFT radix-2 no lugar (re, im) */
@@ -80,16 +101,16 @@ export function escreverLeituras(c: ControlePassagem, m: Medidor, l: Leituras, a
   const set = (k: string, txt: string) => { const e = l[k]; if (e && e.textContent !== txt) e.textContent = txt; };
   set('nivel', Number.isFinite(m.dBA) && c.audio ? `${fmt(m.dBA, 1)} dB(A)` : '—');
   set('nivelZ', Number.isFinite(m.dB) && c.audio ? `${fmt(m.dB, 1)} dB · máx ${Number.isFinite(m.maxA) ? fmt(m.maxA, 1) : '—'} dB(A)` : '—');
-  set('direto', t ? `${fmt(t.cena.splDbA, 1)} dB(A) direto (sem o ambiente)` : '—');
+  set('direto', t ? `${fmt(t.cena.splDbA, 1)} dB(A) sem o eco` : '—');
   set('v', `${fmt(Math.abs(v) * 3.6)} km/h${c.andando ? '' : ' (parado)'}`);
-  if (c.ouv.modo === 'fixo') set('nariz', xi < 0 ? `${fmt(-xi)} m antes, chegando` : xi <= L ? `abeam: ${fmt(xi)} m do corpo passaram` : `passou há ${fmt(xi - L)} m (cauda)`);
-  else set('nariz', 'ouvinte no gimbal: anda com o corpo');
+  if (c.ouv.modo === 'fixo') set('nariz', xi < 0 ? `chegando: faltam ${fmt(-xi)} m` : xi <= L ? `passando: ${fmt(xi)} de ${fmt(L)} m` : `passou: ${fmt(xi - L)} m depois da cauda`);
+  else set('nariz', 'você anda junto com o corpo');
   const d = dopplerEscolhida(c);
-  set('doppler', d ? (c.ouv.modo === 'gimbal' ? `${d.id}: ≈ 1 (sem movimento relativo)` : `${d.id}: × ${fmt(d.fator, 3)} (1 kHz → ${fmt(1000 * d.fator)} Hz) · ${fmt(d.r, 1)} m`) : '—');
-  set('pressao', t ? `${fmt(t.pressao.nariz, 1)} Pa nariz/cauda · pico ${fmt(Math.max(Math.abs(t.pressao.max), Math.abs(t.pressao.min)), 1)} Pa` : '—');
+  set('doppler', d ? (c.ouv.modo === 'gimbal' ? '× 1 (você anda junto)' : `× ${fmt(d.fator, 3)} · ${nomeFonte(c, d.id)}`) : '—');
+  set('pressao', t ? `${fmt(t.pressao.nariz, 1)} Pa · pico ${fmt(Math.max(Math.abs(t.pressao.max), Math.abs(t.pressao.min)), 1)} Pa` : '—');
   set('tunel', t && c.ambienteCena().tunel ? `${fmt(t.pressao.tunel / 1000, 2)} kPa` : 'sem túnel');
   set('vento', t ? `${fmt(t.cena.ventoMs, 1)} m/s` : '—');
-  set('local', `${c.localEfetivo()}${c.portador === 'trem' && t ? ` · face ${t.lado > 0 ? 'esquerda (y+)' : 'direita (y−)'}` : ''}`);
+  set('local', `${c.localEfetivo()}${c.portador === 'trem' && t ? ` · face ${t.lado > 0 ? 'esquerda' : 'direita'} do trem` : ''}`);
 }
 
 /** HUD da cena 3D (3.4, item 8): v, distância de cada grupo de fontes, pressão, vento, nível, Doppler */
@@ -97,14 +118,15 @@ export function textoHud(c: ControlePassagem, m: Medidor) {
   const t = c.tele;
   const linhas: string[] = [];
   const v = c.estimativa().v;
-  linhas.push(`v ${fmt(Math.abs(v) * 3.6)} km/h · ${Number.isFinite(m.dBA) && c.audio ? fmt(m.dBA, 1) : '—'} dB(A)`);
+  linhas.push(`${fmt(Math.abs(v) * 3.6)} km/h · ${Number.isFinite(m.dBA) && c.audio ? fmt(m.dBA, 1) : '—'} dB(A)`);
   if (t) {
+    // a fonte de cada tipo que está mais perto do ouvinte, com a distância
     const grupos = new Map<string, number>();
-    t.cena.fontes.forEach((f, i) => { const tipo = c.fontes.find((x) => x.id === f.id)?.tipo ?? '?'; void i; grupos.set(tipo, Math.min(grupos.get(tipo) ?? Infinity, f.r)); });
-    linhas.push([...grupos].map(([k, r]) => `${k} ${fmt(r, 1)} m`).join(' · '));
-    linhas.push(`p ${fmt(t.cena.pressaoPa, 1)} Pa · vento ${fmt(t.cena.ventoMs, 1)} m/s`);
+    t.cena.fontes.forEach((f) => { const tipo = c.fontes.find((x) => x.id === f.id)?.tipo ?? '?'; grupos.set(tipo, Math.min(grupos.get(tipo) ?? Infinity, f.r)); });
+    linhas.push([...grupos].map(([k, r]) => `${NOME_TIPO[k] ?? k} a ${fmt(r, r < 100 ? 1 : 0)} m`).join(' · '));
+    linhas.push(`pressão ${fmt(t.cena.pressaoPa, 1)} Pa · vento ${fmt(t.cena.ventoMs, 1)} m/s`);
     const d = dopplerEscolhida(c);
-    if (d && c.ouv.modo === 'fixo') linhas.push(`Doppler ${d.id} × ${fmt(d.fator, 3)}`);
+    if (d && c.ouv.modo === 'fixo') linhas.push(`Doppler × ${fmt(d.fator, 3)} (${nomeFonte(c, d.id)})`);
   }
   return linhas.join('\n');
 }
@@ -121,6 +143,7 @@ function preparar(cv: HTMLCanvasElement) {
 
 /** onda de pressão: extremos de cada telemetria (21 ms), nariz/cauda e túnel */
 export function desenharPressao(c: ControlePassagem, cv: HTMLCanvasElement) {
+  lerCores();
   const { g, W, H } = preparar(cv);
   g.fillStyle = COR.panel; g.fillRect(0, 0, W, H);
   const h = c.histP, n = c.nHist, k0 = h.k;
@@ -138,20 +161,25 @@ export function desenharPressao(c: ControlePassagem, cv: HTMLCanvasElement) {
   g.fillStyle = 'rgba(165,122,216,0.25)';
   for (let i = 0; i < n; i++) { const j = (k0 + i) % n, x = (i / (n - 1)) * W; g.fillRect(x, y(h.max[j]), Math.max(1, W / n), Math.max(1, y(h.min[j]) - y(h.max[j]))); }
   trilha(h.tunel, COR.blue); trilha(h.nariz, COR.violet);
-  g.fillStyle = COR.muted; g.font = '11px "IBM Plex Mono", monospace';
+  g.font = `500 10px ${COR.mono}`; g.textBaseline = 'alphabetic';
+  g.fillStyle = COR.muted; g.textAlign = 'left';
   g.fillText(`±${esc >= 1000 ? fmt(esc / 1000, 1) + ' kPa' : fmt(esc) + ' Pa'} · 11 s`, 6, 12);
-  g.fillStyle = COR.violet; g.fillText('nariz/cauda', W - 170, 12);
-  g.fillStyle = COR.blue; g.fillText('túnel', W - 70, 12);
+  // legenda das duas curvas, embaixo à direita (fora do caminho do traço, que anda perto do zero)
+  g.textAlign = 'right';
+  g.fillStyle = COR.blue; g.fillText('túnel', W - 6, H - 5);
+  g.fillStyle = COR.violet; g.fillText('nariz e cauda', W - 6 - g.measureText('túnel').width - 12, H - 5);
+  g.textAlign = 'left';
 }
 
 /** espectrograma (rolando) e espectro do analisador da saída */
 export class Espectro {
   buf: Float32Array<ArrayBuffer> | null = null; img: ImageData | null = null; off: HTMLCanvasElement | null = null;
   desenhar(c: ControlePassagem, cv: HTMLCanvasElement) {
+    lerCores();
     const { g, W, H } = preparar(cv);
     g.fillStyle = COR.panel; g.fillRect(0, 0, W, H);
     const an = c.audio?.analyser;
-    if (!an) { g.fillStyle = COR.faint; g.font = '12px sans-serif'; g.fillText('espectrograma (liga o som)', 10, 20); return; }
+    if (!an) { g.fillStyle = COR.muted; g.font = `500 10px ${COR.mono}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('dispare a passagem para ver', W / 2, H / 2); g.textAlign = 'left'; g.textBaseline = 'alphabetic'; return; }
     if (!this.buf || this.buf.length !== an.frequencyBinCount) this.buf = new Float32Array(an.frequencyBinCount);
     an.getFloatFrequencyData(this.buf);
     const sr = c.audio!.ctx.sampleRate, nb = this.buf.length;
@@ -179,8 +207,9 @@ export class Espectro {
       if (x) g.lineTo(x, yy); else g.moveTo(x, yy);
     }
     g.stroke();
-    g.fillStyle = COR.muted; g.font = '10px "IBM Plex Mono", monospace';
-    for (const f of [100, 1000, 10000]) { const x = ((Math.log(f) - fl) / (fh - fl)) * W; g.fillText(f >= 1000 ? `${f / 1000}k` : String(f), x + 2, H - 3); g.fillRect(x, hE, 1, 4); }
+    g.fillStyle = COR.muted; g.font = `500 10px ${COR.mono}`;
+    for (const f of [100, 1000, 10000]) { const x = ((Math.log(f) - fl) / (fh - fl)) * W; g.textAlign = x > W - 30 ? 'right' : 'left'; g.fillText(f >= 1000 ? `${f / 1000}k` : String(f), x + (x > W - 30 ? -3 : 2), H - 3); g.fillRect(x, hE, 1, 4); }
+    g.textAlign = 'left';
   }
 }
 
@@ -188,10 +217,12 @@ export class Espectro {
 export class Osciloscopio {
   buf: Float32Array<ArrayBuffer> | null = null;
   desenhar(c: ControlePassagem, cv: HTMLCanvasElement) {
+    lerCores();
     const { g, W, H } = preparar(cv);
     g.fillStyle = COR.panel; g.fillRect(0, 0, W, H);
     g.strokeStyle = COR.line; g.beginPath(); g.moveTo(0, H / 2); g.lineTo(W, H / 2); g.stroke();
-    const an = c.audio?.analyser; if (!an) return;
+    const an = c.audio?.analyser;
+    if (!an) { g.fillStyle = COR.muted; g.font = `500 10px ${COR.mono}`; g.textAlign = 'center'; g.textBaseline = 'bottom'; g.fillText('dispare a passagem para ver', W / 2, H / 2 - 6); g.textAlign = 'left'; g.textBaseline = 'alphabetic'; return; }
     if (!this.buf || this.buf.length !== an.fftSize) this.buf = new Float32Array(an.fftSize);
     an.getFloatTimeDomainData(this.buf);
     let pk = 0, ms = 0;
@@ -203,7 +234,7 @@ export class Osciloscopio {
     g.stroke();
     const rms = 10 * Math.log10(ms / this.buf.length + 1e-20);
     cv.dataset.rms = rms.toFixed(1);
-    g.fillStyle = COR.muted; g.font = '10px "IBM Plex Mono", monospace';
+    g.fillStyle = COR.muted; g.font = `500 10px ${COR.mono}`;
     g.fillText(`pico ${fmt(20 * Math.log10(pk + 1e-9), 1)} dBFS · ${(n / (c.audio!.ctx.sampleRate / 1000)).toFixed(0)} ms`, 6, 12);
   }
 }
