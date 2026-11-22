@@ -14,6 +14,7 @@ import { passaFaixa } from './radial-bandas';
 import { EngineDSP } from '../src/engines/ronco/dsp';
 import { configCalibrada } from '../src/engines/ronco/config';
 import { ACESSORIOS_PADRAO, PRESETS_AVIACAO } from '../src/engines/ronco/presets';
+import { semear } from './desvios';
 
 export type MedidaEstouros = { est: number; alt: number; fortes: number; kmed: number; k90: number; hmax: number; n20: number };
 
@@ -76,7 +77,7 @@ function novoAv(id: string, temp: number, quente: boolean) {
     d.coolant = 90; d.ambientT = 20; d.state = 'run'; d.ignition = true; d.runT = 120;
     d.omega = (spec.idle * 2 * Math.PI) / 60; d.rpmAvg = spec.idle; d.exhT = 320; d.warm = 1;
   } else { d.ambientT = temp; d.coolant = temp; d.exhT = temp; }
-  return d;
+  return semear(d);
 }
 const eAv = (id: string) => PRESETS_AVIACAO.some((p) => p.id === id);
 const criar = (id: string, quente: boolean) => (eAv(id) ? novoAv(id, 15, quente) : novoDSP(preset(id), quente ? { quente: true } : { temp: 15 }));

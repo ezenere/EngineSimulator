@@ -7,6 +7,7 @@
 import { RadialDSP } from '../src/engines/radial/dsp';
 import { configCalibrada } from '../src/engines/radial/config';
 import { PRESETS_RADIAL, PADRAO_RADIAL, type PresetRadial } from '../src/engines/radial/presets';
+import { semear } from './desvios';
 
 export const SR = 48000;
 export type Evento = [number, ((d: RadialDSP) => void) | null];
@@ -24,7 +25,8 @@ export function cfgCalibrada(spec: any) {
   return { ...cache.get(k) };
 }
 
-/** DSP com o preset calibrado, ouvinte e temperatura; `quente` põe o motor já funcionando na lenta (sem partida) */
+/** DSP com o preset calibrado, ouvinte e temperatura; `quente` põe o motor já funcionando na lenta (sem partida).
+ *  Os RNG do DSP saem com a semente atual (tools/desvios.ts: 0 = a de fábrica); a calibração fica com a de fábrica */
 export function novoDSP(spec: any, op: { ouvinte?: string; temp?: number; quente?: boolean; master?: number } = {}) {
   const d = new RadialDSP(SR);
   d.setConfig(cfgCalibrada(spec));
@@ -37,7 +39,7 @@ export function novoDSP(spec: any, op: { ouvinte?: string; temp?: number; quente
     const t = op.temp ?? 20;
     d.ambientT = t; d.coolant = t; d.exhT = t;
   }
-  return d;
+  return semear(d);
 }
 
 export type Tele = Record<string, any> & { t: number };

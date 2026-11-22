@@ -52,12 +52,16 @@ export class Avas {
     this.fVib += 0.15 * dt; if (this.fVib >= 1) this.fVib -= 1;
     this.fMod += 0.8 * dt; if (this.fMod >= 1) this.fMod -= 1;
     const vib = 1 + 0.005 * Math.sin(TAU * this.fVib);
-    const f1 = (re ? 200 : 250 * (1 + 0.012 * kmh)) * vib;
+    // as leis de tom, de nível e da fração de ruído param na velocidade-limite: acima dela o AVAS só está desligando (rampa
+    // de 2 s). Com a velocidade sem teto, um carro que saía de parado para 108 km/h de uma vez pedia L_W de 139 dB durante a
+    // rampa: 101,6 dB(A) na Passagem com o carro a 60 m (AUDITORIA P-02)
+    const kl = Math.min(kmh, this.limite());
+    const f1 = (re ? 200 : 250 * (1 + 0.012 * kl)) * vib;
     this.f1 = f1;
     // nível no eixo: L_W = 74 + 0,6·v dB(A), dividido entre o tom e o ruído; o ruído sobe 3 dB por 10 km/h dentro desse
     // total (parado: −7 dB, o tom −1 dB; a 20 km/h, −1 e −7) (≈)
-    const paA = paDeLw(74 + 0.6 * kmh, REF_DIST_ELETRICO) * this.fp * this.env;
-    const fr = Math.min(0.85, 0.2 * Math.pow(10, (0.3 * kmh) / 10));
+    const paA = paDeLw(74 + 0.6 * kl, REF_DIST_ELETRICO) * this.fp * this.env;
+    const fr = Math.min(0.85, 0.2 * Math.pow(10, (0.3 * kl) / 10));
     let eA = 0;
     for (let i = 0; i < PARC.length; i++) { const a = dB(PARC[i][1]) * Math.max(0.00316, ganhoA(PARC[i][0] * f1)); eA += a * a; }
     // em ré o tom vira um "bip" a 1,5 Hz (porta de meio período com bordas de 30 ms)

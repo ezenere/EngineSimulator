@@ -57,10 +57,12 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     id: 'leaf', name: 'Nissan Leaf ZE1', tag: 'PMSM 8 polos · IGBT 10 kHz', family: 'carros', nome: 'Nissan Leaf (ZE1, 40 kWh)', familia: 'eletrico',
     maquina: 'pmsm', p: 4, Zs: 48, Tn: 320, Pmax: 110000, rpmBase: 3300, rpmMax: 10500, J: 0.04,
     inversor: { tipo: 'igbt', fc: 10000, modo: 'assincrona' },
-    reducao: { estagios: [{ Zp: 16, Zc: 44 }, { Zp: 17, Zc: 51 }], eta: 0.97 }, ventilacao: null, carcaca: 'carro',
+    // caixa RE1F61B: 17:32 e 17:74 = 8,1938 (manual de serviço, citado em fórum e wiki; AUDITORIA F-ELE-09). Estava com
+    // 16:44 e 17:51 (8,25): o engrenamento do 1º estágio sai em 17·f_rot e o do 2º em 9,03·f_rot (eram 16 e 6,18)
+    reducao: { estagios: [{ Zp: 17, Zc: 32 }, { Zp: 17, Zc: 74 }], eta: 0.97 }, ventilacao: null, carcaca: 'carro',
     niveis: { motor: 86, inversor: 62, reducao: 84, ventilador: 0 }, avas: 'ue', creep: true, Tregen: 0.3,
     fontes: { ...FONTES_CARRO_TRAS, motor: dentro([1.3, 0, 0.35]), inversor: dentro([1.05, 0, 0.5]), reducao: dentro([1.3, 0.25, 0.35]) }, vMaxKmh: 144,
-    aprox: ['fc (linha fixa 9,6–10 kHz na gravação)', 'reducao (2,75 × 3,0)'],
+    aprox: ['fc (linha fixa 9,6–10 kHz na gravação)', 'reducao (dentes do manual de serviço, citado em fórum)'],
     portador: { tipo: 'carro', massa: 1580, CdA: 0.28 * 2.27, Crr: 0.011, rw: 0.316 },
   },
   {
@@ -126,21 +128,26 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
   },
   {
     id: 'frotaa', name: 'Metrô SP Frota A', tag: 'CC série · chopper', family: 'trens', nome: 'Metrô de São Paulo, Frota A (original, chopper)', familia: 'eletrico',
-    maquina: 'cc-serie', p: 2, Zs: 46, Zc: 139, Tn: 1190, Pmax: 130000, rpmBase: 1040, rpmMax: 3500, J: 6,
+    // os seis carros motores, 4 motores de 110 kW nominais em cada (24; Wikipedia, Frota A; AUDITORIA F-ELE-08). Estava com
+    // 16 motores de 130 kW em 4 carros. T_n: o mesmo esforço de partida de antes repartido por 24 motores (1 190·16/24);
+    // base = P/T_n. A potência total que a mesma página dá (1 224 kW) não fecha com 24 × 110
+    maquina: 'cc-serie', p: 2, Zs: 46, Zc: 139, Tn: 793, Pmax: 110000, rpmBase: 1325, rpmMax: 3500, J: 6,
     inversor: { tipo: 'chopper', fc: 350, modo: 'chopper' },
     reducao: { estagios: [{ Zp: 15, Zc: 93 }], eta: 0.96 }, ventilacao: { forcada: false, B: 12 }, escovas: { Zc: 139, desgaste: 0.3 }, carcaca: 'trem',
     niveis: { motor: 95, inversor: 94, reducao: 96, ventilador: 92, escovas: 90 }, Tregen: 0.8, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 90,
-    aprox: ['Zs', 'Zc', 'reducao (6,2)', 'f_ch (sem gravação)', 'Tn'],
+    aprox: ['Zs', 'Zc', 'reducao (6,2)', 'f_ch (sem gravação)', 'Tn (esforço de partida ≈)', 'vMaxKmh (a fonte dá 100)'],
     portador: {
-      tipo: 'trem', carrosMotores: [1, 3, 4, 6], motoresPorTruque: 2, rw: 0.43, massaTotal: 240000, carroAux: 2,
+      tipo: 'trem', carrosMotores: [1, 2, 3, 4, 5, 6], motoresPorTruque: 2, rw: 0.43, massaTotal: 240000, carroAux: 2,
       davis: { A: 7000, B: 120, C: 12 },
       config: { N: 6, Lc: 21.5, vao: 0.8, lNariz: 1.5, lCauda: 1.5, cpNariz: 0.3, largura: 3.1, altura: 3.7, zPiso: 0.5, pantografos: [], carenagem: false },
     },
   },
   {
     id: 'cptm9500', name: 'CPTM Série 9500', tag: 'Hyundai Rotem · IGBT · SIV 1333 Hz', family: 'trens', nome: 'CPTM Série 9500 (Hyundai Rotem)', familia: 'eletrico',
-    maquina: 'inducao', p: 2, Zs: 36, Tn: 1760, Pmax: 210000, rpmBase: 1140, rpmMax: 4000, J: 4, escorregamentoNominal: 0.02,
+    // 16 motores Hyundai Rotem HRTM-IFS-270A de 270 kW (4 320 kW; Wikipedia, TUE Série 9500; AUDITORIA F-ELE-07). Estava
+    // com 210 kW (≈). T_n do esforço de partida (≈); base = P/T_n
+    maquina: 'inducao', p: 2, Zs: 36, Tn: 1760, Pmax: 270000, rpmBase: 1465, rpmMax: 4000, J: 4, escorregamentoNominal: 0.02,
     inversor: { tipo: 'igbt', fc: 1500, modo: 'auto', sincrona: IGBT_TREM, fcAux: 1333, fRede: 60 },
     // engrenamento Z_p 16 (família 1) e ranhuras Z_s 36 (família 2): 36/16 = 2,25, medido 2,24 (3.2); barras não aparecem
     reducao: { estagios: [{ Zp: 16, Zc: 101 }], eta: 0.96 }, ventilacao: null, carcaca: 'trem',
@@ -156,7 +163,9 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
   },
   {
     id: 'cptm9000', name: 'CPTM Série 9000', tag: 'Alstom · IGBT 2,3 kHz', family: 'trens', nome: 'CPTM Série 9000 (Alstom)', familia: 'eletrico',
-    maquina: 'inducao', p: 2, Zs: 44, Tn: 1700, Pmax: 200000, rpmBase: 1120, rpmMax: 4100, J: 4, escorregamentoNominal: 0.02,
+    // 16 motores Alstom 4ECA2142B de 275 kW (4 400 kW; Wikipedia, TUE Série 9000; AUDITORIA F-ELE-07). Estava com 200 kW
+    // (≈). T_n do esforço de partida (≈); base = P/T_n
+    maquina: 'inducao', p: 2, Zs: 44, Tn: 1700, Pmax: 275000, rpmBase: 1545, rpmMax: 4100, J: 4, escorregamentoNominal: 0.02,
     inversor: { tipo: 'igbt', fc: 2300, modo: 'auto', sincrona: IGBT_TREM },
     // ordens medidas 1 : 1,44 : 2,45 (3.2): engrenamento Z_p 18, ranhuras 44 (44/18 = 2,44) e a linha de 1,44·18 = 25,9·f_rot,
     // medida e sem explicação física
@@ -173,14 +182,18 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
   },
   {
     id: 'metropolis', name: 'Alstom Metropolis', tag: 'Frota G · Onix · troca de marcha', family: 'trens', nome: 'Alstom Metropolis (Frota G, Metrô SP)', familia: 'eletrico',
-    maquina: 'inducao', p: 2, Zs: 48, Tn: 1110, Pmax: 150000, rpmBase: 1290, rpmMax: 4000, J: 3, escorregamentoNominal: 0.02,
+    // os seis carros motores, Bo'Bo', com motores Alstom 4EXA 1828 A de 180 kW: 24 motores, 4 320 kW (AUDITORIA F-ELE-03 e
+    // F-ELE-02). Estava com 16 motores de 150 kW, baixados para o 0–80 caber nos 36 s do plano, que eram uma conta e não
+    // uma medida (T-ELE-07; o alvo foi refeito no teste com esta ficha). T_n: o mesmo esforço de partida de antes repartido
+    // por 24 motores (1 110·16/24); base = P/T_n
+    maquina: 'inducao', p: 2, Zs: 48, Tn: 740, Pmax: 180000, rpmBase: 2323, rpmMax: 4000, J: 3, escorregamentoNominal: 0.02,
     inversor: { tipo: 'igbt', fc: 1250, modo: 'auto', sincrona: [15, 9, 5, 3, 1] },
     reducao: { estagios: [{ Zp: 15, Zc: 102 }], eta: 0.96 }, ventilacao: null, carcaca: 'trem',
     niveis: { motor: 98, inversor: 92, reducao: 96, ventilador: 0 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 90,
-    aprox: ['Zs', 'reducao (6,8)', 'fc', 'lista síncrona', 'Pmax (150 kW: com os 190 da ficha o 0–80 km/h sai em 30 s, contra 36 ± 4 do passo 2)'],
+    aprox: ['Zs', 'reducao (6,8)', 'fc', 'lista síncrona', 'Tn (esforço de partida ≈)'],
     portador: {
-      tipo: 'trem', carrosMotores: [1, 2, 5, 6], motoresPorTruque: 2, rw: 0.43, massaTotal: 240000,
+      tipo: 'trem', carrosMotores: [1, 2, 3, 4, 5, 6], motoresPorTruque: 2, rw: 0.43, massaTotal: 240000,
       davis: { A: 7000, B: 120, C: 12 },
       config: { N: 6, Lc: 22, vao: 0.8, lNariz: 1.5, lCauda: 1.5, cpNariz: 0.3, largura: 3.1, altura: 3.8, zPiso: 0.5, pantografos: [], carenagem: false },
     },

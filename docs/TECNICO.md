@@ -1206,9 +1206,13 @@ As funções de aviação moram em `src/engines/ronco/aviacao.ts` (`instalarAvia
 
 ### Ferramentas e portões
 
-`npm run teste:radial` (`tools/radial-valida.ts`, 12 grupos: 11 em paralelo e o de CPU sozinho no fim, ~2–3 min), `npm run lenta:radial` (26 presets, os 16 radiais com lenta e os 10 de aviação; a Megola fica de fora; × 20 °C e −5 °C, partida de verdade, acelerada aos 12 s, rotação final aos 35–40 s: 52/52; a janela era 25–30 s e o Verner 5S, que pega aos 7 s, só passava porque os estouros exagerados freavam o motor pela contrapressão), `npx tsx tools/radial-estouros.ts [ids]` (estouros e falhas por regime), `npm run geometria:radial`, `npm run navegador:radial` (Chromium e Firefox, `dist/`). `tools/radial-bandas.ts` é a porta de `medir2.py` (conferida: Yak-52 e DC-3 dão os números do Apêndice A); `tools/radial-cena.ts` monta o preset no portador e ouve parado de lado pela Cena (propagação, solo, hélice). CPU: R-4360 subindo de giro, 26–28% do tempo real em Node (62 tubos, 32 nós), contra o portão de 60%.
+`npm run teste:radial` (`tools/radial-valida.ts`, 24 grupos em paralelo, 2–6 min conforme a carga da máquina), `npm run cpu:radial` (`tools/radial-cpu.ts`), `npm run lenta:radial` (26 presets, os 16 radiais com lenta e os 10 de aviação; a Megola fica de fora; × 20 °C e −5 °C, partida de verdade, acelerada aos 12 s, rotação final aos 35–40 s: 52/52; a janela era 25–30 s e o Verner 5S, que pega aos 7 s, só passava porque os estouros exagerados freavam o motor pela contrapressão), `npx tsx tools/radial-estouros.ts [ids]` (estouros e falhas por regime), `npm run geometria:radial`, `npm run navegador:radial` (Chromium e Firefox, `dist/`). `tools/radial-bandas.ts` é a porta de `medir2.py` (conferida: Yak-52 e DC-3 dão os números do Apêndice A); `tools/radial-cena.ts` monta o preset no portador e ouve parado de lado pela Cena (propagação, solo, hélice). CPU (`cpu:radial`, tempo de CPU do processo, mediana de 3 passadas): R-4360 subindo de giro, 24% do tempo real em Node com a máquina livre e 44–53% com ela ocupada por outras suítes (62 tubos, 32 nós), contra o portão de 60%; a medida de relógio de antes ia de 26 a 45%.
 
-### Alvo × medido (`npm run teste:radial`: 141 medidas, 110 ok, 31 desvios documentados, 0 falhas)
+**Desvios com teto e sementes** (desde 22/11/2026, `tools/desvios.ts`, comum às famílias). Uma medida fora do alvo só passa se estiver no retrato `tools/radial-desvios.json` (chave = nome exato da medida; `medido`, `folga`, `motivo`) e o valor de hoje ficar dentro da folga do gravado (±1 dB nas medidas em dB, ±5 % nas outras; alargada, com a razão em `nota_folga`, onde a mediana de 3 sementes muda mais que isso entre bases). Saiu da folga, para pior ou para melhor: falha até `--atualizar` (tudo o que mudou) ou `--atualizar=<nome>` (só a medida que a mudança explica). Medida do retrato que voltou a passar: aviso de desvio órfão. Medidas à beira (`beira: true`: passam por menos de 5 % da tolerância e caem fora com outras sementes) podem passar ou falhar dentro da folga. Contagens, transientes, vagar e CV são a mediana de 3 sementes do ruído (`semear` troca o estado dos RNG do DSP montado, depois da calibração, que fica com a semente de fábrica; `--semente N` muda a base, 0 é a de fábrica). Antes, o desvio era só um nome (a medida podia piorar à vontade) e o resultado valia para uma semente: com outras três, 19 medidas "ok" do Radial viravam falha (AUDITORIA T-RAD-01, T-RAD-02). O grupo `pagina` mede as lentas pelo `RadialDSP` da página (`radial.html`, ouvinte de fora a 5 m do cubo): 4 a 11 dB mais escura acima de 400 Hz que pela Cena, 10 desvios declarados (T-RAD-05). Os grupos `estalos-*` medem a lenta quente pela página em 21 presets, os motores pequenos, o Sherman e a aviação do Ronco incluídos (T-RAD-06): Rotec R2800 19 picos/s (16,6 acima de 16 dB), Verner 11–15/s, Sherman 15/s, M-14PF 10/s e os planos de 4 cilindros ~20/s, todos desvios declarados. A potência é a média de 2 s por ponto (o `tqMean` é uma média de 50 ms: lido no fim de 0,5 s ele variava ±8% com a semente).
+
+### Alvo × medido (`npm run teste:radial`: 169 medidas; semente de fábrica 115 ok e 54 desvios com teto; retrato com 64 entradas, 15 à beira; 0 falhas com as sementes de base 0, 1000, 2000, 3000 e 4000)
+
+Os números da tabela são da semente de fábrica, de antes das medianas; os de hoje, com o teto de cada desvio, estão no retrato e na saída do teste. Mudaram de estado com a mediana de 3 sementes: o CVciclo do R-1830 nos 3 s em que pega (0,62 → 0,50, desvio), o 3·f_ign do Rotec (desvio → à beira), a potência do Rotec R2800 (+4,9%, à beira).
 
 | Medida | Alvo | Medido |
 |---|---|---|
@@ -1241,10 +1245,13 @@ As funções de aviação moram em `src/engines/ronco/aviacao.ts` (`instalarAvia
 | mistura 0,55: potência · escape | −3 a −7% · +40 a +80 °C | −5,0% · +60 °C |
 | mecânica do radial contra o mesmo motor a água | 1,4× | 1,40× |
 | R-2800: governador da hélice na decolagem | 1 225 rpm ± 2% | 1 226 rpm |
-| potência (R-1820, R-1830, R-2800, R-4360, M-14P, R-1340) | ficha ± 5% | +0,8 / −1,3 / +0,4 / −0,1 / −1,5 / +3,4% |
+| potência (R-1820, R-1830, R-2800, R-4360, M-14P, R-1340; média de 2 s por ponto) | ficha ± 5% | −1,5 / −0,6 / +1,3 / −1,0 / −1,5 / +0,9% |
 | Cessna 172: lenta quente a 20 e −5 °C · decolagem a 35 m/s | 650 ± 20 rpm · BPF ≈ 90 Hz, M 0,80, f_ign/BPF 1 | 646 / 646 · 88,5 Hz, 0,79, 1,001 |
-| R44 (O-540 + rotor): Nr · droop (0,5 → 0,75 em 1 s) · recuperação | 408 ± 2% · 2–3% · ≤ 1,5 s | 408,0 · 0,7% (**desvio**) · 1,1 s |
-| R-4360, 10 s subindo de giro em Node | ≤ 60% | 28% |
+| R44 (O-540 + rotor): Nr · droop (0,5 → 0,75 em 1 s) · recuperação | 408 ± 2% · 2–3% · ≤ 1,5 s | 408,0 · 0,6% (**desvio**) · 0,7 s |
+| R-4360, 10 s subindo de giro em Node (`cpu:radial`) | ≤ 60% | 24% (tempo de CPU; 44–53% com a máquina ocupada) |
+| bandas da lenta pela página (Yak, T-6G, DC-3, P-47, Corsair, Rotec) | os mesmos alvos | 2 a 11 dB abaixo acima de 400 Hz (Rotec 2–6 dB acima) (**desvios**, T-RAD-05) |
+| lenta quente pela página: picos por segundo (Rotec R2800/R3600, Verner 3V/5S, M-14PF, Sherman; C172, O-360, O-200, Rotax 912, R22, 300C) | ≤ 3, ≤ 0,3/s acima de 16 dB | 19 / 9,7 / 11,6 / 15,4 / 10,3 / 15; 19–24 (**desvios**, T-RAD-06); IO-540, IO-550, Bell 47 e R44 passam |
+| Sherman: velocidade no corte em cada marcha (conta da ficha) | 5ª 39 km/h ± 5% | 3,8 / 9,3 / 16,2 / 26,0 / 39,5 km/h |
 | lenta de 16 radiais (sem a Megola) e dos 10 de aviação a 20 e −5 °C | zero apagamentos, ±3% | 52/52 |
 
 ### Desvios conhecidos
@@ -1258,6 +1265,7 @@ As funções de aviação moram em `src/engines/ronco/aviacao.ts` (`instalarAvia
 - **Faixa dos 13 aviões a 12 m.** O alvo de 12 dB não cabe nos `nivelEscape` do próprio RADIAL.md (Verner 124 e R-1820 145 dB de L_W): a faixa medida é 38 dB.
 - **Desvios das fórmulas do RADIAL.md, anotados no código:** ordem do 3 cilindros `1-3-2` (a `1-2-3` da tabela 1.1 dispara a 120-120-480°); intervalos do 9 cilindros 80 ± 7,2° (os ΔPMS da própria tabela 1.2 somados; o texto diz ±5°); `qMix` com o fator pobre (a fórmula de 2.2 dava 1 com 0,55); um magneto ×1,6 na queima (com ×1,2 o mag check caía 18 rpm); ar de partida ×0,3 da vazão do texto e janela de 3–100° (com 5–60° o motor parado ficava num buraco sem cilindro recebendo ar); arranque direto 3,2× o atrito frio; passo mínimo absorvendo 90% da potência (com 25% o R-2800 subia em 1 s); `FAMILIES` do Ronco sem a Aviação (ela fica em `PRESETS_AVIACAO`/`FAMILIA_AVIACAO`, e a página usa `PRESETS_PAGINA`), porque a paridade confere os 68 e as 9 famílias contra o legado.
 - **Aproximações declaradas:** Monaco-Trossi em 4 tempos (o ciclo de 360° do `EngineDSP` só existe com `cc`); Megola (a panorâmica dos estaques gira com a roda; a "lenta" é a roda empurrada); Sherman sem o ruído da esteira.
+- **Fichas corrigidas em 22/11/2026** (AUDITORIA F-RAD-02 a F-RAD-04): Verner 5S com 3,39 L, 7,8 e 61 kW a 2 300 rpm, com o arranque elétrico direto vencendo também 1,3× o pico de compressão de um cilindro (≈ 0,11·p₀·V_cil·cr^1,3: com o arranque só pelo atrito o 5S balançava abaixo de 60 rpm e não pegava; o 3V passou a pegar em 2,9 s em vez de 4,9); S-55 com o rotor a 199 rpm (caixa 11,3155:1); Sherman com a redução final 2,84 × 3,53 = 10,03 (5ª a 39,5 km/h).
 
 ### Pendente (TODO)
 
@@ -1703,13 +1711,17 @@ O projeto está em [`ELETRICO.md`](ELETRICO.md); aqui fica o que foi feito, como
 
 ### Ferramentas e portões
 
-`npm run teste:eletrico` (`tools/eletrico/valida.ts`, 13 grupos em série, ~35 s), `npm run lenta:eletrico` (os 18 presets em quatro estados: 18/18), `npm run navegador:eletrico` (Chromium, Firefox e a reserva). Portões da etapa: `paridade:ronco`, `paridade:turbina` e `paridade:acoustics` idênticos; `teste:cena` com as mesmas 105 medidas e os mesmos estados de antes (93 ok, 12 desvios: só o CPU e as coletas do laço variam de rodada para rodada); `teste:diesel`, `teste:radial`, `lenta:diesel`, `lenta:radial`, `typecheck`, `build` e os `navegador:*` de todas as páginas no `dist/`.
+`npm run teste:eletrico` (`tools/eletrico/valida.ts`, 12 grupos em série, ~40 s), `npm run cpu:eletrico` (`tools/eletrico/cpu.ts`: banco de 200 linhas, motor do N700, N700 no túnel pela Cena e as coletas do `--trace-gc`, com o tempo de CPU e a mediana de 3), `npm run lenta:eletrico` (os 18 presets em quatro estados: 18/18), `npm run navegador:eletrico` (Chromium, Firefox e a reserva). Portões da etapa: `paridade:ronco`, `paridade:turbina` e `paridade:acoustics` idênticos; `teste:cena` com as mesmas 105 medidas e os mesmos estados de antes (93 ok, 12 desvios: só o CPU e as coletas do laço variam de rodada para rodada); `teste:diesel`, `teste:radial`, `lenta:diesel`, `lenta:radial`, `typecheck`, `build` e os `navegador:*` de todas as páginas no `dist/`.
 
-### Alvo × medido (`npm run teste:eletrico`: 94 medidas, 92 ok, 2 desvios documentados, 0 falhas)
+**Desvios com teto e sementes** (desde 22/11/2026, `tools/desvios.ts`, comum às famílias). Uma medida fora do alvo só passa se estiver no retrato `tools/eletrico-desvios.json` (chave = nome exato da medida; `medido`, `folga`, `motivo`) e o valor de hoje ficar dentro da folga do gravado (±1 dB nas medidas em dB, ±5 % nas outras; alargada, com a razão em `nota_folga`, onde a mediana de 3 sementes muda mais que isso entre bases). Saiu da folga, para pior ou para melhor: falha até `--atualizar` (tudo o que mudou) ou `--atualizar=<nome>` (só a medida que a mudança explica). Medida do retrato que voltou a passar: aviso de desvio órfão. Medidas à beira (`beira: true`: passam por menos de 5 % da tolerância e caem fora com outras sementes) podem passar ou falhar dentro da folga. Contagens, transientes, vagar e CV são a mediana de 3 sementes do ruído (`semear` troca o estado dos RNG do DSP montado, depois da calibração, que fica com a semente de fábrica; `--semente N` muda a base, 0 é a de fábrica). Antes, o desvio era só um nome (a medida podia piorar à vontade) e o resultado valia para uma semente: com outras três, 8 medidas "ok" do Elétrico viravam falha (AUDITORIA T-ELE-03). O grupo que confere a tabela 3.7 chama-se `alvos-3.7` (era `gravacoes`: não abre gravação nenhuma). As bandas dos quatro casos conferem as cinco bandas da decisão 3, 20–60 e 60–150 Hz a ±6 dB; o vetor do Taurus e da CPTM estava deslocado uma casa e o grave ficava fora do critério: o Taurus fica 8,5 e 7,5 dB abaixo em 20–60 e 60–150, a CPTM 8,2 em 20–60 (desvios, T-ELE-05). AVAS e pneus são medidos no asfalto, a condição do alvo (T-ELE-04): AVAS 54,8 / 62,9 / 70,4 dB(A) a 0 / 10 / 20 km/h, pneus 75,7 dB(A) (desvios; em campo livre 55,0 / 61,8 / 68,3 e 70,7). O AVAS que saía de parado para 108 km/h estourava 50 dB acima do nível do limite na rampa de desligar (P-02): corrigido em 22/11 (`avas.ts`, as leis param na velocidade-limite), −2,6 dB.
+
+### Alvo × medido (`npm run teste:eletrico`: 90 medidas; semente de fábrica 82 ok e 8 desvios com teto; retrato com 15 entradas, 7 à beira; 0 falhas com as sementes de base 0, 1000, 2000, 3000 e 4000)
+
+Os números da tabela são da semente de fábrica e de antes das fichas de 22/11; os de hoje estão no retrato e na saída do teste. Depois das fichas (F-ELE-03, F-ELE-07 a F-ELE-09): o Metropolis com 24 × 180 kW faz o 0–80 em 26,4 s contra a conta do plano refeita, 22,9 ± 4 s (antes 16 × 150 kW: 38,0 s contra 30,5 de conta); o Leaf com os dentes reais tem a ordem de ranhura em 9 357 Hz a 85 km/h (desvio: 1,5 % abaixo dos 9,5 kHz de uma velocidade estimada) e a razão das famílias agudas em 1,41 (à beira: é o 4º harmônico do engrenamento, 96/68; com os dentes errados dava 96/64 = 1,50).
 
 | Medida | Alvo | Medido |
 |---|---|---|
-| 200 linhas: frequência, nível, nada acima de 21,6 kHz, CPU | ±0,01%, ±0,1 dB, < −100 dB, < 3% | 0,0002%, 0,006 dB, −154 dB, 1,8% |
+| 200 linhas: frequência, nível, nada acima de 21,6 kHz; CPU (`cpu:eletrico`) | ±0,01%, ±0,1 dB, < −100 dB; < 3% | 0,0002%, 0,006 dB, −154 dB; 1,8% |
 | troca de 100 linhas de uma vez (acima de 16 kHz); coletas em 10 s | < 0,05 FS; zero | 0,004 FS; zero (motor do N700: 5) |
 | 0–100 km/h Model 3 · Leaf; 0–80 do metrô de 6 carros; regeneração 100 → 20 | 4,7 ± 0,5 · 8,0 ± 0,8; 36 ± 4; 9 ± 1 s | 4,59 · 8,19; 38,0; 9,76 s |
 | Leaf a 5000 rpm: 666,7 / 2000 / 4000 / 4000 ± 666,7 Hz | ±0,5% | 0,000% |
@@ -1845,13 +1857,14 @@ As 14 fichas da seção 5: K4s, A4, D51, 844, Big Boy, Y6b, Shay, Maria Fumaça,
 ### Ferramentas e portões
 
 - `npm run gravacoes:vapor` (`tools/vapor-gravacoes.ts`, passo 1): a porta em TypeScript dos scripts do projetista (`tools/vapor-analise.ts`) contra o Apêndice A. O Butterworth/filtfilt bate com o scipy em 12 algarismos. Resultado na etapa: 135 ok e 6 desvios, que são notas do Apêndice que o próprio `apito.py` não acha com os parâmetros do texto. **Precisa das gravações**, que ficam fora do git: sem `-- --pasta <pasta dos WAV>` ele procura numa pasta temporária da etapa que não existe mais e termina com erro (`ENOENT`, código 1); por isso não entra no `verificar`.
-- `npm run teste:vapor` (`tools/vapor-valida.ts`): 14 grupos (13 em paralelo e o de CPU sozinho no fim), 30–60 s.
+- `npm run teste:vapor` (`tools/vapor-valida.ts`): 13 grupos em paralelo, 30–90 s. `npm run cpu:vapor` (`tools/vapor-cpu.ts`): CPU por amostra contra o Ronco, 3 passadas alternadas, tempo de CPU do processo (`process.cpuUsage()`), mediana: K4s 0,15, 844 0,15, Big Boy 0,21 (com o tempo de relógio e uma passada o Big Boy dava 0,34–0,40; a primeira passada ainda paga o JIT e sai perto de 0,3).
+- **Desvios com teto e sementes** (desde 22/11/2026, `tools/desvios.ts`, comum às famílias). Uma medida fora do alvo só passa se estiver no retrato `tools/vapor-desvios.json` (chave = nome exato da medida; `medido`, `folga`, `motivo`) e o valor de hoje ficar dentro da folga do gravado (±1 dB nas medidas em dB, ±5 % nas outras; alargada, com a razão em `nota_folga`, onde a mediana de 3 sementes muda mais que isso entre bases). Saiu da folga, para pior ou para melhor: falha até `--atualizar` (tudo o que mudou) ou `--atualizar=<nome>` (só a medida que a mudança explica). Medida do retrato que voltou a passar: aviso de desvio órfão. Medidas à beira (`beira: true`: passam por menos de 5 % da tolerância e caem fora com outras sementes) podem passar ou falhar dentro da folga. Contagens, transientes, vagar e CV são a mediana de 3 sementes do ruído (`semear` troca o estado dos RNG do DSP montado, depois da calibração, que fica com a semente de fábrica; `--semente N` muda a base, 0 é a de fábrica). Antes, o desvio era só um nome (a medida podia piorar à vontade) e o resultado valia para uma semente: com outras três, 11 medidas "ok" do Vapor viravam falha (AUDITORIA T-VAP-01, T-VAP-03). O pórtico de escape é medido (a área que o laço entrega à rede, interceptada em `rede.injetar`, contra o ângulo da manivela do `tap`: 19,9°), no lugar do `ok` fixo; os rótulos mostram o critério de verdade.
 - `npm run lenta:vapor` (`tools/vapor-lenta.ts`): os 14 presets no portador de uso real. Confere parado sem escape, arrancada no molhado com patinação, chuffs/s exatos em cruzeiro, drifting e ausência de NaN: 14/14.
 - `npm run navegador:vapor`: Chromium e Firefox, servindo o `dist/`.
 
-### Alvo × medido (`npm run teste:vapor`: 125 medidas, 97 ok, 28 desvios documentados, 0 falhas)
+### Alvo × medido (`npm run teste:vapor`: 121 medidas; semente de fábrica 94 ok e 27 desvios com teto; retrato com 36 entradas, 12 à beira; 0 falhas com as sementes de base 0, 3000 e 4000 depois das fichas, e 0, 1000 e 2000 antes)
 
-Os desvios estão em negrito.
+Os desvios estão em negrito. Os números da tabela são da semente de fábrica, de antes das medianas; os de hoje estão no retrato e na saída do teste. Com a mediana de 3 sementes o ataque a 9/s virou desvio (24 ms contra 37 ± 30 %: só passava com a semente do preset), o Shay e a CPU do Big Boy voltaram a passar, e doze medidas ficaram à beira (ataque a 4/s, decaimentos a 9 e 21,3/s, p/v a 21,3/s, massa por chuff, linha de 2/volta a 7/s, nível por chuff na arrancada, "pants" do Stanley, L_W do chuff, quilling, a 844 a 15 m). A volta do Corliss passou a ser o tempo de acomodação a ±1 % (a primeira passagem caía em 1 a 10 s ou em nunca conforme a semente): ele não se acomoda em 30 s, desvio estável. Depois das fichas de 22/11 (comprimentos reais das composições, F-VAP-04) a segurança a 10 m foi a 105,4 dB(A) e a 844 a 15 m a 89,9.
 
 | Medida | Alvo | Medido |
 |---|---|---|
@@ -1886,7 +1899,7 @@ Os desvios estão em negrito.
 | Aveling em lenta (escapes/s, 400–1k) · Stanley a 40 km/h (pants/s, p/v, queimador) · barco a 40 rpm | 2,5 ± 0,3, +8 dB · 23 ± 0,5, ≤ 4 dB, ≥ +10 · 6,7 ± 0,2 | **3,38, −1,3** · 23,34, **6,7**, ok · 6,67 |
 | L_W na referência (chuff, apito, segurança, torneiras, sino, bomba, injetor) | tabela 4.6 ± 1 dB | 124,3 / 145,0 / 140,0 / 123,2 / 113,1 / 104,2 / 94,0 |
 | apito a 30 m · segurança a 10 m · 844 a 15 m · por chuff na arrancada / em cruzeiro | 105 ± 3 · 110 ± 3 · 95 ± 5 · +6 ± 3 / −4 ± 3 | **100,5 · 104,4 · 89,1** · +3,6 / **−7,8** |
-| CPU por amostra / Ronco (K4s, 844, Big Boy) | < 1/3 | 0,25 / 0,25 / **0,34** |
+| CPU por amostra / Ronco (K4s, 844, Big Boy), `cpu:vapor` | < 1/3 | 0,15 / 0,15 / 0,21 (tempo de CPU, mediana de 3) |
 
 ### Desvios conhecidos
 
@@ -1911,7 +1924,8 @@ O motivo de cada um está no `DESVIOS` de `tools/vapor-valida.ts`. Por grupo:
   - Corliss: queda de −5,3% no degrau, limitada pelo reabastecimento da caixa de válvulas.
   - Aveling em lenta: o governador desce devagar, e falta o ruído de mecanismo da gravação.
   - Stanley: p/v de 6,7 dB; falta o volume do abafador.
-- **CPU do Big Boy:** 0,34 do Ronco, pelas 16 extremidades.
+- **CPU do Big Boy:** com o tempo de CPU e a mediana de 3 passadas, 0,21 do Ronco: o 0,34 de antes era o tempo de relógio de uma passada (com o JIT frio e a máquina ocupada).
+- **Fichas corrigidas em 22/11/2026** (AUDITORIA F-VAP-04 a F-VAP-08): comprimentos reais das composições (K4s 25,45 m, A4 21,65, 844 34,81, Big Boy 40,47, Y6b 35,01; divisão locomotiva/tênder ≈ onde a fonte só dá o total), apito de uma nota na Y6b, o de 3 notas da 844 no Big Boy, o de 3 notas da PRR na K4s, a A4 sem bomba de ar.
 
 ### Relatado, sem mudar (fora da etapa)
 
