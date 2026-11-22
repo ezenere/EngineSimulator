@@ -345,6 +345,10 @@ async function grupo(nome: string): Promise<Linha[]> {
       const ts = m3(sb.map((r) => r.t)), nh = mediana(sb.map((r) => r.nh));
       add('R-2800: subida de giro com o passo mínimo (manete ao fundo em 3 s)', '650 → 2 800 rpm em 4–7 s', `${ts.txt} s`, ts.m >= 4 && ts.m <= 7, ts.m, 's');
       add('R-2800: governador segura a hélice', '1 225 ± 2%', `${f1(nh, 0)} rpm`, Math.abs(nh / 1225 - 1) <= 0.02, nh, 'rpm');
+      // Sherman (D1, F-RAD-03): velocidade de cada marcha no corte, pela ficha (redução final 2,84 × diferencial 3,53);
+      // a máxima do M4A1 é 24 mph (39 km/h). Conta da ficha, não do som: guarda a relação que a página e a Passagem usam
+      const sh = preset('r975'), vm = sh.ratios.map((r: number) => ((sh.rpmMax / (r * sh.finalDrive)) * 2 * Math.PI / 60) * sh.wheelR * 3.6);
+      add('Sherman (r975): velocidade no corte em cada marcha (conta da ficha)', '5ª: 39 km/h ± 5% (24 mph do M4A1)', `${vm.map((v: number) => f1(v)).join(' / ')} km/h`, Math.abs(vm[4] / 39 - 1) <= 0.05, vm, 'km/h');
     }
   }
 
