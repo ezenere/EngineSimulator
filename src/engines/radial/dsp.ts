@@ -435,7 +435,14 @@ export class RadialDSP extends EngineDSP {
       // (no de inércia o volante perde força em poucos segundos: se as 9 pás não vieram em 4,5 s, o piloto liga os magnetos assim mesmo)
       if (this.magAuto && this.magnetos === 'desligado' && (this.pas >= 9 || (tipo === 'inercia' && this.tGiro >= 4.5))) this.magnetos = 'ambos';
     }
-    if (this.state === 'run' && this.fase === 'girar') this.fase = 'pegou';
+    if (this.state === 'run' && this.fase === 'girar') {
+      this.fase = 'pegou';
+      // (engatado com o motor ainda girando da vez anterior, o giro passa do limite de "funcionando" antes da 9ª pá: no
+      // automático os magnetos ligam aí. Sem isso o motor ficava "funcionando" sem centelha e parava: o roteiro de
+      // navegador troca de preset e engata em menos de 1 s, e só passava quando o giro que sobrava ainda estava acima
+      // de 400 rpm na hora da leitura)
+      if (this.magAuto && this.magnetos === 'desligado') this.magnetos = 'ambos';
+    }
     if (this.state === 'off' && (this.fase === 'girar' || this.fase === 'pegou')) this.fase = 'parado';
     this.arPartida = tipo === 'ar' && this.state === 'crank' && this.tGiro < 3;
     if (this.engateT >= 0) { this.engateT += dtc; if (this.engateT > 3) this.engateT = -1; }
