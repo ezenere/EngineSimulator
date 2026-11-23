@@ -8,7 +8,7 @@ import { PRESETS_ROTATIVO } from '../../engines/rotativo/presets';
 import { volumeCamara } from '../../engines/rotativo/geometria';
 import urlRot from '../../worklet/processador-rotativo.ts?worker&url';
 import { ControleRotativo, type EstadoRot } from './controle';
-import { NavDePresets, Pedal } from '../comum/Palco';
+import { BotaoDoFreio, ManeteDePotencia, NavDePresets, Pedal, PosicoesDaManete } from '../comum/Palco';
 import { MostradoresRot } from './mostradores';
 import { Painel } from './Painel';
 import { usarTeclado } from './teclado';
@@ -39,16 +39,21 @@ function placa({ spec, motor }: EstadoRot) {
 function Interior({ k, e }: { k: ControleRotativo; e: EstadoRot }) {
   const { iniciar, estado, erro } = useAudioShell();
   k.iniciarAudio = iniciar;
+  const [freio, setFreio] = useState(false);
   useEffect(() => {
     (window as any).__rotativo = k; // (alça para os testes no navegador, tools/rotativo-navegador.mjs)
     const m = new MostradoresRot(k);
     m.iniciar();
-    return () => m.parar();
+    // a manete dos presets de aviação anda com as teclas seguradas
+    let raf = 0, antes = 0;
+    const laco = (agora: number) => { k.segurar(antes ? Math.min(0.1, (agora - antes) / 1000) : 0); antes = agora; raf = requestAnimationFrame(laco); };
+    raf = requestAnimationFrame(laco);
+    return () => { m.parar(); cancelAnimationFrame(raf); };
   }, [k]);
-  usarTeclado(k);
+  usarTeclado(k, setFreio);
 
   const ligar = () => { k.toggleIgnition().catch((err) => console.error('Rotativo: áudio não iniciou', err)); };
-  const carro = (e.spec.portadores || []).includes('carro'), pal = e.spec.tipo === 'palhetas';
+  const carro = (e.spec.portadores || []).includes('carro'), pal = e.spec.tipo === 'palhetas', aviao = !!e.spec.aviation;
 
   return (
     <div className="app">
@@ -62,7 +67,8 @@ function Interior({ k, e }: { k: ControleRotativo; e: EstadoRot }) {
       <main className={pal ? 'cluster' : 'cluster cluster-3'}>
         <section className="tach-wrap" aria-label="Conta-giros">
           <canvas id="tach" role="img" aria-label="Conta-giros: rotação do eixo, pressão do turbo, torque e temperatura" />
-          <Pedal k={k} rotulo={pal ? 'Gatilho' : 'Acelerador'} />
+          {/* (avião e helicóptero: a manete de potência, como na Aviação do Ronco; no resto, o pedal ou o gatilho) */}
+          {aviao ? <ManeteDePotencia k={k} /> : <Pedal k={k} rotulo={pal ? 'Gatilho' : 'Acelerador'} />}
         </section>
 
         <section className="firing" aria-label={pal ? 'Rotor de palhetas' : 'Ciclo das câmaras'}>
@@ -84,14 +90,18 @@ function Interior({ k, e }: { k: ControleRotativo; e: EstadoRot }) {
         </section>
 
         <section className="drive">
+          {aviao && <PosicoesDaManete k={k} />}
           {carro && (
             <div className="gearbox">
               <button type="button" className="key" aria-label="Reduzir marcha" onClick={() => k.shift(-1)}>Q</button>
               <div className="gear-read"><span className="k">Marcha</span><span className="gear mono" id="gearRead">N</span></div>
               <button type="button" className="key" aria-label="Subir marcha" onClick={() => k.shift(1)}>E</button>
+              <BotaoDoFreio k={k} aceso={freio} aoFrear={setFreio} />
             </div>
           )}
-          <p className="hints"><kbd>W</kbd>/<kbd>↑</kbd> {pal ? 'gatilho' : 'acelerador'} · <kbd>Shift</kbd> meio · <kbd>I</kbd> {pal ? 'ar' : 'ignição'} · <kbd>C</kbd> microfone{carro ? <> · <kbd>Q</kbd>/<kbd>E</kbd> câmbio · <kbd>S</kbd> freio</> : null}{e.spec.aviation ? <> · <kbd>M</kbd> magnetos</> : null}{pal ? <> · <kbd>[</kbd>/<kbd>]</kbd> carga</> : null}</p>
+          <p className="hints">{aviao
+            ? <><kbd>W</kbd>/<kbd>↑</kbd> avança a manete · <kbd>S</kbd>/<kbd>↓</kbd> recua · <kbd>1</kbd>–<kbd>4</kbd> posições</>
+            : <><kbd>W</kbd>/<kbd>↑</kbd> {pal ? 'gatilho' : 'acelerador'} · <kbd>Shift</kbd> meio</>} · <kbd>I</kbd> {pal ? 'ar' : 'ignição'} · <kbd>C</kbd> microfone{carro ? <> · <kbd>Q</kbd>/<kbd>E</kbd> câmbio · <kbd>S</kbd> freio</> : null}{aviao ? <> · <kbd>M</kbd> magnetos</> : null}{pal ? <> · <kbd>[</kbd>/<kbd>]</kbd> carga</> : null}</p>
         </section>
       </main>
 

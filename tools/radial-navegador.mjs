@@ -228,6 +228,15 @@ try {
   await tecla('KeyC');
   confere((await lerAte(() => ev(`window.__radial.audio.ouvinte`), (v) => v === 'int', 3000)) === 'int', 'C: microfone na cabine');
   await clicar('#env .chip:nth-child(1)');
+  // equalização com o médio e o Zerar, dicas do som de fundo e do volume e a nota do Arcade (as peças comuns do Ronco)
+  const medio = await deslizar('eqMid', -3);
+  await ev(`[...document.querySelectorAll('.controls .chip')].find((c) => c.textContent === 'Zerar').click()`);
+  const zerado = await lerAte(() => ev(`[document.getElementById('eqMid').closest('.field').querySelector('output').textContent, window.__radial.estado.eq.mid]`), (z) => z[0] === '0 dB' && z[1] === 0, 3000);
+  confere(medio === '-3 dB' && zerado[0] === '0 dB' && zerado[1] === 0, 'equalização: médio (900 Hz) e Zerar', `${medio} → ${zerado.join(' · ')}`);
+  await chip('#dynamics', 'Arcade');
+  const dicas = await lerAte(() => ev(`({ fundo: [...document.querySelectorAll('#ambSound .chip')].map((c) => c.title), volume: [...document.querySelectorAll('#dynamics .chip')].map((c) => c.title), nota: [...document.querySelectorAll('.controls .note')].some((n) => n.textContent.startsWith('Arcade:')) })`), (d) => d.nota, 3000);
+  confere(dicas.fundo.every(Boolean) && dicas.volume.every(Boolean) && dicas.nota, 'dicas do som de fundo e do volume, nota do Arcade', JSON.stringify(dicas));
+  await chip('#dynamics', 'Real');
 
   // DC-3: arranque de inércia (energizar → engatar), corte da mistura para desligar
   await clicar('.preset[data-id=r1830]');
@@ -274,6 +283,17 @@ try {
   await tecla('KeyW', 'keyup');
   const ps = await lerAte(fill, (v) => v === '0%', 3000);
   confere(pw === '100%' && ps === '0%', 'Sherman: W no pedal, volta a zero ao soltar', `${pw} → ${ps}`);
+  // freio do tanque: S segurado acende o botão e a janela perder o foco solta; o botão da tela freia enquanto apertado
+  await tecla('KeyS');
+  const fS = await esperaAte(() => ev(`document.getElementById('brakeBtn').classList.contains('on') && window.__radial.input.brake === 1`), 3000);
+  await ev(`window.dispatchEvent(new Event('blur'))`);
+  const fB = await esperaAte(() => ev(`!document.getElementById('brakeBtn').classList.contains('on') && window.__radial.input.brake === 0`), 3000);
+  confere(!!fS && !!fB, 'Sherman: S segura o freio (botão aceso) e a janela perder o foco solta');
+  await ev(`document.getElementById('brakeBtn').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))`);
+  const bD = await esperaAte(() => ev(`document.getElementById('brakeBtn').classList.contains('on') && window.__radial.input.brake === 1`), 3000);
+  await ev(`document.getElementById('brakeBtn').dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))`);
+  const bU = await esperaAte(() => ev(`!document.getElementById('brakeBtn').classList.contains('on') && window.__radial.input.brake === 0`), 3000);
+  confere(!!bD && !!bU, 'Sherman: botão do freio na tela (aperta e solta)');
 
   // temperatura fixa: o controle nasce da telemetria (não de um valor fixo) e manda no motor
   await chip('#tempMode', 'Fixa');

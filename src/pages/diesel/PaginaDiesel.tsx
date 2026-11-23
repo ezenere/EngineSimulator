@@ -9,7 +9,7 @@ import { DieselDSP } from '../../engines/diesel/dsp';
 import { PRESETS } from '../../engines/diesel/presets';
 import urlDiesel from '../../worklet/processador-diesel.ts?worker&url';
 import { ControleDiesel, familyFor, type EstadoDiesel } from './controle';
-import { Balanco, DICA_BALANCO, NavDePresets, Pedal } from '../comum/Palco';
+import { Balanco, BotaoDoFreio, DICA_BALANCO, NavDePresets, Pedal } from '../comum/Palco';
 import { Mostradores } from './mostradores';
 import { Painel } from './Painel';
 import { usarTeclado } from './teclado';
@@ -54,9 +54,6 @@ function Interior({ k, e }: { k: ControleDiesel; e: EstadoDiesel }) {
   usarTeclado(k, setFreio);
 
   const ligar = () => { k.toggleIgnition().catch((err) => console.error('Diesel: áudio não iniciou', err)); };
-  // (soltar o pedal da tela também solta o acelerador do teclado)
-  const solta = () => { k.input.pad = 0; k.input.key = 0; k.sendInput(); };
-  const freia = (on: boolean) => { k.input.brake = on ? 1 : 0; k.sendInput(); setFreio(on); };
 
   return (
     <div className="app">
@@ -70,7 +67,7 @@ function Interior({ k, e }: { k: ControleDiesel; e: EstadoDiesel }) {
       <main className="cluster cluster-3">
         <section className="tach-wrap" aria-label="Conta-giros">
           <canvas id="tach" role="img" aria-label="Conta-giros: rotação, pressão do turbo, torque e temperatura do motor" />
-          {comPedal && <Pedal k={k} rotulo={carro ? 'Acelerador' : 'Rotação'} nome={carro ? 'Acelerador' : 'Rotação da bancada'} aoSoltar={solta} />}
+          {comPedal && <Pedal k={k} rotulo={carro ? 'Acelerador' : 'Rotação'} nome={carro ? 'Acelerador' : 'Rotação da bancada'} />}
         </section>
 
         <section className="firing" aria-label="Ciclo de ignição">
@@ -92,8 +89,7 @@ function Interior({ k, e }: { k: ControleDiesel; e: EstadoDiesel }) {
               <button type="button" className="key" id="gDown" aria-label="Reduzir marcha" onClick={() => k.shift(-1)}>Q</button>
               <div className="gear-read"><span className="k">Marcha</span><span className="gear mono" id="gearRead">N</span></div>
               <button type="button" className="key" id="gUp" aria-label="Subir marcha" onClick={() => k.shift(1)}>E</button>
-              <button type="button" className={`key wide${freio ? ' on' : ''}`} id="brakeBtn" title="Freio (segure)"
-                onPointerDown={() => freia(true)} onPointerUp={() => freia(false)} onPointerLeave={() => freia(false)} onPointerCancel={() => freia(false)}>S · freio</button>
+              <BotaoDoFreio k={k} aceso={freio} aoFrear={setFreio} />
               <button type="button" className="valve-tag" id="valveTag" title="Troca o modo do escape ativo (B)" onClick={() => k.cycleValve()} hidden>válvula fechada</button>
             </div>
           ) : <ComandoDaCarga k={k} e={e} />}

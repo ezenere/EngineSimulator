@@ -42,7 +42,7 @@ function Escuta({ k, e }: P) {
       <SomDeFundo k={k} params={params} />
       <VolumeDoMotor k={k} params={params} />
       <Mixagem k={k} params={params} mecanica="Mecânica (cilindros expostos)" />
-      <Equalizacao k={k} eq={eq} />
+      <Equalizacao k={k} eq={eq} medio="Médio (900 Hz)" zerar />
     </Section>
   );
 }

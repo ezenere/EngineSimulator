@@ -48,9 +48,7 @@ function Escuta({ k, e }: P) {
       {e.observer === 'car' ? <Microfone k={k} e={e} ext="Câmera atrás" bay="Cofre" /> : <NaVia k={k} params={params} quem="carro" />}
       <Ambiente k={k} params={params} />
       <SomDeFundo k={k} params={params} dicas={['Vento, trânsito ao longe, ventilação do túnel, arquibancada…', 'Só o carro (a acústica do lugar, ecos e reverberação, continua)']} />
-      <VolumeDoMotor k={k} params={params}
-        dicas={['Nível de verdade: a marcha lenta fica uns 20 dB abaixo do giro alto em carga', 'Segura o som num nível médio em qualquer rotação: lenta e giro baixo sobem, o giro alto não muda']}
-        notaArcade="Arcade: a lenta e o giro baixo ganham volume até ficar perto do giro alto. Útil em alto-falante pequeno ou volume baixo." />
+      <VolumeDoMotor k={k} params={params} />
       <Mixagem k={k} params={params} />
       <Equalizacao k={k} eq={eq} medio="Médio (900 Hz)" zerar />
     </Section>

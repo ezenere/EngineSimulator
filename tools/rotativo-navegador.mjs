@@ -114,6 +114,7 @@ const tecla = (code, tipo = 'keydown', extra = {}) => ev(`window.dispatchEvent(n
 const clicar = (sel) => ev(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) throw new Error('sem ${sel.replace(/'/g, '')}'); el.click(); return true; })()`);
 const chip = (grupo, texto) => ev(`(() => { const el = [...document.querySelectorAll(${JSON.stringify(grupo + ' .chip')})].find((c) => c.textContent.trim().startsWith(${JSON.stringify(texto)})); if (!el) throw new Error('sem chip ${texto}'); el.click(); return true; })()`);
 const texto = (sel) => ev(`document.querySelector(${JSON.stringify(sel)})?.textContent ?? null`);
+const deslizar = (id, v) => ev(`(() => { const r = document.getElementById(${JSON.stringify(id)}); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set; set.call(r, String(${v})); r.dispatchEvent(new Event('input', { bubbles: true })); r.dispatchEvent(new Event('change', { bubbles: true })); return r.closest('.field').querySelector('output').textContent; })()`);
 const tele = () => ev(`(() => { const k = window.__rotativo; const t = k.tele; return { rpm: t.rpm, state: t.state, theta: t.theta, cyc: t.cyc, rotores: t.rotores, camara: t.camara, estouros: t.estouros, tEscape: t.tEscape, fHC: t.fHC, gear: t.gear, kmh: t.kmh, Nr: t.Nr, palhetas: t.palhetas, fPalheta: t.fPalheta, rpmHospedeiro: t.rpmHospedeiro, trailing: t.trailing, janelas: t.janelas, modo: k.audio?.modo, sr: k.audio?.ctx.sampleRate, estadoCtx: k.audio?.ctx.state, idade: performance.now() - (t.t || 0) }; })()`);
 const rms = () => ev(`(() => { const an = window.__rotativo.audio?.analyser; if (!an) return -999; const x = new Float32Array(an.fftSize); an.getFloatTimeDomainData(x); let s = 0; for (const v of x) s += v * v; return 10 * Math.log10(s / x.length + 1e-20); })()`);
 // Esperas: em vez de dormir um tempo fixo depois de mexer num controle (com a máquina carregada a página ainda não
@@ -164,6 +165,17 @@ try {
   const g1 = await textoAte('#gearRead', (v) => /^1$/.test(v));
   confere(/^1$/.test(g1), 'E engata a 1ª', g1);
   await tecla('KeyQ');
+  // freio: ↓ segurado acende o botão (como S); o botão da tela freia enquanto apertado
+  await tecla('ArrowDown');
+  const fD = await esperaAte(() => ev(`document.getElementById('brakeBtn').classList.contains('on') && window.__rotativo.input.brake === 1`), 3000);
+  await tecla('ArrowDown', 'keyup');
+  const fU = await esperaAte(() => ev(`!document.getElementById('brakeBtn').classList.contains('on') && window.__rotativo.input.brake === 0`), 3000);
+  confere(!!fD && !!fU, '↓ segura o freio e acende o botão');
+  await ev(`document.getElementById('brakeBtn').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))`);
+  const bD = await esperaAte(() => ev(`document.getElementById('brakeBtn').classList.contains('on') && window.__rotativo.input.brake === 1`), 3000);
+  await ev(`document.getElementById('brakeBtn').dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))`);
+  const bU = await esperaAte(() => ev(`!document.getElementById('brakeBtn').classList.contains('on') && window.__rotativo.input.brake === 0`), 3000);
+  confere(!!bD && !!bU, 'botão do freio na tela (aperta e solta)');
   // ambiente e microfone
   await clicar('#env .chip:nth-child(3)');
   confere((await lerAte(() => ev(`window.__rotativo.estado.params.env`), (v) => v === 'tunnel', 3000)) === 'tunnel', 'ambiente Túnel');
@@ -171,6 +183,22 @@ try {
   confere((await lerAte(() => ev(`window.__rotativo.audio.ouvinte`), (v) => v === 'int', 3000)) === 'int', 'C: microfone na cabine');
   await clicar('#env .chip:nth-child(1)');
   await tecla('KeyC'); await tecla('KeyC'); await tecla('KeyC');
+  // a via como no Ronco (vista de cima, nota da passagem, 2–40 m), equalização com o Zerar, dicas e a nota do Arcade
+  await chip('#observer', 'Parado na via');
+  const via = await lerAte(() => ev(`({ canvas: !!document.getElementById('passby'), nota: document.getElementById('passNote')?.textContent, max: document.getElementById('roadDist')?.max, ouvinte: window.__rotativo.audio.ouvinte })`),
+    (v) => v.canvas && /m de você/.test(v.nota) && v.ouvinte === 'road', 4000);
+  const dist = await deslizar('roadDist', 20);
+  confere(via.canvas && /m de você/.test(via.nota) && via.max === '40' && via.ouvinte === 'road' && dist === '20 m', 'parado na via: vista de cima, nota e distância (2–40 m)', JSON.stringify({ ...via, dist }));
+  await chip('#observer', 'Junto com o carro');
+  const rotMedio = await ev(`document.getElementById('eqMid').closest('.field').querySelector('span').textContent`);
+  const medio = await deslizar('eqMid', 2.5);
+  await ev(`[...document.querySelectorAll('.controls .chip')].find((c) => c.textContent === 'Zerar').click()`);
+  const zerado = await lerAte(() => ev(`[document.getElementById('eqMid').closest('.field').querySelector('output').textContent, window.__rotativo.estado.eq.mid]`), (z) => z[0] === '0 dB' && z[1] === 0, 3000);
+  confere(rotMedio === 'Médio (900 Hz)' && medio === '+2,5 dB' && zerado[0] === '0 dB', 'equalização: Médio (900 Hz) e Zerar', `${rotMedio} · ${medio} → ${zerado.join(' · ')}`);
+  await chip('#dynamics', 'Arcade');
+  const dicas = await lerAte(() => ev(`({ fundo: [...document.querySelectorAll('#ambSound .chip')].map((c) => c.title), volume: [...document.querySelectorAll('#dynamics .chip')].map((c) => c.title), nota: [...document.querySelectorAll('.controls .note')].some((n) => n.textContent.startsWith('Arcade:')) })`), (d) => d.nota, 3000);
+  confere(dicas.fundo.every(Boolean) && dicas.volume.every(Boolean) && dicas.nota, 'dicas do som de fundo e do volume, nota do Arcade', JSON.stringify(dicas));
+  await chip('#dynamics', 'Real');
   // janelas, velas, pré-silencioso
   await chip('#admissao', 'Periférica');
   confere((await lerAte(() => ev(`window.__rotativo.estado.spec.janelas.admissao`), (v) => v === 'periferica', 3000)) === 'periferica', 'janela de admissão periférica');
@@ -199,6 +227,12 @@ try {
   await clicar('.preset[data-id=ae50r]');
   const sec = await lerAte(() => ev(`[...document.querySelectorAll('.controls h2')].map((h) => h.textContent).join(',')`), (v) => v.includes('Rotor') && !v.includes('Transmissão'), 5000);
   confere(sec.includes('Rotor') && !sec.includes('Transmissão'), 'AE50R: seção do rotor, sem transmissão', sec);
+  // aviação: a manete de potência no lugar do pedal, como na Aviação do Ronco (tecla 3 → subida, 85%)
+  const lv = await lerAte(() => ev(`({ lever: !!document.getElementById('lever'), pedal: !!document.getElementById('pedal'), posicoes: document.querySelectorAll('#detents button').length })`), (v) => v.lever && !v.pedal, 4000);
+  await tecla('Digit3');
+  const m3 = await lerAte(() => ev(`[+document.getElementById('lever')?.getAttribute('aria-valuenow'), window.__rotativo.manete]`), (m) => m[0] === 85 && Math.abs(m[1] - 0.85) < 1e-9, 3000);
+  confere(lv.lever && !lv.pedal && lv.posicoes === 4 && m3[0] === 85, 'AE50R: manete de potência com as 4 posições, sem o pedal (tecla 3 → 85%)', `${JSON.stringify(lv)} · ${m3.join(' · ')}`);
+  await tecla('Digit1');
   // X Mini
   await clicar('.fam:nth-child(5)');
   await clicar('.preset[data-id=xmini]');

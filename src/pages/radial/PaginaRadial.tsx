@@ -9,7 +9,7 @@ import { RadialDSP } from '../../engines/radial/dsp';
 import { PRESETS_RADIAL } from '../../engines/radial/presets';
 import urlRadial from '../../worklet/processador-radial.ts?worker&url';
 import { ControleRadial, type EstadoRadial } from './controle';
-import { Balanco, ManeteDePotencia, NavDePresets, Pedal, PosicoesDaManete } from '../comum/Palco';
+import { Balanco, BotaoDoFreio, ManeteDePotencia, NavDePresets, Pedal, PosicoesDaManete } from '../comum/Palco';
 import { Mostradores } from '../comum/mostradores';
 import { escreverLeiturasAv } from '../comum/Aviacao';
 import { Painel } from './Painel';
@@ -43,7 +43,8 @@ function rotuloPartida(e: EstadoRadial, fase: string | undefined) {
 function Interior({ k, e }: { k: ControleRadial; e: EstadoRadial }) {
   const { iniciar, estado, erro } = useAudioShell();
   k.iniciarAudio = iniciar;
-  // (o pedal só existe no tanque, no carro e na moto)
+  const [freio, setFreio] = useState(false);
+  // (o pedal e o freio só existem no tanque, no carro e na moto)
   const terra = (e.spec.portadores || []).includes('carro');
 
   useEffect(() => {
@@ -61,7 +62,7 @@ function Interior({ k, e }: { k: ControleRadial; e: EstadoRadial }) {
     raf = requestAnimationFrame(laco);
     return () => { m.parar(); cancelAnimationFrame(raf); };
   }, [k]);
-  usarTeclado(k);
+  usarTeclado(k, setFreio);
 
   const ligar = () => { k.toggleIgnition().catch((err) => console.error('Radial: áudio não iniciou', err)); };
 
@@ -96,10 +97,11 @@ function Interior({ k, e }: { k: ControleRadial; e: EstadoRadial }) {
               <button type="button" className="key" aria-label="Reduzir marcha" onClick={() => k.shift(-1)}>Q</button>
               <div className="gear-read"><span className="k">Marcha</span><span className="gear mono" id="gearRead">N</span></div>
               <button type="button" className="key" aria-label="Subir marcha" onClick={() => k.shift(1)}>E</button>
+              <BotaoDoFreio k={k} aceso={freio} aoFrear={setFreio} />
             </div>
           )}
           <p className="hints">{terra
-            ? <><kbd>W</kbd>/<kbd>↑</kbd>/<kbd>Espaço</kbd> acelera · <kbd>Shift</kbd> meio pé · <kbd>Q</kbd>/<kbd>E</kbd> câmbio</>
+            ? <><kbd>W</kbd>/<kbd>↑</kbd>/<kbd>Espaço</kbd> acelera · <kbd>Shift</kbd> meio pé · <kbd>S</kbd> freia · <kbd>Q</kbd>/<kbd>E</kbd> câmbio</>
             : <><kbd>W</kbd>/<kbd>↑</kbd> avança a manete · <kbd>S</kbd>/<kbd>↓</kbd> recua · <kbd>1</kbd>–<kbd>4</kbd> posições</>} · <kbd>I</kbd> partida (energizar, engatar, magnetos) · <kbd>M</kbd> magnetos · <kbd>[</kbd>/<kbd>]</kbd> mistura · <kbd>,</kbd>/<kbd>.</kbd> passo · <kbd>C</kbd> microfone</p>
         </section>
       </main>

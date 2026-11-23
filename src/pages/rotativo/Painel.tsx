@@ -12,7 +12,7 @@ import { sobreposicao } from '../../engines/rotativo/config';
 import { HeliceAv, RotorAv, MagnetosEMistura } from '../comum/Aviacao';
 import { clamp } from '../comum/controle';
 import {
-  AguaDoMotor, Ambiente, br, Equalizacao, FAIXA_DO_CORTE, LIGADO, Microfone, Mixagem, Observador, RelacoesDasMarchas, SomDeFundo,
+  AguaDoMotor, Ambiente, br, Equalizacao, FAIXA_DO_CORTE, LIGADO, Microfone, Mixagem, NaVia, Observador, RelacoesDasMarchas, SomDeFundo,
   TemperaturasProntas, trocaDoCorte, VolumeDoMotor,
 } from '../comum/Painel';
 import type { ControleRotativo, EstadoRot } from './controle';
@@ -54,14 +54,12 @@ function Escuta({ k, e }: P) {
       {e.observer === 'car' ? (
         <Microfone k={k} e={e} ext={carro ? 'Câmera atrás' : aviacao ? 'De fora, a 5 m da hélice' : 'De fora, a alguns metros'}
           bay={carro ? 'Cofre' : aviacao ? 'Dentro da carenagem' : 'Junto ao motor'} />
-      ) : (
-        <Slider id="roadDist" rotulo="Distância até a via" min={2} max={60} passo={0.5} valor={params.roadDist} formatar={(v) => `${virgula(v, 1)} m`} aoMudar={(v) => k.setParams({ roadDist: v })} />
-      )}
+      ) : <NaVia k={k} params={params} quem="carro" />}
       <Ambiente k={k} params={params} />
       <SomDeFundo k={k} params={params} />
       <VolumeDoMotor k={k} params={params} />
       <Mixagem k={k} params={params} mecanica="Mecânica (vedações, engrenagem)" />
-      <Equalizacao k={k} eq={eq} medio="Médio" />
+      <Equalizacao k={k} eq={eq} medio="Médio (900 Hz)" zerar />
     </Section>
   );
 }

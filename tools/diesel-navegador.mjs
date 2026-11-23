@@ -164,6 +164,9 @@ try {
   const alto = await rms();
   confere(t.rpm > 3800 && t.rpm < 4500, 'W acelera até o governador de máxima', `${Math.round(t.rpm)} rpm`);
   confere(alto > lenta + 3, 'acelerando soa mais alto', `${alto.toFixed(1)} vs ${lenta.toFixed(1)} dBFS`);
+  // soltar o pedal da tela não solta o acelerador do teclado (W continua seguro)
+  await ev(`document.getElementById('pedal').dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))`);
+  confere((await ev(`window.__diesel.input.key`)) === 1, 'soltar o pedal da tela não solta o W seguro', String(await ev(`window.__diesel.input.key`)));
   await tecla('KeyW', 'keyup');
   await teleAte((x) => x.rpm < 1200, 12000); // volta perto da lenta antes de engatar
 
