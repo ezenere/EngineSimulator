@@ -141,7 +141,7 @@ const { ev } = b;
 const tecla = (code, tipo = 'keydown', extra = {}) => ev(`window.dispatchEvent(new KeyboardEvent('${tipo}', ${JSON.stringify({ code, bubbles: true, ...extra })}))`);
 const clicar = (sel) => ev(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) throw new Error('sem ${sel.replace(/'/g, '')}'); el.click(); return true; })()`);
 const chip = (grupo, texto) => ev(`(() => { const el = [...document.querySelectorAll(${JSON.stringify(grupo + ' .chip')})].find((c) => c.textContent.trim().startsWith(${JSON.stringify(texto)})); if (!el) throw new Error('sem chip ${texto}'); el.click(); return true; })()`);
-const tele = () => ev(`(() => { const k = window.__vapor; const t = k.tele; const m = t?.motor; return { tem: !!t, motor: !!m, v: t ? t.portador.v * 3.6 : 0, rpmEixo: t?.portador.rpmEixo ?? 0, chuffs: m?.chuffsPorS ?? 0, pCal: m?.pCaldeira ?? 0, apito: m ? m.fApito.filter((f) => f > 0).length : 0, motores: m?.motores ?? 0, spl: t?.cena.splDbA ?? -999, idade: t ? performance.now() - t.t : 1e9, modo: k.audio?.modo, estadoCtx: k.audio?.ctx.state, amb: k.audio?.ambiente, calibrando: k.estado.calibrando, cenario: k.estado.cenario, sino: k.estado.cmd.sino, preset: k.estado.presetId, regulador: k.estado.cmd.regulador, rev: k.reversaoEfetiva(), corteAuto: k.estado.corteAuto, apitando: k.estado.apitando, freando: k.estado.freando, vFixa: k.vFixa, estado: document.getElementById('estadoTitulo')?.textContent ?? '' }; })()`);
+const tele = () => ev(`(() => { const k = window.__vapor; const t = k.tele; const m = t?.motor; return { tem: !!t, motor: !!m, v: t ? t.portador.v * 3.6 : 0, rpmEixo: t?.portador.rpmEixo ?? 0, chuffs: m?.chuffsPorS ?? 0, pCal: m?.pCaldeira ?? 0, apito: m ? m.fApito.filter((f) => f > 0).length : 0, motores: m?.motores ?? 0, spl: t?.cena.splDbA ?? -999, idade: t ? performance.now() - t.t : 1e9, modo: k.audio?.modo, estadoCtx: k.audio?.ctx.state, amb: k.audio?.ambiente, calibrando: k.estado.calibrando, cenario: k.estado.cenario, sino: k.estado.cmd.sino, preset: k.estado.presetId, regulador: k.estado.cmd.regulador, rev: k.reversaoEfetiva(), corteAuto: k.estado.corteAuto, apitando: k.estado.apitando, freando: k.estado.freando, vFixa: k.vFixa, estado: document.getElementById('estadoTitulo')?.textContent ?? '', detalhe: document.getElementById('estadoDetalhe')?.textContent ?? '', pat: !!m?.patinando, regMotor: m?.regulador ?? 0, marcha: k.estado.marcha, rampa: k.estado.rampa, areia: k.estado.cmd.areia, vagoes: k.estado.vagoes }; })()`);
 const rms = () => ev(`(() => { const an = window.__vapor.audio?.analyser; if (!an) return -999; const x = new Float32Array(an.fftSize); an.getFloatTimeDomainData(x); let s = 0; for (const v of x) s += v * v; return 10 * Math.log10(s / x.length + 1e-20); })()`);
 const esperaAte = async (f, ms = 8000) => { const t0 = Date.now(); let v; while (Date.now() - t0 < ms) { v = await f(); if (v) return v; await espera(200); } return v; };
 // lê até a condição valer ou o limite passar e devolve a última leitura (no lugar de dormir um tempo fixo depois de mexer
@@ -305,6 +305,22 @@ try {
   confere(t.apito === 0 && !t.apitando && t.cenario === null, 'demonstração do apito cancelada no meio do toque pelo regulador: cala na hora');
   await clicar('#fecharRegulador');
 
+  // demonstração "Subida forte" (o roteiro de maquinista.ts): segura, abre o regulador aos poucos, areia e o corte
+  // automático; nos primeiros 15 s a composição sai para a frente e não desce de ré (antes, com 10 vagões, descia).
+  // Cancelada pelo regulador, devolve a areia e a rampa
+  await clicar('[data-cenario=lickey]');
+  const tSub = Date.now(); let vMinSub = 0, vSub = null, areiaSub = false;
+  while (Date.now() - tSub < 16000) {
+    const x = await tele();
+    if (x.cenario === 'lickey' && x.rampa > 2) { vMinSub = Math.min(vMinSub, x.v); vSub = x; areiaSub ||= x.areia; }
+    await espera(250);
+  }
+  confere(!!vSub && vMinSub > -0.3 && vSub.v > 2 && areiaSub && vSub.vagoes <= 6, 'demonstração "Subida forte": sobe a rampa (nos primeiros 15 s sai para a frente, sem descer de ré), com areia', vSub ? `${r1(vSub.v)} km/h aos 15 s, mínima ${r1(vMinSub)} km/h, ${vSub.vagoes} vagões, rampa ${vSub.rampa} % · ${vSub.estado}` : JSON.stringify(await tele()));
+  await regulador(0.2);
+  t = await lerAte(tele, (x) => x.cenario === null && !x.areia && x.rampa === 0, 4000);
+  confere(t.cenario === null && !t.areia && t.rampa === 0, 'a "Subida forte" cancelada pelo regulador devolve a areia e a rampa', `areia ${t.areia}, rampa ${t.rampa} %`);
+  await clicar('#fecharRegulador');
+
   // cada preset que se dirige: ligar e abrir o regulador pela tela põe a máquina em marcha em poucos segundos
   const familias = ['Locomotivas', 'Trator', 'Carro', 'Barco'];
   const lentos = [];
@@ -326,6 +342,29 @@ try {
       confere(!!x && bate.chuffs > 0.05 && pronta.estado.startsWith('Pronta para partir') && Math.abs(pronta.v) < 0.3, `${id}: nasce parada e pronta, e o regulador pela tela a põe em marcha`, x ? `${r1(x.v)} km/h em ${r1(s)} s, ${r1(bate.chuffs)} escapes/s · ${bate.estado}` : `${pronta.estado} · ${JSON.stringify(await tele())}`);
       if (x && s > 6) lentos.push(id);
       if (id === 'bigboy') confere(x?.motores === 2, 'Big Boy: dois motores na telemetria', `${x?.motores} motores`);
+      if (id === 'stanley') {
+        // o pneu na estrada seca (aderência 0,8; antes o motor usava a do trilho, 0,22, e o carro patinava 20–30 s com o
+        // regulador cheio): o regulador todo aberto pela tela, e a fração do tempo patinando nos 6 s seguintes
+        await regulador(1);
+        let n = 0, np = 0; const t6 = Date.now();
+        while (Date.now() - t6 < 6000) { const y = await tele(); n++; if (y.pat) np++; await espera(200); }
+        const ult = await tele();
+        confere(n > 10 && np / n <= 0.2, 'stanley: regulador todo aberto pela tela, estrada seca: quase não patina', `patinando em ${np} de ${n} leituras (6 s), ${r1(ult.v)} km/h · ${ult.estado}`);
+      }
+      if (id === 'aveling') {
+        // marcha N e de volta à 1ª pela tela: o motor desliga o governador ao engatar (antes a página o montava de novo
+        // como contorno: nenhuma mensagem 'portador' agora) e o regulador do dono volta a valer
+        await ev(`(() => { const a = window.__vapor.audio; a.__portadores = 0; if (!a.__envia) { a.__envia = a.send.bind(a); a.send = (m) => { if (m?.type === 'portador') a.__portadores++; return a.__envia(m); }; } return true; })()`);
+        await chip('#marcha', 'N');
+        const emN = await lerAte(tele, (y) => y.marcha === 0 && y.estado.startsWith('Embreagem solta'), 4000);
+        await espera(2000);
+        await chip('#marcha', '1ª');
+        await regulador(0.3);
+        const eng = await lerAte(tele, (y) => y.marcha === 1 && y.regulador > 0.15 && Math.abs(y.regMotor - y.regulador) < 0.03, 5000);
+        const remontou = await ev(`window.__vapor.audio.__portadores`);
+        const anda = await esperaAte(async () => { const y = await tele(); return y.v > 0.5 && y.chuffs > 0.05 ? y : null; }, 10000);
+        confere(emN.estado.startsWith('Embreagem solta') && remontou === 0 && eng.regulador > 0.15 && Math.abs(eng.regMotor - eng.regulador) < 0.03 && !!anda, 'trator: N e 1ª de novo pela tela, sem montar o motor de novo: o regulador do dono vale (o governador saiu) e ele anda', `no N: ${emN.estado}; ${remontou} montagem(ns); regulador no motor ${Math.round(eng.regMotor * 100)} % (pedido ${Math.round(eng.regulador * 100)} %); ${anda ? `${r1(anda.v)} km/h` : 'parado'}`);
+      }
     }
   }
   confere(!lentos.length, 'todas saem em até 6 s', lentos.join(', '));
@@ -335,6 +374,15 @@ try {
   t = await esperaAte(async () => { const x = await tele(); return x.preset === 'corliss' && !x.calibrando && Math.abs(x.rpmEixo - 75) < 6 ? x : null; }, 30000);
   const est = await ev(`({ alavanca: !!document.getElementById('alavancaRegulador'), carga: document.querySelectorAll('#carga .chip').length })`);
   confere(!!t && !est.alavanca && est.carga === 5, 'Corliss governado a 75 rpm (família Estacionárias), com a carga do eixo no lugar da alavanca', t ? `${r1(t.rpmEixo)} rpm · ${t.estado}` : JSON.stringify(await tele()));
+  // o apito de fábrica: o botão de segurar no palco da estacionária (o portador gerador passa o apito ao motor)
+  const temApito = await ev(`!!document.querySelector('.comandos.fixa #botaoApito')`);
+  if (temApito) {
+    const [cx, cy] = await segurar('#botaoApito');
+    const soa = await apitoEm(true);
+    await largar(cx, cy);
+    const cala = await apitoEm(false);
+    confere(soa.apito > 0 && soa.apitando && cala.apito === 0 && !cala.apitando, 'Corliss: o apito de fábrica pelo botão do palco soa seguro e cala ao soltar', `${soa.apito} tubo(s) seguro, ${cala.apito} solto`);
+  } else confere(false, 'Corliss: o apito de fábrica pelo botão do palco soa seguro e cala ao soltar', 'sem o botão no palco da estacionária');
 
   if (process.env.SHOT) await b.foto(process.env.SHOT);
 } catch (e) {

@@ -30,9 +30,10 @@ import { configLocoVapor } from '../../carriers/locomotiva-vapor';
 import { configTrator } from '../../carriers/trator';
 import { configBarco } from '../../carriers/barco';
 import { configCarroDireto } from '../../carriers/carro-direto';
-import { CorteAutomatico, CORTE_MAX, CORTE_MIN, type Sentido } from './maquinista';
+import { CorteAutomatico, CORTE_MAX, CORTE_MIN, SUBIDA_FORTE, type Sentido } from './maquinista';
 
 export const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
+const fmtPct = (x: number) => `${x.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} %`;
 export const fmt = (x: number, d = 0) => (Number.isFinite(x) ? x.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—');
 /** reverser (−1..1) do corte desejado (fração do curso, 15–85%) */
 export const revDeCorte = (c: number, sentido = 1) => sentido * clamp((c - CORTE_MIN) / (CORTE_MAX - CORTE_MIN), 0, 1);
@@ -51,7 +52,7 @@ export const CENARIOS: { id: IdCenario; nome: string; titulo: string; estado: st
   { id: 'cruzeiro60', nome: 'Cruzeiro a 60', titulo: 'velocidade fixa a 60 km/h, corte 25%, 30 s', estado: 'cruzeiro a 60 km/h (velocidade fixa)' },
   { id: 'cruzeiro100', nome: 'Cruzeiro a 100', titulo: 'velocidade fixa a 100 km/h, corte 20%, 30 s', estado: 'cruzeiro a 100 km/h (velocidade fixa)' },
   { id: 'drifting', nome: 'Regulador fechado', titulo: 'regulador fechado a 60 km/h: rolamento, bielas e o bufo dos cilindros, 30 s', estado: 'regulador fechado a 60 km/h (velocidade fixa)' },
-  { id: 'lickey', nome: 'Subida forte', titulo: 'a rampa de Lickey: 2,65% com 10 vagões, corte 55%, regulador cheio, 60 s', estado: 'subida forte (rampa de 2,65 %, 10 vagões)' },
+  { id: 'lickey', nome: 'Subida forte', titulo: `a rampa de Lickey: ${fmtPct(SUBIDA_FORTE.rampa)} com ${SUBIDA_FORTE.vagoes} vagões, regulador abrindo até o fim em ${SUBIDA_FORTE.regulador[SUBIDA_FORTE.regulador.length - 1][0]} s, areia e corte automático, ${SUBIDA_FORTE.dur} s`, estado: `subida forte (rampa de ${fmtPct(SUBIDA_FORTE.rampa)}, ${SUBIDA_FORTE.vagoes} vagões, areia)` },
   { id: 'apito', nome: 'Toque de apito', titulo: 'longo, longo, curto, longo (passagem de nível)', estado: 'toque de apito (longo, longo, curto, longo)' },
   { id: 'passagem', nome: 'Passagem', titulo: 'a composição passando a 40 km/h pelo ouvinte parado junto à via', estado: 'passagem a 40 km/h pelo ouvinte parado junto à via (velocidade fixa)' },
 ];
@@ -122,7 +123,7 @@ export const temTorneiras = (P: PresetVapor) => portadorDe(P) === 'locomotiva' |
 export interface Tele { cena: any; portador: any; motor: TelemetriaVapor | null; t: number }
 
 /** o que a demonstração mudou fora da condução e volta como estava no fim */
-type Retrato = Pick<ComandoPagina, 'fogo' | 'fogoAuto' | 'freio' | 'sino' | 'torneiras' | 'injetor' | 'bombaAr' | 'soprador'> & { rampa: number };
+type Retrato = Pick<ComandoPagina, 'fogo' | 'fogoAuto' | 'freio' | 'sino' | 'torneiras' | 'injetor' | 'bombaAr' | 'soprador' | 'areia'> & { rampa: number };
 
 export class ControleVapor {
   estado: EstadoVapor;
@@ -148,6 +149,8 @@ export class ControleVapor {
   private apitoDono = false; private apitoDemo = false;
   /** reversão imposta pela demonstração (null: a do dono, automática ou à mão) */
   private revDemo: number | null = null;
+  /** a demonstração deixa a reversão com o corte automático, mesmo com o dono na reversão à mão ("Subida forte") */
+  private autoDemo = false;
   /** freio de estacionamento automático: parada na rampa com o regulador fechado */
   freioAuto = 0;
   private tAbriu = 0;
@@ -253,7 +256,7 @@ export class ControleVapor {
    *  15 %), então a página manda o regulador fechado; a alavanca fica onde o dono a deixou (maquinista.ts) */
   reguladorEfetivo() { const e = this.estado; return e.corteAuto && e.sentido === 0 && this.revDemo == null ? 0 : e.cmd.regulador; }
   /** a reversão que vai ao motor: a da demonstração, a do automático ou a do dono */
-  reversaoEfetiva() { const e = this.estado; return this.revDemo ?? (e.corteAuto ? this.auto.reversao(e.sentido) : e.cmd.reverser); }
+  reversaoEfetiva() { const e = this.estado; return this.revDemo ?? (e.corteAuto || this.autoDemo ? this.auto.reversao(e.sentido) : e.cmd.reverser); }
   /** o comando completo da máquina e do portador */
   comando(): Partial<ComandoVapor> & Record<string, unknown> {
     const c = this.estado.cmd, e = this.estado, reg = this.reguladorEfetivo();
@@ -393,16 +396,14 @@ export class ControleVapor {
   private remontarT: ReturnType<typeof setTimeout> | undefined;
   private remontar() { clearTimeout(this.remontarT); this.remontarT = setTimeout(() => void this.mandarPortador(), 150); }
   setRampa(pct: number) { this.mudar({ rampa: pct }); this.mandarComando(); }
-  /** marcha do trator (é condução: devolve a máquina). Ao sair do N o motor é montado de novo: o VaporDSP liga o
-   *  governador de esferas quando o trator fica sem carga e não o desliga quando ela volta (src/engines/vapor/dsp.ts,
-   *  `acoplar`), e o regulador do dono deixaria de valer; montar de novo é engatar com a manivela parada */
+  /** marcha do trator (é condução: devolve a máquina). O motor cuida do resto: no N liga o governador de esferas (a
+   *  lenta), engatado o desliga e devolve o regulador do dono, e a embreagem engata com a manivela girando
+   *  (`VaporDSP.acoplar` e `engatar`; antes o governador ficava ligado e a página montava o motor de novo) */
   setMarcha(m: number) {
     this.assumir(); this.acender();
-    const de = this.estado.marcha;
-    if (m === de) return;
+    if (m === this.estado.marcha) return;
     this.mudar({ marcha: m }); this.auto.marcha = m;
-    if (de === 0 && m > 0 && this.audio) void this.mandarPortador();
-    else this.mandarComando(true);
+    this.mandarComando(true);
   }
   setCarga(f: number) { this.acender(); this.mudar({ carga: f }); this.mandarComando(true); }
   setAmbiente(a: IdAmbienteVapor) { this.mudar({ ambiente: a }); this.mandarCena(); }
@@ -459,7 +460,7 @@ export class ControleVapor {
     this.agenda = []; clearInterval(this.relogio); this.relogio = undefined;
     const a = this.audio;
     if (this.vFixa != null) { this.vFixa = null; a?.send({ type: 'comando', velocidadeFixa: null }); }
-    this.apitoDemo = false; this.revDemo = null; this.auto.zerar();
+    this.apitoDemo = false; this.revDemo = null; this.autoDemo = false; this.auto.zerar();
     if (this.fixo) { this.fixo = false; this.mandarCena(); }
     const r = this.retrato;
     this.retrato = null;
@@ -480,7 +481,7 @@ export class ControleVapor {
     await this.ligar();
     this.pararCenario();
     const c0 = this.estado.cmd;
-    this.retrato = { fogo: c0.fogo, fogoAuto: c0.fogoAuto, freio: c0.freio, sino: c0.sino, torneiras: c0.torneiras, injetor: c0.injetor, bombaAr: c0.bombaAr, soprador: c0.soprador, rampa: this.estado.rampa };
+    this.retrato = { fogo: c0.fogo, fogoAuto: c0.fogoAuto, freio: c0.freio, sino: c0.sino, torneiras: c0.torneiras, injetor: c0.injetor, bombaAr: c0.bombaAr, soprador: c0.soprador, areia: c0.areia, rampa: this.estado.rampa };
     const t0 = performance.now(), em = (s: number, f: () => void) => this.agenda.push([t0 + s * 1000, f]);
     const P = this.P, a = this.audio!;
     const livre = () => { this.vFixa = null; this.presaParada = false; a.send({ type: 'comando', velocidadeFixa: null }); };
@@ -509,11 +510,17 @@ export class ControleVapor {
       fixar(Math.min(60, P.vMax));
       this.demoCmd({ regulador: 0, torneiras: false, freio: 0 }); this.demoCorte(0.4);
     } else if (id === 'lickey') {
-      if (this.portador === 'locomotiva' && this.estado.vagoes !== 10) { this.mudar({ vagoes: 10 }); await this.mandarPortador(); }
-      this.mudar({ rampa: 2.65 });
-      fixar(0); em(0.3, livre);
-      this.demoCmd({ regulador: 1, torneiras: 'auto', freio: 0, areia: false }); this.demoCorte(0.55);
-      dur = 60;
+      // o roteiro está em maquinista.ts (SUBIDA_FORTE), o mesmo que o teste roda offline: segura parada enquanto o vapor
+      // enche os cilindros, abre o regulador aos poucos, areia a subida toda e o corte com o automático
+      const S = SUBIDA_FORTE;
+      if (this.portador === 'locomotiva' && this.estado.vagoes !== S.vagoes) { this.mudar({ vagoes: S.vagoes }); await this.mandarPortador(); }
+      this.mudar({ rampa: S.rampa, sentido: 1 });
+      fixar(0); em(S.segura, livre);
+      this.auto.zerar();
+      if (S.corte === 'auto') this.autoDemo = true; else this.demoCorte(S.corte);
+      this.demoCmd({ regulador: S.regulador[0][1], torneiras: 'auto', freio: 0, areia: S.areia });
+      for (const [t, r] of S.regulador.slice(1)) em(t, () => this.demoCmd({ regulador: r }));
+      dur = S.dur;
     } else if (id === 'apito') {
       let t = 0.2;
       for (const d of [1.6, 1.6, 0.5, 2.6]) { em(t, () => this.demoApito(true)); em(t + d, () => this.demoApito(false)); t += d + 0.45; }

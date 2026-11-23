@@ -106,6 +106,7 @@ function Interior({ k }: { k: ControleVapor }) {
         <div className="rodape">
           <Demonstracoes k={k} />
           {P.nota && <p className="note">{P.nota}</p>}
+          {k.portador === 'gerador' && <p className="hints"><kbd>H</kbd> apito (segure) · <kbd>I</kbd> injetor</p>}
           {k.portador !== 'gerador' && (
             <p className="hints">
               <kbd>W</kbd>/<kbd>S</kbd> regulador · <kbd>X</kbd> fecha · <kbd>H</kbd> apito (segure)

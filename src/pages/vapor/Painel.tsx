@@ -6,6 +6,7 @@
 import { useSyncExternalStore } from 'react';
 import { ChipGroup, Field, Section, Slider } from '../../ui';
 import { AMBIENTES_VAPOR, corteDeRev, fmt, temChamine, temFreio, temPares, temTorneiras, type ControleVapor, type EstadoVapor } from './controle';
+import { ADERENCIA } from '../../engines/vapor/constantes';
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 type P = { k: ControleVapor; e: EstadoVapor };
@@ -78,9 +79,18 @@ function Composicao({ k, e }: P) {
         <Slider id="vagoes" rotulo="Vagões" min={0} max={20} passo={1} valor={e.vagoes} formatar={(v) => String(v)} aoSoltar={(v) => k.setVagoes(v)} />
         <Slider id="massaVagao" rotulo="Massa por vagão" min={10} max={100} passo={1} valor={e.massaVagao} formatar={(v) => `${v} t`} aoSoltar={(v) => k.setMassaVagao(v)} />
         <Field rotulo="Trilho">
-          <ChipGroup id="trilho" opcoes={[{ valor: 'seco' as const, rotulo: 'Seco', titulo: 'Atrito 0,22' }, { valor: 'molhado' as const, rotulo: 'Molhado', titulo: 'Atrito 0,12: abrir demais faz as rodas patinarem (a areia resolve)' }]} atual={e.cmd.trilho} aoEscolher={(v) => k.setCmd({ trilho: v }, true)} />
+          <ChipGroup id="trilho" opcoes={[{ valor: 'seco' as const, rotulo: 'Seco', titulo: `Aderência ${fmt(ADERENCIA.trilho.seco, 2)}` }, { valor: 'molhado' as const, rotulo: 'Molhado', titulo: `Aderência ${fmt(ADERENCIA.trilho.molhado, 2)}: abrir demais faz as rodas patinarem (a areia resolve)` }]} atual={e.cmd.trilho} aoEscolher={(v) => k.setCmd({ trilho: v }, true)} />
         </Field>
       </>}
+      {(t === 'carro' || t === 'trator') && (() => {
+        // (a aderência vem da rodagem: pneu no Stanley, roda de ferro no trator; constantes.ts → ADERENCIA)
+        const A = ADERENCIA[t === 'carro' ? 'pneu' : 'ferro'], roda = t === 'carro' ? 'pneus' : 'rodas de ferro';
+        return (
+          <Field rotulo="Piso">
+            <ChipGroup id="trilho" opcoes={[{ valor: 'seco' as const, rotulo: 'Seco', titulo: `Aderência das ${roda}: ${fmt(A.seco, 2)}` }, { valor: 'molhado' as const, rotulo: 'Molhado', titulo: `Aderência das ${roda}: ${fmt(A.molhado, 2)}: abrir demais faz as rodas patinarem` }]} atual={e.cmd.trilho} aoEscolher={(v) => k.setCmd({ trilho: v }, true)} />
+          </Field>
+        );
+      })()}
       <Slider id="rampa" rotulo="Rampa (parada na rampa com o regulador fechado, a página segura no freio)" min={-3} max={3} passo={0.05} valor={e.rampa} formatar={(v) => `${fmt(v, 2)}%`} aoMudar={(v) => k.setRampa(v)} />
     </Section>
   );
