@@ -34,6 +34,6 @@ export function configPortadorVapor(portador: string, id: string | null, vagoes:
   if (portador === 'trator') return configTrator(P);
   if (portador === 'barco') return configBarco(P);
   if (portador === 'carro') return configCarroDireto(P);
-  if (portador === 'gerador') return { rpmNominal: P.rpmGovernado ?? 75, potenciaNominal: P.potenciaGerador ?? 500, eta: 0.95, J_alt: 50, semFontes: true, posMotor: [0, 0, 0], corpo: { comprimento: 12, largura: 6, altura: 6, massaSuperficial: 30 } };
+  if (portador === 'gerador') return { rpmNominal: P.rpmNominal ?? P.rpmGovernado ?? 75, potenciaNominal: P.potenciaGerador ?? 500, eta: 0.95, J_alt: 50, semFontes: true, posMotor: [0, 0, 0], corpo: { comprimento: 12, largura: 6, altura: 6, massaSuperficial: 30 } };
   return {};
 }

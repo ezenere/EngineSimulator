@@ -99,7 +99,11 @@ export class Gerador extends PortadorComMotor {
   }
   carga() { return this.cargaG; }
   gRel = 0;
-  acoplar(m: import('./tipos').Motor | null) { this.gRel = 0; super.acoplar(m); }
+  acoplar(m: import('./tipos').Motor | null) {
+    this.gRel = 0; super.acoplar(m);
+    // (vapor, aditivo) o trator a vapor na polia: a correia no volante e a máquina no governador dela (`VaporDSP.naPolia`)
+    if (m?.familia === 'vapor') (m as unknown as { naPolia?: () => void }).naPolia?.();
+  }
   /**
    * (vapor, aditivo: o diesel e as outras famílias não passam por aqui) a máquina a vapor recebe do comando o que não é do
    * governador: o apito de fábrica, o fogo, o injetor, o soprador e a mistura. O regulador e o corte ficam com o

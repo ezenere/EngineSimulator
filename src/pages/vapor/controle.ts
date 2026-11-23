@@ -214,7 +214,7 @@ export class ControleVapor {
     if (t === 'trator') return { ...configTrator(P), rampa: e.rampa / 100 };
     if (t === 'barco') return configBarco(P);
     if (t === 'carro') return { ...configCarroDireto(P), rampa: e.rampa / 100 };
-    return { rpmNominal: P.rpmGovernado ?? 75, potenciaNominal: P.potenciaGerador ?? 500, eta: 0.95, J_alt: 50, semFontes: true, posMotor: [0, 0, 0], corpo: { comprimento: 12, largura: 6, altura: 6, massaSuperficial: 30 } };
+    return { rpmNominal: P.rpmNominal ?? P.rpmGovernado ?? 75, potenciaNominal: P.potenciaGerador ?? 500, eta: 0.95, J_alt: 50, semFontes: true, posMotor: [0, 0, 0], corpo: { comprimento: 12, largura: 6, altura: 6, massaSuperficial: 30 } };
   }
   /** monta o portador com o motor no worklet (aloca lá; a sonda roda aqui antes). `parar`: a máquina nova começa parada
    *  (troca de preset, som ligado); senão segue na velocidade de agora (vagões, escape, a marcha do trator) */

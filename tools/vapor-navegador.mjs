@@ -365,6 +365,12 @@ try {
         const remontou = await ev(`window.__vapor.audio.__portadores`);
         const anda = await esperaAte(async () => { const y = await tele(); return y.v > 0.5 && y.chuffs > 0.05 ? y : null; }, 10000);
         confere(emN.estado.startsWith('Embreagem solta') && remontou === 0 && eng.regulador > 0.15 && Math.abs(eng.regMotor - eng.regulador) < 0.03 && !!anda, 'trator: N e 1ª de novo pela tela, sem montar o motor de novo: o regulador do dono vale (o governador saiu) e ele anda', `no N: ${emN.estado}; ${remontou} montagem(ns); regulador no motor ${Math.round(eng.regMotor * 100)} % (pedido ${Math.round(eng.regulador * 100)} %); ${anda ? `${r1(anda.v)} km/h` : 'parado'}`);
+        // o regulador todo aberto em 1ª: o governador de esferas segura a manivela na rotação de trabalho (160 rpm, 4,0 km/h
+        // em 1ª) e a linha de estado diz que é ele (antes o trator passava de 16 km/h)
+        await regulador(1);
+        let vMaxT = 0, gov = null; const tG = Date.now();
+        while (Date.now() - tG < 14000) { const y = await tele(); vMaxT = Math.max(vMaxT, y.v); if (y.detalhe.startsWith('No governador')) gov = y; await espera(250); }
+        confere(vMaxT <= 1.15 * 4.02 && !!gov, 'trator: o regulador todo aberto em 1ª não passa da máxima da marcha (o governador), e a linha de estado diz', `máxima ${r1(vMaxT)} km/h em 14 s${gov ? ` · ${gov.estado} · ${gov.detalhe}` : ' · sem "No governador"'}`);
       }
     }
   }

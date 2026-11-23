@@ -51,6 +51,22 @@ const GOV_KP = 0.2, GOV_KI = 0.012;
 /** corte mínimo do governador (o 2.1 diz 10%; o disparo do Corliss corta bem antes, e com 10% a máquina de moinho
  * em meia carga ficava forte demais e o governador tinha de estrangular o regulador) */
 const GOV_CMIN = 0.05;
+/** inércia das esferas do governador do trator engatado (s): a rotação que ele sente é a média de pouco mais de uma volta */
+const TAU_ESFERAS = 0.3;
+/**
+ * o governador do trator engatado (a válvula em série com o regulador): K_p (abertura por % de erro de rotação), K_i (por
+ * %·s), a faixa em que o integrador trabalha (± %) e a abertura em que o integrador parte ao engatar. Medido no Aveling em
+ * 1ª e em 2ª com o regulador todo aberto (referencias/_sim/vapor-dinamica, `govaval.ts`):
+ *   - com os ganhos da ficha (0,03 e 0,01, acertados para a máquina na polia) a 1ª caça: ±12 % de rotação em ~2 s e a
+ *     pressão de escape de cada golpe variando ±35 % (o veículo leve e o volante refletido aceleram depressa, e a caixa de
+ *     válvulas leva ~0,5 s para responder à válvula: a malha não aguenta mais que ~1/s de ganho);
+ *   - com um terço deles fica firme (±0,03 km/h, o escape ±5 %, como com o regulador parado), mas, partindo com a válvula
+ *     toda aberta, a máquina passa da rotação 65 % em 1ª e 32 % em 2ª antes de o integrador descer;
+ *   - partindo de 0,2 (a abertura que a estrada plana pede: 0,22 em 1ª e 0,38 em 2ª) e integrando só a ±25 % da rotação,
+ *     passa 11 % em 1ª por meio segundo e 1 % em 2ª. Abaixo da faixa a parte proporcional abre a válvula (toda aberta a
+ *     ~80 % abaixo): numa rampa forte a máquina chega à rotação com a válvula aberta o que precisar
+ */
+const GOV_ESTRADA = { kp: 0.01, ki: 0.003, faixaI: 25, partida: 0.2 };
 /** ruído de mistura do bico, Pa (unidades da linha) por kg/s·M³, num bico de 0,0177 m² (escala com 1/A_bico) */
 const K_MISTURA = 1200;
 const DEG = Math.PI / 180;
@@ -173,6 +189,16 @@ export class VaporDSP implements Motor {
   ejetor: Ejetor | null = null; ejetorLigado = 0;
   /** governador de esferas (estacionária e trator parado): alvo, integrador */
   rpmAlvo = 0; govI = 0; govLigado = false;
+  /**
+   * o governador de esferas do trator engatado (estrada): fica na linha de vapor em série com o regulador do dono, aberto
+   * abaixo da rotação de trabalho (`rpmNominal` da ficha) e estrangulando acima dela. `regGov` é a abertura da válvula
+   * dele (1 = toda aberta; nas outras máquinas fica em 1) e `wGov` a rotação que as esferas sentem (rad/s de manivela)
+   */
+  limitador = false; rpmNominal = 0; regGov = 1; wGov = 0; govIE = 0.2;
+  /** o trator na polia (portador gerador): a correia pega no volante, sem redução, e a máquina fica no governador */
+  polia = false;
+  /** atrito seco e viscoso do lado da manivela (N·m e N·m·s): `kAtS`/`kAtV` na roda são estes × redução e × redução² */
+  kAtS0 = 0; kAtV0 = 0;
   carga: Carga | null = null;
   rng: RNG;
   // telemetria
@@ -213,6 +239,7 @@ export class VaporDSP implements Motor {
     this.rodagem = rodagemDe(P.familia);
     { const A = ADERENCIA[this.rodagem]; this.mu = this.muAlvo = this.trilho === 'molhado' ? A.molhado : A.seco; }
     this.rpmAlvo = P.rpmGovernado ?? 0;
+    this.rpmNominal = P.rpmNominal ?? 0; this.limitador = false; this.regGov = 1; this.wGov = 0; this.polia = false; this.govIE = GOV_ESTRADA.partida;
     this.montarCilindros(P);
     this.montarFontes(P);
     // caixa de válvulas e regulador: A_max tal que, com o regulador cheio e a vazão máxima (1,5·E_max), p_chest ≈ 0,85·p_cal
@@ -315,6 +342,7 @@ export class VaporDSP implements Motor {
     // locomotivas, 3% nas estacionárias e 8% no trator (bombas, engrenagens e os mancais das rodas na embreagem solta)
     this.kAtV = (0.02 * this.TE * this.rRoda) / Math.max(1, P.vMax / 3.6 / this.rRoda);
     this.kAtS = (P.familia === 'locomotiva' ? 0.004 : P.familia === 'trator' ? 0.08 : 0.03) * this.TE * this.rRoda;
+    this.kAtS0 = this.kAtS / this.reducao; this.kAtV0 = this.kAtV / (this.reducao * this.reducao);
     // rede: uma passagem por extremidade
     this.rede = new RedeEscape(this.fs, {
       nPassagens: nE, aPortico: CD_PORTICO * this.eAe[0], dBico: P.escape.dBico, lDescarga: P.escape.lDescarga, vCaixa: P.escape.vCaixa,
@@ -392,9 +420,11 @@ export class VaporDSP implements Motor {
   impor(omega: number | null) { this.omegaImposto = omega; }
   definirReducao(r: number) {
     if (r === this.reducao) return;
-    // a roda continua com a mesma velocidade; o J do volante refletido muda com a relação
+    // a roda continua com a mesma velocidade; o J do volante refletido muda com a relação, e o atrito da máquina (bielas,
+    // mancais, bombas, engrenagens: do lado da manivela) chega à roda × r (o seco) e × r² (o viscoso)
     this.reducao = r; this.wRef = TAU / r;
     if (this.jPreset) { for (let m = 0; m < this.nM; m++) this.JM[m] = (this.jPreset * r * r) / this.nM; this.jMotorTotal = this.jPreset * r * r; }
+    this.kAtS = this.kAtS0 * r; this.kAtV = this.kAtV0 * r * r;
   }
 
   comandar(c0: ComandoMotor & Partial<ComandoVapor>) {
@@ -432,7 +462,22 @@ export class VaporDSP implements Motor {
       if (gov && !this.govLigado) this.govI = 0;
       if (!gov && this.govLigado) this.regAlvo = this.regDono;
       this.govLigado = gov;
+      // engatado, o governador continua na linha de vapor como limite de rotação (controle: `regGov`)
+      this.limitador = !!carga && this.rpmNominal > 0;
+      if (!this.limitador) this.regGov = 1;
     }
+  }
+  /**
+   * O trator na polia (o portador gerador acionando uma debulhadora): a correia pega no volante, então a carga fica na
+   * manivela (redução 1), e a máquina vai ao governador de esferas na rotação de trabalho, como a estacionária (o portador
+   * manda o `rpmAlvo`). Antes o portador governava a "roda" (a manivela ÷ 12) e a manivela ia a ~900 rpm
+   */
+  naPolia() {
+    if (!this.P || this.P.familia !== 'trator') return;
+    this.polia = true; this.governadorProprio = true;
+    const wMan = this.wM[0] * this.reducao;
+    this.definirReducao(1);
+    this.wTrem = wMan; for (let m = 0; m < this.nM; m++) { this.wM[m] = wMan * (1 + this.epsM[m]); this.patM[m] = 0; }
   }
   /**
    * Engata a embreagem com a manivela girando (o trator saindo do N para uma marcha): a embreagem escorrega até a
@@ -495,6 +540,20 @@ export class VaporDSP implements Motor {
       this.corte = clamp(u, GOV_CMIN, 0.6);
       this.regAlvo = clamp(1 + (u - GOV_CMIN) / 0.15, 0, 1); this.reg = this.regAlvo;
     }
+    // o governador do trator engatado: uma válvula em série com o regulador do dono (a abertura que chega à caixa é a
+    // menor das duas: `processar`). PI na rotação de trabalho da ficha (`rpmNominal`): em regime a manivela fica nela, e a
+    // velocidade máxima de cada marcha é ela × a redução. As esferas sentem a média da rotação (1ª ordem de 0,3 s: a
+    // inércia delas), não o pulso de cada golpe. Os ganhos, as condições do integrador e a válvula de partida estão em
+    // GOV_ESTRADA (os porquês, medidos, ao lado da constante)
+    if (this.limitador && !this.govLigado) {
+      const w = Math.abs(this.wM[0]) * this.reducao, alvo = (this.rpmNominal * TAU) / 60, G = GOV_ESTRADA;
+      this.wGov += (w - this.wGov) * (1 - Math.exp(-dt / TAU_ESFERAS));
+      const erro = (100 * (alvo - this.wGov)) / alvo;
+      // (integra perto da rotação de trabalho e só quando é ele que segura a máquina, ou acima dela: com o regulador do
+      // dono mais fechado que a válvula, o integrador não sobe, e o dono que abre de uma vez não acha a válvula toda aberta)
+      if (Math.abs(erro) < G.faixaI && (erro < 0 || this.regGov <= this.reg)) this.govIE = clamp(this.govIE + G.ki * erro * dt, 0, 1);
+      this.regGov = clamp(this.govIE + G.kp * erro, 0, 1);
+    } else { this.regGov = 1; this.wGov = Math.abs(this.wM[0]) * this.reducao; this.govIE = GOV_ESTRADA.partida; }
     this.atualizarEventos();
     // adesão pela rodagem (trilho, pneu, ferro): μ seco/molhado, areia (só no trilho) sobe em 0,3 s
     const A = ADERENCIA[this.rodagem];
@@ -583,7 +642,8 @@ export class VaporDSP implements Motor {
       const aL = this.aL, d = this.dirMarcha, eAC = this.eAC, eAR = this.eAR, eAK = this.eAK;
       const aAdm0 = TAU - aL;
       // ---- caixa de válvulas: orifício do regulador a partir da caldeira
-      const r = this.reg, aReg = r < 0.3 ? (0.08 * r) / 0.3 : 0.08 + 0.92 * ((r - 0.3) / 0.7) * ((r - 0.3) / 0.7);
+      // (a abertura que chega à caixa: a do regulador e, no trator engatado, a do governador em série)
+      const r = this.reg < this.regGov ? this.reg : this.regGov, aReg = r < 0.3 ? (0.08 * r) / 0.3 : 0.08 + 0.92 * ((r - 0.3) / 0.7) * ((r - 0.3) / 0.7);
       const mReg = vazaoV(aReg * this.aRegMax, pCalAbs, this.pChest, this.sRTv);
       let mAdmChest = 0, mAdmRec = 0, mRecIn = 0, mCond = 0;
       for (let m = 0; m < nM; m++) { sM[m] = Math.sin(thM[m]); cM[m] = Math.cos(thM[m]); }
@@ -719,7 +779,7 @@ export class VaporDSP implements Motor {
         cF[c] = F;
       }
       const wAbs = Math.abs(wM[0]);
-      const rolar = Math.min(2, wAbs / this.wRef) * (0.45 + 0.55 * this.reg);
+      const rolar = Math.min(2, wAbs / this.wRef) * (0.45 + 0.55 * (this.reg < this.regGov ? this.reg : this.regGov));
       const th = thM[0] * red;
       S[ch.bielE][k] = gBiel * this.biel[0].amostra(rolar, cM[0]);
       if (ch.bielD >= 0) S[ch.bielD][k] = gBiel * this.biel[1].amostra(rolar, -sM[0]);
@@ -843,7 +903,12 @@ export class VaporDSP implements Motor {
 
   // ================================================================ telemetria
   get patinando() { for (let m = 0; m < this.nM; m++) if (this.patM[m]) return true; return false; }
-  chuffsPorS() { return (escapesPorVolta(this.P, this.simplif) * Math.abs(this.wM[0])) / TAU; }
+  /** escapes por segundo (o `escapesPorVolta` é por volta de roda na redução da ficha; o trator em 2ª ou na polia gira
+   *  a manivela `reducao` vezes por volta de roda) */
+  chuffsPorS() {
+    const e = escapesPorVolta(this.P, this.simplif), r0 = this.P.reducao ?? 1;
+    return ((this.reducao === r0 ? e : (e / r0) * this.reducao) * Math.abs(this.wM[0])) / TAU;
+  }
   telemetria(): TelemetriaVapor {
     const w = this.wM[0];
     const pr = this.pRelN ? this.pRelSoma / this.pRelN : this.pRelUlt;
@@ -855,7 +920,7 @@ export class VaporDSP implements Motor {
       vapor: this.mTot, consumoCilindros: this.mCylS, evaporacao: this.evap, esforco: this.esforcoS, adesao, patinando: this.patinando,
       seguranca: this.seg.aberta, injetor: this.injetor.ligado, bombaAr: this.bombas.some((b) => b.ligada) || this.ejetorLigado > 0, torneiras: this.torneirasAbertas,
       soprador: this.sopradorLigado > 0, fApito: this.apito.frequencias(), aquecimentoApito: this.apito.aq,
-      regulador: this.reg, reverser: this.rev, fogo: this.fogo, nivelAgua: this.injetor.nivel, engasgado: this.engasgado,
+      regulador: this.reg, governador: this.regGov, reverser: this.rev, fogo: this.fogo, nivelAgua: this.injetor.nivel, engasgado: this.engasgado,
       v: this.wTrem * this.rRoda, rodaRpm: (w * 60) / TAU, voltasPorS: w / TAU, pCaixa: this.rede.pCaixa, theta: Array.from(this.thM, (t) => t * this.reducao),
       motores: this.nM, escapes: this.nEscapes, pRec: (this.pRec - P0) / BAR, mu: this.mu,
     };

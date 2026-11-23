@@ -45,6 +45,8 @@ export function corteDaTabela(x: number): number {
 
 /** redução manivela : roda na marcha de agora (o trator tem duas; as outras, a da ficha) */
 export const reducaoAtual = (P: PresetVapor, marcha = 1) => (P.familia === 'trator' && marcha === 2 ? P.reducao2 ?? P.reducao ?? 1 : P.reducao ?? 1);
+/** trator: a velocidade máxima da marcha (km/h), a do governador de esferas na rotação de trabalho da ficha; 0 sem ela */
+export const vMaxDaMarcha = (P: PresetVapor, marcha = 1) => (P.rpmNominal && P.dRoda > 0 ? (P.rpmNominal / 60 / reducaoAtual(P, marcha)) * Math.PI * P.dRoda * 3.6 : 0);
 
 /** voltas da manivela por segundo na velocidade máxima da ficha, na marcha mais longa */
 export function voltasDeProjeto(P: PresetVapor): number {
@@ -190,6 +192,9 @@ export type EntradaEstado = {
   marcha: number;
   /** estacionária: rotação do eixo e carga */
   rpm: number; carga: number;
+  /** trator engatado: o governador está segurando a máquina (a válvula dele mais fechada que o regulador) e a velocidade
+   *  máxima da marcha (km/h; 0 = sem governador na estrada) */
+  governando?: boolean; vMaxMarcha?: number;
   pCaldeira: number; pNominal: number;
 };
 
@@ -214,7 +219,9 @@ export function linhaDeEstado(e: EntradaEstado): LinhaDeEstado {
     if (e.freando) return { titulo: `Freando · ${vel}`, detalhe: `Solte o freio para seguir${e.reguladorEfetivo > 0.02 ? ' (o regulador está aberto: feche-o para parar de vez)' : ''}`, tom: 'neutro' };
     if (contra) return { titulo: `Contravapor · ${vel}`, detalhe: `O sentido está contra o movimento: a máquina freia no vapor e depois volta · ${comando}`, tom: 'aviso' };
     if (e.reguladorEfetivo > 0.02) {
-      if (av > e.vMax * 1.05) return { titulo: `Em marcha · ${vel}`, detalhe: `Acima da velocidade máxima da ficha (${num(e.vMax)} km/h): feche um pouco o regulador · ${comando}`, tom: 'aviso' };
+      // (o trator engatado não passa da máxima: o governador de esferas segura a manivela na rotação de trabalho)
+      if (e.governando && e.vMaxMarcha) return { titulo: `Em marcha · ${vel}`, detalhe: `No governador: a máxima da ${e.marcha}ª (${num(e.vMaxMarcha, 1)} km/h)${e.marcha === 1 ? ' · engate a 2ª para ir mais depressa' : ''} · ${comando}`, tom: 'ok' };
+      if (!e.vMaxMarcha && av > e.vMax * 1.05) return { titulo: `Em marcha · ${vel}`, detalhe: `Acima da velocidade máxima da ficha (${num(e.vMax)} km/h): feche um pouco o regulador · ${comando}`, tom: 'aviso' };
       return { titulo: `Em marcha · ${vel}`, detalhe: `${comando} · regulador ${pctTxt(e.regulador)}${caldeira}`, tom: 'ok' };
     }
     if (e.corteAuto && e.sentido === 0) return { titulo: `Ponto morto · ${vel}`, detalhe: `A máquina corre solta: escolha Frente ou Ré para puxar · ${parar}`, tom: 'neutro' };

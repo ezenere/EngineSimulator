@@ -810,6 +810,37 @@ async function grupo(nome: string): Promise<Linha[]> {
       add('trator N → 1ª e o regulador a 60 %: anda acima da lenta do governador (1,9 km/h) em 8 s', '≥ 3 km/h', f1(vAbre, 1) + ' km/h', vAbre >= 3, vAbre, 'km/h');
     }
 
+    // ---- 2b. o governador de esferas do trator engatado: o dono arrasta o regulador até o fim (a reversão pelo corte
+    // automático) e a máquina para na rotação de trabalho × a redução de cada marcha (a média de 0,5 s, sem o pulso de cada
+    // golpe). Antes, sem governador na estrada, ela passava de 16 km/h em 1ª
+    {
+      const P = X.presetVapor('aveling')!;
+      for (const marcha of [1, 2]) {
+        const red = marcha === 1 ? P.reducao! : P.reducao2!, vN = ((P.rpmNominal ?? 0) / 60 / red) * Math.PI * P.dRoda * 3.6;
+        const { m, p, can } = montar('aveling', 'trator', configTrator(P));
+        const auto = new CorteAutomatico(P); auto.marcha = marcha;
+        let pico = 0, sv = 0, nv = 0, sf = 0, nf = 0;
+        for (let i = 0; i < 40 * SR; i += B) {
+          const t = i / SR, tl = m.telemetria(), r = t > 1 ? 1 : 0;
+          auto.passo(B / SR, { voltasRoda: tl.voltasPorS as number, v: p.cinematica.v, sentido: 1, regulador: r, rampa: 0, freando: false, patinando: tl.patinando });
+          cmd(p, { marcha, regulador: r, cutoff: auto.reversao(1) });
+          p.processar(can, B, 1 / SR);
+          sv += p.cinematica.v * 3.6; if (++nv === 187) { pico = Math.max(pico, sv / nv); sv = 0; nv = 0; }
+          if (t >= 30) { sf += p.cinematica.v * 3.6; nf++; }
+        }
+        const reg = sf / nf;
+        add(`trator em ${marcha}ª, regulador todo aberto: a velocidade máxima (o governador na rotação de trabalho, ${P.rpmNominal} rpm)`, `${f1(vN, 2)} km/h ± 5 %, pico ≤ +15 %`, `${f1(reg, 2)} km/h dos 30 aos 40 s, pico de 0,5 s ${f1(pico, 2)} (${sg(100 * (pico / vN - 1), 0)} %)`, Math.abs(reg / vN - 1) <= 0.05 && pico <= 1.15 * vN, reg, 'km/h');
+      }
+      // na polia (o portador gerador acionando uma debulhadora): a correia no volante e a máquina no governador, na rotação
+      // de trabalho; antes o portador governava a "roda" (a manivela ÷ 12) e a manivela ia a ~900 rpm
+      const { m, p, can } = montar('aveling', 'gerador', configPortadorVapor('gerador', 'aveling', 0));
+      cmd(p, { cargaFracao: 0.5 });
+      const rpmP: number[] = [];
+      for (let i = 0; i < 25 * SR; i += B) { p.processar(can, B, 1 / SR); if (i >= 10 * SR) rpmP.push((Math.abs(m.wM[0]) * m.reducao * 60) / TAU); }
+      const rm = X.media(rpmP);
+      add('trator na polia (gerador, carga 50 %): rotação da manivela no governador', `${P.rpmNominal} rpm ± 5 %, carga ligada`, `${f1(rm, 1)} rpm (${f1(Math.min(...rpmP), 0)}–${f1(Math.max(...rpmP), 0)}), ${f1(m.chuffsPorS(), 2)} escapes/s, carga ${p.cargaG.fracao}`, Math.abs(rm / P.rpmNominal! - 1) <= 0.05 && p.cargaG.fracao === 0.5, rm, 'rpm');
+    }
+
     // ---- 3. o apito do Corliss pelo portador gerador (o botão do palco da estacionária): soa no nível da ficha e cala
     {
       const { m, p, can, ids } = montar('corliss', 'gerador', configPortadorVapor('gerador', 'corliss', 0));
