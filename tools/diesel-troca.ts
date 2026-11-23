@@ -3,8 +3,10 @@
 // Scania (o defeito: o caminhão aceita gerador e nascia isócrono a 1800 rpm) → gerador → EMD em notch 8 → Scania → GE
 // em notch 6 → Hilux → gerador → Cat C15. Depois de cada troca o motor dá a partida de novo e tem de voltar à lenta do
 // novo preset (±5%) em poucos segundos, sem ficar acelerado pelo estado do governador ou da carga do preset anterior.
+// A troca de configuração com o motor funcionando (sem `fresh`: diâmetro, ponteira, abafador…) é a de tools/troca.ts;
+// `npm run troca:diesel` roda as duas.
 //
-//   npx tsx tools/diesel-troca.ts
+//   npx tsx tools/diesel-troca.ts      (só a troca de preset; `npm run troca:diesel` = tools/troca.ts diesel)
 import { DieselDSP } from '../src/engines/diesel/dsp';
 import { configCalibrada } from '../src/engines/diesel/config';
 import { preset, SR } from './diesel-comum';
@@ -20,47 +22,52 @@ const carga = (portador: string, c: Partial<{ notch: number; degrau: number }> =
   dinamico: false, lentaBaixa: false, fRede: 60,
 });
 
-const d = new DieselDSP(SR);
-d.params.listener = 'ext';
-const L = new Float32Array(B), R = new Float32Array(B);
-const rodar = (s: number) => { const rpms: number[] = []; for (let i = 0; i < s * SR; i += B) { d.process(L, R, B); if (i % 4096 === 0) rpms.push(d.rpmAvg); } return rpms; };
-const media = (x: number[]) => x.reduce((a, b) => a + b, 0) / Math.max(1, x.length);
+/** a sequência de trocas de preset: imprime a tabela e devolve o número de falhas */
+export function trocaDePresetDiesel() {
+  const d = new DieselDSP(SR);
+  d.params.listener = 'ext';
+  const L = new Float32Array(B), R = new Float32Array(B);
+  const rodar = (s: number) => { const rpms: number[] = []; for (let i = 0; i < s * SR; i += B) { d.process(L, R, B); if (i % 4096 === 0) rpms.push(d.rpmAvg); } return rpms; };
+  const media = (x: number[]) => x.reduce((a, b) => a + b, 0) / Math.max(1, x.length);
 
-// passos: [preset, carga do passo, segundos com carga]; o portador é o que a página escolhe (portadorAoTrocar)
-const passos: [string, any, number][] = [
-  ['gen500', { degrau: 0.5 }, 8],
-  ['scaniav8', {}, 0], // (o caso do defeito: o Scania aceita gerador e nascia isócrono a 1800 rpm)
-  ['gen500', { degrau: 1 }, 6],
-  ['emd710', { notch: 8 }, 14],
-  ['scaniav8', {}, 0],
-  ['ge7fdl', { notch: 6 }, 12],
-  ['hilux28', {}, 0],
-  ['gen500', {}, 0],
-  ['catc15', {}, 0],
-];
-let falhas = 0;
-console.log('| troca para | portador | rpm 8–12 s depois | alvo (lenta) | erro | |\n|---|---|---|---|---|---|');
-let port = preset(passos[0][0]).portadores[0] as string;
-d.message({ type: 'config', cfg: { ...cfgDe(passos[0][0]) } });
-d.message(carga(port));
-d.message({ type: 'input', temp: { mode: 'fixed', value: 90 } });
-d.message({ type: 'input', ignition: true });
-for (const [i, [id, c, s]] of passos.entries()) {
-  if (i > 0) {
-    port = portadorAoTrocar(preset(id), port as any);
-    // loadPreset: config com fresh (o motor ligado dá a partida de novo) e o estado de carga zerado
-    d.message({ type: 'config', cfg: { ...cfgDe(id), fresh: true } });
-    d.message(carga(port));
+  // passos: [preset, carga do passo, segundos com carga]; o portador é o que a página escolhe (portadorAoTrocar)
+  const passos: [string, any, number][] = [
+    ['gen500', { degrau: 0.5 }, 8],
+    ['scaniav8', {}, 0], // (o caso do defeito: o Scania aceita gerador e nascia isócrono a 1800 rpm)
+    ['gen500', { degrau: 1 }, 6],
+    ['emd710', { notch: 8 }, 14],
+    ['scaniav8', {}, 0],
+    ['ge7fdl', { notch: 6 }, 12],
+    ['hilux28', {}, 0],
+    ['gen500', {}, 0],
+    ['catc15', {}, 0],
+  ];
+  let falhas = 0;
+  console.log('| troca para | portador | rpm 8–12 s depois | alvo (lenta) | erro | |\n|---|---|---|---|---|---|');
+  let port = preset(passos[0][0]).portadores[0] as string;
+  d.message({ type: 'config', cfg: { ...cfgDe(passos[0][0]) } });
+  d.message(carga(port));
+  d.message({ type: 'input', temp: { mode: 'fixed', value: 90 } });
+  d.message({ type: 'input', ignition: true });
+  for (const [i, [id, c, s]] of passos.entries()) {
+    if (i > 0) {
+      port = portadorAoTrocar(preset(id), port as any);
+      // loadPreset: config com fresh (o motor ligado dá a partida de novo) e o estado de carga zerado
+      d.message({ type: 'config', cfg: { ...cfgDe(id), fresh: true } });
+      d.message(carga(port));
+    }
+    // lenta do motor novo: o gerador no portador gerador vai à rotação da rede (isócrono)
+    const r = media(rodar(12).slice(-Math.round((4 * SR) / 4096)));
+    const sp = preset(id);
+    const alvo = port === 'gerador' && sp.gerador ? (120 * sp.gerador.fRede) / sp.gerador.polos : sp.idle;
+    const erro = (r - alvo) / alvo, ok = Math.abs(erro) <= 0.05 && d.state === 'run';
+    if (!ok) falhas++;
+    console.log(`| ${id} | ${port} | ${r.toFixed(0)} (${d.state}) | ${alvo} | ${(erro * 100).toFixed(1)}% | ${ok ? 'ok' : 'FALHA'} |`);
+    // a carga do passo (notch, degrau) antes da próxima troca
+    if (s > 0) { d.message({ ...carga(port, c) }); rodar(s); }
   }
-  // lenta do motor novo: o gerador no portador gerador vai à rotação da rede (isócrono)
-  const r = media(rodar(12).slice(-Math.round((4 * SR) / 4096)));
-  const sp = preset(id);
-  const alvo = port === 'gerador' && sp.gerador ? (120 * sp.gerador.fRede) / sp.gerador.polos : sp.idle;
-  const erro = (r - alvo) / alvo, ok = Math.abs(erro) <= 0.05 && d.state === 'run';
-  if (!ok) falhas++;
-  console.log(`| ${id} | ${port} | ${r.toFixed(0)} (${d.state}) | ${alvo} | ${(erro * 100).toFixed(1)}% | ${ok ? 'ok' : 'FALHA'} |`);
-  // a carga do passo (notch, degrau) antes da próxima troca
-  if (s > 0) { d.message({ ...carga(port, c) }); rodar(s); }
+  console.log(falhas ? `${falhas} falha(s) na troca de preset` : 'TROCA OK: o motor volta à lenta depois de cada troca');
+  return falhas;
 }
-console.log(falhas ? `${falhas} falha(s) na troca de preset` : 'TROCA OK: o motor volta à lenta depois de cada troca');
-process.exit(falhas ? 1 : 0);
+
+if (process.argv[1] && process.argv[1].endsWith('diesel-troca.ts')) process.exit(trocaDePresetDiesel() ? 1 : 0);

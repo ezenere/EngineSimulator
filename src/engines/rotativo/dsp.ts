@@ -85,19 +85,14 @@ export class RotativoDSP extends EngineDSP {
   // ------------------------------------------------------------------ configuração
   setConfig(cfg, calibrate = true) {
     // Troca de configuração com o motor funcionando e as mesmas câmaras (janela, escape, abafador, velas): o estado de
-    // cada câmara e a composição do gás passam de uma configuração para a outra. O `setConfig` do motor-base recomeça
-    // todas as câmaras com o gás do coletor e sem ar contado (um ciclo inteiro, três voltas do eixo, sem queimar: a lenta
-    // de fábrica caía de 750 para ~600 rpm a cada troca), e aqui a composição recomeçava do zero em todas juntas: nas
-    // janelas de competição as câmaras, que em regime alternam queima e falha cada uma no seu passo, passavam a queimar
-    // todas juntas e a falhar todas juntas, e três trocas seguidas às vezes apagavam o motor
-    const a0: any = this.cfg;
-    const vivo = !!a0 && (this.state === 'run' || this.state === 'crank') && !cfg.fresh && this.N === cfg.N && this.cyc === (cfg.cyc || 1080)
-      && a0.Vcam === cfg.Vcam && a0.compression === cfg.compression && (a0.rotores || 1) === (cfg.rotores || 1);
-    const guardado: Record<string, any> | null = vivo ? {
-      p: this.p, m: this.m, Vprev: this.Vprev, aPrev: this.aPrev, mEx: this.mEx, mIn: this.mIn, densC: this.densC, Q: this.Q, xb: this.xb, air: this.air,
-      armed: this.armed, spk: this.spk, burnK: this.burnK, hcQ: this.hcQ, hcC: this.hcC, mq: this.mq, arQ: this.arQ, xRes: this.xRes, xEsc: this.xEsc,
-      admQ: this.admQ, cru: this.cru, plenQ: this.plenQ, pEO: this.pEO, TEO: this.TEO, MjEO: this.MjEO, falhaRot: this.falhaRot,
-    } : null;
+    // cada câmara e a composição do gás passam de uma configuração para a outra, pelo mecanismo do motor-base
+    // (EngineDSP.guardarTroca / passarTroca; aqui `camposCamara`), guardados antes de realocar a composição. Sem isso o
+    // motor-base recomeçava todas as câmaras com o gás do coletor e sem ar contado (um ciclo inteiro, três voltas do eixo,
+    // sem queimar: a lenta de fábrica caía de 750 para ~600 rpm a cada troca), e aqui a composição recomeçava do zero em
+    // todas juntas: nas janelas de competição as câmaras, que em regime alternam queima e falha cada uma no seu passo,
+    // passavam a queimar todas juntas e a falhar todas juntas, e três trocas seguidas às vezes apagavam o motor
+    const g = (this.trocaPendente = this.guardarTroca(cfg));
+    const pqAntes = g ? this.nodes.find((n) => n instanceof PosQueimaBoca) : null;
     this.cyc = cfg.cyc || 1080; this.kVol = cfg.kVol || 2 / 3; this.tipoRot = cfg.tipo || 'wankel'; this.rotores = cfg.rotores || 1;
     const N = cfg.N;
     // dispersão por flanco (a do Ronco: ar ±7%, janela ±10%, energia ±5%, × 2,6 com carburador) escalada por `dispersao`:
@@ -108,11 +103,8 @@ export class RotativoDSP extends EngineDSP {
     this.falhaRot = new Float64Array(N); this.hcC = new Float64Array(N); this.mq = new Float64Array(N); this.arQ = new Float64Array(N); this.xRes = new Float64Array(N);
     this.xEsc = new Float64Array(this.rotores).fill(1); this.admQ = new Float64Array(this.rotores); this.cru = new Float64Array(this.rotores); this.plenQ = 0;
     super.setConfig(cfg, calibrate);
-    if (guardado) {
-      // (janelas trocadas: a composição guardada era a das janelas antigas; fica a nova, zerada, e o resto do estado passa)
-      const mesmas = a0.janelas?.admissao === cfg.janelas?.admissao && a0.janelas?.escape === cfg.janelas?.escape;
-      for (const k in guardado) if (mesmas || !COMPOSICAO.includes(k)) (this as any)[k] = guardado[k];
-    }
+    // (a pós-queima que já ia a caminho do ponto quente segue para a rede nova)
+    if (pqAntes && this.trocaViva) (this.nodes[0] as PosQueimaBoca).e = (pqAntes as PosQueimaBoca).e;
     if (cfg.iacLenta) this.iacLenta = cfg.iacLenta;
     this.arDeLenta();
     // dispersão por rotor (1.2): além da do Ronco por flanco, ±4% na energia e ±6% na janela de escape de cada rotor (a
@@ -121,6 +113,15 @@ export class RotativoDSP extends EngineDSP {
     const fq = Array.from({ length: this.rotores }, () => 1 + 0.04 * sp * sr.bi()), fe = Array.from({ length: this.rotores }, () => 1 + 0.06 * sp * sr.bi());
     for (let c = 0; c < N; c++) { this.cylQ[c] *= fq[cfg.bank[c]]; this.cylEx[c] *= fe[cfg.bank[c]]; }
   }
+
+  /** troca de configuração: além do estado de cada câmara do motor-base, o da abertura do escape e a composição do gás. Com
+   *  as janelas trocadas a composição guardada era a das janelas antigas: fica a nova, zerada, e o resto passa */
+  camposCamara(cfgAntes?, cfg?) {
+    const mesmas = !cfgAntes || (cfgAntes.janelas?.admissao === cfg.janelas?.admissao && cfgAntes.janelas?.escape === cfg.janelas?.escape);
+    return [...super.camposCamara(), 'pEO', 'TEO', 'MjEO', ...(mesmas ? COMPOSICAO : [])];
+  }
+  /** o ruído da combustão turbulenta, o chiado das vedações e o escoamento médio do escape (o que a ponteira lê) */
+  camposFiltros() { return [...super.camposFiltros(), 'hcS', 'vedLP', 'mEscAc', 'mEscMed']; }
 
   /** volume da câmara (m³) no ângulo `a` (°e) */
   volume(a: number) { return this.Vc + this.Vh * (1 - Math.cos(this.kVol * a * DEG)); }

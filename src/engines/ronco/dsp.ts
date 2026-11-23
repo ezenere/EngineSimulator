@@ -28,6 +28,42 @@ import { T_MAN, T_BACK, T_WALL, T_EXREF, SCREW_H, ENV_LOOP, CARCACA, BATIDA, JAT
 import { montarMedios } from './medios';
 import { instalarAviacao } from './aviacao';
 
+// ---- troca de configuração com o motor funcionando (EngineDSP.guardarTroca / passarTroca)
+/** duração do cruzamento entre a rede do escape antiga e a nova (s): a nova nasce vazia, e nesse tempo os pulsos já a
+ *  atravessaram (ver docs/TECNICO.md → Ronco → "Troca de configuração com o motor funcionando") */
+const TROCA_REDE = 0.06;
+/** constante de tempo da rampa do ganho quando a sonda da página muda (s) */
+const TROCA_GANHO = 0.03;
+/** estado de cada câmara: termodinâmico (pressão, massa, volume e ângulo do passo anterior, vazões) e da queima (calor da
+ *  explosão, fração queimada, ar contado, centelha armada, ângulo dela, ritmo da queima, densidade do pulso) */
+const CAMPOS_CAMARA = ['p', 'm', 'Vprev', 'aPrev', 'mEx', 'mIn', 'densC', 'Q', 'xb', 'air', 'armed', 'spk', 'burnK'];
+/** estados escalares fora da rede: a derivada da admissão, as envoltórias dos tiques e da batida, a rajada do coletor, o índice
+ *  do atraso entre os ouvidos (a rede antiga e a nova o dividem) */
+const CAMPOS_FILTROS = ['inPrev', 'clickEnv', 'knockEnv', 'brkLP', 'brkE', 'brkS', 'batC', 'batV', 'itdW'];
+/** biquads que são da rede do escape (uma por boca): ficam com a rede antiga no cruzamento */
+const REDE_BIQUADS = new Set(['radHP', 'radSh', 'jetF', 'carcF']);
+const pesoRede = (r) => (r.k >= r.n ? 0 : r.w0 * (0.5 + 0.5 * Math.cos((Math.PI * r.k) / r.n)));
+const copiaEstado = (v) => (ArrayBuffer.isView(v) ? (v as any).slice() : Array.isArray(v) ? v.map(copiaEstado) : v);
+/** o mesmo formato: dois números, ou vetores do mesmo tipo e tamanho (e o mesmo por dentro) */
+function mesmoFormato(a, b) {
+  if (typeof a === 'number' || typeof a === 'boolean') return typeof b === typeof a;
+  if (ArrayBuffer.isView(a)) return ArrayBuffer.isView(b) && a.constructor === b.constructor && (a as any).length === (b as any).length;
+  if (Array.isArray(a)) return Array.isArray(b) && a.length === b.length && a.every((x, i) => mesmoFormato(x, b[i]));
+  return false;
+}
+const temBiquad = (v) => v instanceof Biquad || (Array.isArray(v) && v.length > 0 && v.some(temBiquad));
+/** a onda dentro de um tubo (as duas linhas de atraso e os estados das perdas) para outro do mesmo comprimento */
+function passarLinha(a: Line, b: Line) {
+  if (a === b || a.D !== b.D || a.a.length !== b.a.length) return;
+  b.a.set(a.a); b.b.set(a.b); b.w = a.w; b.sa = a.sa; b.sb = a.sb; b.Dprev = a.Dprev;
+  b.in0 = a.in0; b.in1 = a.in1; b.out0 = a.out0; b.out1 = a.out1;
+}
+/** o estado (z1, z2) de cada biquad de `a` no biquad do mesmo lugar em `b`, onde o formato é o mesmo */
+function passarBiquads(a, b) {
+  if (a instanceof Biquad && b instanceof Biquad) { if (a !== b) { b.z1 = a.z1; b.z2 = a.z2; } }
+  else if (Array.isArray(a) && Array.isArray(b) && a.length === b.length) for (let i = 0; i < a.length; i++) passarBiquads(a[i], b[i]);
+}
+
 // Diferencial padrão: motores de giro alto pedem redução maior para a mesma velocidade.
 export const defaultFinal = (redline) => 3.55 * clamp(redline / 7000, 0.6, 3);
 
@@ -88,6 +124,10 @@ export class EngineDSP implements DSPDeAudio {
   // e quem liga é o preset (`carcaca`, `batida`, `jato`, `bombaAr`); as famílias que herdam não mudam sem eles
   declare carcK: any; declare carcSrc: any; declare carcF: any; declare carcOut: any; declare carcS: any; declare carcKp: any; declare batK: any; declare batF: any; declare batW: any; declare batC: any; declare batV: any; declare batQ0: any;
   declare jatoFis: any; declare jatoQ: any; declare jatoM: any; declare saModo: any; declare saJit: any;
+  // troca de configuração com o motor funcionando (docs/TECNICO.md → Ronco → "Troca de configuração com o motor funcionando"):
+  // as redes de escape antigas que ainda soam no cruzamento, o ganho de antes (rampa até o novo), o estado guardado pela
+  // subclasse antes de remontar o dela, e se a última troca foi com o motor funcionando e se as câmaras passaram
+  declare redesVelhas: any; declare runMix: any; declare gTroca: any; declare trocaPendente: any; declare trocaViva: any; declare trocaCamaras: any;
 
   constructor(fs) {
     this.fs = fs; this.dt = 1 / fs;
@@ -130,6 +170,7 @@ export class EngineDSP implements DSPDeAudio {
     // médios e jato físico: valor legado (o som de antes) até o preset pedir
     this.carcK = 0; this.carcSrc = null; this.carcF = null; this.carcOut = null; this.carcS = null; this.carcKp = 0; this.batK = 0; this.batF = null; this.batW = null; this.batC = 0; this.batV = 0; this.batQ0 = 1;
     this.jatoFis = false; this.jatoQ = 0; this.jatoM = 0; this.saModo = 0; this.saJit = 0;
+    this.redesVelhas = null; this.runMix = { in0: 0 }; this.gTroca = 0; this.trocaPendente = null; this.trocaViva = false; this.trocaCamaras = false;
   }
 
   message(m) {
@@ -186,8 +227,14 @@ export class EngineDSP implements DSPDeAudio {
 
   setConfig(cfg, calibrate = true) {
     const prevN = this.N;
+    // troca com o motor funcionando (mesmo número de câmaras, sem `fresh`): o que passa de uma configuração para a outra é
+    // guardado antes de remontar (a subclasse que realoca o próprio estado antes de chamar este guarda antes, em
+    // `trocaPendente`) e posto de volta no fim, em `passarTroca`. Motor parado ou preset novo: nada muda
+    const g = this.trocaPendente || this.guardarTroca(cfg);
+    this.trocaPendente = null; this.trocaViva = !!g; this.trocaCamaras = false;
+    if (!g) this.redesVelhas = null; // (o motor recomeça: as redes de um cruzamento em curso saem junto)
     this.cfg = cfg;
-    if (cfg.aviation || this.av) instalarAviacao(this, cfg); // (aviação: RADIAL.md 6)
+    if (cfg.aviation || this.av) instalarAviacao(this, cfg, !!g); // (aviação: RADIAL.md 6)
     const N = cfg.N;
     this.N = N;
     this.fire = Float64Array.from(cfg.fire);
@@ -253,7 +300,8 @@ export class EngineDSP implements DSPDeAudio {
     else { this.cfgGain = 1; this.mkIdle = 1; }
     if (cfg.powerModel) { this.powerModel = cfg.powerModel; this.tqPeakModel = cfg.tqPeakModel; this.frPeakModel = cfg.frPeakModel; this.tune(cfg); }
     else if (calibrate && cfg.power && !cfg.gain) { const pm = this.measurePower(cfg); this.powerModel = pm.kw; this.tqPeakModel = pm.tq; this.frPeakModel = pm.fr; this.tune(cfg); }
-    this.fade = 0;
+    if (g) this.passarTroca(g, cfg); // (motor funcionando: o som segue, sem o recomeço em rampa de 40 ms)
+    else this.fade = 0;
     // trocou de carro com o motor ligado: o motor novo dá a partida do zero. Herdar giro,
     // marcha e o controle de marcha lenta "aprendido" no outro motor deixava a lenta
     // instável e às vezes apagava (uma moto nascendo a 750 rpm de um V8, por exemplo)
@@ -267,6 +315,89 @@ export class EngineDSP implements DSPDeAudio {
     this.limiter = false; this.pops.length = 0; this.boost = 0; this.turboW = 0; this.bovEnv = 0; this.catRetard = 0; this.exhT = this.ambientT; this.popWindow = 0; this.als = false;
     this.gear = 0; this.clutch = 1; this.locked = false; this.shifting = false; this.shiftCut = false; this.blip = false; this.v = 0;
     this.pMan = P0; this.thr = 0; this.dfcoOn = false; this.fuelRamp = 1;
+  }
+
+  // ------------------------------------------------------------------ troca de configuração com o motor funcionando
+  // Cada controle estrutural da página (abafador, diâmetro do escape, ponteira…) manda a configuração inteira. Com o motor
+  // funcionando e o mesmo número de câmaras, o que passa (docs/TECNICO.md → Ronco → "Troca de configuração com o motor
+  // funcionando"): o estado de cada câmara (pressão, massa, ar contado, queima em curso), se as câmaras são as mesmas
+  // (`geometriaCamaras`); o estado dos filtros de fora do escape e o ganho (em rampa); e a rede do escape antiga segue
+  // soando, tocada pelas mesmas vazões, num cruzamento curto com a nova (`TROCA_REDE`), que nasce vazia.
+
+  /** as câmaras: quantas, o ciclo, a geometria do volume e a fase de cada uma. O estado delas só passa se nada disso mudou */
+  geometriaCamaras() {
+    return [this.N, this.cyc, this.Vd, this.Ap, this.rCrank, this.lRod, this.Vc, this.Vh || 0, this.kVol || 0, ...(this.fire || [])].join(',');
+  }
+
+  /** estado de cada câmara que passa com as mesmas câmaras (as famílias acrescentam o delas; `cfgAntes` → `cfg`) */
+  camposCamara(_cfgAntes?, _cfg?): string[] { return CAMPOS_CAMARA; }
+
+  /** estado dos filtros e das fontes fora da rede do escape que passa sempre (os biquads passam sozinhos, `guardarTroca`) */
+  camposFiltros(): string[] { return CAMPOS_FILTROS; }
+
+  /** guarda o que passa para a configuração `cfg`; null se o motor recomeça (parado, preset novo, outro número de câmaras) */
+  guardarTroca(cfg) {
+    if (!this.cfg || !(this.state === 'run' || this.state === 'crank') || cfg.fresh || this.N !== cfg.N) return null;
+    const g: any = { geo: this.geometriaCamaras(), cfg: this.cfg, cfgGain: this.cfgGain, camara: {}, filtros: {}, biquads: {} };
+    for (const k of this.camposCamara()) g.camara[k] = copiaEstado(this[k]);
+    for (const k of this.camposFiltros()) g.filtros[k] = copiaEstado(this[k]);
+    // (todo biquad da instância fora da rede do escape: a página troca os filtros por outros iguais, e o estado passa)
+    for (const k of Object.keys(this)) if (!REDE_BIQUADS.has(k) && temBiquad(this[k])) g.biquads[k] = this[k];
+    // a rede do escape como está: segue soando no cruzamento (os nós presos à instância, como a pós-queima do rotativo, não)
+    g.rede = {
+      lines: this.lines, nodes: this.nodes.filter((n) => n.d !== this), runners: this.runners, runRot: this.rot ? this.runRot : null, bankJ: this.bankJ,
+      rads: this.rads, radHP: this.radHP, radSh: this.radSh, itdB: this.itdB, itdD: this.itdD, jetF: this.jetF, jetEnv: this.jetEnv, tipA: this.tipA,
+      jatoFis: this.jatoFis, jatoQ: this.jatoQ, jatoM: this.jatoM, jetGain: this.jetGain,
+      carcK: this.carcK, carcSrc: this.carcSrc, carcF: this.carcF, carcS: this.carcS, carcKp: this.carcKp, carcOut: this.carcOut,
+    };
+    return g;
+  }
+
+  /** depois de remontar: põe de volta o que passa e começa o cruzamento da rede do escape */
+  passarTroca(g, cfg) {
+    this.trocaCamaras = g.geo === this.geometriaCamaras();
+    if (this.trocaCamaras) {
+      for (const k of this.camposCamara(g.cfg, cfg)) if (mesmoFormato(g.camara[k], this[k])) this[k] = g.camara[k];
+    } else this.fade = 0;
+    // (câmaras novas: recomeçam com o gás do coletor, e a pressão de cada uma salta para a do coletor; a vazão na válvula dá
+    // um degrau que sai na boca como estalo, 37× o salto do regime no Mustang. Fica o recomeço em rampa de antes, e o resto
+    // passa como numa troca com as mesmas câmaras)
+    for (const k of this.camposFiltros()) if (k in g.filtros && mesmoFormato(g.filtros[k], this[k])) this[k] = g.filtros[k];
+    for (const k in g.biquads) passarBiquads(g.biquads[k], this[k]);
+    // os primários são o que a válvula de escape enxerga: com o mesmo comprimento, a onda que já estava neles passa para os
+    // novos (sem isso a contrapressão na válvula ia a zero de uma vez, a vazão de escape dava um degrau e ele saía na boca
+    // como um estalo alguns ms depois)
+    const feitos = new Set();
+    for (let c = 0; c < this.N; c++) { const a = g.rede.runners[c], b = this.runners[c]; if (a && b && !feitos.has(b)) { feitos.add(b); passarLinha(a, b); } }
+    // a rede antiga sai com o peso que tinha (se já havia um cruzamento em curso, as mais antigas seguem saindo)
+    const velhas = (this.redesVelhas || []).filter((r) => r.k < r.n);
+    const resto = velhas.reduce((s, r) => s + pesoRede(r), 0);
+    velhas.push({ ...g.rede, w0: 1 - resto, k: 0, n: Math.max(1, Math.round(TROCA_REDE * this.fs)), ex: new Float64Array(4), rng: new RNG(0x7a0ca + velhas.length) });
+    this.redesVelhas = velhas;
+    // ganho: a sonda da página mudou (o reforço da lenta já anda em rampa, `mk`)
+    if (this.cfgGain !== g.cfgGain) { this.gTroca = this.cfgGain; this.cfgGain = g.cfgGain; }
+  }
+
+  /** as bocas de uma rede antiga no cruzamento: o laço da ponteira de `process` com as peças dela (sem o `tap` da Cena).
+   *  O ruído do jato dela sai de um sorteio próprio: o do motor segue a mesma sequência com e sem a troca */
+  radiarRedeVelha(rv, P, iw) {
+    let exL = 0, exR = 0, exLd = 0, exRd = 0;
+    const rads = rv.rads, jatoFis = rv.jatoFis, carcK = rv.carcK, M = this.itdM, rng = rv.rng;
+    for (let i = 0; i < rads.length; i++) {
+      const rd = rads[i], jf = rv.jetF[i];
+      let x = rv.radSh[i].run(rv.radHP[i].run(rd.emit));
+      const vel = jatoFis ? Math.max(0, rd.u) * rv.jatoQ : Math.max(0, rd.u) / (2.5e4 * rv.tipA);
+      rv.jetEnv[i] += (vel - rv.jetEnv[i]) * 0.15;
+      const jv = rv.jetEnv[i], nz = rng.bi();
+      if (jatoFis) { const m = jv * rv.jatoM, m2 = m * m, je = jv / Math.sqrt(Math.sqrt(1 + m2 * m2)); x += (jf[0].run(nz) + 0.8 * jf[1].run(nz)) * je * je * rv.jetGain * P.air; }
+      else x += (jf[0].run(nz) + 0.8 * jf[1].run(nz)) * jv * jv * rv.jetGain * P.air;
+      if (carcK) { const src = rv.carcSrc[i]; if (src) { const f = rv.carcF[i], pw = src.in1, lo = (rv.carcS[i] += rv.carcKp * (pw - rv.carcS[i])); x += f[1].run(f[0].run(pw - lo)) * carcK; } }
+      exL += x * rd.panL; exR += x * rd.panR;
+      const ib = rv.itdB[i], dd = rv.itdD[i]; ib[iw] = x;
+      exLd += ib[(iw - dd[0]) & M] * rd.panL; exRd += ib[(iw - dd[1]) & M] * rd.panR;
+    }
+    const o = rv.ex; o[0] = exL; o[1] = exR; o[2] = exLd; o[3] = exRd;
+    return o;
   }
 
   // Parâmetros escalares que podem mudar sem reconstruir a acústica.
@@ -862,6 +993,7 @@ export class EngineDSP implements DSPDeAudio {
     const g1 = GAM - 1;
     const cyc = this.cyc, cyc2 = cyc / 2, cyc3 = (3 * cyc) / 4, cyc4 = cyc / 4; // (gancho 3: 720/360/540/180 no pistão, os mesmos doubles)
     const batK = this.batK, carcK = this.carcK, jatoFis = this.jatoFis; // (médios e jato: 0/false = legado)
+    let velhas = this.redesVelhas; // (troca de configuração: as redes antigas no cruzamento; null em regime)
 
     for (let s = 0; s < n; s++) {
       if (this.ctrl-- <= 0) { this.control(16 * dt); this.ctrl = 15; }
@@ -907,6 +1039,7 @@ export class EngineDSP implements DSPDeAudio {
 
       for (let i = 0; i < nL; i++) lines[i].read();
       if (this.rot) for (const run of this.runRot) run.out0 = 0.985 * run.in0; // (rotativo, gancho 13: um primário por rotor, as 3 câmaras somam)
+      if (velhas) for (const rv of velhas) { for (const l of rv.lines) l.read(); if (rv.runRot) for (const run of rv.runRot) run.out0 = 0.985 * run.in0; }
 
       const wn = rng.bi();
       this.tzLP += this.tzK * (wn - this.tzLP);
@@ -1038,12 +1171,16 @@ export class EngineDSP implements DSPDeAudio {
         // ---- válvula de escape -> tubo primário
         let mEx = 0;
         const run = runners[c];
-        if (this.cc) mEx = this.ccEscape(c, a, p, T, run, Zr);
-        else if (this.rot) mEx = this.rotEscape(c, a, p, T, run, Zr); // (rotativo, gancho 12: janela trapezoidal)
+        // (troca de configuração: a válvula enxerga a contrapressão das redes antiga e nova pesadas como no cruzamento; a
+        // nova sozinha, que nasce vazia, dava um degrau na vazão que saía na boca como estalo)
+        let runE = run;
+        if (velhas) { let w = 1, b = 0; for (const rv of velhas) { const k = pesoRede(rv); w -= k; b += k * rv.runners[c].in0; } runE = this.runMix; runE.in0 = w * run.in0 + b; }
+        if (this.cc) mEx = this.ccEscape(c, a, p, T, runE, Zr);
+        else if (this.rot) mEx = this.rotEscape(c, a, p, T, runE, Zr); // (rotativo, gancho 12: janela trapezoidal)
         else if (a > evo && a < evc) {
           const sv = Math.sin(Math.PI * (a - evo) / (evc - evo));
           const A = this.AexMax * this.cylEx[c] * Math.min(1, 2.5 * sv * sv); // (área efetiva satura cedo: perfil "quadrado")
-          mEx = this.exhaustFlow(A, p, T, P0 + 2 * run.in0, Zr);
+          mEx = this.exhaustFlow(A, p, T, P0 + 2 * runE.in0, Zr);
         }
         // turbulência no vão da válvula: o jato que sai pelo vão no "estouro" da abertura. A velocidade dele vem da
         // razão entre a pressão no cilindro e a do tubo (Mach do escoamento isentrópico, que satura no engasgo), e o
@@ -1054,7 +1191,7 @@ export class EngineDSP implements DSPDeAudio {
         // colmeia do catalisador, com milhares de canais finos, come um pouco desse agudo antes do abafador
         let turb = 0;
         if (mEx > 0) {
-          const pr = p / (P0 + 2 * run.in0), Mj = pr > 1 ? Math.min(1, Math.sqrt(2 / (GAM - 1) * (Math.pow(pr, (GAM - 1) / GAM) - 1))) : 0;
+          const pr = p / (P0 + 2 * runE.in0), Mj = pr > 1 ? Math.min(1, Math.sqrt(2 / (GAM - 1) * (Math.pow(pr, (GAM - 1) / GAM) - 1))) : 0;
           turb = this.valveNoise * this.catNoise * P.air * Mj * Mj * Mj;
         }
         // a pressão no tubo é impedância × vazão volumétrica, não mássica: o gás de um cilindro cortado
@@ -1070,8 +1207,11 @@ export class EngineDSP implements DSPDeAudio {
         else if (ap <= evo && a > evo) this.densC[c] = clamp(T / T_EXREF, 0.1, 1.3);
         const dens = mEx > 0 ? this.densC[c] : 1;
         // (o chiado do jato na válvula não entra na correção: é o escoamento sônico, não o empurrão do gás)
-        if (this.rot) run.out0 += Zr * mEx * (dens + turb * hiN) + this.posQueima(c, a, Zr); // (rotativo, gancho 13: acumula no primário do rotor)
-        else run.out0 = 0.985 * run.in0 + Zr * mEx * (dens + turb * hiN);
+        if (this.rot) { const pq = this.posQueima(c, a, Zr); run.out0 += Zr * mEx * (dens + turb * hiN) + pq; if (velhas) for (const rv of velhas) rv.runners[c].out0 += Zr * mEx * (dens + turb * hiN) + pq; } // (rotativo, gancho 13: acumula no primário do rotor)
+        else {
+          run.out0 = 0.985 * run.in0 + Zr * mEx * (dens + turb * hiN);
+          if (velhas) for (const rv of velhas) { const ro = rv.runners[c]; ro.out0 = 0.985 * ro.in0 + Zr * mEx * (dens + turb * hiN); } // (a rede antiga recebe a mesma vazão)
+        }
         this.mEx[c] = mEx;
         if (mEx > 0) brkIn += this.brkW[c] * Zr * mEx * dens;
 
@@ -1168,10 +1308,12 @@ export class EngineDSP implements DSPDeAudio {
         const t = pp.t / fs;
         const v = pp.amp * 0.55 * (Math.exp(-t / 0.0025) * (1 + 0.3 * rng.bi()) + 0.45 * rng.bi() * Math.exp(-t / 0.006));
         this.bankJ[Math.min(pp.bank, this.bankJ.length - 1)].inj += v;
+        if (velhas) for (const rv of velhas) rv.bankJ[Math.min(pp.bank, rv.bankJ.length - 1)].inj += v;
         if (++pp.t > 0.03 * fs) this.pops.splice(i, 1);
       }
       for (let i = 0; i < nN; i++) nodes[i].step();
       for (let i = 0; i < nL; i++) lines[i].write();
+      if (velhas) for (const rv of velhas) { for (const nd of rv.nodes) nd.step(); for (const l of rv.lines) l.write(); }
 
       // ---- ponteira: irradiação + ruído de jato (escala com a velocidade do gás)
       let exL = 0, exR = 0, exLd = 0, exRd = 0;
@@ -1200,6 +1342,17 @@ export class EngineDSP implements DSPDeAudio {
         exL += x * rd.panL; exR += x * rd.panR;
         const ib = this.itdB[i], dd = this.itdD[i]; ib[iw] = x;
         exLd += ib[(iw - dd[0]) & this.itdM] * rd.panL; exRd += ib[(iw - dd[1]) & this.itdM] * rd.panR;
+      }
+      // troca de configuração: as redes antigas saem em cosseno levantado (cada uma com o peso que tinha) e a nova entra
+      if (velhas) {
+        let wv = 0, oL = 0, oR = 0, oLd = 0, oRd = 0;
+        for (const rv of velhas) {
+          const w = pesoRede(rv), o = this.radiarRedeVelha(rv, P, iw);
+          wv += w; oL += w * o[0]; oR += w * o[1]; oLd += w * o[2]; oRd += w * o[3];
+          rv.k++;
+        }
+        exL = (1 - wv) * exL + oL; exR = (1 - wv) * exR + oR; exLd = (1 - wv) * exLd + oLd; exRd = (1 - wv) * exRd + oRd;
+        if (velhas.some((rv) => rv.k >= rv.n)) { velhas = velhas.filter((rv) => rv.k < rv.n); if (!velhas.length) velhas = null; this.redesVelhas = velhas; }
       }
 
       // ---- admissão
@@ -1389,6 +1542,10 @@ export class EngineDSP implements DSPDeAudio {
       // reforço da lenta medido na calibração, que some conforme o giro sobe (até metade da faixa)
       const wIdle = 1 - smooth((this.idle / this.redline) * 1.15, 0.5, rpmFrac);
       this.mk += (Math.pow(this.mkIdle || 1, wIdle) - this.mk) * 0.0005;
+      if (this.gTroca) { // (troca de configuração: o ganho novo da sonda chega em rampa)
+        this.cfgGain += (this.gTroca - this.cfgGain) * (1 - Math.exp(-dt / TROCA_GANHO));
+        if (Math.abs(this.gTroca - this.cfgGain) < 1e-6 * this.gTroca) { this.cfgGain = this.gTroca; this.gTroca = 0; }
+      }
       if (this.fade < 1) this.fade = Math.min(1, this.fade + dt / 0.04);
       // arcade: nivelador sobre o escape na fonte (antes do ouvinte, para a distância na rua e a cabine
       // continuarem valendo). Abaixo da carga total da calibração ele sobe o ganho na razão 1:2, até +10 dB: a lenta

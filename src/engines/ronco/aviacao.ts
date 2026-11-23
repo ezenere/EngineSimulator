@@ -141,9 +141,11 @@ export class CargaBancadaAv {
 
 /**
  * Põe (ou tira) a aviação na instância. `d` é o EngineDSP (ou o RadialDSP, que já vem com `av` e as funções dele).
- * Chamado pelo `setConfig` quando o preset tem `aviation` ou a instância já é de aviação.
+ * Chamado pelo `setConfig` quando o preset tem `aviation` ou a instância já é de aviação. `vivo`: troca de configuração com
+ * o motor funcionando (EngineDSP.guardarTroca): a hélice e o rotor seguem como estavam (passo, governador, embreagem, e o
+ * som da hélice na mesma fase, se ela é a mesma), em vez de recomeçarem no passo mínimo.
  */
-export function instalarAviacao(d: any, cfg: any) {
+export function instalarAviacao(d: any, cfg: any, vivo = false) {
   if (!cfg.aviation && !d.radial) { d.av = false; d.carga = d.cargaExterna || null; return; }
   const novo = !d.av || d.avPreset !== cfg.id;
   d.av = true;
@@ -156,20 +158,33 @@ export function instalarAviacao(d: any, cfg: any) {
     d.mistura = cfg.misturaPadrao ?? 0.8;
     d.prime = 0;
   }
-  d.qMix = 1; d.burnAv = 1; d.avHot = 0; d.prAv = 0.015; d.kEstouroAv = d.radial ? ESTOURO_PARTIDA.k : ESTOURO_PARTIDA.kPlano; d.arPartida = false; d.falhaMix = 0;
+  // (com o motor funcionando, a mistura, os magnetos e o calor da partida seguem os de antes: o controle os recalcula)
+  if (!vivo) { d.qMix = 1; d.burnAv = 1; d.avHot = 0; d.prAv = 0.015; d.kEstouroAv = d.radial ? ESTOURO_PARTIDA.k : ESTOURO_PARTIDA.kPlano; d.arPartida = false; d.falhaMix = 0; }
   d.crankMax = cfg.crankMax || (d.radial ? 25 : 8);
   d.partidaTipo = cfg.partida || 'direta';
   d.nivelEscape = cfg.nivelEscape || 135;
   d.avRng = d.avRng || new RNG(0xa71a);
   d.avStLP = new Biquad().lp(d.fs, 2200, 0.8); d.avStBP = new Biquad().bp(d.fs, 1200, 1.2);
   // carga de bancada (a do portador, se acoplada, manda)
+  const ant = vivo ? d.cargaAv : null, somAnt = vivo ? d.heliceSom : null;
   d.cargaAv = cfg.helice || cfg.rotor ? new CargaBancadaAv(cfg) : null;
+  if (ant && d.cargaAv && ant.tipo === d.cargaAv.tipo) passarCarga(ant, d.cargaAv);
   d.carga = d.cargaExterna || d.cargaAv;
   // som da hélice na página (só sem portador externo: na Cena a hélice é do portador)
   const h = d.cargaAv?.hcfg;
-  d.heliceSom = h && !d.cargaExterna ? new FonteHelice(d.fs, h.B, h.D, h.nHelice) : null;
+  // (a mesma hélice com o motor funcionando: a mesma fonte, na fase em que estava, com o bloco que já tinha preparado)
+  const mesma = !!somAnt && !!h && !d.cargaExterna && somAnt.B === h.B && somAnt.D === h.D && somAnt.propHz === h.nHelice / 60;
+  d.heliceSom = mesma ? somAnt : h && !d.cargaExterna ? new FonteHelice(d.fs, h.B, h.D, h.nHelice) : null;
   if (d.heliceSom) { d.heliceSom.onLenta = h.onLenta ?? 0; d.heliceSom.kapK = h.kapK ?? 1; d.heliceSom.largoK = h.largoK ?? 1; }
-  d.helBuf = new Float32Array(128); d.helK = 128; d.kHel = 0;
+  if (!mesma) { d.helBuf = new Float32Array(128); d.helK = 128; d.kHel = 0; }
+}
+
+/** troca com o motor funcionando: o passo, o governador, a manete de passo, o coletivo e a embreagem da carga antiga */
+function passarCarga(a: CargaBancadaAv, b: CargaBancadaAv) {
+  b.rpmAlvo = a.rpmAlvo; b.coletivo = a.coletivo; b.engate = a.engate; b.engatar = a.engatar;
+  if (a.helice && b.helice && !b.hcfg!.passoFixo) b.helice.beta = clamp(a.helice.beta, b.hcfg!.betaMin, b.hcfg!.betaMax);
+  for (const [ga, gb] of [[a.gov, b.gov], [a.govR, b.govR]] as const) if (ga && gb) { gb.i = clamp(ga.i, gb.min, gb.max); gb.saida = clamp(ga.saida, gb.min, gb.max); }
+  if (a.rotor && b.rotor) { b.rotor.c = a.rotor.c; b.inercia = a.inercia; }
 }
 
 // ------------------------------------------------------------------ funções postas na instância (this = EngineDSP)
