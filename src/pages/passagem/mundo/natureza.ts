@@ -6,6 +6,7 @@ import type { Lugar } from '../lugar';
 import type { Via } from '../../../scene/trajetoria';
 import { repetir, type Inst } from './geo';
 import { sorteio } from './planta';
+import { leveCirculo } from './leves';
 
 export const VERDES = [0x4f7a3a, 0x5d8a40, 0x3f6b35, 0x6b8f45] as const;
 const TRONCO = 0x6a5038;
@@ -36,7 +37,7 @@ function geos() {
  * As árvores em instâncias: tronco, copa redonda, pinheiro, arbusto. Perto do ponto de chegada (`centro`, em s e m),
  * inteiras e fazendo sombra; longe, o tronco de 3 lados e a copa num sólido de 8 faces, sem sombra.
  */
-export function arvores(lg: Lugar, l: readonly Arvore[], semente = 7, centro: readonly [number, number] = [0, 0]): THREE.Group {
+export function arvores(lg: Lugar, l: readonly Arvore[], semente = 7, centro: readonly [number, number] = [0, 0], zBase = 0): THREE.Group {
   const g = new THREE.Group(), sorte = sorteio(semente), G = geos();
   const troncos: Inst[] = [], copas: Inst[] = [], cones: Inst[] = [], troncosL: Inst[] = [], copasL: Inst[] = [], conesL: Inst[] = [];
   const w: [number, number, number] = [0, 0, 0];
@@ -44,6 +45,8 @@ export function arvores(lg: Lugar, l: readonly Arvore[], semente = 7, centro: re
     lg.mundo(a.s, a.m, 0, w);
     const longe = Math.hypot(a.s - centro[0], a.m - centro[1]) > LONGE;
     const z0 = a.z ?? 0, rumo = sorte() * 6.28, cor = VERDES[Math.floor(sorte() * VERDES.length)];
+    // (o que segura o passo: o tronco; a moita, inteira)
+    leveCirculo(a.s, a.m, a.tipo === 'arbusto' ? a.h * 0.32 : 0.14 + a.h * 0.018, a.h, zBase + z0);
     if (a.tipo === 'arbusto') { (longe ? copasL : copas).push({ pos: [w[0], w[1], z0 + a.h * 0.35], rumo, esc: [a.h * 0.7, a.h * 0.6, a.h * 0.55], cor }); continue; }
     const ht = a.tipo === 'pinheiro' ? a.h * 0.22 : a.h * 0.42, rt = 0.12 + a.h * 0.018;
     (longe ? troncosL : troncos).push({ pos: [w[0], w[1], z0], rumo, esc: [rt, rt, ht + (a.tipo === 'copa' ? a.h * 0.15 : 0)], cor: TRONCO });

@@ -10,9 +10,11 @@ import type { Lugar } from '../lugar';
 import { type Cenario, RUA_M, VALE, ESTACAO_OUTRA, AERO, construcoes, sorteio, alturaVale, alturaMorro } from './planta';
 import { fosco, pintura, faixa, prisma, repetir, terreno, grade, type Inst } from './geo';
 import { linhaFerrea, catenaria, telegrafo, cerca, defensa, postesDeLuz, redeEletrica, asfalto, calcada, type Dormentes } from './vias';
+import { aero } from './aero';
+import { iniciarLeves, fecharLeves, leveCaixa, leveElipse } from './leves';
 import { arvores, bosque, alameda, retalhos, morros, type Arvore } from './natureza';
 import { construir } from './construcoes';
-import { estacao } from './estacao';
+import { estacao, estacaoMetro, estacaoAntiga } from './estacao';
 import { tuboPorDentro, morroEEmboque } from './tunel';
 import { carro, type TipoCarro } from '../modelos/estrada';
 import { aviaoHelice } from '../modelos/ar';
@@ -20,7 +22,11 @@ import { fundir, soltarPecas } from '../modelos/fundir';
 import { COR } from '../modelos/kit';
 import type { FonteSonora } from '../../../scene/tipos';
 
-export interface Mundo { grupo: THREE.Group; dormentes: Dormentes[]; relogio?: (d: Date) => void; cenario: Cenario; /** o morro do túnel (some quando você está dentro do tubo) */ morro?: THREE.Object3D }
+export interface Mundo {
+  grupo: THREE.Group; dormentes: Dormentes[]; relogio?: (d: Date) => void; cenario: Cenario;
+  /** o morro do túnel (some quando você está dentro do tubo) */ morro?: THREE.Object3D;
+  /** a luz de fora nas bocas do túnel (só aparece de dentro do tubo) */ boca?: THREE.Object3D;
+}
 
 const GRAMA = 0x5f7f40, BRITA = 0x8a7d68;
 const LAVOURAS = [0x8f9a4a, 0xa89a5a, 0x6d8a3e, 0x7f6a4c, 0xb3a35f, 0x5f8a45];
@@ -79,12 +85,14 @@ function estacionado(lg: Lugar, s: number, m: number, tipo: TipoCarro, cor: numb
   const p = carro(tipo, cor, []), malha = fundir(p.g);
   soltarPecas(p.g);
   const w = lg.mundo(s, m, 0); malha.position.set(w[0], w[1], 0); malha.rotation.z = lg.rumoVia(s) + (contraMao ? Math.PI : 0);
+  leveCaixa(s - 2.35, s + 2.35, m - 0.95, m + 0.95, 1.5);
   return malha;
 }
 
 export function montarMundo(c: ControlePassagem, brita: THREE.Texture | null): Mundo {
   const G = new THREE.Group(), dormentes: Dormentes[] = [];
   const lg = c.lugar(), via = c.via, cen = c.cenario(), reta = via.tipo === 'reta', Lv = via.comp;
+  iniciarLeves();
   const s0 = reta ? -Lv / 2 : -Lv / 2, s1 = Lv / 2, passo = reta ? 40 : 4;
   const sorte = sorteio(0x77 + cen.length * 131);
   const w = c.corpo.segmentos[0]?.largura ?? 2, mCh = c.traj.lateral + w / 2;
@@ -92,7 +100,7 @@ export function montarMundo(c: ControlePassagem, brita: THREE.Texture | null): M
   const zFio = alturaFio(c);
   const ferro = c.portador === 'trem' || c.portador === 'locomotiva';
   const rodov = (c.portador === 'carro' || c.portador === 'trator') && c.traj.altitude <= 2;
-  let relogio: Mundo['relogio'], morro: THREE.Object3D | undefined;
+  let relogio: Mundo['relogio'], morro: THREE.Object3D | undefined, boca: THREE.Object3D | undefined;
   const arv: Arvore[] = [];
   /** (s, m) livre de construções (com folga) */
   const cs = construcoes(cen, { tipo: via.tipo, comp: via.comp, R: via.R, ls: via.ls });
@@ -119,8 +127,8 @@ export function montarMundo(c: ControlePassagem, brita: THREE.Texture | null): M
   };
 
   // ---------------------------------------------------------------- o chão e o horizonte
-  // (no túnel, o que fica fora do tubo vai num grupo à parte: a cena o esconde quando você está lá dentro)
-  const F = cen === 'tunel' ? new THREE.Group() : G;
+  // (no túnel e no metrô, o que fica fora vai num grupo à parte: a cena o esconde quando você está lá dentro, ou sempre)
+  const F = cen === 'tunel' || cen === 'estacao-metro' ? new THREE.Group() : G;
   if (F !== G) { G.add(F); morro = F; }
   const corChao = cen === 'patio' ? GRAMA : cen === 'patio-ferro' ? 0x7f8a56 : GRAMA;
   const mRio = Math.max(7, mCh - 3);
@@ -130,10 +138,11 @@ export function montarMundo(c: ControlePassagem, brita: THREE.Texture | null): M
   // ---------------------------------------------------------------- a via que corre no lugar
   const lastroM = lastro(brita);
   const viasFerro: number[] = [];
-  if (ferro || ['tunel', 'estacao', 'ponte', 'corte'].includes(cen) && !rodov) {
+  if (ferro || ['tunel', 'estacao', 'estacao-metro', 'estacao-antiga', 'ponte', 'corte'].includes(cen) && !rodov) {
     viasFerro.push(0);
     if (cen === 'tunel' || (cen === 'ponte' && lg.segundaViaNaPonte)) viasFerro.push(-SEGUNDA_VIA);
-    if (cen === 'estacao') viasFerro.push(ESTACAO_OUTRA.via);
+    if (cen === 'estacao' || cen === 'estacao-antiga') viasFerro.push(ESTACAO_OUTRA.via);
+    if (cen === 'estacao-metro' && lg.est?.outra) viasFerro.push(lg.est.outra.via);
     if (cen === 'ferrovia' && c.portador === 'trem') viasFerro.push(-4.5);
     if (cen === 'patio-ferro') viasFerro.push(-5, -10, -15, -20);
     for (const mv of viasFerro) linhaFerrea(G, lg, s0, s1, passo, mv, lastroM, dormentes, 0, cen === 'patio-ferro' && mv !== 0 ? 70 : undefined);
@@ -145,7 +154,7 @@ export function montarMundo(c: ControlePassagem, brita: THREE.Texture | null): M
 
   // ---------------------------------------------------------------- os cenários
   if (cen === 'tunel') {
-    tuboPorDentro(G, lg, reta, zFio);
+    boca = tuboPorDentro(G, lg, reta, zFio).boca;
     if (reta && lg.tun) {
       morroEEmboque(F, lg);
       // árvores no alto do morro (na altura do terreno)
@@ -155,6 +164,19 @@ export function montarMundo(c: ControlePassagem, brita: THREE.Texture | null): M
     // fora do morro: o campo dos dois lados, com a catenária nos trechos de fora
     if (zFio != null && lg.tun) for (const [a, b] of [[s0, lg.tun.ta - 40], [lg.tun.tb + 40, s1]] as const) if (b > a) catenaria(F, lg, a, b, viasFerro, zFio, -7.0);
     matas(130, 3);
+  } else if (cen === 'estacao-metro') {
+    // embaixo da terra: só a caixa (o resto, em F, fica escondido)
+    G.add(estacaoMetro(lg, s0, s1).grupo);
+  } else if (cen === 'estacao-antiga') {
+    G.add(estacaoAntiga(lg).grupo);
+    G.add(construir(lg, cs, 37));
+    // o pátio de terra em volta, o telégrafo do outro lado, a cerca, os eucaliptos
+    G.add(retalhos(lg, [{ s0: -140, s1: 140, m0: -14, m1: -2.6, cor: 0x9a8a6a }, { s0: -80, s1: 80, m0: lg.bordaPlataforma + 6.2, m1: 30, cor: 0xa08f70 }], 1));
+    telegrafo(G, lg, s0, s1, -9, (s) => Math.abs(s) < 12);
+    cerca(G, lg, s0, s1, -16, 1.3, 3); cerca(G, lg, s0, -90, 30, 1.3, 3); cerca(G, lg, 90, s1, 30, 1.3, 3);
+    for (const sg of [-1, 1]) arv.push(...alameda(sorte, s0, s1, sg > 0 ? 40 : -22, 9, [18, 26], 'copa', livre(15)));
+    lavouras(60, 320);
+    matas(200, 5);
   } else if (cen === 'estacao') {
     const e = estacao(lg, zFio); G.add(e.grupo); relogio = e.relogio;
     G.add(construir(lg, cs, 29));
@@ -181,12 +203,12 @@ export function montarMundo(c: ControlePassagem, brita: THREE.Texture | null): M
       // a canaleta de drenagem no pé do talude e a cerca lá em cima
       G.add(faixa(lg, s0, s1, sp, sg * (CORTE.m0 - 0.9), sg * (CORTE.m0 - 0.2), 0, 0, pintura(0x9a978f, 1)));
       const gAlto = new THREE.Group(); gAlto.position.z = CORTE.alto; G.add(gAlto);
-      cerca(gAlto, lg, s0, s1, sg * (CORTE.m1 + 2.5), 1.3, 3, 0x8a7a62, 3);
+      cerca(gAlto, lg, s0, s1, sg * (CORTE.m1 + 2.5), 1.3, 3, 0x8a7a62, 3, false, undefined, CORTE.alto);
     }
     if (zFio != null) catenaria(G, lg, s0, s1, [0], zFio, -5.2, 60, (s) => !longe(s, 10));
     const alto: Arvore[] = [];
     for (const sg of [-1, 1]) alto.push(...bosque(sorte, s0, s1, sg * (CORTE.m1 + 5), sg * 300, 7, { copa: 3, pinheiro: 1 }, [7, 15]));
-    const ga = arvores(lg, alto, 31, [0, mCh]); ga.position.z = CORTE.alto; G.add(ga);
+    const ga = arvores(lg, alto, 31, [0, mCh], CORTE.alto); ga.position.z = CORTE.alto; G.add(ga);
     // moitas no talude, na altura dele
     for (const sg of [-1, 1]) for (const a of bosque(sorte, s0, s1, sg * (CORTE.m0 + 1.5), sg * (CORTE.m1 - 1), 14, { arbusto: 1 }, [0.9, 2.2])) if (Math.abs(a.s) < 700 || (Math.round(a.s) & 3) === 0) arv.push({ ...a, z: perfilCorte(a.m) - 0.5 });
   } else if (cen === 'ponte') {
@@ -224,7 +246,7 @@ export function montarMundo(c: ControlePassagem, brita: THREE.Texture | null): M
       redeEletrica(G, lg, s0, s1, -8, 45, (s) => !longe(s, 10));
     }
     const mc = fazenda ? 4.5 : Math.max(11, mCh + 2.5);
-    cerca(G, lg, s0, s1, mc, 1.3, 3.5, 0x8a6e4e, 3); cerca(G, lg, s0, s1, fazenda ? -4.5 : -9.5, 1.3, 3.5, 0x8a6e4e, 3);
+    cerca(G, lg, s0, s1, mc, 1.3, 3.5, 0x8a6e4e, 3, false, mc < mCh ? [-2.5, 2.5] : undefined); cerca(G, lg, s0, s1, fazenda ? -4.5 : -9.5, 1.3, 3.5, 0x8a6e4e, 3);
     lavouras(mc + 2, 340);
     G.add(construir(lg, cs));
     // o silo do lado do celeiro e os fardos na lavoura
@@ -237,14 +259,17 @@ export function montarMundo(c: ControlePassagem, brita: THREE.Texture | null): M
   } else if (cen === 'reta-arvores') {
     // a reta de Hunaudières: estrada de 9,5 m, guard-rail dos dois lados, alambrado do público, plátanos em fileira
     asfalto(G, lg, s0, s1, passo, -4.75, 4.75, { tracejado: [0], bordas: [-4.55, 4.55] });
-    defensa(G, lg, s0, s1, 6.2, 1); defensa(G, lg, s0, s1, -6.2, -1);
-    cerca(G, lg, s0, s1, Math.max(9, mCh - 1.2), 2.6, 3, 0x7d838a, 4, true);
+    // (o alambrado do público e o guard-rail de cá têm a porteira na frente de quem chega: dá para ir à pista)
+    defensa(G, lg, s0, s1, 6.2, 1, [-2.5, 2.5]); defensa(G, lg, s0, s1, -6.2, -1);
+    cerca(G, lg, s0, s1, Math.max(9, mCh - 1.2), 2.6, 3, 0x7d838a, 4, true, [-2.5, 2.5]);
     for (const m of [Math.max(20, mCh + 5), Math.max(27, mCh + 12), -14, -21]) arv.push(...alameda(sorte, s0, s1, m, 9, [15, 22], 'copa', (s, mm) => longeDasCasas(s, mm) && noMiolo(mm)));
     lavouras(Math.max(40, mCh + 25), 300);
     G.add(construir(lg, cs));
     matas(300, 4);
   } else if (cen === 'aerodromo') {
     aerodromo(G, lg, c, s0, s1, sorte, arv, cs);
+  } else if (cen.startsWith('aero-')) {
+    aero(G, lg, c, cen, s0, s1, sorte, arv, cs);
   } else if (cen === 'parque') {
     parque(G, lg, c, s0, s1, passo, sorte, arv, cs);
   } else if (cen === 'patio') {
@@ -262,7 +287,9 @@ export function montarMundo(c: ControlePassagem, brita: THREE.Texture | null): M
   }
   if (arv.length) F.add(arvores(lg, arv, 17, [0, mCh]));
   G.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.receiveShadow = true; });
-  return { grupo: G, dormentes, relogio, cenario: cen, morro };
+  // o que segura quem anda a pé (troncos, postes, cercas, carros e vagões parados, água) vai para o lugar
+  lg.definirLeves(fecharLeves());
+  return { grupo: G, dormentes, relogio, cenario: cen, morro, boca };
 }
 
 /** vagões de carga parados no pátio: fechado, tanque e gôndola, com os truques */
@@ -273,6 +300,7 @@ function vagoes(lg: Lugar, l: readonly { s: number; m: number; tipo: number }[])
     if (v.tipo === 1) tanques.push({ pos: P(0, 2.4), rumo: r, esc: [15, 1.5, 1.5], cor: 0x2b2e33 });
     else caixas.push({ pos: P(0, 1.2), rumo: r, esc: [15, 2.9, v.tipo === 0 ? 2.9 : 1.6], cor: v.tipo === 0 ? 0x8a3f2a : 0x5b5f63 });
     for (const d of [-5.5, 5.5]) truques.push({ pos: P(d, 0.75), rumo: r, esc: [2.6, 2.2, 0.6], cor: 0x2a2d31 });
+    leveCaixa(v.s - 7.5, v.s + 7.5, v.m - 1.5, v.m + 1.5, 4);
   }
   const G = new THREE.Group(), mat = new THREE.MeshLambertMaterial({ flatShading: true });
   const caixa = new THREE.BoxGeometry(1, 1, 1).translate(0, 0, 0.5);
@@ -325,7 +353,7 @@ function ponteEVale(G: THREE.Group, lg: Lugar, c: ControlePassagem, s0: number, 
   G.add(retalhos(lg, l, 1, PONTE.vale + 0.01));
   const margens: Arvore[] = [];
   for (const m of [-VALE.rio - VALE.larguraRio / 2 - 4, -VALE.rio + VALE.larguraRio / 2 + 4]) margens.push(...alameda(sorte, s0, s1, m, 11, [8, 14]));
-  const gm = arvores(lg, margens, 23, [0, c.traj.lateral]); gm.position.z = PONTE.vale; G.add(gm);
+  const gm = arvores(lg, margens, 23, [0, c.traj.lateral], PONTE.vale); gm.position.z = PONTE.vale; G.add(gm);
   for (const sg of [-1, 1]) arv.push(...bosque(sorte, s0, s1, sg * (VALE.borda + 5), sg * (VALE.borda + 260), 6, { copa: 3, pinheiro: 1 }, [7, 15]));
   void c;
 }
@@ -432,6 +460,7 @@ function parque(G: THREE.Group, lg: Lugar, c: ControlePassagem, s0: number, s1: 
   const lago = new THREE.Shape(), centro = lg.mundo(60, -38, 0);
   for (let i = 0; i <= 24; i++) { const a = (i / 24) * Math.PI * 2, r = 1 + 0.12 * Math.sin(3 * a + 1); const x = 42 * r * Math.cos(a), y = 17 * r * Math.sin(a); i ? lago.lineTo(x, y) : lago.moveTo(x, y); }
   const ml = new THREE.Mesh(new THREE.ShapeGeometry(lago), pintura(0x3d6f86, 2)); ml.position.set(centro[0], centro[1], 0); ml.rotation.z = lg.rumoVia(60); G.add(ml);
+  leveElipse(60, -38, 42 * 1.06, 17 * 1.06);
   const can: { s0: number; s1: number; m0: number; m1: number; cor: number }[] = [];
   for (let s = -300; s < 300; s += 55 + sorte() * 40) { const lado = sorte() < 0.5 ? 1 : -1; can.push({ s0: s, s1: s + 6 + sorte() * 6, m0: lado * 4, m1: lado * (6.5 + sorte() * 2), cor: [0xc0453a, 0xe2b33a, 0xd9d5cc, 0x9a5aa8][Math.floor(sorte() * 4)] }); }
   G.add(retalhos(lg, can, 2));
@@ -448,6 +477,8 @@ function rio(G: THREE.Group, lg: Lugar, c: ControlePassagem, s0: number, s1: num
   G.add(faixa(lg, s0, s1, passo, perto, perto + 1.6, zA - 0.1, 0.05, fosco(0x8a7656)), faixa(lg, s0, s1, passo, longe - 1.6, longe, 0.05, zA - 0.1, fosco(0x8a7656)));
   // trapiche de madeira: o deque até a água e as estacas
   const sT = 0, a = perto - 3.5, b = perto + 4;
+  // (a água segura o passo; o trapiche, não)
+  for (const [x0, x1, m1] of [[s0, sT - 3, perto], [sT + 3, s1, perto], [sT - 3, sT + 3, a]] as const) leveCaixa(x0, x1, longe, m1, 3, -1.5);
   G.add(prisma(lg, sT - 3, sT + 3, 1, [[a, 0.05], [a, 0.25], [b, 0.25], [b, 0.05]], fosco(0x8a6a48), true));
   const est: Inst[] = [];
   for (const ds of [-2.7, 2.7]) for (const m of [a + 0.2, (a + b) / 2, b - 0.2]) est.push({ pos: lg.mundo(sT + ds, m, -0.5), rumo: 0 });

@@ -4,8 +4,12 @@
 // Coordenadas da via, como em lugar.ts: `s` ao longo dela e `m` para o lado do ponto de chegada.
 
 /** o cenário em volta da via */
-export type Cenario = 'tunel' | 'estacao' | 'ponte' | 'corte' | 'ferrovia' | 'patio-ferro' | 'rua' | 'estrada-rural' | 'reta-arvores'
-  | 'aerodromo' | 'parque' | 'patio' | 'fazenda' | 'rio';
+export type Cenario = 'tunel' | 'estacao' | 'estacao-metro' | 'estacao-antiga' | 'ponte' | 'corte' | 'ferrovia' | 'patio-ferro' | 'rua' | 'estrada-rural' | 'reta-arvores'
+  | 'aerodromo' | 'aero-pista' | 'aero-cabeceira' | 'aero-patio' | 'aero-cerca' | 'aero-campo' | 'parque' | 'patio' | 'fazenda' | 'rio';
+
+/** os cenários de estação (a plataforma em que se pisa) e os de aeródromo */
+export const ehEstacao = (c: Cenario | null | undefined) => c === 'estacao' || c === 'estacao-metro' || c === 'estacao-antiga';
+export const ehAero = (c: Cenario | null | undefined) => !!c && (c === 'aerodromo' || c.startsWith('aero-'));
 
 export interface EscolhaCenario { ambiente: string; portador: string; motor: string; motorPreset: string | null; altitude: number }
 
@@ -15,10 +19,12 @@ export interface EscolhaCenario { ambiente: string; portador: string; motor: str
  * o aeródromo dos aviões, o parque do drone, o pátio do gerador, a ferrovia e o pátio de manobras, a fazenda, o rio).
  */
 export function qualCenario(e: EscolhaCenario): Cenario {
-  if (e.ambiente === 'tunel' || e.ambiente === 'estacao' || e.ambiente === 'ponte' || e.ambiente === 'corte') return e.ambiente;
   const p = e.portador, id = e.motorPreset ?? '';
+  // a estação: a de superfície (o galpão de aço), a do metrô (subterrânea) e a antiga do interior (a da Maria Fumaça)
+  if (e.ambiente === 'estacao') return p === 'locomotiva' && e.motor === 'vapor' ? 'estacao-antiga' : p === 'trem' && ['frotaa', 'metropolis'].includes(id) ? 'estacao-metro' : 'estacao';
+  if (e.ambiente === 'tunel' || e.ambiente === 'ponte' || e.ambiente === 'corte') return e.ambiente;
   if (p === 'drone') return 'parque';
-  if (p === 'helice' || p === 'aviao' || p === 'rotor' || e.altitude > 2) return 'aerodromo';
+  if (p === 'helice' || p === 'aviao' || p === 'rotor' || e.altitude > 2) return qualAero(p, id, e.altitude);
   if (p === 'trem') return 'ferrovia';
   if (p === 'locomotiva') return e.motor === 'diesel' ? 'patio-ferro' : 'ferrovia';
   if (p === 'gerador') return 'patio';
@@ -30,6 +36,24 @@ export function qualCenario(e: EscolhaCenario): Cenario {
     return 'rua';
   }
   return 'ferrovia';
+}
+
+/**
+ * O lugar de onde se vê cada avião passar (você fica sempre no mesmo ponto debaixo da trajetória: o que muda é o
+ * aeródromo em volta): na beira da pista de um festival aéreo (o Corsair, o Yak-52), na cabeceira de um aeroporto
+ * regional com o turboélice decolando por cima (o ATR), no gramado do pátio do aeroclube (o Cessna), na cerca de uma
+ * base (o P-47, o caça), no campo, longe de tudo (o jato a 1 500 m, o VANT). O resto, o aeródromo genérico.
+ */
+function qualAero(p: string, id: string, alt: number): Cenario {
+  if (p === 'aviao') return alt > 600 ? 'aero-campo' : 'aero-cerca';
+  if (p === 'helice') {
+    if (id === 'r2800' || id === 'm14p') return 'aero-pista';
+    if (id === 'regional') return 'aero-cabeceira';
+    if (id === 'c172') return 'aero-patio';
+    if (id === 'r2800turbo') return 'aero-cerca';
+    if (id === 'ar741') return 'aero-campo';
+  }
+  return 'aerodromo';
 }
 
 // ------------------------------------------------------------------ rua
@@ -50,6 +74,19 @@ export const RUA_M = (() => {
 /** a segunda via da estação e a plataforma do outro lado, debaixo da mesma cobertura (o galpão cobre as duas) */
 export const ESTACAO_OUTRA = { via: -4.6, plataforma: [-14.6, -6.4] as const, muro: -15.2, muroAlto: 2.6, telhado: -15.6 } as const;
 
+/**
+ * As medidas de cada estação (em m; a borda da plataforma fica a 0,35 m da lateral do trem, em lugar.ts): meia extensão
+ * da plataforma ao longo da via, largura dela e o fundo até a parede (ou o prédio), a altura do teto (a cobertura, o
+ * forro do metrô, a gare), a plataforma do outro lado (ou nenhuma) e, no metrô, a caixa inteira: as paredes de lá e de
+ * cá e o teto valem para a via toda (lá embaixo não há céu)
+ */
+export interface MedidasEstacao { meio: number; /** meia extensão da cobertura */ cobre: number; largura: number; fundo: number; teto: number; outra: { via: number; plataforma: readonly [number, number]; telhado: number } | null; caixa: { longe: number; perto: number; teto: number } | null }
+export function medidasEstacao(c: Cenario | null | undefined, borda: number): MedidasEstacao {
+  if (c === 'estacao-metro') return { meio: 80, cobre: 80, largura: 5.2, fundo: 0.4, teto: 5.4, outra: { via: -4.4, plataforma: [-10.0, -6.2], telhado: -10.6 }, caixa: { longe: -10.6, perto: borda + 5.6, teto: 5.4 } };
+  if (c === 'estacao-antiga') return { meio: 55, cobre: 30, largura: 5.5, fundo: 0.5, teto: 4.1, outra: null, caixa: null };
+  return { meio: 160, cobre: 160, largura: 8, fundo: 2, teto: 7, outra: { via: ESTACAO_OUTRA.via, plataforma: ESTACAO_OUTRA.plataforma, telhado: ESTACAO_OUTRA.telhado }, caixa: null };
+}
+
 // ------------------------------------------------------------------ aeródromo
 
 /**
@@ -57,6 +94,16 @@ export const ESTACAO_OUTRA = { via: -4.6, plataforma: [-14.6, -6.4] as const, mu
  * avião a 70 m, depois o taxiway, o pátio de concreto e a fileira de hangares, o escritório e a torre.
  */
 export const AERO = { pista: -70, meiaPista: 22.5, cerca: -32, taxi: [-127, -112] as const, patio: [-203, -135] as const, hangar: -205 } as const;
+/**
+ * As variantes (m: para o seu lado; s: ao longo da trajetória, o avião vem de s negativo): a beira da pista (a pista de cá
+ * da trajetória, o alambrado do público atrás de você), a cabeceira (a pista no eixo, à sua frente, acabando em `fim`),
+ * o pátio do aeroclube (o concreto até 4 m de você, os hangares a 66 m), a cerca da base (a tela a 1 m da trajetória, a
+ * pista a 85 m lá dentro)
+ */
+export const AERO_PISTA = { pista: -24, meia: 22.5, publico: 5.5 } as const;
+export const AERO_CABECEIRA = { meia: 22.5, fim: -210, cerca: -24, localizador: -105 } as const;
+export const AERO_PATIO = { patio: [-62, -4] as const, hangar: -66, pista: -150 } as const;
+export const AERO_CERCA = { cerca: -1.0, pista: -85 } as const;
 
 // ------------------------------------------------------------------ túnel: o morro e o emboque
 
@@ -177,6 +224,37 @@ export function construcoes(c: Cenario, v: ViaPlanta): Construcao[] {
     for (const [s, l] of [[-170, 46], [-112, 46], [-54, 46]] as const) out.push(C({ s, m: A.hangar - 20, l, p: 40, h: 11, tipo: 'hangar', telhado: 'arco', cor: 0xb9bcc0, corTelhado: 0x8f949a, frente: -1 }));
     out.push(C({ s: 40, m: A.hangar - 7, l: 26, p: 14, h: 7, tipo: 'escritorio', telhado: 'plano', cor: 0xe6e2d8, andares: 2, frente: -1 }));
     out.push(C({ s: 78, m: A.hangar - 3, l: 6, p: 6, h: 22, tipo: 'torre', telhado: 'plano', cor: 0xe6e2d8, frente: -1 }));
+  } else if (c === 'aero-pista') {
+    // do outro lado da pista: os hangares e a torre; atrás do público, as tendas do festival
+    for (const [s, l] of [[-420, 46], [-360, 46], [-300, 46]] as const) out.push(C({ s, m: AERO_PISTA.pista - 150, l, p: 40, h: 11, tipo: 'hangar', telhado: 'arco', cor: 0xb9bcc0, corTelhado: 0x8f949a, frente: -1 }));
+    out.push(C({ s: -180, m: AERO_PISTA.pista - 120, l: 6, p: 6, h: 22, tipo: 'torre', telhado: 'plano', cor: 0xe6e2d8, frente: -1 }));
+    for (let s = -70; s <= 70; s += 14) if (Math.abs(s) > 6) out.push(C({ s, m: 17, l: 8, p: 6, h: 2.6, tipo: 'casa', telhado: 'duas-aguas', cor: s % 28 === 0 ? 0xeef0f2 : 0xe2c23a, corTelhado: s % 28 === 0 ? 0xeef0f2 : 0xd94a3a, frente: 1 }));
+  } else if (c === 'aero-cabeceira') {
+    // o aeroporto lá no fim da pista: o terminal, os hangares e a torre; o abrigo dos equipamentos do localizador
+    out.push(C({ s: -1250, m: -160, l: 90, p: 30, h: 12, tipo: 'escritorio', telhado: 'plano', cor: 0xe6e2d8, andares: 3, frente: -1 }));
+    for (const s of [-1050, -980]) out.push(C({ s, m: -150, l: 52, p: 44, h: 13, tipo: 'hangar', telhado: 'arco', cor: 0xb9bcc0, corTelhado: 0x8f949a, frente: -1 }));
+    out.push(C({ s: -1150, m: -120, l: 7, p: 7, h: 28, tipo: 'torre', telhado: 'plano', cor: 0xe6e2d8, frente: -1 }));
+    out.push(C({ s: AERO_CABECEIRA.localizador + 8, m: -28, l: 4, p: 3, h: 2.6, tipo: 'escritorio', telhado: 'plano', cor: 0xe6e2d8, frente: 1 }));
+  } else if (c === 'aero-patio') {
+    for (const [s, l] of [[-75, 30], [-40, 30], [-5, 30]] as const) out.push(C({ s, m: AERO_PATIO.hangar - 12, l, p: 24, h: 7, tipo: 'hangar', telhado: 'arco', cor: [0xb9bcc0, 0x9aa7b4, 0xc9c5b8][Math.abs(s) % 3], corTelhado: 0x8f949a, frente: -1 }));
+    out.push(C({ s: 34, m: AERO_PATIO.hangar - 6, l: 16, p: 10, h: 3.4, tipo: 'escritorio', telhado: 'plano', cor: 0xeee6d2, frente: -1 }));
+    out.push(C({ s: 50, m: AERO_PATIO.hangar - 4, l: 4, p: 4, h: 12, tipo: 'torre', telhado: 'plano', cor: 0xeee6d2, frente: -1 }));
+  } else if (c === 'aero-cerca') {
+    for (const [s, l] of [[-380, 60], [-310, 60]] as const) out.push(C({ s, m: AERO_CERCA.pista - 120, l, p: 50, h: 14, tipo: 'hangar', telhado: 'arco', cor: 0x8f9a86, corTelhado: 0x6b7560, frente: -1 }));
+    out.push(C({ s: -200, m: AERO_CERCA.pista - 95, l: 7, p: 7, h: 20, tipo: 'torre', telhado: 'plano', cor: 0xd9d5c9, frente: -1 }));
+    out.push(C({ s: 38, m: 7, l: 4, p: 3.5, h: 2.6, tipo: 'escritorio', telhado: 'plano', cor: 0xd9d5c9, frente: 1 }));
+  } else if (c === 'aero-campo') {
+    // a vila longe, do seu lado, e um sítio do outro
+    const [a, b] = trecho(v, 900);
+    out.push(...fileira(sorte, v, a, b, 160, 1, 0.1).filter((k) => Math.abs(k.s) < 500));
+    out.push(C({ s: -120, m: -90, l: 20, p: 12, h: 6, tipo: 'celeiro', cor: 0x9a3a2a, corTelhado: 0x5b5f63, frente: -1 }));
+    out.push(C({ s: -150, m: -82, l: 11, p: 9, h: 3.2, tipo: 'casa', cor: 0xf0ece2, corTelhado: 0xa4553a, frente: -1 }));
+  } else if (c === 'estacao-antiga') {
+    // o prédio da estação atrás da plataforma, o armazém, e a vila do outro lado da via
+    out.push(C({ s: -6, m: 1.9 + 6.0 + 5, l: 22, p: 10, h: 4.6, tipo: 'casa', telhado: 'duas-aguas', cor: 0xe8d48a, corTelhado: 0xa4553a, frente: 1 }));
+    out.push(C({ s: 34, m: 1.9 + 6.0 + 6, l: 16, p: 12, h: 5.2, tipo: 'galpao', telhado: 'duas-aguas', cor: 0xb9876a, corTelhado: 0x8f4a33, frente: 1 }));
+    const [a, b] = trecho(v, 300);
+    out.push(...fileira(sorte, v, a, b, 26, -1, 0.05).filter((k) => v.tipo === 'reta' || Math.abs(k.m) + k.p / 2 < v.R - 6));
   } else if (c === 'patio') {
     out.push(C({ s: -6, m: -26, l: 30, p: 16, h: 8, tipo: 'galpao', cor: 0xb9bcc0, corTelhado: 0x6b6e73, frente: -1 }));
     out.push(C({ s: -34, m: 22, l: 10, p: 7, h: 3.2, tipo: 'escritorio', telhado: 'plano', cor: 0xe6dcc0, frente: 1 }));

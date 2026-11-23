@@ -26,11 +26,12 @@ import type { Via } from '../../scene/trajetoria';
 import { PontoVia } from '../../scene/trajetoria';
 import { secaoTunel } from '../../scene/ambientes';
 import type { Tunel } from '../../scene/tipos';
-import { type Cenario, type Obstaculo, RUA, RUA_M, ESTACAO_OUTRA, alturaMorro, alturaVale, construcoes, obstaculos } from './mundo/planta';
+import { type Cenario, type Obstaculo, type MedidasEstacao, RUA, RUA_M, alturaMorro, alturaVale, construcoes, obstaculos, medidasEstacao } from './mundo/planta';
 
 /** m, altura da plataforma da estação (a borda junto do piso do trem) */
 export const PLATAFORMA = 0.9;
-/** estação: extensão ao longo da via (m, de −a a +a), largura da plataforma, altura da cobertura */
+/** estação de superfície: extensão ao longo da via (m, de −a a +a), largura da plataforma, altura da cobertura (as
+ * outras estações, o metrô e a antiga, em medidasEstacao de planta.ts) */
 export const ESTACAO = { meio: 160, largura: 8, folga: 0.35, teto: 7, fundo: 2 } as const;
 /**
  * túnel: a passarela de serviço (altura acima do piso da via; a borda do lado da via, que chega até 0,6 m antes do
@@ -69,10 +70,13 @@ export class Lugar {
   readonly cenario: Cenario | null;
   /** as casas, galpões e hangares do cenário (caixas em s, m) */
   readonly obstaculos: Obstaculo[];
+  /** a estação (plataforma, teto, a outra plataforma; no metrô, a caixa subterrânea), se o lugar é uma */
+  readonly est: MedidasEstacao | null;
   constructor(p: ParamsLugar) {
     this.amb = p.ambiente; this.via = p.via; this.cenario = p.cenario ?? null;
     this.obstaculos = this.cenario ? obstaculos(construcoes(this.cenario, { tipo: p.via.tipo, comp: p.via.comp, R: p.via.R, ls: p.via.ls })) : [];
     this.borda = p.larguraCorpo / 2 + ESTACAO.folga;
+    this.est = this.amb === 'estacao' ? medidasEstacao(this.cenario, this.borda) : null;
     if (p.tunel) {
       const sec = secaoTunel(p.tunel.area), mPerto = -sec.paredeOuvinte;
       // (paredeOuvinte é negativa na normal da via do lado do ouvinte: em m ela fica positiva)
@@ -92,7 +96,7 @@ export class Lugar {
   paraFicar(m: number) {
     if (this.tun) return Math.max(m, this.tun.borda + 0.5);
     if (this.amb === 'ponte') return Math.max(m, this.passeio + 0.6);
-    if (this.amb === 'estacao') return Math.max(m, this.borda + 0.8);
+    if (this.est) return Math.max(m, this.borda + 0.8);
     return m;
   }
 
@@ -155,7 +159,8 @@ export class Lugar {
   }
   private chaoSM(s: number, m: number, zRef = 0): number {
     if (this.amb === 'corte') { const a = Math.abs(m); return a <= CORTE.m0 ? 0 : a >= CORTE.m1 ? CORTE.alto : (a - CORTE.m0) * (CORTE.alto / (CORTE.m1 - CORTE.m0)); }
-    if (this.amb === 'estacao' && this.noTrecho(s, -ESTACAO.meio, ESTACAO.meio) && ((m >= this.borda && m <= this.borda + ESTACAO.largura + ESTACAO.fundo) || (m >= ESTACAO_OUTRA.plataforma[0] && m <= ESTACAO_OUTRA.plataforma[1]))) return PLATAFORMA;
+    const e = this.est;
+    if (e && this.noTrecho(s, -e.meio, e.meio) && ((m >= this.borda && m <= this.borda + e.largura + e.fundo) || (!!e.outra && m >= e.outra.plataforma[0] && m <= e.outra.plataforma[1]))) return PLATAFORMA;
     if (this.amb === 'ponte') return m >= this.passeio && m <= PONTE.perto ? PONTE.meioFio : m >= PONTE.longe && m <= PONTE.perto ? 0 : alturaVale(m, PONTE.vale);
     const t = this.tun;
     if (t) {
@@ -184,18 +189,23 @@ export class Lugar {
     let z = nova[2];
     // ponte: a pé não se sai do tabuleiro (guarda-corpo); voando, sim
     if (this.amb === 'ponte' && !voo) m = Math.max(PONTE.longe + FOLGA, Math.min(PONTE.perto - FOLGA, m));
-    // estação: a parede do fundo e a cobertura; por baixo da cobertura, voando, até o teto
-    if (this.amb === 'estacao') {
-      const fundo = this.borda + ESTACAO.largura + ESTACAO.fundo;
-      const dentroA = this.noTrecho(a.s, -ESTACAO.meio, ESTACAO.meio), dentroB = this.noTrecho(s, -ESTACAO.meio, ESTACAO.meio);
+    // estação: a parede do fundo e a cobertura; por baixo da cobertura, voando, até o teto. No metrô, a caixa subterrânea
+    // inteira: as duas paredes e o forro ao longo da via toda
+    const e = this.est;
+    if (e?.caixa) {
+      m = Math.max(e.caixa.longe + FOLGA, Math.min(e.caixa.perto - FOLGA, m));
+      z = Math.min(z, e.caixa.teto - FOLGA);
+    } else if (e) {
+      const fundo = this.borda + e.largura + e.fundo, T = e.teto, beira = e.outra ? e.outra.telhado : this.borda - 0.6;
+      const dentroA = this.noTrecho(a.s, -e.meio, e.meio), dentroB = this.noTrecho(s, -e.meio, e.meio);
       if (dentroB || dentroA) {
-        const sobA = a.m < fundo && ant[2] < ESTACAO.teto;
+        const sobA = a.m < fundo && ant[2] < T, cob = this.noTrecho(s, -e.cobre, e.cobre) || this.noTrecho(a.s, -e.cobre, e.cobre);
         // atravessar a parede do fundo
-        if ((a.m < fundo) !== (m < fundo) && (z < ESTACAO.teto + 0.5 || ant[2] < ESTACAO.teto + 0.5)) m = a.m < fundo ? fundo - FOLGA : fundo + FOLGA;
+        if ((a.m < fundo) !== (m < fundo) && (z < T + 0.5 || ant[2] < T + 0.5)) m = a.m < fundo ? fundo - FOLGA : fundo + FOLGA;
         // atravessar a cobertura (de cima para baixo ou de baixo para cima)
-        if (m < fundo && m > ESTACAO_OUTRA.telhado) {
-          if (sobA && z > ESTACAO.teto - FOLGA) z = ESTACAO.teto - FOLGA;
-          else if (!sobA && ant[2] >= ESTACAO.teto && z < ESTACAO.teto + 0.4) z = ESTACAO.teto + 0.4;
+        if (cob && m < fundo && m > beira) {
+          if (sobA && z > T - FOLGA) z = T - FOLGA;
+          else if (!sobA && ant[2] >= T && z < T + 0.4) z = T + 0.4;
         }
       }
     }
@@ -229,6 +239,8 @@ export class Lugar {
       if (a.s < o.s0 - FOLGA * 0.5) s = o.s0 - FOLGA; else if (a.s > o.s1 + FOLGA * 0.5) s = o.s1 + FOLGA;
       else if (a.m < o.m0) m = o.m0 - FOLGA; else m = o.m1 + FOLGA;
     }
+    // o resto que segura quem anda a pé (voando, nada disso segura): troncos, postes, carros e vagões parados, cercas, água
+    if (!voo && this.leves) [s, m] = this.desviarLeves(a.s, a.m, s, m, ant[2] - olho);
     // o chão: a pé, a altura é a do chão onde pisa; voando, não desce abaixo dele. Um degrau de mais de 1 m (a testa do
     // emboque, a ala, a parede de uma casa) não se sobe andando: o passo volta
     let ch = this.chaoSM(s, m, ant[2]);
@@ -238,4 +250,63 @@ export class Lugar {
     else z = Math.max(ch + 0.3, Math.min(600, z));
     this.mundo(s, m, z, nova as [number, number, number]);
   }
+
+  // ------------------------------------------------------------------ o que segura o passo a pé, além das construções
+  private leves: { circulos: Map<number, Leves['circulos']>; caixas: Map<number, Leves['caixas']>; linhas: Leves['linhas']; travessas: Leves['travessas']; elipses: Leves['elipses'] } | null = null;
+  /**
+   * Os obstáculos leves do cenário (mundo/ desenha e entrega: as árvores, os postes, os carros e vagões parados, as
+   * cercas, a água), guardados em faixas de 20 m ao longo da via. Sem a cena 3D, nenhum: só as construções seguram.
+   */
+  definirLeves(l: Leves) {
+    const fx = (s: number) => Math.floor(s / 20), circulos = new Map<number, Leves['circulos']>(), caixas = new Map<number, Leves['caixas']>();
+    const por = <T>(mapa: Map<number, T[]>, k: number, o: T) => { let v = mapa.get(k); if (!v) mapa.set(k, (v = [])); v.push(o); };
+    for (const o of l.circulos) if (Math.abs(o.m) < LIMITE_LATERAL + 10) por(circulos, fx(o.s), o);
+    for (const o of l.caixas) for (let k = fx(o.s0 - 1); k <= fx(o.s1 + 1); k++) por(caixas, k, o);
+    this.leves = { circulos, caixas, linhas: l.linhas, travessas: l.travessas, elipses: l.elipses };
+  }
+  /** quantos obstáculos leves o lugar tem (o teste do navegador confere) */
+  get nLeves() { const l = this.leves; if (!l) return 0; let n = l.linhas.length + l.travessas.length + l.elipses.length; for (const v of l.circulos.values()) n += v.length; for (const v of l.caixas.values()) n += v.length; return n; }
+  /** o passo de (as, am) para (s, m), desviado dos obstáculos leves; `pe`: a altura dos pés */
+  private desviarLeves(as: number, am: number, s: number, m: number, pe: number): [number, number] {
+    const l = this.leves!, F = 0.22, alcance = (z0: number, h: number) => pe > z0 - 1.2 && pe < z0 + h;
+    const k = Math.floor(s / 20);
+    for (let kk = k - 1; kk <= k + 1; kk++) {
+      for (const o of l.circulos.get(kk) ?? []) {
+        if (!alcance(o.z0, o.h)) continue;
+        const ds = s - o.s, dm = m - o.m, d = Math.hypot(ds, dm), r = o.r + F;
+        if (d < r) { const ux = d > 1e-6 ? ds / d : as - o.s || 1, uy = d > 1e-6 ? dm / d : am - o.m; const n = Math.hypot(ux, uy) || 1; s = o.s + (ux / n) * r; m = o.m + (uy / n) * r; }
+      }
+      for (const o of l.caixas.get(kk) ?? []) {
+        if (!alcance(o.z0, o.h) || s < o.s0 - F || s > o.s1 + F || m < o.m0 - F || m > o.m1 + F) continue;
+        if (as < o.s0 - F * 0.5) s = o.s0 - F; else if (as > o.s1 + F * 0.5) s = o.s1 + F;
+        else if (am < o.m0) m = o.m0 - F; else m = o.m1 + F;
+      }
+    }
+    // cercas ao longo da via (não se cruza a linha delas, a não ser pelo vão) e atravessadas
+    for (const o of l.linhas) {
+      if (!alcance(o.z0, o.h) || s < o.s0 || s > o.s1 || (o.vao && s > o.vao[0] && s < o.vao[1])) continue;
+      if ((am - o.m) * (m - o.m) <= 0 || Math.abs(m - o.m) < F) m = am >= o.m ? o.m + F : o.m - F;
+    }
+    for (const o of l.travessas) {
+      if (!alcance(o.z0, o.h) || m < o.m0 || m > o.m1) continue;
+      if ((as - o.s) * (s - o.s) <= 0 || Math.abs(s - o.s) < F) s = as >= o.s ? o.s + F : o.s - F;
+    }
+    // a água: elipses (o lago), em (s, m)
+    for (const o of l.elipses) {
+      const u = (s - o.s) / (o.rs + F), v = (m - o.m) / (o.rm + F), d = Math.hypot(u, v);
+      if (d < 1 && d > 1e-6) { s = o.s + (u / d) * (o.rs + F); m = o.m + (v / d) * (o.rm + F); }
+    }
+    return [s, m];
+  }
 }
+
+/** obstáculos leves em (s, m): círculos (troncos, postes), caixas (carros, vagões, água), cercas ao longo da via (com o
+ * vão da porteira) e atravessadas, elipses (o lago); `z0` e `h`: de que altura a que altura seguram */
+export interface Leves {
+  circulos: { s: number; m: number; r: number; z0: number; h: number }[];
+  caixas: { s0: number; s1: number; m0: number; m1: number; z0: number; h: number }[];
+  linhas: { s0: number; s1: number; m: number; z0: number; h: number; vao?: [number, number] }[];
+  travessas: { s: number; m0: number; m1: number; z0: number; h: number }[];
+  elipses: { s: number; m: number; rs: number; rm: number }[];
+}
+export const levesVazios = (): Leves => ({ circulos: [], caixas: [], linhas: [], travessas: [], elipses: [] });
