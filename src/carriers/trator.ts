@@ -43,19 +43,23 @@ export class Trator extends PortadorComMotor {
   carga() { return this.marcha > 0 ? this.cargaT : null; }
   get vapor(): VaporDSP | null { return (this.motor as unknown as VaporDSP) ?? null; }
   acoplar(m: Motor | null) { super.acoplar(m); this.aplicarMarcha(); }
-  private aplicarMarcha() {
+  /** `de`: a marcha de antes. Saindo do N (a manivela girando em lenta no governador) a embreagem engata com o momento
+   *  angular conservado (`VaporDSP.engatar`); o motor desliga o governador ao receber a carga */
+  private aplicarMarcha(de = this.marcha) {
     const m = this.vapor; if (!m) return;
+    if (this.marcha > 0 && de === 0) { m.engatar(this.cargaT, this.cfg.reducoes[this.marcha - 1], this.cinematica.v / (this.cfg.dRoda / 2)); return; }
     if (this.marcha > 0) m.definirReducao(this.cfg.reducoes[this.marcha - 1]);
     m.acoplar(this.carga());
   }
   comandar(c: ComandoPortador & Partial<ComandoVapor> & { rampa?: number }) {
     super.comandar(c);
-    if (typeof c.marcha === 'number' && c.marcha !== this.marcha) { this.marcha = Math.max(0, Math.min(2, c.marcha | 0)); this.aplicarMarcha(); }
+    if (typeof c.marcha === 'number' && c.marcha !== this.marcha) { const de = this.marcha; this.marcha = Math.max(0, Math.min(2, c.marcha | 0)); this.aplicarMarcha(de); }
     if (c.rampa != null) this.cargaT.rampa = c.rampa;
     const m = this.vapor;
     if (m) {
       const vc: any = { acelerador: 0, ignicao: c.ignicao !== false, partida: false };
-      for (const k of ['regulador', 'cutoff', 'apito', 'fogo', 'injetor', 'torneiras', 'freio', 'mixAr', 'mixMec']) if ((c as any)[k] !== undefined) vc[k] = (c as any)[k];
+      // (`trilho`: a estrada seca ou molhada; a aderência é a da roda de ferro, constantes.ts → ADERENCIA)
+      for (const k of ['regulador', 'cutoff', 'apito', 'fogo', 'injetor', 'torneiras', 'freio', 'trilho', 'mixAr', 'mixMec']) if ((c as any)[k] !== undefined) vc[k] = (c as any)[k];
       if (c.regulador === undefined && c.pedal !== undefined && (c as any).cutoff === undefined) vc.regulador = c.pedal;
       m.comandar(vc);
     }

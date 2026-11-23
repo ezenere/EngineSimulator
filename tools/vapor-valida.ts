@@ -13,7 +13,7 @@
 // (base, base+1, base+2; AUDITORIA T-VAP-01). A CPU saiu para `npm run cpu:vapor` (tools/vapor-cpu.ts).
 //
 //   npx tsx tools/vapor-valida.ts [grupos...] [--j 6] [--semente N] [--atualizar[=nome exato]]
-//   grupos: cilindro rede taxa forma bandas caldeira apito sino geometrias patinagem composicao estacionarios niveis
+//   grupos: cilindro rede taxa forma bandas caldeira apito sino geometrias patinagem composicao estacionarios niveis conducao
 // Sai ≠ 0 se houver falha (os desvios do retrato aparecem como "desv", com o teto).
 import os from 'node:os';
 import path from 'node:path';
@@ -742,11 +742,155 @@ async function grupo(nome: string): Promise<Linha[]> {
     add('nível por chuff na arrancada (corte 80%, 1,5/s) contra a referência', '+6 ± 3 dB', arr.txt + ' dB', Math.abs(arr.m - 6) <= 3, arr.m, 'dB');
     add('nível por chuff em cruzeiro (corte 25%, 15/s) contra a referência', '−4 ± 3 dB', cru.txt + ' dB', Math.abs(cru.m + 4) <= 3, cru.m, 'dB');
   }
+
+  if (nome === 'conducao') {
+    // Os achados da condução pela tela (TECNICO.md, Vapor → "Página e condução"), pelo portador de uso real, como a
+    // página os dirige: o trator preso parado, o governador do trator depois do N, o apito do Corliss pelo portador
+    // gerador, a aderência pela rodagem (o Stanley e o trator) e a demonstração "Subida forte".
+    const { montarPortadorVapor, configPortadorVapor } = await import('../src/carriers/portadores-vapor');
+    const { configTrator } = await import('../src/carriers/trator');
+    const { configCarroDireto } = await import('../src/carriers/carro-direto');
+    const { configLocoVapor } = await import('../src/carriers/locomotiva-vapor');
+    const { CorteAutomatico, reversaoDe, SUBIDA_FORTE } = await import('../src/pages/vapor/maquinista');
+    const B = 128;
+    /** portador de uso real com o motor calibrado (a página) */
+    const montar = (id: string, tipo: string, conf: any) => {
+      const m: any = new X.MotorVapor(SR); m.configurar(X.cfg(id), SR);
+      const p: any = montarPortadorVapor(tipo, conf, m, SR)!;
+      semear(p);
+      return { m, p, can: p.fontes().map(() => new Float32Array(B)) as Float32Array[], ids: p.fontes().map((f: any) => f.id) as string[] };
+    };
+    const cmd = (p: any, c: any) => p.comandar({ pedal: 0, ignicao: true, fogo: 'auto', ...c });
+
+    // ---- 1. trator parado com o regulador todo aberto, a manivela em 24 ângulos, reversão toda à frente e toda à ré.
+    // "Preso": com esforço na manivela (fora dos pontos mortos, onde nenhuma ponta admite vapor) e menos de 5 cm em 2 s.
+    // Antes a roda e o veículo entravam num ciclo de duas amostras (patina, readere, patina) com o veículo a ±2,5·10⁻⁵ rad/s
+    const L4 = 1 / 34; // (LAMBDA4 de dsp.ts: a biela de 8,5 manivelas)
+    let presos = 0, comEsforco = 0, trocasMax = 0; const quais: string[] = [];
+    for (const rev of [1, -1]) for (let g = 0; g < 360; g += 15) {
+      const { m, p, can } = montar('aveling', 'trator', configTrator(X.presetVapor('aveling')!));
+      // (a manivela levada à mão até o ângulo: o volume de cada ponta acompanha)
+      m.thM[0] = (g * Math.PI) / 180;
+      for (let e = 0; e < m.nE; e++) { let a = m.thM[0] + m.ePhi[e]; a -= TAU * Math.floor(a / TAU); const s = (e & 1) === 0 ? 1 : -1; m.eV[e] = m.eVcl[e] + m.eVs[e] * (0.5 * (1 - Math.cos(a)) + s * L4 * Math.sin(a) ** 2); }
+      cmd(p, { marcha: 1, regulador: 1, cutoff: rev });
+      const s0 = p.cinematica.s; let trocas = 0, ant = 0, tqMax = 0;
+      // (o ramo da patinagem amostra a amostra: o tap do motor)
+      m.tap = (d: any) => { if (d.patM[0] !== ant) { trocas++; ant = d.patM[0]; } };
+      for (let i = 0; i < 2 * SR; i += B) {
+        p.processar(can, B, 1 / SR);
+        if (i > SR / 2) tqMax = Math.max(tqMax, Math.abs(m.tqS));
+      }
+      const ds = Math.abs(p.cinematica.s - s0);
+      if (tqMax > 3000) { comEsforco++; if (ds < 0.05) { presos++; quais.push(`${rev > 0 ? 'frente' : 'ré'} ${g}°`); } }
+      trocasMax = Math.max(trocasMax, trocas / 2);
+    }
+    add('trator parado (1ª, regulador todo aberto, 24 ângulos × frente e ré): presos com esforço na manivela', '0', `${presos} de ${comEsforco}${quais.length ? ` (${quais.slice(0, 6).join(', ')}${quais.length > 6 ? '…' : ''})` : ''}`, presos === 0, presos, '');
+    add('trator parado: trocas entre aderir e patinar (máximo por segundo)', '≤ 2/s', f1(trocasMax, 0) + '/s', trocasMax <= 2, trocasMax, '/s');
+
+    // ---- 2. trator: 1ª → N (o governador de esferas segura a lenta) → 1ª. Engatado, o regulador é o do dono de novo:
+    // fechado, o trator para; a 60 %, anda acima da lenta do governador (75 rpm na manivela: 1,9 km/h em 1ª)
+    {
+      const { m, p, can } = montar('aveling', 'trator', configTrator(X.presetVapor('aveling')!));
+      const rodar = (s: number) => { for (let i = 0; i < s * SR; i += B) p.processar(can, B, 1 / SR); };
+      cmd(p, { marcha: 1, regulador: 0, cutoff: reversaoDe(0.6, 1) }); rodar(1);
+      cmd(p, { marcha: 0, regulador: 0 }); rodar(6);
+      const rpmN = (Math.abs(m.wM[0]) * m.reducao * 60) / TAU;
+      cmd(p, { marcha: 1, regulador: 0 }); rodar(10);
+      const tl = m.telemetria(), vFech = Math.abs(p.cinematica.v) * 3.6;
+      add('trator N → 1ª com o regulador fechado: o governador sai e o trator para em 10 s', 'governador desligado, regulador ≤ 5 %, ≤ 0,3 km/h', `lenta no N ${f1(rpmN, 0)} rpm; depois: governador ${m.govLigado ? 'LIGADO' : 'desligado'}, regulador ${f1(100 * (tl.regulador as number), 0)} %, ${f1(vFech, 2)} km/h`, !m.govLigado && (tl.regulador as number) <= 0.05 && vFech <= 0.3, vFech, 'km/h');
+      // (a reversão pelo corte automático da página, que tira a manivela de um cilindro só do ponto morto)
+      const auto = new CorteAutomatico(X.presetVapor('aveling')!);
+      for (let i = 0; i < 8 * SR; i += B) {
+        const tl2 = m.telemetria();
+        auto.passo(B / SR, { voltasRoda: tl2.voltasPorS as number, v: p.cinematica.v, sentido: 1, regulador: 0.6, rampa: 0, freando: false, patinando: tl2.patinando });
+        cmd(p, { marcha: 1, regulador: 0.6, cutoff: auto.reversao(1) });
+        p.processar(can, B, 1 / SR);
+      }
+      const vAbre = Math.abs(p.cinematica.v) * 3.6;
+      add('trator N → 1ª e o regulador a 60 %: anda acima da lenta do governador (1,9 km/h) em 8 s', '≥ 3 km/h', f1(vAbre, 1) + ' km/h', vAbre >= 3, vAbre, 'km/h');
+    }
+
+    // ---- 3. o apito do Corliss pelo portador gerador (o botão do palco da estacionária): soa no nível da ficha e cala
+    {
+      const { m, p, can, ids } = montar('corliss', 'gerador', configPortadorVapor('gerador', 'corliss', 0));
+      const ia = ids.indexOf('apito'), y = new Float64Array(2.5 * SR);
+      cmd(p, { cargaFracao: 0.5 });
+      for (let i = 0; i < 3 * SR; i += B) p.processar(can, B, 1 / SR);
+      m.apito.aq = 1;   // (os tubos quentes, como na referência do L_W)
+      cmd(p, { cargaFracao: 0.5, apito: 1 });
+      for (let i = 0; i < y.length; i += B) { p.processar(can, B, 1 / SR); for (let k = 0; k < B; k++) y[i + k] = can[ia][k]; }
+      const { PonderacaoA, fatorPotenciaDir } = await import('../src/scene/filtros');
+      const pa = new PonderacaoA(SR); let e = 0;
+      for (let i = 0; i < y.length; i++) { const v = pa.run(y[i]); if (i > SR) e += v * v; }
+      const lw = 10 * Math.log10(e / (y.length - SR) / 4e-10 + 1e-30) + 20 * Math.log10(7.5) + 11 + 10 * Math.log10(fatorPotenciaDir(m.fontes[ia].dir.tabela));
+      const P = X.presetVapor('corliss')!;
+      cmd(p, { cargaFracao: 0.5, apito: 0 });
+      let eFim = 0; for (let i = 0; i < 2 * SR; i += B) { p.processar(can, B, 1 / SR); if (i >= 1.5 * SR) for (let k = 0; k < B; k++) eFim += can[ia][k] * can[ia][k]; }
+      const cala = 10 * Math.log10(eFim / (0.5 * SR) / 4e-10 + 1e-30) + 20 * Math.log10(7.5) + 11;
+      add('Corliss: apito pelo portador gerador (o botão do palco), tubos quentes: L_W', `${P.apito.nivelDb} ± 1 dB(A)`, Number.isFinite(lw) && lw > 0 ? f1(lw) + ' dB(A)' : 'calado', Math.abs(lw - P.apito.nivelDb!) <= 1, lw, 'dB');
+      add('Corliss: apito solto, 1,5 s depois', `< ${P.apito.nivelDb! - 60} dB`, f1(cala) + ' dB', cala < P.apito.nivelDb! - 60, cala, 'dB');
+    }
+
+    // ---- 4. aderência pela rodagem: o Stanley (pneu) com o regulador todo aberto e o corte de partida do automático, e o
+    // trator (roda de ferro) em 1ª a 60 %, na estrada seca; o Stanley também na molhada
+    const patinaStanley = (piso: 'seco' | 'molhado') => {
+      const { m, p, can } = montar('stanley', 'carro', configCarroDireto(X.presetVapor('stanley')!));
+      cmd(p, { regulador: 0, cutoff: reversaoDe(0.78, 1), trilho: piso });
+      for (let i = 0; i < SR; i += B) p.processar(can, B, 1 / SR);
+      cmd(p, { regulador: 1, cutoff: reversaoDe(0.78, 1), trilho: piso });
+      let pat = 0; for (let i = 0; i < 20 * SR; i += B) { p.processar(can, B, 1 / SR); if (m.patinando) pat += B; }
+      return { pat: pat / SR, v: p.cinematica.v * 3.6, ad: m.telemetria().adesao };
+    };
+    const st = patinaStanley('seco'), stM = patinaStanley('molhado');
+    add('Stanley parado, regulador todo aberto e corte de partida (78 %), estrada seca: patinando em 20 s', '≤ 2 s', `${f1(st.pat, 1)} s (aderência ${f1(st.ad / 1000, 1)} kN; ${f1(st.v, 0)} km/h aos 20 s)`, st.pat <= 2, st.pat, 's');
+    add('Stanley, o mesmo na estrada molhada: patinando em 20 s', '≤ 8 s', `${f1(stM.pat, 1)} s (aderência ${f1(stM.ad / 1000, 1)} kN; ${f1(stM.v, 0)} km/h aos 20 s)`, stM.pat <= 8, stM.pat, 's');
+    {
+      const { m, p, can } = montar('aveling', 'trator', configTrator(X.presetVapor('aveling')!));
+      cmd(p, { marcha: 1, regulador: 0, cutoff: reversaoDe(0.78, 1), trilho: 'seco' });
+      for (let i = 0; i < SR; i += B) p.processar(can, B, 1 / SR);
+      cmd(p, { marcha: 1, regulador: 0.6, cutoff: reversaoDe(0.78, 1), trilho: 'seco' });
+      let pat = 0; for (let i = 0; i < 15 * SR; i += B) { p.processar(can, B, 1 / SR); if (m.patinando) pat += B; }
+      add('trator em 1ª, regulador a 60 % e corte de partida, estrada seca: patinando em 15 s', '≤ 1 s', `${f1(pat / SR, 1)} s (aderência ${f1(m.telemetria().adesao / 1000, 1)} kN; ${f1(p.cinematica.v * 3.6, 1)} km/h aos 15 s)`, pat / SR <= 1, pat / SR, 's');
+    }
+
+    // ---- 5. a demonstração "Subida forte" como a página a roda (o roteiro de maquinista.ts, a mesma lei do corte
+    // automático): a composição sobe sem descer de ré, e a máquina trabalha forte (regulador todo aberto, corte longo,
+    // a caldeira caindo). Antes, com a K4s e 10 vagões, ela descia de ré
+    const S = SUBIDA_FORTE;
+    for (const id of ['k4s', 'd51', 'bigboy']) {
+      const P = X.presetVapor(id)!;
+      const { m, p, can } = montar(id, 'locomotiva', configLocoVapor(P, { vagoes: S.vagoes, rampa: S.rampa / 100 }));
+      const auto = new CorteAutomatico(P);
+      const c: any = { regulador: S.regulador[0][1], cutoff: reversaoDe(S.corte === 'auto' ? auto.corte : S.corte, 1), torneiras: 'auto', freio: 0, areia: S.areia, rampa: S.rampa / 100 };
+      cmd(p, { ...c, velocidadeFixa: 0 });
+      const fila = [...S.regulador.slice(1)];
+      let vMin = 0, sCorte = 0, nCorte = 0, pat = 0; const p0 = m.pCal;
+      for (let i = 0; i < S.dur * SR; i += B) {
+        const t = i / SR;
+        let mudou = false;
+        if (t >= S.segura && p.cmd.velocidadeFixa != null) { cmd(p, { ...c, velocidadeFixa: null }); }
+        while (fila.length && fila[0][0] <= t) { c.regulador = fila.shift()![1]; mudou = true; }
+        if (S.corte === 'auto' && t >= S.segura) {
+          const tl = m.telemetria();
+          auto.passo(B / SR, { voltasRoda: tl.voltasPorS as number, v: p.cinematica.v, sentido: 1, regulador: c.regulador, rampa: S.rampa, freando: false, patinando: tl.patinando });
+          const r2 = reversaoDe(auto.corte, 1); if (Math.abs(r2 - c.cutoff) > 0.004) { c.cutoff = r2; mudou = true; }
+        }
+        if (mudou) cmd(p, c);
+        p.processar(can, B, 1 / SR);
+        if (t > S.segura) vMin = Math.min(vMin, p.cinematica.v * 3.6);
+        if (t > 10) { sCorte += m.corte; nCorte++; }
+        if (m.patinando) pat += B;
+      }
+      const vFim = p.cinematica.v * 3.6, queda = p0 - m.pCal, corteMed = sCorte / Math.max(1, nCorte);
+      add(`"Subida forte" (${id}, ${S.vagoes} vagões, ${f1(S.rampa, 2)} %): não desce de ré e sobe`, 'mínima ≥ −0,1 km/h, ≥ 5 km/h no fim', `mínima ${f1(vMin, 2)} km/h, ${f1(vFim, 1)} km/h aos ${S.dur} s, ${f1(p.cinematica.s, 0)} m (patinando ${f1(pat / SR, 1)} s)`, vMin >= -0.1 && vFim >= 5, vFim, 'km/h');
+      if (id === 'k4s') add('"Subida forte" (k4s): trabalha forte', 'regulador ≥ 90 %, corte médio ≥ 50 %, caldeira cai ≥ 0,5 bar', `regulador ${f1(100 * m.reg, 0)} %, corte médio ${f1(100 * corteMed, 0)} % (dos 10 s ao fim), caldeira −${f1(queda, 2)} bar`, m.reg >= 0.9 && corteMed >= 0.5 && queda >= 0.5, corteMed, '');
+    }
+  }
   return L;
 }
 
 // ------------------------------------------------------------------ CLI
-const GRUPOS = ['caldeira', 'composicao', 'geometrias', 'estacionarios', 'apito', 'patinagem', 'niveis', 'rede', 'cilindro', 'taxa', 'forma', 'bandas', 'sino'];
+const GRUPOS = ['conducao', 'caldeira', 'composicao', 'geometrias', 'estacionarios', 'apito', 'patinagem', 'niveis', 'rede', 'cilindro', 'taxa', 'forma', 'bandas', 'sino'];
 const args = process.argv.slice(2);
 if (args[0] === '--grupo') {
   iniciarSementes();

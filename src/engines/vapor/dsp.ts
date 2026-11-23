@@ -27,7 +27,7 @@ import { BombaAr, Injetor, Seguranca, Torneiras, Bielas, Soprador, Ejetor, Queim
 import { type PresetVapor, escapesPorVolta, vColetorPadrao } from './presets';
 import {
   P0, BAR, G, R_V, T_SUPER, T_SAT, K_T_ESCAPE, N_SUPER, N_SAT, PERDA_ADMISSAO, V_NOCIVO, HASTE, CD_PORTICO,
-  ABERTURA_PORTICO, TAU_ADMISSAO, eventos, cortePorReverser, MU, REF_DIST_VAPOR, C_V,
+  ABERTURA_PORTICO, TAU_ADMISSAO, eventos, cortePorReverser, MU, REF_DIST_VAPOR, C_V, ADERENCIA, rodagemDe, type Rodagem,
 } from './constantes';
 
 const TAU = Math.PI * 2;
@@ -128,7 +128,10 @@ export class VaporDSP implements Motor {
   thM!: Float64Array; wM!: Float64Array; JM!: Float64Array; wAd!: Float64Array; patM!: Uint8Array; epsM!: Float64Array; tqM!: Float64Array;
   /** por motor: fração da aderência que sobra patinando (cai com a velocidade de deslizamento) */
   kAtM = new Float64Array(2).fill(1);
-  trilhoDeAco = true;
+  /** onde a roda motriz apoia (constantes.ts, `ADERENCIA`): aço no trilho, pneu ou ferro na estrada */
+  rodagem: Rodagem = 'trilho';
+  /** por motor (a dinâmica): torque líquido na roda, atrito de escorregamento (N, com sinal) e o sentido da patinagem */
+  private tLiq = new Float64Array(2); private fDesl = new Float64Array(2); private sPat = new Int8Array(2);
   /** ω da roda se não patinasse (= v/r) */
   wTrem = 0;
   omegaImposto: number | null = null;
@@ -151,6 +154,8 @@ export class VaporDSP implements Motor {
   aRegMax = 0;
   pRec = P0; vRec = 1;         // receptor do compound (Pa abs)
   reg = 0; regAlvo = 0;        // regulador 0..1
+  /** o regulador que o maquinista pediu por último (o governador do trator em N o substitui e o devolve ao engatar) */
+  regDono = 0;
   rev = 0.6; revAlvo = 0.6;    // reverser −1..1
   corte = 0.57; aC = 0; aR = 0; aK = 0; aL = 0;
   dirMarcha = 1;
@@ -205,7 +210,8 @@ export class VaporDSP implements Motor {
     this.condensador = P.escape.destino === 'condensador' || P.escape.destino === 'abafador';
     this.pCond = P.escape.pCondensador ?? P0;
     this.governadorProprio = P.familia === 'estacionaria';
-    this.trilhoDeAco = P.familia === 'locomotiva';
+    this.rodagem = rodagemDe(P.familia);
+    { const A = ADERENCIA[this.rodagem]; this.mu = this.muAlvo = this.trilho === 'molhado' ? A.molhado : A.seco; }
     this.rpmAlvo = P.rpmGovernado ?? 0;
     this.montarCilindros(P);
     this.montarFontes(P);
@@ -378,7 +384,7 @@ export class VaporDSP implements Motor {
   // ================================================================ comando
   /** valores já no alvo (testes, cenários e a troca de preset): sem as rampas do regulador e do reverser */
   fixar(c: { regulador?: number; cutoff?: number }) {
-    if (c.regulador != null) { this.reg = this.regAlvo = clamp(c.regulador, 0, 1); }
+    if (c.regulador != null) { this.reg = this.regAlvo = this.regDono = clamp(c.regulador, 0, 1); }
     if (c.cutoff != null) { this.rev = this.revAlvo = clamp(c.cutoff, -1, 1); }
     this.atualizarEventos();
   }
@@ -393,9 +399,9 @@ export class VaporDSP implements Motor {
 
   comandar(c0: ComandoMotor & Partial<ComandoVapor>) {
     const c = c0 as Partial<ComandoVapor> & ComandoMotor;
-    if (c.regulador != null) this.regAlvo = clamp(c.regulador, 0, 1);
-    else if (c.acelerador != null && c.combustivel == null && !this.governadorProprio && !Object.keys(c).some((k) => CHAVES_VAPOR.has(k))) this.regAlvo = clamp(c.acelerador, 0, 1);
-    if (c.combustivel != null) this.regAlvo = clamp(c.combustivel, 0, 1);
+    if (c.regulador != null) this.regAlvo = this.regDono = clamp(c.regulador, 0, 1);
+    else if (c.acelerador != null && c.combustivel == null && !this.governadorProprio && !Object.keys(c).some((k) => CHAVES_VAPOR.has(k))) this.regAlvo = this.regDono = clamp(c.acelerador, 0, 1);
+    if (c.combustivel != null) this.regAlvo = this.regDono = clamp(c.combustivel, 0, 1);
     if (c.cutoff != null) this.revAlvo = clamp(c.cutoff, -1, 1);
     if (c.apito != null) this.apitoCmd = clamp(c.apito, 0, 1);
     if (c.sino != null) this.sinoCmd = c.sino;
@@ -415,8 +421,33 @@ export class VaporDSP implements Motor {
   }
   acoplar(carga: Carga | null) {
     this.carga = carga;
-    // estacionária e trator sem carga ficam no governador (lenta a 70–80 rpm com a embreagem solta)
-    if (this.P && (this.P.familia === 'estacionaria' || (this.P.familia === 'trator' && !carga))) this.govLigado = !!this.P.rpmGovernado;
+    if (!this.P) return;
+    // a estacionária fica sempre no governador
+    if (this.P.familia === 'estacionaria') this.govLigado = !!this.P.rpmGovernado;
+    // o trator só sem carga (a marcha N, a embreagem solta: lenta a 70–80 rpm no governador de esferas). Engatado, o
+    // governador sai e o regulador volta a ser o do maquinista (antes ele ficava ligado depois do N e o regulador deixava
+    // de valer: o governador escrevia o dele por cima a cada 64 amostras)
+    else if (this.P.familia === 'trator') {
+      const gov = !carga && !!this.P.rpmGovernado;
+      if (gov && !this.govLigado) this.govI = 0;
+      if (!gov && this.govLigado) this.regAlvo = this.regDono;
+      this.govLigado = gov;
+    }
+  }
+  /**
+   * Engata a embreagem com a manivela girando (o trator saindo do N para uma marcha): a embreagem escorrega até a
+   * manivela e o veículo girarem juntos, e o momento angular na roda se conserva:
+   *   ω = (J_m·ω_man/red + J_c·ω_v)/(J_m + J_c),  J_m = J·red² (o volante refletido na roda pela marcha nova).
+   * `wVeiculo`: ω da roda pelo veículo (v/r). No N a "roda" do motor é a manivela dividida pela redução de antes.
+   */
+  engatar(carga: Carga, reducao: number, wVeiculo: number) {
+    const wMan = this.wM[0] * this.reducao;
+    this.definirReducao(reducao);
+    const Jm = this.jMotorTotal, Jc = carga.inercia;
+    const w = Jm + Jc > 0 ? (Jm * (wMan / reducao) + Jc * wVeiculo) / (Jm + Jc) : wVeiculo;
+    this.wTrem = w;
+    for (let m = 0; m < this.nM; m++) { this.wM[m] = w * (1 + this.epsM[m]); this.patM[m] = 0; }
+    this.acoplar(carga);
   }
 
   private atualizarEventos() {
@@ -465,8 +496,9 @@ export class VaporDSP implements Motor {
       this.regAlvo = clamp(1 + (u - GOV_CMIN) / 0.15, 0, 1); this.reg = this.regAlvo;
     }
     this.atualizarEventos();
-    // adesão: μ seco/molhado, areia sobe em 0,3 s
-    this.muAlvo = this.areia ? MU.areia : this.trilho === 'molhado' ? MU.molhado : MU.seco;
+    // adesão pela rodagem (trilho, pneu, ferro): μ seco/molhado, areia (só no trilho) sobe em 0,3 s
+    const A = ADERENCIA[this.rodagem];
+    this.muAlvo = this.areia && A.areia != null ? A.areia : this.trilho === 'molhado' ? A.molhado : A.seco;
     this.mu += (this.muAlvo - this.mu) * (1 - Math.exp(-dt / 0.3));
     const wAd = this.P.massaAderente * 1000 * G / this.nM;
     for (let m = 0; m < this.nM; m++) this.wAd[m] = this.mu * wAd * (this.nM > 1 && m === 0 ? 0.93 : 1);   // o dianteiro perde antes
@@ -712,7 +744,26 @@ export class VaporDSP implements Motor {
     this.eixo.inercia = this.jMotorTotal;
   }
 
-  /** integra ω (uma vez por amostra); tqM ainda tem o torque desta amostra */
+  /**
+   * Integra ω (uma vez por amostra); tqM ainda tem o torque desta amostra.
+   *
+   * A roda (rodeiro, bielas e, com redução, o volante refletido: J_m) e o veículo (J_c = carga.inercia) são dois corpos
+   * ligados pelo atrito no contato (o trilho ou a estrada). Roda presa (aderida): giram juntos, com
+   *   α = (Σ T·k − T_carga)/(J_c + Σ J_m·k²),
+   * e o contato tem de dar a cada roda a força que a faz acompanhar o veículo: F_c·r = T − J_m·k·α. A roda patina quando
+   * ESSA força passa da aderência (μ·W), e não quando o torque do motor passa: com o volante refletido pela redução (o
+   * trator: J 60 × 12² = 8 640 kg·m² contra 6 400 do veículo) quase todo pulso de torque vai acelerar o volante, e só a
+   * parte que acelera o veículo passa pelo contato. Nas locomotivas (J do trem centenas de vezes o da roda) F_c ≈ T/r.
+   * Patinando, a roda recebe o atrito de escorregamento (μ_d ≤ μ: a curva de Polach no trilho, a fração `desliza` na
+   * estrada) contra o escorregamento, o veículo o recebe a favor, e a roda readere quando a velocidade relativa ao veículo
+   * (já integrado nesta amostra) troca de sinal. Como ela só começa a patinar com |F_c| acima da aderência, a aceleração
+   * relativa (que tem o sinal de F_c − F_d) faz o escorregamento crescer no sentido em que ele começou: os dois ramos não
+   * se alternam amostra a amostra.
+   * (Antes o critério era |T_motor|/r acima da aderência, e a roda patinando readeria contra o veículo de antes da
+   * amostra: parado, com o esforço acima da aderência e o J do veículo menor que o da roda, o atrito acelerava o veículo
+   * mais que a roda, ele a passava numa amostra, ela readeria e patinava de novo na seguinte; o trator ficava preso num
+   * ciclo de duas amostras com o veículo a ±2,5·10⁻⁵ rad/s, e nem a ré o tirava.)
+   */
   private dinamica(dt: number) {
     const nM = this.nM, wM = this.wM, tqM = this.tqM, r = this.rRoda;
     const kAtV = this.kAtV, kAtS = this.kAtS;
@@ -721,37 +772,53 @@ export class VaporDSP implements Motor {
       for (let m = 0; m < nM; m++) { wM[m] = this.omegaImposto * (1 + this.epsM[m]); this.thM[m] += wM[m] * this.reducao * dt; this.patM[m] = 0; }
       return;
     }
-    const carga = this.carga;
+    const carga = this.carga, tL = this.tLiq, fD = this.fDesl, sP = this.sPat;
     const Jc = carga ? carga.inercia : 0;
     let Jt = Jc, Tt = -(carga ? carga.torque(this.wTrem) : 0);
     for (let m = 0; m < nM; m++) {
       const k = 1 + this.epsM[m];
       const T = tqM[m] - (kAtV * wM[m] + kAtS * Math.tanh(wM[m] / 0.2));
-      const F = Math.abs(tqM[m]) / r;
-      if (!this.patM[m]) {
-        // aderido: a roda segue o trem; passa da adesão (com carga de verdade atrás) → patina
-        if (carga && F > this.wAd[m] && this.wAd[m] > 0) this.patM[m] = 1;
-        else { Jt += this.JM[m] * k * k; Tt += T * k; continue; }
+      tL[m] = T;
+      // (sem carga não há contato: no N do trator a "roda" é a manivela)
+      if (!carga) this.patM[m] = 0;
+      // aderida: a roda segue o veículo
+      if (!this.patM[m]) { Jt += this.JM[m] * k * k; Tt += T * k; continue; }
+      // patinando: o atrito de escorregamento, contra o sentido em que a roda escorrega
+      const s = Math.sign(wM[m] - this.wTrem * k) || sP[m] || 1;
+      sP[m] = s;
+      fD[m] = this.atritoDesliza(m, Math.abs(wM[m] - this.wTrem * k) * r) * s;
+      Tt += fD[m] * r * k;
+    }
+    // roda presa: patina quando a força que o contato tem de dar passa da aderência (a pior primeiro; com ela solta,
+    // o veículo e a outra roda mudam de aceleração e a conta se refaz)
+    if (carga) {
+      for (let it = 0; it < nM; it++) {
+        const a = Tt / Jt;
+        let solta = -1, pior = 1, sentido = 1;
+        for (let m = 0; m < nM; m++) {
+          if (this.patM[m] || !(this.wAd[m] > 0)) continue;
+          const Fc = (tL[m] - this.JM[m] * (1 + this.epsM[m]) * a) / r, x = Math.abs(Fc) / this.wAd[m];
+          if (x > pior) { pior = x; solta = m; sentido = Fc > 0 ? 1 : -1; }
+        }
+        if (solta < 0) break;
+        const m = solta, k = 1 + this.epsM[m];
+        this.patM[m] = 1; sP[m] = sentido;
+        Jt -= this.JM[m] * k * k; Tt -= tL[m] * k;
+        fD[m] = this.atritoDesliza(m, 0) * sentido;
+        Tt += fD[m] * r * k;
       }
-      // patinando: só o rodeiro e as bielas; o trem recebe o atrito de escorregamento
-      const s = Math.sign(wM[m] - this.wTrem * k) || Math.sign(tqM[m]) || 1;
-      // o atrito de escorregamento cai com a velocidade de deslizamento (a curva de aderência de Polach: μ = μ₀·(A + (1 − A)·e^(−B·w)),
-      // A = 0,45 e B = 0,4 s/m): a 15 m/s de deslizamento sobram 45% da aderência. É por isso que a roda dispara: quanto
-      // mais patina, menos o trilho segura, a máquina pede mais vapor do que o regulador entrega, a caixa de válvulas cai
-      // e cada chuff sai mais fraco e mais curto
-      const wDes = Math.abs(wM[m] - this.wTrem * k) * r;
-      // (roda de aço em trilho; no trator de rodas de ferro com garras e no carro de pneus fica o 0,9 da aderência)
-      const kAt = this.trilhoDeAco ? ATRITO_A + (1 - ATRITO_A) * Math.exp(-ATRITO_B * wDes) : 0.9;
-      this.kAtM[m] = kAt;
-      const Fat = this.wAd[m] * kAt * s;
-      wM[m] += ((T - Fat * r) / this.JM[m]) * dt;
-      Tt += Fat * r * k;
-      // readere quando a roda volta à velocidade do trem
-      if ((wM[m] - this.wTrem * k) * s <= 0) { this.patM[m] = 0; wM[m] = this.wTrem * k; }
     }
     if (Jt <= 0) Jt = this.jMotorTotal;
     this.wTrem += (Tt / Jt) * dt;
     if (!carga && this.P.familia === 'locomotiva' && Math.abs(this.wTrem) < 0.05 && Math.abs(Tt) < 0.02 * this.TE * r) this.wTrem *= 0.9;
+    // as rodas que patinam: só o rodeiro e as bielas (e o volante refletido), com o próprio atrito; readerem quando
+    // alcançam o veículo
+    for (let m = 0; m < nM; m++) {
+      if (!this.patM[m]) continue;
+      const k = 1 + this.epsM[m];
+      wM[m] += ((tL[m] - fD[m] * r) / this.JM[m]) * dt;
+      if ((wM[m] - this.wTrem * k) * sP[m] <= 0) { this.patM[m] = 0; wM[m] = this.wTrem * k; }
+    }
     for (let m = 0; m < nM; m++) {
       if (!this.patM[m]) wM[m] = this.wTrem * (1 + this.epsM[m]);
       this.thM[m] += wM[m] * this.reducao * dt;
@@ -761,6 +828,17 @@ export class VaporDSP implements Motor {
     // esforço de tração médio (N)
     let tq = 0; for (let m = 0; m < nM; m++) tq += this.patM[m] ? this.wAd[m] * this.kAtM[m] * r : tqM[m];
     this.esforcoS += 0.0005 * (tq / r - this.esforcoS);
+  }
+  /**
+   * Atrito de escorregamento da roda `m` (N, sem sinal) a uma velocidade de deslizamento `wDes` (m/s). No trilho cai com a
+   * velocidade (a curva de aderência de Polach: μ = μ₀·(A + (1 − A)·e^(−B·w)), A = 0,45 e B = 0,4 s/m; a 15 m/s de
+   * deslizamento sobram 45% da aderência): é por isso que a roda dispara, a máquina pede mais vapor do que o regulador
+   * entrega, a caixa de válvulas cai e cada chuff sai mais fraco e mais curto. Na estrada, a fração `desliza` da rodagem.
+   */
+  private atritoDesliza(m: number, wDes: number) {
+    const kAt = this.rodagem === 'trilho' ? ATRITO_A + (1 - ATRITO_A) * Math.exp(-ATRITO_B * wDes) : ADERENCIA[this.rodagem].desliza;
+    this.kAtM[m] = kAt;
+    return this.wAd[m] * kAt;
   }
 
   // ================================================================ telemetria
