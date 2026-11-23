@@ -15,7 +15,7 @@
 //
 //   npx tsx tools/diesel-valida.ts [grupos...] [--j 24] [--semente N] [--atualizar[=nome exato]]   (ou --so g1,g2)
 //   grupos: pressoes-a … -c, bandas-a -b, real3-a … -g, real3-tom, envoltoria-a … -d, ar-a … -c, fumaca-a -b, jake,
-//           potencia, veiculo-a -b, cambio-a … -c, nan-<preset> (e nan-<preset>-b nas locomotivas), governador-a … -d,
+//           potencia, veiculo-a -b, cambio-a … -e, nan-<preset> (e nan-<preset>-b nas locomotivas), governador-a … -d,
 //           projeto-a … -c, lenta, troca;
 //           o nome sem a letra (pressoes, real3, nan, governador…) roda todos os dele
 import os from 'node:os';
@@ -49,8 +49,8 @@ const ger = (g: number, a = 8, s = 24): Cenario => ({ eventos: [[0, (d) => { que
 const mono = (r, t0: number, t1: number) => { const a = Math.floor(t0 * SR), b = Math.floor(t1 * SR), x = new Float64Array(b - a); for (let i = 0; i < x.length; i++) x[i] = 0.5 * (r.L[a + i] + r.R[a + i]); return x; };
 const med = (tl, k) => media(tl.map((e) => e[k]));
 /** bandas relativas a 150–400 Hz, centroide, curtose, p90/p10, tiques e CV de um trecho (tools/diesel-bandas.ts) */
-const medir = (id: string, cen: Cenario, ouvinte: string, t0: number, t1: number, port?: string) => {
-  const sp = preset(id), r = renderizar(sp, cen, { ouvinte, portador: port });
+const medir = (id: string, cen: Cenario, ouvinte: string, t0: number, t1: number, port?: string, extra: Record<string, any> = {}) => {
+  const sp = { ...preset(id), ...extra }, r = renderizar(sp, cen, { ouvinte, portador: port });
   const rpm = med(trecho(r.tele, t0, t1), 'rpm');
   return analisar(mono(r, t0, t1), SR, rpm, sp.cylinders, sp.tempos);
 };
@@ -141,7 +141,11 @@ function bandas(g: string): Linha[] {
 // de ganho). Tolerância: a faixa entre arquivos da classe ±2 dB (n ≥ 2) ou ±5 dB (n = 1); centroide na faixa da
 // classe; CV do knock (std(Δa)/(√2·média) por ignição) na faixa da classe ±0,03. O simulado de cada classe é a média
 // dos presets indicados. Uma classe por grupo (`real3-a` … `real3-h`), 3 sementes (o CV); os tons do turbo em `real3-tom`
-type Classe = { nome: string; casos: [string, Cenario, string, number, number, string?][]; b: [number, number][]; cen: [number, number]; cv: [number, number] };
+// (os caminhões e o ônibus em carga ficam no modo econômico do câmbio, `ECO`: as gravações da classe são de caminhões
+// trocando cedo, a 1400–1600 rpm; o automático padrão, desde 3098531, leva o giro até perto da faixa vermelha com o pé no
+// fundo, e o cenário deixaria de ser o da gravação)
+const ECO = { driveMode: 'eco' };
+type Classe = { nome: string; casos: [string, Cenario, string, number, number, string?, Record<string, any>?][]; b: [number, number][]; cen: [number, number]; cv: [number, number] };
 const r3 = (lo: number, hi: number, n = 2): [number, number] => (n >= 2 ? [lo - 2, hi + 2] : [lo - 5, hi + 5]);
 const CLASSES: Record<string, Classe[]> = {
   'real3-a': [
@@ -153,9 +157,9 @@ const CLASSES: Record<string, Classe[]> = {
       b: [r3(-6.3, 0.7), r3(3.2, 8), r3(-0.5, 5), r3(-2.7, 4), r3(-12.2, -5.7), r3(-22.4, -13)], cen: [502, 988], cv: [0.125, 0.25] },
   ],
   'real3-c': [
-    { nome: 'caminhão carga, cabine (scaniav8)', casos: [['scaniav8', carga(40), 'int', 20, 40]],
+    { nome: 'caminhão carga, cabine (scaniav8)', casos: [['scaniav8', carga(40), 'int', 20, 40, undefined, ECO]],
       b: [r3(-23.6, 9.1), r3(1.7, 8.3), r3(-7.2, -2.5), r3(-13, -6.6), r3(-20.6, -8.4), r3(-38.4, -17.3)], cen: [244, 711], cv: [0.166, 0.39] },
-    { nome: 'ônibus carga (onibusisl)', casos: [['onibusisl', carga(14), 'ext', 6, 14]],
+    { nome: 'ônibus carga (onibusisl)', casos: [['onibusisl', carga(14), 'ext', 6, 14, undefined, ECO]],
       b: [r3(-8.4, -1.9), r3(-3.6, 6), r3(-4.9, 0.8), r3(-12.5, 1), r3(-17.6, -5.8), r3(-29.4, -14)], cen: [242, 1017], cv: [0.14, 0.27] },
   ],
   'real3-d': [
@@ -181,7 +185,7 @@ function real3(g: string): Linha[] {
   const L: Linha[] = [];
   const nomes = ['30–60', '60–150', '400–1k', '1–2,5k', '2,5–6k', '6–12k'];
   for (const k of CLASSES[g]) {
-    const an = k.casos.map(([id, cen, ouv, t0, t1, port]) => medir(id, cen, ouv, t0, t1, port));
+    const an = k.casos.map(([id, cen, ouv, t0, t1, port, extra]) => medir(id, cen, ouv, t0, t1, port, extra));
     const m = (f: (a: any) => number) => media(an.map(f));
     const v = [m((a) => a.b30), m((a) => a.b60), m((a) => a.b400), m((a) => a.b1k), m((a) => a.b25k), m((a) => a.b6k)];
     v.forEach((x, i) => L.push({ grupo: g, nome: `real3 · ${k.nome}: ${nomes[i]}`, alvo: `${k.b[i][0].toFixed(1)} a ${k.b[i][1].toFixed(1)} dB`, medido: f1(x), ok: faixa(x, k.b[i][0], k.b[i][1]), valor: x, unidade: 'dB' }));
@@ -195,8 +199,8 @@ function real3(g: string): Linha[] {
 // lenta com tom forte em ~7 kHz; EMD em notch 8 com o "grito" do turbo. 3 sementes: a saliência de um tom sobre a mediana
 // em volta segue a realização do ruído (com uma semente só, o apito do caminhão ia de −49 a −36 dB)
 function real3Tom(g: string): Linha[] {
-  const tom = (id: string, cen: Cenario, ouv: string, t0: number, t1: number, port?: string, f0 = 2000, f1x = 20000) => {
-    const rr = renderizar(preset(id), cen, { ouvinte: ouv, portador: port });
+  const tom = (id: string, cen: Cenario, ouv: string, t0: number, t1: number, port?: string, f0 = 2000, f1x = 20000, extra: Record<string, any> = {}) => {
+    const rr = renderizar({ ...preset(id), ...extra }, cen, { ouvinte: ouv, portador: port });
     const [f, P] = welch(mono(rr, t0, t1), SR, 32768), Ld = Array.from(P, (q) => 10 * Math.log10(q + 1e-30));
     let best = -99, fb = 0;
     for (let k2 = 0; k2 < f.length; k2++) {
@@ -209,7 +213,7 @@ function real3Tom(g: string): Linha[] {
     for (let k2 = 0; k2 < f.length; k2++) { if (f[k2] >= 0.98 * fb && f[k2] <= 1.02 * fb) pt += P[k2]; if (f[k2] >= 150 && f[k2] < 400) pb += P[k2]; }
     return { best, fb, rel: 10 * Math.log10(pt / (pb + 1e-30) + 1e-30) };
   };
-  const t1 = tom('scaniav8', carga(40), 'int', 20, 40), t2 = tom('ram67', lentaQ(14), 'ext', 6, 14, undefined, 5000, 9000), t3 = tom('emd710', loco(8), 'ext', 30, 40, 'locomotiva', 3500, 17500);
+  const t1 = tom('scaniav8', carga(40), 'int', 20, 40, undefined, 2000, 20000, ECO), t2 = tom('ram67', lentaQ(14), 'ext', 6, 14, undefined, 5000, 9000), t3 = tom('emd710', loco(8), 'ext', 30, 40, 'locomotiva', 3500, 17500);
   // (4ª passada: o caminhão em carga tem o apito, um tom fino; o que não pode é passar do da gravação do Cat C15 na
   // cabine, 20 dB abaixo da banda das ordens. Ver também o grupo `ar`)
   return [
@@ -230,18 +234,19 @@ function real3Tom(g: string): Linha[] {
 function envoltoria(g: string): Linha[] {
   const L: Linha[] = [];
   // [nome, preset, cenário, ouvinte, t0, t1, faixa, portador]; faixas: as gravações da classe (real3), ±1 dB
-  const C: [string, string, Cenario, string, number, number, [number, number], string?][] = ({
+  type Caso = [string, string, Cenario, string, number, number, [number, number], string?, Record<string, any>?];
+  const C: Caso[] = ({
     'envoltoria-a': [
       ['picape acelerando (ram67; Cummins 6.7 11,6, TDI 13,4)', 'ram67', carga(14), 'ext', 9, 14, [10.6, 14.4]],
-      ['caminhão carga, cabine (scaniav8; ERF 11,1, FH16 10,1, Scania 18,3)', 'scaniav8', carga(14), 'int', 9, 14, [9.1, 19.3]],
-      ['ônibus carga (onibusisl; Bedford 8,1, K360 9,3, OF-1519 12,2)', 'onibusisl', carga(14), 'ext', 9, 14, [7.1, 13.2]],
+      ['caminhão carga, cabine (scaniav8; ERF 11,1, FH16 10,1, Scania 18,3)', 'scaniav8', carga(14), 'int', 9, 14, [9.1, 19.3], undefined, ECO],
+      ['ônibus carga (onibusisl; Bedford 8,1, K360 9,3, OF-1519 12,2)', 'onibusisl', carga(14), 'ext', 9, 14, [7.1, 13.2], undefined, ECO],
       ['gerador com carga (gen500; Cummins 2500 kW 8,3)', 'gen500', ger(1, 6, 16), 'ext', 10, 16, [7.3, 9.3], 'gerador'],
     ],
     'envoltoria-b': [['GE 7FDL notch 8 (ge7fdl; U23B 9,7)', 'ge7fdl', loco(8, 30), 'ext', 22, 30, [8.7, 10.7], 'locomotiva']],
     'envoltoria-c': [['EMD notch 8 (emd710; SD70ACe 7,6 e 9,9)', 'emd710', loco(8, 30), 'ext', 22, 30, [6.6, 10.9], 'locomotiva']],
-  } as Record<string, [string, string, Cenario, string, number, number, [number, number], string?][]>)[g] ?? [];
-  for (const [nome, id, cen, ouv, t0, t1, fx, port] of C) {
-    const sp = preset(id), rr = renderizar(sp, cen, { ouvinte: ouv, portador: port });
+  } as Record<string, Caso[]>)[g] ?? [];
+  for (const [nome, id, cen, ouv, t0, t1, fx, port, extra] of C) {
+    const sp = { ...preset(id), ...extra }, rr = renderizar(sp, cen, { ouvinte: ouv, portador: port });
     const rpm = med(trecho(rr.tele, t0, t1), 'rpm'), fIgn = (rpm / 60) * sp.cylinders * (2 / sp.tempos);
     const e = envoltoriaBanda(mono(rr, t0, t1), SR, 2000, 6000, fIgn);
     L.push({ grupo: g, nome: `envoltória · ${nome}: p90/p10 de 2–6 kHz`, alvo: `≥ ${fx[0].toFixed(1)} dB (gravações até ${fx[1].toFixed(1)})`, medido: `${f1(e.p9010)} dB`, ok: e.p9010 >= fx[0], valor: e.p9010, unidade: 'dB' });
@@ -414,12 +419,16 @@ function veiculo(g: string): Linha[] {
   return L;
 }
 
-// câmbio automático (troca pela rotação de potência do diesel): arrancada com pé no fundo e com meio pé, depois solta
-// o pedal. A sequência de marchas tem de subir sem voltar, nos pontos de troca do diesel, e sem acelerar não sobe.
-// 3 sementes; `cambio-a`: Hilux; `cambio-b`: Scania; `cambio-c`: Volvo
+// câmbio automático: arrancada com pé no fundo e com meio pé, depois solta o pedal. A sequência de marchas tem de subir
+// sem voltar, nos pontos de troca do diesel, e sem acelerar não sobe. Desde 3098531 (`pontosDeTroca()` do DieselDSP), com
+// o pé no fundo o automático leva o giro até perto da faixa vermelha (o maior entre 1,05 × a rotação de potência e
+// 0,90 × a máxima, sem passar de 0,95 × a máxima), e o medido passa um pouco do ponto pelo tempo da troca; com meio pedal
+// fica quase igual a antes. 3 sementes; `cambio-a`: Hilux; `cambio-b`: Scania; `cambio-c`: Volvo; `cambio-d` e
+// `cambio-e`: o ônibus e o 6V92, as duas caixas de degrau largo (1ª→2ª de 1,76 e 1,83) que ficavam presas na 1ª: só a
+// sequência de marchas
 function cambio(g: string): Linha[] {
   const L: Linha[] = [];
-  const caso = (id: string, ped: number, T: number, faixa0: [number, number]) => {
+  const caso = (id: string, ped: number, T: number, faixa0: [number, number] | null) => {
     const r = renderizar(preset(id), { eventos: [[0, (d) => { quente(d); liga(d); }], [3, (d) => { d.message({ type: 'input', shift: 1 }); d.message({ type: 'input', throttle: ped }); }], [3 + T, (d) => d.message({ type: 'input', throttle: 0 })], [13 + T, null]], portador: 'carro' }, { tele: 512 });
     const acel = r.tele.filter((e) => e.t >= 3 && e.t < 3 + T), solto = r.tele.filter((e) => e.t >= 3.5 + T);
     let volta = 0; const trocas: number[] = [];
@@ -429,12 +438,16 @@ function cambio(g: string): Linha[] {
     const rm = trocas.length ? media(trocas) : NaN, mn = trocas.length ? Math.min(...trocas) : NaN, mx = trocas.length ? Math.max(...trocas) : NaN;
     L.push({ grupo: g, nome: `${id} pedal ${ped}: marchas sobem sem voltar`, alvo: 'monotônica', medido: `1ª → ${fim}ª, ${volta} reduções`, ok: volta === 0 && fim > 2, valor: [volta, fim], unidade: '', ordem: volta });
     // (o caso mediano é o da subida mais longe da faixa, para um lado ou para o outro)
-    L.push({ grupo: g, nome: `${id} pedal ${ped}: rotação nas subidas`, alvo: `${faixa0[0]}–${faixa0[1]} rpm`, medido: `${mn.toFixed(0)}–${mx.toFixed(0)} rpm (média ${rm.toFixed(0)})`, ok: mn >= faixa0[0] && mx <= faixa0[1], valor: [mn, mx], unidade: 'rpm', ordem: Math.max(faixa0[0] - mn, mx - faixa0[1]) });
+    if (faixa0) L.push({ grupo: g, nome: `${id} pedal ${ped}: rotação nas subidas`, alvo: `${faixa0[0]}–${faixa0[1]} rpm`, medido: `${mn.toFixed(0)}–${mx.toFixed(0)} rpm (média ${rm.toFixed(0)})`, ok: mn >= faixa0[0] && mx <= faixa0[1], valor: [mn, mx], unidade: 'rpm', ordem: Math.max(faixa0[0] - mn, mx - faixa0[1]) });
     L.push({ grupo: g, nome: `${id} pedal ${ped} → solto: não sobe sem acelerar`, alvo: '0 subidas', medido: `${sobeSolto}`, ok: sobeSolto === 0, valor: sobeSolto, unidade: '' });
   };
-  if (g === 'cambio-a') { caso('hilux28', 1, 30, [2700, 3300]); caso('hilux28', 0.5, 40, [2200, 2700]); }
-  if (g === 'cambio-b') { caso('scaniav8', 1, 80, [1350, 1700]); caso('scaniav8', 0.5, 80, [1250, 1500]); }
-  if (g === 'cambio-c') caso('volvod13', 1, 80, [1300, 1600]);
+  // (pedal 1: a faixa da lei de 3098531, com o medido de 23/11/2026 dentro: Hilux 3974–4041, Scania 1998–2056, Volvo
+  // 1893–1984 rpm; antes 2700–3300, 1350–1700 e 1300–1600, a lei que subia a 0,80–0,88 da rotação de potência)
+  if (g === 'cambio-a') { caso('hilux28', 1, 30, [3800, 4200]); caso('hilux28', 0.5, 40, [2200, 2700]); }
+  if (g === 'cambio-b') { caso('scaniav8', 1, 80, [1950, 2100]); caso('scaniav8', 0.5, 80, [1250, 1500]); }
+  if (g === 'cambio-c') caso('volvod13', 1, 80, [1850, 2050]);
+  if (g === 'cambio-d') { caso('onibusisl', 1, 40, null); caso('onibusisl', 0.5, 40, null); }
+  if (g === 'cambio-e') { caso('dd6v92', 1, 40, null); caso('dd6v92', 0.5, 40, null); }
   return L;
 }
 
@@ -496,14 +509,14 @@ const GRUPOS: Record<string, (g: string) => Linha[] | Promise<Linha[]>> = {
   ...Object.fromEntries(Object.keys(CLASSES).map((g) => [g, real3])), 'real3-tom': real3Tom,
   'envoltoria-a': envoltoria, 'envoltoria-b': envoltoria, 'envoltoria-c': envoltoria, 'envoltoria-d': envoltoria,
   'ar-a': ar, 'ar-b': ar, 'ar-c': ar, 'fumaca-a': fumaca, 'fumaca-b': fumaca, jake, potencia, 'veiculo-a': veiculo, 'veiculo-b': veiculo,
-  'cambio-a': cambio, 'cambio-b': cambio, 'cambio-c': cambio,
+  'cambio-a': cambio, 'cambio-b': cambio, 'cambio-c': cambio, 'cambio-d': cambio, 'cambio-e': cambio,
   ...Object.fromEntries(NAN.map((g) => [g, nan])),
   ...Object.fromEntries(GOV.map((g) => [g, async (gg: string) => (await import('./diesel-governador')).passadaGovernador(gg.slice('governador-'.length))])),
   'projeto-a': projeto, 'projeto-b': projeto, 'projeto-c': projeto,
 };
 /** contagem, transiente, CV e a dispersão de ciclo a ciclo: 3 sementes, uma por processo, e o caso mediano */
 const SEMENTES = new Set(['pressoes-a', 'pressoes-b', 'pressoes-c', 'bandas-a', ...Object.keys(CLASSES), 'envoltoria-a', 'envoltoria-b', 'envoltoria-c', 'envoltoria-d',
-  'real3-tom', 'ar-b', 'fumaca-a', 'fumaca-b', 'jake', 'veiculo-b', 'cambio-a', 'cambio-b', 'cambio-c', ...GOV, 'projeto-a']);
+  'real3-tom', 'ar-b', 'fumaca-a', 'fumaca-b', 'jake', 'veiculo-b', 'cambio-a', 'cambio-b', 'cambio-c', 'cambio-d', 'cambio-e', ...GOV, 'projeto-a']);
 /** os que não devolvem medidas: tabelas próprias, em que falha é falha (não há desvio aceito nelas) */
 const TEXTO: Record<string, [string, string[]]> = { lenta: [path.join(RAIZ, 'tools/diesel-lenta.ts'), ['--j', '6']], troca: [path.join(RAIZ, 'tools/diesel-troca.ts'), []] };
 /** os nomes de antes (um grupo por nome) valem pelos grupos em que cada um foi partido */

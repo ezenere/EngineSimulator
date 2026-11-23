@@ -308,88 +308,6 @@
     "motivo": "o primeiro harmônico da ignição (30 Hz) sai 8 dB acima das gravações de 2–3 m: a irradiação de monopolo da chaminé (+6 dB/oitava) não basta para o pulso de 2 L por cilindro; o CV (0,28) é o da picape, um pouco irregular demais para o caminhão [23/11/2026: o CV está em 0,38 (sementes 0,38 / 0,36 / 0,41), não 0,28; a 4ª passada mediu nas picapes o efeito do clique de forma fixa por cilindro (0,57), sem conferir no caminhão.]",
     "nota_folga": "folga alargada: o valor vai de 0,385 / 0,381 / 0,409 entre as bases 0, 1000 e 2000"
   },
-  "real3 · caminhão carga, cabine (scaniav8): 400–1k": {
-    "grupo": "real3-c",
-    "medido": -12.17,
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "-9.2 a -0.5 dB",
-    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
-  },
-  "real3 · caminhão carga, cabine (scaniav8): 1–2,5k": {
-    "grupo": "real3-c",
-    "medido": -17.43,
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "-15.0 a -4.6 dB",
-    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
-  },
-  "real3 · caminhão carga, cabine (scaniav8): 2,5–6k": {
-    "grupo": "real3-c",
-    "medido": -36.84,
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "-22.6 a -6.4 dB",
-    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
-  },
-  "real3 · caminhão carga, cabine (scaniav8): centroide": {
-    "grupo": "real3-c",
-    "medido": 223.0,
-    "unidade": "Hz",
-    "folga": "±5 %",
-    "alvo": "244–711 Hz",
-    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (223 / 223 / 224 nas bases 0, 1000 e 2000, alvo 244–711 Hz); fica declarada à beira, com teto.]",
-    "beira": true
-  },
-  "real3 · caminhão carga, cabine (scaniav8): CV do knock": {
-    "grupo": "real3-c",
-    "medido": 0.4471,
-    "unidade": "",
-    "folga": "±5 %",
-    "alvo": "0.17–0.39",
-    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
-  },
-  "real3 · ônibus carga (onibusisl): 400–1k": {
-    "grupo": "real3-c",
-    "medido": -12.5,
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "-6.9 a 2.8 dB",
-    "motivo": "o ônibus carregado é 3 dB mais escuro em 400–1000 Hz que o mais escuro da classe (gravações de dentro do ônibus têm a carroceria e a rodagem) [23/11/2026: −12,5 dB, 5,6 dB abaixo do limite da classe (−6,9).]"
-  },
-  "real3 · ônibus carga (onibusisl): 1–2,5k": {
-    "grupo": "real3-c",
-    "medido": -14.96,
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "-14.5 a 3.0 dB",
-    "motivo": "4ª passada: −15,4 dB (faixa −14,5 a 3): o mesmo que no caminhão em carga; sem o sopro do compressor sobra a batida, 1 dB abaixo da gravação mais escura [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (−15 / −15,1 / −14,9 nas bases 0, 1000 e 2000, alvo -14.5 a 3.0 dB); fica declarada à beira, com teto.]",
-    "beira": true
-  },
-  "real3 · ônibus carga (onibusisl): 2,5–6k": {
-    "grupo": "real3-c",
-    "medido": -23.35,
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "-19.6 a -3.8 dB",
-    "motivo": "o agudo de carga do ônibus era o sopro liso do compressor (60–95% do som ponderado A); modulado e 6 dB abaixo, faltam 3–4 dB acima de 2,5 kHz contra as gravações de dentro do ônibus (carroceria, rodagem, ventilação), e o CV do knock cai para 0,10 sem o ruído do sopro por cima: a queima do ISL9 com injeção longa é regular demais"
-  },
-  "real3 · ônibus carga (onibusisl): 6–12k": {
-    "grupo": "real3-c",
-    "medido": -34.57,
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "-31.4 a -12.0 dB",
-    "motivo": "o agudo de carga do ônibus era o sopro liso do compressor (60–95% do som ponderado A); modulado e 6 dB abaixo, faltam 3–4 dB acima de 2,5 kHz contra as gravações de dentro do ônibus (carroceria, rodagem, ventilação), e o CV do knock cai para 0,10 sem o ruído do sopro por cima: a queima do ISL9 com injeção longa é regular demais"
-  },
-  "real3 · ônibus carga (onibusisl): CV do knock": {
-    "grupo": "real3-c",
-    "medido": 0.5325,
-    "unidade": "",
-    "folga": "±5 %",
-    "alvo": "0.14–0.27",
-    "motivo": "o agudo de carga do ônibus era o sopro liso do compressor (60–95% do som ponderado A); modulado e 6 dB abaixo, faltam 3–4 dB acima de 2,5 kHz contra as gravações de dentro do ônibus (carroceria, rodagem, ventilação), e o CV do knock cai para 0,10 sem o ruído do sopro por cima: a queima do ISL9 com injeção longa é regular demais [23/11/2026: o CV do knock está em 0,53 (sementes 0,53 / 0,49 / 0,54), acima da faixa e não abaixo: a frase do CV acima é da 3ª passada. Sem diagnóstico do valor de hoje; a 4ª passada achou o mesmo efeito nas picapes (0,57: cada batida é um clique de forma fixa por cilindro, com um cilindro dominante), sem conferir no ônibus.]"
-  },
   "real3 · gerador sem carga (gen500): 30–60": {
     "grupo": "real3-d",
     "medido": -25.62,
@@ -900,6 +818,89 @@
     "alvo": "300 Hz ± 30%",
     "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a C36ME, 7FDL-16, da lenta ao notch 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a). O mesmo do real3 da GE em notch 8 (4ª passada): acima de 1 kHz a GE em notch 8 era só a banda larga da turbina (o motor não tinha nada ali); com ela 22 dB abaixo, falta som de motor em carga nessa faixa (pendente), não ruído."
   },
+  "real3 · caminhão carga, cabine (scaniav8): 400–1k": {
+    "grupo": "real3-c",
+    "medido": -12.17,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-9.2 a -0.5 dB",
+    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
+  },
+  "real3 · caminhão carga, cabine (scaniav8): 1–2,5k": {
+    "grupo": "real3-c",
+    "medido": -17.43,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-15.0 a -4.6 dB",
+    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
+  },
+  "real3 · caminhão carga, cabine (scaniav8): 2,5–6k": {
+    "grupo": "real3-c",
+    "medido": -36.84,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-22.6 a -6.4 dB",
+    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
+  },
+  "real3 · caminhão carga, cabine (scaniav8): centroide": {
+    "grupo": "real3-c",
+    "medido": 223.0,
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "alvo": "244–711 Hz",
+    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (223 / 223 / 224 nas bases 0, 1000 e 2000, alvo 244–711 Hz); fica declarada à beira, com teto.]",
+    "beira": true
+  },
+  "real3 · caminhão carga, cabine (scaniav8): CV do knock": {
+    "grupo": "real3-c",
+    "medido": 0.4471,
+    "unidade": "",
+    "folga": "±5 %",
+    "alvo": "0.17–0.39",
+    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
+  },
+  "real3 · ônibus carga (onibusisl): 400–1k": {
+    "grupo": "real3-c",
+    "medido": -12.54,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-6.9 a 2.8 dB",
+    "motivo": "o ônibus carregado é 3 dB mais escuro em 400–1000 Hz que o mais escuro da classe (gravações de dentro do ônibus têm a carroceria e a rodagem) [23/11/2026: −12,5 dB, 5,6 dB abaixo do limite da classe (−6,9).]"
+  },
+  "real3 · ônibus carga (onibusisl): 1–2,5k": {
+    "grupo": "real3-c",
+    "medido": -15.01,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-14.5 a 3.0 dB",
+    "motivo": "4ª passada: −15,4 dB (faixa −14,5 a 3): o mesmo que no caminhão em carga; sem o sopro do compressor sobra a batida, 1 dB abaixo da gravação mais escura [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (−15 / −14,9 / −14,9 nas bases 0, 1000 e 2000, alvo -14.5 a 3.0 dB); fica declarada à beira, com teto.]",
+    "beira": true
+  },
+  "real3 · ônibus carga (onibusisl): 2,5–6k": {
+    "grupo": "real3-c",
+    "medido": -23.29,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-19.6 a -3.8 dB",
+    "motivo": "o agudo de carga do ônibus era o sopro liso do compressor (60–95% do som ponderado A); modulado e 6 dB abaixo, faltam 3–4 dB acima de 2,5 kHz contra as gravações de dentro do ônibus (carroceria, rodagem, ventilação), e o CV do knock cai para 0,10 sem o ruído do sopro por cima: a queima do ISL9 com injeção longa é regular demais"
+  },
+  "real3 · ônibus carga (onibusisl): 6–12k": {
+    "grupo": "real3-c",
+    "medido": -34.58,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-31.4 a -12.0 dB",
+    "motivo": "o agudo de carga do ônibus era o sopro liso do compressor (60–95% do som ponderado A); modulado e 6 dB abaixo, faltam 3–4 dB acima de 2,5 kHz contra as gravações de dentro do ônibus (carroceria, rodagem, ventilação), e o CV do knock cai para 0,10 sem o ruído do sopro por cima: a queima do ISL9 com injeção longa é regular demais"
+  },
+  "real3 · ônibus carga (onibusisl): CV do knock": {
+    "grupo": "real3-c",
+    "medido": 0.5122,
+    "unidade": "",
+    "folga": "±10 %",
+    "alvo": "0.14–0.27",
+    "motivo": "o agudo de carga do ônibus era o sopro liso do compressor (60–95% do som ponderado A); modulado e 6 dB abaixo, faltam 3–4 dB acima de 2,5 kHz contra as gravações de dentro do ônibus (carroceria, rodagem, ventilação), e o CV do knock cai para 0,10 sem o ruído do sopro por cima: a queima do ISL9 com injeção longa é regular demais [23/11/2026: o CV do knock está em 0,51 (mediana de 3 sementes; de 0,49 a 0,57 entre elas), acima da faixa e não abaixo: a frase do CV acima é da 3ª passada. Sem diagnóstico do valor de hoje; a 4ª passada achou o mesmo efeito nas picapes (0,57: cada batida é um clique de forma fixa por cilindro, com um cilindro dominante), sem conferir no ônibus.]",
+    "nota_folga": "folga alargada: o valor vai de 0,512 / 0,552 / 0,55 entre as bases 0, 1000 e 2000"
+  },
   "real3 · turbo: VGT do Cummins 6.7 em lenta": {
     "grupo": "real3-tom",
     "medido": 14.37,
@@ -907,6 +908,15 @@
     "folga": "±1 dB",
     "alvo": "+17 a +24 dB em ~7 kHz",
     "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (14,4 / 14 / 15,1 nas bases 0, 1000 e 2000, alvo +17 a +24 dB em ~7 kHz); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "volvod13 carregado 0–85 km/h": {
+    "grupo": "veiculo-b",
+    "medido": 56.73,
+    "unidade": "s",
+    "folga": "±5 %",
+    "alvo": "60–90 s",
+    "motivo": "Desde 3098531 o câmbio automático leva o giro até perto da faixa vermelha com o pé no fundo, e o caminhão carregado usa a potência máxima em cada marcha: chega a 85 km/h em 57 s (antes, no modo econômico, que era o de fábrica dos caminhões, 83–84 s). [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (56,7 / 56,8 / 56,7 nas bases 0, 1000 e 2000, alvo 60–90 s); fica declarada à beira, com teto.]",
     "beira": true
   },
   "EMD 16-710 (2 tempos, 16 cilindros) em notch 8, 10 s em Node (tempo de CPU, mediana de 3)": {

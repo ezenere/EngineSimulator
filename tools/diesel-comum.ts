@@ -141,7 +141,8 @@ export function casoMediano(listas: LinhaDiesel[][]): Medida[] {
     const cs = listas.map((ls) => ls[i]);
     if (cs.some((c) => !c || c.nome !== cs[0].nome)) throw new Error(`as sementes deram medidas diferentes em "${cs[0].nome}"`);
     const v = cs.map(escalar), { ordem: _o, ...m } = cs[indiceMediano(v)];
-    const txt = v.map(fmtS);
+    // (o texto mostra o valor de cada semente; num vetor, os componentes; a escolha do mediano é pela `ordem`)
+    const txt = cs.map((c) => (Array.isArray(c.valor) ? c.valor.map(fmtS).join('/') : fmtS(c.valor ?? NaN)));
     return new Set(txt).size > 1 ? { ...m, medido: `${m.medido} [sementes ${txt.join(' · ')}]` } : m;
   });
 }
