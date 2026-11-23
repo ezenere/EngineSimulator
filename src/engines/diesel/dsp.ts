@@ -14,7 +14,7 @@ import {
 } from '../../acoustics';
 import { EngineDSP } from '../ronco/dsp';
 import { T_MAN, T_EXREF } from '../ronco/constantes';
-import { LHV, ESTEQ, CETANO_PADRAO, K_ATRASO, R_UNIV, BSFC, INJECAO, NOTCH_POT, K_MEC, K_VALV, K_FUNDO, K_VIB, K_CALOR, K_MISTURA, K_TURBINA, K_SOPRO, K_CHIADO_TURBO, K_MOD_TURBO, K_CHOQUE, EST, EST_COMB, EST_VALV, K_ASPEREZA, ASPEREZA_FIXA, F_ASPEREZA, K_JATO, JATO_V0, JATO_V1, COFRE, EST_SAIA, SAIA, EXP_TIQUE, ENGRENAGENS, EST_ENG } from './constantes';
+import { LHV, ESTEQ, CETANO_PADRAO, K_ATRASO, R_UNIV, BSFC, INJECAO, NOTCH_POT, K_MEC, K_VALV, K_FUNDO, K_VIB, K_CALOR, K_MISTURA, K_TURBINA, K_SOPRO, K_CHIADO_TURBO, K_MOD_TURBO, K_CHOQUE, EST, EST_COMB, EST_VALV, K_ASPEREZA, ASPEREZA_FIXA, F_ASPEREZA, K_JATO, JATO_V0, JATO_V1, COFRE, EST_SAIA, SAIA, EXP_TIQUE, ENGRENAGENS, EST_ENG, CORPO } from './constantes';
 import { DoisPortasDiesel } from './escape';
 
 // Carga e comando vindos de um portador externo (CENA.md 1.2). TODO(integração carriers/): trocar por
@@ -127,6 +127,7 @@ export class DieselDSP extends EngineDSP {
   declare eM: any; declare eB0: any; declare eA1: any; declare eA2: any; declare eZ1: any; declare eZ2: any; declare eAcc: any; declare eWc: any; declare eWi: any; declare eWv: any; declare eWb: any; declare eWp: any; declare eWe: any; declare eEng: any; declare kEng: any; declare pInj0: any; declare kSaia: any; declare eRug: any; declare nQ: any; declare rgF: any; declare rgS: any; declare kRug: any; declare kAsp: any; declare apitoLenta: any;
   declare evN: any; declare evT: any; declare evW: any; declare evO: any; declare evA: any; declare nivInj: any; declare gRess: any; declare gDesig: any; declare gJato: any; declare jatoMed: any;
   declare apF: any; declare apF2: any; declare apFreq: any; declare apNorm: any; declare apAm: any; declare cfB: any; declare cfN: any; declare cfI: any; declare cfG: any; declare cfLP: any; declare cfK: any; declare cfA: any; declare gCofre: any;
+  declare eF: any; declare eGo: any; declare gCorpo: any;
 
   constructor(fs: number) {
     super(fs);
@@ -307,6 +308,8 @@ export class DieselDSP extends EngineDSP {
     this.gRess = clamp(cfg.ressonancia ?? 1, 0.3, 3); this.gDesig = clamp(cfg.desigualdade ?? 1, 0, 3);
     this.gJato = Math.pow(10, (cfg.jatoBoca || 0) / 20);
     this.gCofre = Math.pow(10, (cfg.cofre ?? COFRE.nivel) / 20);
+    // corpo da batida: o que as chapas presas ao bloco somam à irradiação dos modos de 400 a 2500 Hz (constantes.ts → CORPO)
+    this.gCorpo = clamp(cfg.corpo ?? 0, -12, 12); if (this.eF) this.pesarCorpo();
     this.piloto = !!cfg.piloto; this.idi = !!cfg.idi; this.eletronico = !!cfg.eletronico;
     this.cetano = cfg.cetano || CETANO_PADRAO;
     this.limiteFumaca = cfg.limiteFumaca || 1.25;
@@ -453,6 +456,7 @@ export class DieselDSP extends EngineDSP {
     // (pré-câmara: a chama áspera fica dentro dela e o cilindro recebe um jato já alisado pelo canal)
     this.kAsp = K_ASPEREZA * (this.idi ? 0.6 : 1);
     this.eZ1 = new Float64Array(est.M); this.eZ2 = new Float64Array(est.M); this.eAcc = new Float64Array(est.M); this.evN = 0;
+    this.eF = est.f; this.pesarCorpo();
     // parede do bloco: quanto maior o cilindro, mais grossa a parede e mais pesado o bloco; o agudo da mecânica cai
     // (passa-baixa de 2ª ordem em 7,5 kHz na picape de 92 mm, 5,4 kHz no caminhão de 137 mm, 3,6 kHz na locomotiva)
     this.mecLP = new Biquad().lp(fs, Math.min(0.45 * fs, 7000 * Math.pow(0.1 / B, 0.8)), 0.7);
@@ -481,6 +485,15 @@ export class DieselDSP extends EngineDSP {
     this.apF = new Biquad().bp(fs, 3000, 30); this.apF2 = new Biquad().bp(fs, 3000, 30); this.apFreq = 0; this.apNorm = 0;
     this.turbNzF = [new Biquad().hp(fs, 350, 0.6), new Biquad().lp(fs, 14000, 0.6)];
     this.whooshF = [new Biquad().hp(fs, 250, 0.6), new Biquad().lp(fs, 1500, 0.6)];
+  }
+
+  // Peso de irradiação de cada modo da estrutura (constantes.ts → CORPO): 1 fora da faixa das chapas, até `corpo` dB no
+  // centro dela. Sem o campo (0 dB) não há pesos e a soma dos modos sai como sempre saiu, amostra a amostra
+  pesarCorpo() {
+    const dB = this.gCorpo || 0, f = this.eF;
+    if (!dB || !f) { this.eGo = null; return; }
+    const fc = CORPO.f * Math.sqrt(0.1 / (this.bore || 0.1));
+    this.eGo = Float64Array.from(f, (x: number) => Math.pow(10, (dB * Math.exp(-0.5 * (Math.log2(x / fc) / CORPO.largura) ** 2)) / 20));
   }
 
   // ------------------------------------------------------------------ ramos cc do laço de amostra
@@ -835,16 +848,26 @@ export class DieselDSP extends EngineDSP {
       this.evN = n;
     }
     // banco de modos: cada um é um ressonador de 2ª ordem (passa-faixa); a soma é o que o bloco irradia
-    let s = 0;
-    const b0 = this.eB0, a1 = this.eA1, a2 = this.eA2, z1 = this.eZ1, z2 = this.eZ2;
-    for (let i = 0; i < M; i++) {
-      const x = acc[i] + 1e-25, y = b0[i] * x + z1[i]; // (1e-25: sem números desnormalizados quando o motor para)
-      z1[i] = z2[i] - a1[i] * y; z2[i] = -b0[i] * x - a2[i] * y;
-      s += y; acc[i] = 0;
+    let s = 0, sc = 0;
+    const b0 = this.eB0, a1 = this.eA1, a2 = this.eA2, z1 = this.eZ1, z2 = this.eZ2, go = this.eGo;
+    if (go) {
+      // (com o corpo da batida: `s` segue sendo a soma crua, a que mede a referência dos impactos; `sc` é o que irradia)
+      for (let i = 0; i < M; i++) {
+        const x = acc[i] + 1e-25, y = b0[i] * x + z1[i];
+        z1[i] = z2[i] - a1[i] * y; z2[i] = -b0[i] * x - a2[i] * y;
+        s += y; sc += go[i] * y; acc[i] = 0;
+      }
+    } else {
+      for (let i = 0; i < M; i++) {
+        const x = acc[i] + 1e-25, y = b0[i] * x + z1[i]; // (1e-25: sem números desnormalizados quando o motor para)
+        z1[i] = z2[i] - a1[i] * y; z2[i] = -b0[i] * x - a2[i] * y;
+        s += y; acc[i] = 0;
+      }
+      sc = s;
     }
     if (this.sonda) { const ay = Math.abs(s); if (ay > this.kPk) this.kPk = ay; else this.kPk *= 0.99995; }
     const kr = (this.refKnock || 0.5) * K_MEC * this.gMec;
-    let m = s * K_MEC * this.gMec;
+    let m = sc * K_MEC * this.gMec;
     // fundo mecânico contínuo (engrenagens da distribuição, correias): o que sobrou dele (K_FUNDO)
     const fl = clamp(this.fuelCmd, 0, 1);
     m += (this.fundoF[0].run(rng.bi()) * this.fundoAmp[0] + 0.6 * this.fundoF[1].run(rng.bi()) * this.fundoAmp[1]) * kr * K_FUNDO * (0.5 + 0.8 * rf + 0.4 * fl) * (1 + 0.5 * coldN);

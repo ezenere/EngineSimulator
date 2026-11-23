@@ -15,10 +15,14 @@
 //   --agua T           com --rpm: água fixa em T °C (motor frio recém-ligado); padrão 90
 //   --lenta            lenta livre pelo governador, como na página (com --rpm: a lenta regulada para R)
 //   --cenario nome     cenário de giro livre do tools/diesel-fontes.ts (carga, n8, ger, rev, wot…); --de/--ate recortam (s)
+//   --arrancada p[,t0] o gesto de quem dirige na página: lenta quente e, aos t0 s (padrão 4), engata e pisa p (0 a 1), com o
+//                      câmbio do preset trocando sozinho; --de/--ate recortam (s), --dur é o fim (padrão 30 s)
 //   --dur s            segundos gravados (padrão 12)       --descarta s  segundos jogados fora antes (padrão: o turbo assenta)
 //   --ouvinte ext|pipe|int|bay    posição (padrão ext: a câmera atrás)
 //   --ambiente         deixa o som de ambiente ligado (padrão: desligado, para comparar o motor sozinho)
 //   --campo JSON       muda campos do preset antes de montar ('{"turboChiado":-6}')
+//   --antes            o preset com os valores de antes da 5ª passada de som (presets.ts → ANTES_DOS_MEDIOS): o som
+//                      aprovado em 23/11/2026, para o antes × depois e para provar a volta atrás
 //   --sem a,b          desliga fontes     --escala a=g,b=g   multiplica o ganho de fontes     --semente N
 //   --cada             grava o conjunto do orçamento
 //
@@ -46,12 +50,16 @@
 //   variacao    rede      irregularidade da queima: atraso, injetor, mistura e energia de ciclo para ciclo
 //   ambiente              som de fundo da cena (só com --ambiente)
 //   escape                o som que sai da boca do escape (os pulsos e o jato): para ouvir só o resto
+//   carcaca               a carcaça do escape (parede dos tubos e do abafador; só toca com o campo `carcaca` no preset)
 // Grupos: `ar` (as marcadas), `turbo` (sopro, turbina, wastegate, apito), `turboLargo` (sem o apito), `mecanica`
 // (batida, chocalho, tiques, valvulas, cliques, fundo). A saída passa por um tanh suave: a soma é exata só em nível baixo.
+//
+// Fora do giro travado o .json leva também `fase`: o ângulo do virabrequim no fim de cada bloco de 128 amostras, em
+// ciclos (720° no 4 tempos), para a análise síncrona de um render em que a rotação sobe (tools/diesel-medios.py).
 import fs from 'node:fs';
 import path from 'node:path';
 import { DieselDSP } from '../src/engines/diesel/dsp';
-import { PRESETS, PADRAO_DIESEL } from '../src/engines/diesel/presets';
+import { PRESETS, PADRAO_DIESEL, ANTES_DOS_MEDIOS } from '../src/engines/diesel/presets';
 import { configCalibrada } from '../src/engines/diesel/config';
 import { CENARIOS, type Cenario } from './diesel-comum';
 import { CEN_EXTRA } from './diesel-fontes';
@@ -72,6 +80,7 @@ export function escalar(d: any, f: string, g: number) {
   if (GRUPOS[f]) { for (const x of GRUPOS[f]) escalar(d, x, g); return; }
   switch (f) {
     case 'escape': d.params.exhaust *= g; break;
+    case 'carcaca': d.carcK *= g; break;
     case 'jato': { d.kJatoMed = (d.kJatoMed ?? 1) * g; const fr = d.freio.bind(d); d.freio = (dtc: number) => { fr(dtc); d.jetGain *= d.kJatoMed; }; d.jetGain *= g; break; } // (o freio-motor repõe o ganho a cada passo de controle)
     case 'valvula': d.valveNoise *= g; break;
     case 'chiadoAdm': d.hissGain *= g; break;
@@ -95,7 +104,7 @@ export function escalar(d: any, f: string, g: number) {
   }
 }
 
-type Op = { rpm?: number; comb?: number; agua?: number; degrau?: [number, number, number]; lenta?: boolean; cenario?: string; de?: number; ate?: number; dur: number; descarta?: number;
+type Op = { rpm?: number; comb?: number; agua?: number; degrau?: [number, number, number]; lenta?: boolean; cenario?: string; arrancada?: [number, number]; de?: number; ate?: number; dur: number; descarta?: number;
   ouvinte: string; ambiente: boolean; campo: any; sem: string[]; escala: [string, number][]; semente?: number };
 
 const spec = (id: string, campo: any) => {
@@ -141,7 +150,17 @@ function travar(d: any, rpm: number, comb: number, agua = 90) {
 export function render(id: string, op: Op) {
   const l = new Float32Array(B), r = new Float32Array(B);
   let d: any, sp: any, modo: string, comb = NaN, fixo = false, cen: Cenario | null = null;
-  if (op.cenario) {
+  if (op.arrancada) {
+    // a arrancada da página: quem dirige liga, espera a lenta assentar, engata e pisa; o câmbio é o do preset
+    ({ d, sp } = novo(id, op));
+    const [ped, t0] = op.arrancada;
+    cen = { portador: 'carro', eventos: [
+      [0, (x) => { x.message({ type: 'input', temp: { mode: 'fixed', value: 90 } }); x.message({ type: 'input', ignition: true }); }],
+      [t0, (x) => { x.message({ type: 'input', shift: 1 }); x.message({ type: 'input', throttle: ped }); }],
+      [op.ate ?? op.dur, null],
+    ] };
+    modo = `arrancada com ${Math.round(100 * ped)}% de pedal`;
+  } else if (op.cenario) {
     ({ d, sp } = novo(id, op));
     cen = CEN_EXTRA[op.cenario] || CENARIOS[op.cenario](sp);
     if (cen.portador && cen.portador !== 'nenhum0') d.message({ type: 'diesel', portador: cen.portador });
@@ -172,24 +191,29 @@ export function render(id: string, op: Op) {
   const descarta = cen ? op.de ?? 0 : op.descarta ?? (fixo ? 2.5 : 8); // (travado: o turbo já parte assentado)
   const dur = cen ? (op.ate ?? cen.eventos[cen.eventos.length - 1][0]) - descarta : op.dur;
   const n0 = Math.round(descarta * SR), n = Math.round(dur * SR);
-  const m = new Float32Array(n), tele: any[] = [];
-  let somaRpm = 0, cont = 0, rpmMin = Infinity, rpmMax = 0, ei = 0, nan = 0, pico = 0;
+  const m = new Float32Array(n), tele: any[] = [], fase: number[] = [];
+  let somaRpm = 0, cont = 0, rpmMin = Infinity, rpmMax = 0, ei = 0, nan = 0, pico = 0, thAnt = d.theta, ciclos = 0;
   for (let i = -n0; i < n; i += B) {
     if (cen) { const t = (i + n0) / SR; while (ei < cen.eventos.length && cen.eventos[ei][0] <= t) { cen.eventos[ei][1]?.(d); ei++; } }
     if (op.degrau && i >= op.degrau[2] * SR) d.combExterno = op.degrau[1];
     d.process(l, r, B);
+    // ângulo do virabrequim desenrolado (o `theta` do DSP volta a zero a cada ciclo)
+    if (d.theta < thAnt - 0.5 * d.ciclo) ciclos++;
+    thAnt = d.theta;
     if (i >= 0) {
       const k = Math.min(B, n - i);
       for (let j = 0; j < k; j++) { const v = 0.5 * (l[j] + r[j]); m[i + j] = v; if (!Number.isFinite(v)) nan++; else if (Math.abs(v) > pico) pico = Math.abs(v); }
       somaRpm += d.rpmAvg; cont++; rpmMin = Math.min(rpmMin, d.rpmAvg); rpmMax = Math.max(rpmMax, d.rpmAvg);
-      if (cont % 8 === 1) tele.push({ t: +(i / SR).toFixed(4), rpm: +d.rpmAvg.toFixed(1), comb: +d.fuelCmd.toFixed(4), turbo: +(d.turboW || 0).toFixed(4), boost: +(d.boost || 0).toFixed(4), lambda: +(d.lamM || 0).toFixed(2), dpdth: +(d.dpM || 0).toFixed(2), pMax: +((d.pMaxM || 0) / 1e5).toFixed(1), marcha: d.gear });
+      if (!fixo) fase.push(+(ciclos + d.theta / d.ciclo).toFixed(5));
+      if (cont % 8 === 1) tele.push({ t: +(i / SR).toFixed(4), rpm: +d.rpmAvg.toFixed(1), comb: +d.fuelCmd.toFixed(4), turbo: +(d.turboW || 0).toFixed(4), boost: +(d.boost || 0).toFixed(4), lambda: +(d.lamM || 0).toFixed(2), dpdth: +(d.dpM || 0).toFixed(2), pMax: +((d.pMaxM || 0) / 1e5).toFixed(1), marcha: d.gear, kmh: +(d.v * 3.6).toFixed(1) });
     }
   }
   const rpm = somaRpm / Math.max(1, cont), voltas = d.tempos / 2;
   const info = { preset: id, familia: 'diesel', modo, rpm: +rpm.toFixed(1), rpmMin: +rpmMin.toFixed(1), rpmMax: +rpmMax.toFixed(1), f0: +(rpm / (60 * voltas)).toFixed(4), fixo,
     eventosPorCiclo: d.N, voltasPorCiclo: voltas, comb: Number.isFinite(comb) ? comb : +d.fuelCmd.toFixed(4), degrau: op.degrau, turbo: +(d.turboW || 0).toFixed(3), boostBar: +(d.boost || 0).toFixed(3), lambda: +(d.lamM || 0).toFixed(2),
     dpdth: +(d.dpM || 0).toFixed(2), pMaxBar: +((d.pMaxM || 0) / 1e5).toFixed(1), ouvinte: op.ouvinte, ambiente: op.ambiente, sem: op.sem, escala: op.escala, semente: op.semente ?? 12345,
-    ganho: +d.cfgGain.toFixed(4), pico: +pico.toFixed(4), nan, estado: d.state, campo: op.campo, sr: SR, dur, tele };
+    ganho: +d.cfgGain.toFixed(4), pico: +pico.toFixed(4), nan, estado: d.state, campo: op.campo, sr: SR, dur, tele,
+    ...(fixo ? {} : { bloco: B, fase }), ...(op.arrancada ? { arrancada: op.arrancada } : {}) };
   return { m, info };
 }
 
@@ -213,22 +237,23 @@ function salvar(arq: string, r: { m: Float32Array; info: any }, quieto = false) 
 
 if (process.argv[1] && process.argv[1].endsWith('diesel-ouvido-render.ts')) {
   const a = process.argv.slice(2);
-  const BOOL = ['--lenta', '--ambiente', '--cada'];
+  const BOOL = ['--lenta', '--ambiente', '--cada', '--antes'];
   const pos = a.filter((x, i) => !x.startsWith('--') && !(i > 0 && a[i - 1].startsWith('--') && !BOOL.includes(a[i - 1])));
   const val = (k: string) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : undefined; };
   const num = (k: string) => (val(k) !== undefined ? +val(k)! : undefined);
   const tem = (k: string) => a.includes(k);
   const [id, saida] = pos;
-  if (!id || !saida) { console.error('uso: tsx tools/diesel-ouvido-render.ts <preset> <saida.wav | pasta/ --cada> [--rpm R [--comb x | --degrau c0,c1,t] | --lenta | --cenario nome [--de s --ate s]] [--dur s] [--descarta s] [--ouvinte ext] [--ambiente] [--campo JSON] [--sem a,b] [--escala a=g] [--semente N]'); process.exit(2); }
+  if (!id || !saida) { console.error('uso: tsx tools/diesel-ouvido-render.ts <preset> <saida.wav | pasta/ --cada> [--rpm R [--comb x | --degrau c0,c1,t] | --lenta | --cenario nome [--de s --ate s]] [--dur s] [--descarta s] [--ouvinte ext] [--ambiente] [--campo JSON] [--antes] [--sem a,b] [--escala a=g] [--semente N]'); process.exit(2); }
   const op: Op = {
     rpm: num('--rpm'), comb: num('--comb'), agua: num('--agua'), degrau: val('--degrau') ? (val('--degrau')!.split(',').map(Number) as [number, number, number]) : undefined, lenta: tem('--lenta'),
-    cenario: val('--cenario'), de: num('--de'), ate: num('--ate'), dur: num('--dur') ?? 12, descarta: num('--descarta'), ouvinte: val('--ouvinte') || 'ext', ambiente: tem('--ambiente'),
-    campo: JSON.parse(val('--campo') || '{}'), sem: (val('--sem') || '').split(',').filter(Boolean),
+    cenario: val('--cenario'), arrancada: val('--arrancada') ? (([p, t0 = 4]) => [p, t0] as [number, number])(val('--arrancada')!.split(',').map(Number)) : undefined,
+    de: num('--de'), ate: num('--ate'), dur: num('--dur') ?? (val('--arrancada') ? 30 : 12), descarta: num('--descarta'), ouvinte: val('--ouvinte') || 'ext', ambiente: tem('--ambiente'),
+    campo: { ...(tem('--antes') ? ANTES_DOS_MEDIOS[id] : {}), ...JSON.parse(val('--campo') || '{}') }, sem: (val('--sem') || '').split(',').filter(Boolean),
     escala: (val('--escala') || '').split(',').filter(Boolean).map((kv) => { const [k, v] = kv.split('='); return [k, +v] as [string, number]; }), semente: num('--semente'),
   };
   if (tem('--cada')) {
     fs.mkdirSync(saida, { recursive: true });
-    const cond = op.cenario ? op.cenario : op.rpm && !op.lenta ? `${Math.round(op.rpm)}rpm${op.degrau ? `-degrau` : op.comb !== undefined ? `-c${Math.round(op.comb * 100)}` : ''}` : 'lenta';
+    const cond = op.arrancada ? `arrancada${Math.round(100 * op.arrancada[0])}` : op.cenario ? op.cenario : op.rpm && !op.lenta ? `${Math.round(op.rpm)}rpm${op.degrau ? `-degrau` : op.comb !== undefined ? `-c${Math.round(op.comb * 100)}` : ''}` : 'lenta';
     const base = path.join(saida, `${id}_${cond}_${op.ouvinte}`);
     const tudo = render(id, op);
     salvar(`${base}_tudo.wav`, tudo);

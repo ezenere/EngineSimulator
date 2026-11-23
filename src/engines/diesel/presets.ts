@@ -53,6 +53,7 @@ export type PresetDiesel = PresetRonco & {
   ressonancia?: number; // quanto o bloco ressoa depois de cada pancada (multiplica o fator de qualidade dos modos; padrão 1)
   desigualdade?: number; // quanto os cilindros soam diferentes entre si para quem ouve (multiplica a dispersão dos caminhos; padrão 1)
   cofre?: number; // dB das reflexões do cofre sobre o som direto da mecânica (padrão −10: constantes.ts → COFRE)
+  corpo?: number; // dB que as chapas presas ao bloco (cárter, tampas) somam à irradiação de 400 a 2500 Hz de cada pancada (padrão 0, como era até a 4ª passada: constantes.ts → CORPO)
   jatoBoca?: number; // dB no chiado do jato livre na boca do escape (padrão 0: constantes.ts → K_JATO). (Não é o `jato` do motor-base, que escolhe a lei do jato do Ronco)
   ponteira?: number; // polegadas: diâmetro da boca de saída, de que depende o jato (padrão: o diâmetro do escape)
   mecanica?: number; // dB sobre a mecânica referida ao knock do próprio motor (acerto contra as gravações) // velas: espera = (1 s + 8 s·frio)·glowK (moderno 0,3)
@@ -85,7 +86,16 @@ export const PADRAO_DIESEL: Partial<PresetDiesel> = {
   jakeCilindros: undefined, soprador: undefined, janelas: undefined, J: undefined, glowK: 1, bsfc: undefined, avanco: undefined,
   turboEngrenagem: undefined, ordemReal: undefined, gerador: undefined, locomotiva: undefined, ratios: undefined, finalDrive: undefined,
   wheelR: undefined, drag: undefined, mass: undefined,
-  ressonancia: undefined, desigualdade: undefined, cofre: undefined, jatoBoca: undefined, ponteira: undefined, turboChiado: undefined, turboLenta: undefined, turboPonta: undefined,
+  ressonancia: undefined, desigualdade: undefined, cofre: undefined, corpo: undefined, carcaca: undefined, jatoBoca: undefined, ponteira: undefined, turboChiado: undefined, turboLenta: undefined, turboPonta: undefined,
+};
+
+// Valores de antes da 5ª passada de som (os médios; TECNICO.md → Diesel → Quinta passada): o que cada preset tinha nos
+// campos que ela mudou. O painel mostra essa posição ao lado do valor do controle ("antes +17 dB"; "como era" quando o
+// controle está nela) e `tools/diesel-ouvido-render.ts --antes` renderiza com eles: é o som aprovado pelo dono em
+// 23/11/2026, amostra a amostra. Para voltar atrás de vez, ponha estes valores de volta nos presets abaixo
+export const ANTES_DOS_MEDIOS: Record<string, Partial<PresetDiesel>> = {
+  scaniav8: { corpo: 0 }, volvod13: { corpo: 0 }, catc15: { corpo: 0 }, onibusisl: { corpo: 0 },
+  hilux28: { corpo: 0 }, ram67: { corpo: 0 }, psd73: { corpo: 0 },
 };
 
 // bases
@@ -111,7 +121,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     idle: 780, redline: 4400, rpmMax: 4400, rpmPotencia: 3400, power: 150, torque: 500, inertia: 1.6,
     injecao: 'common-rail', piloto: true, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.4, turboTipo: 'vgt', turboRpmMax: 190000, turboPas: 6, turboApito: -14, turboTau: [0.8, 1.5],
-    freioMotor: 'nenhum', escape: leve(4.2), muffler: 'stock', pipeLen: 4.2, glow: true, mecanica: 5, glowK: 0.3,
+    freioMotor: 'nenhum', escape: leve(4.2), muffler: 'stock', pipeLen: 4.2, glow: true, mecanica: 5, corpo: 3, glowK: 0.3,
     gears: 6, transmission: 'auto', shiftTime: 0.5, ratios: [3.6, 2.09, 1.49, 1.0, 0.69, 0.58], finalDrive: 3.909, wheelR: 0.375, mass: 2200, drag: 0.72, // (raio dinâmico do 265/65 R17 carregado: 0,388 m livre × 0,967)
     portadores: ['carro', 'nenhum'],
   },
@@ -131,7 +141,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     idle: 750, redline: 3200, rpmMax: 3200, rpmPotencia: 2800, power: 276, torque: 1085, inertia: 1.3,
     injecao: 'common-rail', piloto: true, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.9, turboTipo: 'vgt', turboRpmMax: 130000, turboPas: 7, turboApito: -12, turboLenta: 0.24, turboTau: [1.0, 1.8],
-    freioMotor: 'vgt', escape: leve(4.6, 4), muffler: 'stock', pipeLen: 4.6, pipeD: 4, glow: true, glowK: 0.3, mecanica: 10,
+    freioMotor: 'vgt', escape: leve(4.6, 4), muffler: 'stock', pipeLen: 4.6, pipeD: 4, glow: true, glowK: 0.3, mecanica: 10, corpo: 3,
     gears: 6, transmission: 'auto', shiftTime: 0.55, ratios: [3.23, 1.84, 1.41, 1.0, 0.82, 0.63], finalDrive: 3.73, wheelR: 0.4, mass: 3500, drag: 0.85,
     portadores: ['carro', 'nenhum'],
   },
@@ -151,7 +161,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     idle: 680, redline: 3300, rpmMax: 3300, rpmPotencia: 2600, power: 186, torque: 678, inertia: 1.3,
     injecao: 'heui', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.15,
     aspiration: 'turbo', boost: 1.3, turboTipo: 'wastegate', turboRpmMax: 120000, turboPas: 7, turboApito: -14, turboTau: [1.2, 2.0],
-    freioMotor: 'nenhum', escape: leve(4.6, 4, false), muffler: 'sport', pipeLen: 4.6, pipeD: 4, glow: true, mecanica: 6, glowK: 0.6,
+    freioMotor: 'nenhum', escape: leve(4.6, 4, false), muffler: 'sport', pipeLen: 4.6, pipeD: 4, glow: true, mecanica: 6, corpo: 3, glowK: 0.6,
     gears: 4, transmission: 'auto', shiftTime: 0.6, ratios: [2.71, 1.54, 1.0, 0.71], finalDrive: 3.73, wheelR: 0.4, mass: 3400, drag: 0.9,
     portadores: ['carro', 'nenhum'],
   },
@@ -195,7 +205,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     injecao: 'unitaria', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.6, turboTipo: 'wastegate', turboRpmMax: 95000, turboPas: 7, turboApito: -13, turboTau: [1.5, 2.5],
     freioMotor: 'descarga', escape: { turbina: true, dpf: false, abafador: 'abafador-caminhao', comprimento: 3.5, diametro: 5, chamine: { altura: 0.8, diametro: 5 }, tempGas: 500 },
-    muffler: 'stock', pipeLen: 3.5, pipeD: 5, glow: false, mecanica: 17, engine: 'mid',
+    muffler: 'stock', pipeLen: 3.5, pipeD: 5, glow: false, mecanica: 17, corpo: 4, engine: 'mid',
     gears: 12, transmission: 'auto', shiftTime: 1.0, ratios: [11.32, 9.14, 7.19, 5.8, 4.63, 3.74, 3.02, 2.44, 1.92, 1.55, 1.24, 1.0], finalDrive: 3.08, wheelR: 0.52, mass: 40000, drag: 3.6,
     portadores: ['carro', 'gerador', 'nenhum'],
     gerador: { fRede: 60, polos: 4, eta: 0.95, Jalt: 10, pas: 10, kWe: 300 },
@@ -207,7 +217,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     injecao: 'unitaria', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.7, turboTipo: 'wastegate', turboRpmMax: 95000, turboPas: 7, turboApito: -13, turboTau: [1.5, 2.5],
     freioMotor: 'veb', escape: { turbina: true, dpf: false, abafador: 'abafador-caminhao', comprimento: 3.2, diametro: 5, chamine: { altura: 1.0, diametro: 5 }, tempGas: 500 },
-    muffler: 'stock', pipeLen: 3.2, pipeD: 5, glow: false, mecanica: 22, engine: 'mid',
+    muffler: 'stock', pipeLen: 3.2, pipeD: 5, glow: false, mecanica: 22, corpo: 4, engine: 'mid',
     gears: 12, transmission: 'auto', shiftTime: 0.9, ratios: [14.94, 11.73, 9.04, 7.09, 5.54, 4.35, 3.44, 2.7, 2.08, 1.63, 1.27, 1.0], finalDrive: 2.85, wheelR: 0.52, mass: 40000, drag: 3.6,
     portadores: ['carro', 'gerador', 'nenhum'],
     gerador: { fRede: 60, polos: 4, eta: 0.95, Jalt: 10, pas: 10, kWe: 300 },
@@ -220,7 +230,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     aspiration: 'turbo', boost: 1.7, turboTipo: 'wastegate', turboRpmMax: 95000, turboPas: 7, turboApito: -13, turboTau: [1.5, 2.5],
     freioMotor: 'jake', jakeCilindros: [2, 4, 6],
     escape: { turbina: true, dpf: false, abafador: 'abafador-caminhao', comprimento: 2.6, diametro: 5, chamine: { altura: 3.5, diametro: 5 }, saidas: 2, tempGas: 500 },
-    muffler: 'stock', pipeLen: 2.6, pipeD: 5, glow: false, mecanica: 15, engine: 'mid',
+    muffler: 'stock', pipeLen: 2.6, pipeD: 5, glow: false, mecanica: 15, corpo: 3, engine: 'mid',
     gears: 10, transmission: 'auto', shiftTime: 1.1, ratios: [14.4, 8.56, 6.05, 4.38, 3.2, 1.95, 1.38, 1.0, 0.86, 0.73], finalDrive: 3.55, wheelR: 0.52, mass: 36000, drag: 3.8,
     portadores: ['carro', 'gerador', 'nenhum'],
     gerador: { fRede: 60, polos: 4, eta: 0.95, Jalt: 10, pas: 10, kWe: 350 },
@@ -232,7 +242,7 @@ export const PRESETS: PresetDiesel[] & { families: FamiliaDiesel[] } = Object.as
     injecao: 'common-rail', piloto: false, idi: false, eletronico: true, governador: 'min-max', limiteFumaca: 1.25,
     aspiration: 'turbo', boost: 1.6, turboTipo: 'vgt', turboRpmMax: 95000, turboPas: 7, turboApito: -13, turboTau: [1.5, 2.5],
     freioMotor: 'vgt', escape: { turbina: true, dpf: true, abafador: 'abafador-caminhao', comprimento: 6, diametro: 5, chamine: null, tempGas: 500 },
-    muffler: 'stock', pipeLen: 6, pipeD: 5, glow: false, mecanica: 17,
+    muffler: 'stock', pipeLen: 6, pipeD: 5, glow: false, mecanica: 17, corpo: 3,
     gears: 6, transmission: 'auto', shiftTime: 0.8, ratios: [3.36, 1.91, 1.42, 1.0, 0.72, 0.62], finalDrive: 5.74, wheelR: 0.51, mass: 18000, drag: 3.2,
     portadores: ['carro', 'gerador', 'nenhum'],
     gerador: { fRede: 60, polos: 4, eta: 0.95, Jalt: 8, pas: 10, kWe: 180 },

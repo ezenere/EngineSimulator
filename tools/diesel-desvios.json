@@ -217,44 +217,44 @@
   },
   "leve · exterior · ram67 lenta fria: 1–2,5 kHz": {
     "grupo": "bandas-b",
-    "medido": -3.319,
+    "medido": -1.092,
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "−8 ± 4 dB",
-    "motivo": "referência interna (Cummins a −23 °C, vídeo): a mecânica +10 dB que o real3 pede no Cummins em lenta deixa o frio 5 dB mais agudo; o escape de 4\" irradia grave na câmera atrás [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (−3,32 / −3,4 / −3,81 nas bases 0, 1000 e 2000, alvo −8 ± 4 dB); fica declarada à beira, com teto.]",
-    "beira": true
+    "motivo": "referência interna (Cummins a −23 °C, vídeo): a mecânica +10 dB que o real3 pede no Cummins em lenta deixa o frio 5 dB mais agudo; o escape de 4\" irradia grave na câmera atrás [23/11/2026, 5ª passada (os médios: `corpo` nos presets): o corpo da batida (+3 dB no Ram) sobe a banda de −3,3 para −1,0 / −1,1 / −1,5 dB nas bases 0, 1000 e 2000; deixou de estar à beira do alvo (3 dB além do limite). É o lado pedido: o dono ouviu falta de médios também na lenta; se o veredito dele for contra, o caminho de volta é `corpo: 0` no preset (ANTES_DOS_MEDIOS).]"
   },
   "leve · exterior · ram67 lenta fria: centroide": {
     "grupo": "bandas-b",
-    "medido": 220.9,
+    "medido": 275,
     "unidade": "Hz",
     "folga": "±5 %",
     "alvo": "270–450 Hz",
-    "motivo": "referência interna (Cummins a −23 °C, vídeo): a mecânica +10 dB que o real3 pede no Cummins em lenta deixa o frio 5 dB mais agudo; o escape de 4\" irradia grave na câmera atrás"
+    "motivo": "referência interna (Cummins a −23 °C, vídeo): a mecânica +10 dB que o real3 pede no Cummins em lenta deixa o frio 5 dB mais agudo; o escape de 4\" irradia grave na câmera atrás [23/11/2026, 5ª passada (os médios: `corpo` nos presets): com o corpo da batida o centroide sobe de 221 para 279 / 275 / 265 Hz nas bases 0, 1000 e 2000: passa em duas e falha na terceira por 5 Hz; fica declarada à beira, com teto.]",
+    "beira": true
   },
   "leve · exterior · ram67 lenta fria: 1–4 kHz": {
     "grupo": "bandas-b",
-    "medido": -2.928,
+    "medido": -0.8088,
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "−8 ± 4 dB",
-    "motivo": "referência interna (Cummins a −23 °C, vídeo): a mecânica +10 dB que o real3 pede no Cummins em lenta deixa o frio 5 dB mais agudo; o escape de 4\" irradia grave na câmera atrás"
+    "motivo": "referência interna (Cummins a −23 °C, vídeo): a mecânica +10 dB que o real3 pede no Cummins em lenta deixa o frio 5 dB mais agudo; o escape de 4\" irradia grave na câmera atrás [23/11/2026, 5ª passada (os médios: `corpo` nos presets): pelo mesmo corpo da batida (+3 dB), de −2,9 para −0,7 / −0,8 / −1,2 dB nas três bases.]"
   },
   "pesado · escape · catc15 lenta: 1–2,5 kHz": {
     "grupo": "bandas-b",
-    "medido": -14.38,
+    "medido": -12.86,
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "≤ −18 dB",
-    "motivo": "a mecânica que a câmera de lado pede vaza para o microfone do escape"
+    "motivo": "a mecânica que a câmera de lado pede vaza para o microfone do escape [23/11/2026, 5ª passada (os médios: `corpo` nos presets): o corpo da batida (+3 dB no Cat) soma ao que já vazava: de −14,4 para −12,7 / −12,9 / −13,1 dB nas três bases.]"
   },
   "pesado · escape · catc15 lenta: centroide": {
     "grupo": "bandas-b",
-    "medido": 277.5,
+    "medido": 298.8,
     "unidade": "Hz",
     "folga": "±5 %",
     "alvo": "125–200 Hz",
-    "motivo": "a mecânica que a câmera de lado pede vaza para o microfone do escape"
+    "motivo": "a mecânica que a câmera de lado pede vaza para o microfone do escape [23/11/2026, 5ª passada (os médios: `corpo` nos presets): pelo mesmo corpo da batida, de 278 para 304 / 299 / 297 Hz nas três bases.]"
   },
   "real3 · picape lenta (hilux28, ranger32, ram67): 60–150": {
     "grupo": "real3-a",
@@ -644,11 +644,11 @@
   },
   "pesado · exterior · onibusisl lenta: 1–2,5 kHz": {
     "grupo": "projeto-a",
-    "medido": 1.053,
+    "medido": 2.724,
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "−2,5 ± 2 dB",
-    "motivo": "sem diagnóstico. Alvo do projeto (DIESEL.md, tabela 2.6, linha 3: pesado, de fora e de lado, em lenta), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o Cat C15 na mesma condição passa nas cinco medidas. O ônibus fica 3 a 4 dB mais claro em 1–4 kHz relativo a 150–400 Hz e o centroide passa de 900 Hz. Pista não conferida: na lenta dos pesados o simulado tem pouca energia em 150–400 Hz (TECNICO, Diesel, 4ª passada, \"O grave da lenta sobra\"), e as bandas relativas a ela sobem."
+    "motivo": "sem diagnóstico. Alvo do projeto (DIESEL.md, tabela 2.6, linha 3: pesado, de fora e de lado, em lenta), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o Cat C15 na mesma condição passa nas cinco medidas. O ônibus fica 3 a 4 dB mais claro em 1–4 kHz relativo a 150–400 Hz e o centroide passa de 900 Hz. Pista não conferida: na lenta dos pesados o simulado tem pouca energia em 150–400 Hz (TECNICO, Diesel, 4ª passada, \"O grave da lenta sobra\"), e as bandas relativas a ela sobem. [23/11/2026, 5ª passada (os médios: `corpo` nos presets): o corpo da batida (+3 dB no ônibus) afasta mais do alvo do projeto: de +1,1 para +2,7 / +2,9 / +2,7 dB nas três bases. O alvo é relativo a 150–400 Hz; contra a gravação casada, relativo ao total, os médios da lenta estavam 3 a 5 dB baixos (TECNICO, Diesel, quinta passada), e o dono pediu médios também na lenta. O Cat C15 na mesma condição deixou de passar nas cinco: 1–2,5 kHz e 1–4 kHz ficam a até 0,24 dB do limite (entradas próprias, à beira).]"
   },
   "pesado · exterior · onibusisl lenta: centroide": {
     "grupo": "projeto-a",
@@ -660,11 +660,11 @@
   },
   "pesado · exterior · onibusisl lenta: 1–4 kHz": {
     "grupo": "projeto-a",
-    "medido": 1.697,
+    "medido": 3.194,
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "−2 ± 2 dB",
-    "motivo": "sem diagnóstico. Alvo do projeto (DIESEL.md, tabela 2.6, linha 3: pesado, de fora e de lado, em lenta), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o Cat C15 na mesma condição passa nas cinco medidas. O ônibus fica 3 a 4 dB mais claro em 1–4 kHz relativo a 150–400 Hz e o centroide passa de 900 Hz. Pista não conferida: na lenta dos pesados o simulado tem pouca energia em 150–400 Hz (TECNICO, Diesel, 4ª passada, \"O grave da lenta sobra\"), e as bandas relativas a ela sobem."
+    "motivo": "sem diagnóstico. Alvo do projeto (DIESEL.md, tabela 2.6, linha 3: pesado, de fora e de lado, em lenta), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o Cat C15 na mesma condição passa nas cinco medidas. O ônibus fica 3 a 4 dB mais claro em 1–4 kHz relativo a 150–400 Hz e o centroide passa de 900 Hz. Pista não conferida: na lenta dos pesados o simulado tem pouca energia em 150–400 Hz (TECNICO, Diesel, 4ª passada, \"O grave da lenta sobra\"), e as bandas relativas a ela sobem. [23/11/2026, 5ª passada (os médios: `corpo` nos presets): pelo mesmo corpo da batida, de +1,7 para +3,2 / +3,3 / +3,2 dB nas três bases.]"
   },
   "EMD · lenta: 60–150": {
     "grupo": "projeto-b",
@@ -820,35 +820,28 @@
   },
   "real3 · caminhão carga, cabine (scaniav8): 400–1k": {
     "grupo": "real3-c",
-    "medido": -12.17,
+    "medido": -8.978,
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "-9.2 a -0.5 dB",
-    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
-  },
-  "real3 · caminhão carga, cabine (scaniav8): 1–2,5k": {
-    "grupo": "real3-c",
-    "medido": -17.43,
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "-15.0 a -4.6 dB",
-    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
+    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros [23/11/2026, 5ª passada (os médios: `corpo` nos presets): com o corpo da batida (+4 dB) a banda sobe de −12,2 para −9,1 / −9,0 / −9,0 dB nas bases 0, 1000 e 2000 e passa a caber na faixa da classe por 0,1 a 0,24 dB (menos de 5 % da tolerância): fica declarada à beira, com teto.]",
+    "beira": true
   },
   "real3 · caminhão carga, cabine (scaniav8): 2,5–6k": {
     "grupo": "real3-c",
-    "medido": -36.84,
+    "medido": -35.79,
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "-22.6 a -6.4 dB",
-    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
+    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros [23/11/2026, 5ª passada (os médios: `corpo` nos presets): o corpo da batida (+4 dB no Scania) sobe a banda 1 dB, de −36,8 para −35,8 dB nas três bases; 400–1000 Hz entrou na faixa da classe por 0,1 a 0,24 dB (à beira) e 1–2,5 kHz por 0,75 a 0,93 dB (saiu do retrato).]"
   },
   "real3 · caminhão carga, cabine (scaniav8): centroide": {
     "grupo": "real3-c",
-    "medido": 223,
+    "medido": 259.8,
     "unidade": "Hz",
     "folga": "±5 %",
     "alvo": "244–711 Hz",
-    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (223 / 223 / 224 nas bases 0, 1000 e 2000, alvo 244–711 Hz); fica declarada à beira, com teto.]",
+    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros [23/11/2026, 5ª passada (os médios: `corpo` nos presets): com o corpo da batida o centroide sobe de 223 para 259 / 260 / 261 Hz e passa nas três bases por 15 a 17 Hz (menos de 5 % da tolerância): segue à beira.]",
     "beira": true
   },
   "real3 · caminhão carga, cabine (scaniav8): CV do knock": {
@@ -861,20 +854,11 @@
   },
   "real3 · ônibus carga (onibusisl): 400–1k": {
     "grupo": "real3-c",
-    "medido": -12.54,
+    "medido": -10.84,
     "unidade": "dB",
     "folga": "±1 dB",
     "alvo": "-6.9 a 2.8 dB",
-    "motivo": "o ônibus carregado é 3 dB mais escuro em 400–1000 Hz que o mais escuro da classe (gravações de dentro do ônibus têm a carroceria e a rodagem) [23/11/2026: −12,5 dB, 5,6 dB abaixo do limite da classe (−6,9).]"
-  },
-  "real3 · ônibus carga (onibusisl): 1–2,5k": {
-    "grupo": "real3-c",
-    "medido": -15.01,
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "-14.5 a 3.0 dB",
-    "motivo": "4ª passada: −15,4 dB (faixa −14,5 a 3): o mesmo que no caminhão em carga; sem o sopro do compressor sobra a batida, 1 dB abaixo da gravação mais escura [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (−15 / −14,9 / −14,9 nas bases 0, 1000 e 2000, alvo -14.5 a 3.0 dB); fica declarada à beira, com teto.]",
-    "beira": true
+    "motivo": "o ônibus carregado é 3 dB mais escuro em 400–1000 Hz que o mais escuro da classe (gravações de dentro do ônibus têm a carroceria e a rodagem) [23/11/2026: −12,5 dB, 5,6 dB abaixo do limite da classe (−6,9).] [23/11/2026, 5ª passada (os médios: `corpo` nos presets): o corpo da batida (+3 dB) sobe a banda de −12,5 para −10,8 dB nas três bases, 3,9 dB abaixo do limite da classe (−6,9); 1–2,5 kHz (−12,8 / −12,7 / −12,7 dB) passou a caber na faixa com 1,7 dB e saiu do retrato.]"
   },
   "real3 · ônibus carga (onibusisl): 2,5–6k": {
     "grupo": "real3-c",
@@ -894,12 +878,12 @@
   },
   "real3 · ônibus carga (onibusisl): CV do knock": {
     "grupo": "real3-c",
-    "medido": 0.5122,
+    "medido": 0.5733,
     "unidade": "",
     "folga": "±10 %",
     "alvo": "0.14–0.27",
-    "motivo": "o agudo de carga do ônibus era o sopro liso do compressor (60–95% do som ponderado A); modulado e 6 dB abaixo, faltam 3–4 dB acima de 2,5 kHz contra as gravações de dentro do ônibus (carroceria, rodagem, ventilação), e o CV do knock cai para 0,10 sem o ruído do sopro por cima: a queima do ISL9 com injeção longa é regular demais [23/11/2026: o CV do knock está em 0,51 (mediana de 3 sementes; de 0,49 a 0,57 entre elas), acima da faixa e não abaixo: a frase do CV acima é da 3ª passada. Sem diagnóstico do valor de hoje; a 4ª passada achou o mesmo efeito nas picapes (0,57: cada batida é um clique de forma fixa por cilindro, com um cilindro dominante), sem conferir no ônibus.]",
-    "nota_folga": "folga alargada: o valor vai de 0,512 / 0,552 / 0,55 entre as bases 0, 1000 e 2000"
+    "motivo": "o agudo de carga do ônibus era o sopro liso do compressor (60–95% do som ponderado A); modulado e 6 dB abaixo, faltam 3–4 dB acima de 2,5 kHz contra as gravações de dentro do ônibus (carroceria, rodagem, ventilação), e o CV do knock cai para 0,10 sem o ruído do sopro por cima: a queima do ISL9 com injeção longa é regular demais [23/11/2026: o CV do knock está em 0,51 (mediana de 3 sementes; de 0,49 a 0,57 entre elas), acima da faixa e não abaixo: a frase do CV acima é da 3ª passada. Sem diagnóstico do valor de hoje; a 4ª passada achou o mesmo efeito nas picapes (0,57: cada batida é um clique de forma fixa por cilindro, com um cilindro dominante), sem conferir no ônibus.] [23/11/2026, 5ª passada (os médios: `corpo` nos presets): com o corpo da batida o CV vai a 0,53 / 0,58 / 0,57 nas bases 0, 1000 e 2000 (era 0,51 / 0,55 / 0,55): o clique do cilindro dominante pesa mais na banda medida.]",
+    "nota_folga": "folga alargada: o valor vai de 0,534 / 0,578 / 0,573 entre as bases 0, 1000 e 2000"
   },
   "real3 · turbo: VGT do Cummins 6.7 em lenta": {
     "grupo": "real3-tom",
@@ -945,5 +929,23 @@
     "alvo": "≤ 40% do tempo real (DIESEL.md 8.1)",
     "motivo": "sem diagnóstico. O portão do DIESEL.md é o da EMD em notches (o caso mais caro); a Duramax é o terceiro preset mais caro na tabela de CPU por família da AUDITORIA (35 % do quantum na mediana, 55 % no p99, no navegador) e, em plena carga travada, passa dos 40 % em Node.",
     "nota_folga": "teto de um lado só (+30 %) sobre a razão ao Chiron (W16 como V16) do Ronco, a referência do DIESEL.md 8.1, rodado alternado com o caso em trechos de 0,25 s: o tempo de CPU sozinho quase dobra com a máquina ocupada (a Duramax deu 46 % e 84 % em duas rodadas de 23/11/2026), a razão muda de 2 a 10 % entre rodadas"
+  },
+  "pesado · exterior · catc15 lenta: 1–2,5 kHz": {
+    "grupo": "projeto-a",
+    "medido": -0.338,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "−2,5 ± 2 dB",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 2.6, linha 3: pesado, de fora e de lado, em lenta). Passava até a 4ª passada; 23/11/2026, 5ª passada (os médios: `corpo` nos presets): o corpo da batida (+3 dB no Cat C15) deixa a lenta mais clara, −0,29 / −0,34 / −0,47 dB nas bases 0, 1000 e 2000, a até 0,21 dB do limite (−0,5). É o lado pedido pelo dono (faltam médios também na lenta); fica declarada à beira, com teto. Caminho de volta: `corpo: 0` no preset.",
+    "beira": true
+  },
+  "pesado · exterior · catc15 lenta: 1–4 kHz": {
+    "grupo": "projeto-a",
+    "medido": 0.1568,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "−2 ± 2 dB",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 2.6, linha 3: pesado, de fora e de lado, em lenta). Passava até a 4ª passada; 23/11/2026, 5ª passada (os médios: `corpo` nos presets): o corpo da batida (+3 dB no Cat C15) deixa a lenta mais clara, +0,24 / +0,16 / +0,06 dB nas bases 0, 1000 e 2000, a até 0,24 dB do limite (0). É o lado pedido pelo dono (faltam médios também na lenta); fica declarada à beira, com teto. Caminho de volta: `corpo: 0` no preset.",
+    "beira": true
   }
 }

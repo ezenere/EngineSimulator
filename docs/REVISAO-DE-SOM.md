@@ -592,7 +592,8 @@ o chocalho das engrenagens é de 1 a 10% do som ponderado A, e 0% em carga.
   falta é conteúdo tonal do escape e da carcaça dele nessa faixa, que é o mecanismo genérico do caminho compartilhado
   (ver "Caso: os médios"). A carcaça do escape do motor-base ficou ligada ao Diesel e desligada nos presets (controle
   "Carcaça do escape"): com o valor dos carros (−6 dB) nenhuma banda muda; com +18 a +24 dB sobem as linhas de 400–1000 Hz
-  em carga (2 a 7 dB), e nada de 1 a 2,5 kHz.
+  em carga (2 a 7 dB), e nada de 1 a 2,5 kHz. *(Retocado na quinta passada, abaixo: medida no microfone padrão, a
+  carcaça alisa o pulso e ficou desligada; os médios subiram pelo corpo da batida.)*
 - **A lenta continua mais seca que as gravações**: p90/p10 de 1–6 kHz de 14–21 dB contra 5–13, já com as engrenagens
   (sem elas, 19–27). O controle "Reflexos do cofre" enche mais o intervalo; o padrão ficou baixo para a carga não perder
   os pulsos.
@@ -605,6 +606,43 @@ o chocalho das engrenagens é de 1 a 10% do som ponderado A, e 0% em carga.
   (`src/carriers/gerador.ts`, `locomotiva.ts`), mas só a Cena os monta; a página do Diesel roda o motor com a carga
   interna.
 - A 2ª ordem de queima do 6 em linha em carga (153 Hz a 1535 rpm) sai 10 dB abaixo da gravação de cabine do C15.
+
+**Quinta passada: os médios, no padrão de quem ouve.** O dono aprovou o som acima ("agora sim é motor a diesel mesmo") e sentiu
+"um pouco de falta nos médios", "tanto acelerando quanto na lenta", ouvindo "no padrão" da página, sem mexer em controle
+nenhum. O retoque foi um campo só, o corpo da batida (`corpo`: quanto as chapas presas ao bloco, cárter e tampas, somam à
+irradiação dos modos de 400 Hz a 2,5 kHz), com +3 ou +4 dB em sete presets: os médios sobem 2 a 3 dB na lenta e com
+meio pedal e, com o pé no fundo, 1 a 3 dB em 1–2,5 kHz e 0 a 1,7 dB em 400–1000 Hz; o grave do escape, o turbo e o
+instante de cada pancada ficam onde estavam (`TECNICO.md` → Diesel → Quinta passada, com a tabela antes × depois ×
+gravação e a de volta atrás). No meio da passada o câmbio automático mudou (com o pé no fundo passou a levar o giro até
+perto da faixa vermelha) e a medida de aceleração foi refeita: vale a do gesto que o dono faz hoje, e a de troca cedo
+ficou para casar a rotação das gravações. O que ela ensinou:
+
+- **Meça onde o dono ouve, não onde há gravação.** As gravações de carga são de cabine, e a 4ª passada mediu a falta de
+  médios no ouvinte `int`. No microfone padrão (`ext`) a conta é outra: a carcaça do escape, que na cabine parecia o
+  caminho, ali alisa o pulso (o p90/p10 de 400–1000 Hz cai 2,8 dB no Cat com o pé no fundo e 3,6 dB na lenta, por
+  +0,2 dB de nível) e nas picapes soma 11 a 19 dB com o valor que servia aos caminhões. O gesto também é o do dono:
+  `tools/diesel-ouvido-render.ts --arrancada` liga, engata, pisa e deixa o câmbio do preset trocar; o render grava a
+  fase do virabrequim e a análise síncrona vale com o giro subindo.
+- **A âncora engana quando a banda âncora e a banda medida vêm da mesma fonte.** Na lenta do Scania e do Volvo,
+  150–400 Hz também é a batida: os médios "casavam" com as gravações relativos a ela e ficavam 3 a 5 dB baixos relativos
+  ao total. Nas picapes é o contrário (um buraco de 12 a 17 dB em 150–400 Hz põe os médios acima das gravações pela
+  âncora e abaixo pelo total). Olhe as duas medidas e o orçamento por fonte da banda âncora; a relativa ao total
+  depende do grave que o celular gravou, então nenhuma serve sozinha.
+- **Duas fontes pulsadas em instantes diferentes do ciclo alisam uma a outra.** O pulso do escape sai na abertura da
+  válvula e a pancada da queima no PMS; numa banda em que as duas pesam, somar qualquer uma enche o intervalo da outra.
+  Linhas a mais (HNR maior) podem vir com pulso a menos: meça o p90/p10 **da banda que subiu**, não só o de 1–6 kHz.
+- **E o HNR de uma banda cai sem entrar ruído nenhum** quando uma fonte presa ao giro, mas menos tonal, ganha peso sobre
+  outra mais tonal: a batida (HNR de +4 a +6 dB em 400–1000 Hz) contra as linhas do escape com o pé no fundo (8 a 19 dB).
+  O `ar` e o leito não se mexem; o HNR da banda cai 1 a 3 dB. É a pendência declarada desta passada.
+- **Um mecanismo linear não escolhe a condição.** O que sobe os médios da estrutura em carga sobe igual na lenta, e a
+  lenta, que é onde há gravação casada, vira o teto: o retoque parou em 2 a 3 dB com a falta de carga ainda em 3 a 8.
+  Mais que isso pede mexer na proporção entre o escape e a estrutura só em carga.
+- **No giro livre, só se isola fonte somada na saída.** Desligar a banda larga da turbina (que entra na rede de tubos)
+  muda a contrapressão, a trajetória do motor se afasta e a "contribuição" sai com 120 a 200% do nível ponderado A.
+- **O "padrão" inclui o câmbio.** O mesmo pé no fundo, com outro ponto de troca, é outra condição acústica: de
+  1230–1680 para 1560–2130 rpm o escape de 150–400 Hz dos caminhões cresce 3 a 9 dB, o pico da saída vai de 0,32–0,37
+  para 0,51–0,61 e os médios caem 2 a 8 dB em relação a ele. Anote a marcha e a faixa de rotação de cada medida de
+  aceleração, e refaça-a quando o câmbio mudar.
 
 ## Caso: Vapor: o chuff, não o sopro
 
