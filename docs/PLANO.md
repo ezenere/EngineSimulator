@@ -145,3 +145,11 @@ Em duas etapas (Opus, território `src/pages/passagem/**` e, de forma aditiva, o
 2. **O lugar e os modelos.** Cenários low poly opacos por situação (rua, linha em campo aberto, corte, estação, túnel, ponte, pista, píer, pátio) e modelos low poly dos veículos com as dimensões do portador.
 
 Regra para qualquer trabalho futuro na Passagem: a câmera é o único ouvinte, nada translúcido, e o capricho vai para o que se vê da altura do olho no ponto de chegada de cada preset.
+
+Ajuste do dono ao ver as capturas preliminares (gostou): o observador nasce num lugar onde uma pessoa ficaria para ver, nunca em cima da via, e pode ir para a via se quiser. "No túnel o personagem não ficasse no trilho, mas sim em um local de visualização, como se fossem aqueles pontos de descanso/portas/algo assim no meio do túnel. E opcionalmente pudesse ir pro trilho. O mesmo na ponte. Tipo um 'acostamento' do túnel ou da ponte."
+
+### Condução na página do Vapor (queixa do dono, 23/11/2026)
+
+"As locomotivas a vapor estão com os controles bem estranhos. Primeiro que eu não consigo acelerar, existem só estágios fixos. O apito é um 'estágio' e quando aperta ele não para mais. Tipo, não tem uma coisa como dar a partida, pronto para conduzir ou algo assim. É literalmente um estágio fixo."
+
+O palco da página só mostrava a fileira "Cenários" (roteiros); a condução ficava nas teclas e nos sliders do painel. Em correção (Opus, só `src/pages/vapor/**`, sem mexer no som): máquina pronta para partir ao ligar, com uma linha de estado; regulador, freio e apito de segurar na tela; corte automático ligado por padrão (a página encurta o corte com a velocidade, como um maquinista) e seletor de sentido; os roteiros viram "Demonstrações" e devolvem a máquina ao terminar (hoje a velocidade fica presa depois de um cruzeiro). Regra que sai daqui para todas as páginas: o que se dirige tem de estar na tela, no padrão, sem depender de dica de teclado.
