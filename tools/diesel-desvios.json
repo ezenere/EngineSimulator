@@ -905,29 +905,30 @@
   },
   "EMD 16-710 (2 tempos, 16 cilindros) em notch 8, 10 s em Node (tempo de CPU, mediana de 3)": {
     "grupo": "cpu",
-    "medido": 3.46,
+    "medido": 1.56,
     "unidade": "× V16",
     "folga": "+30 %",
     "alvo": "≤ 40% do tempo real (DIESEL.md 8.1)",
-    "motivo": "O custo é do DSP: 16 cilindros (no EMD, de 2 tempos: o dobro de eventos de válvula e de queima por volta) e o resolvedor implícito do escape (6 iterações) em todas as válvulas abertas (DIESEL.md 8.1, \"Riscos\"). A saída que o DIESEL.md prevê (baixar `solverIt` para 4 nos cilindros com razão de pressão > 3) mexe no DSP, fora das ferramentas, e o som do Diesel está aprovado como está (PLANO, 23/11/2026). No navegador, a AUDITORIA (robustez do áudio, CPU por família) mediu as duas locomotivas em 59 % do quantum na mediana e 87 a 91 % no p99.",
+    "motivo": "23/11/2026: o laço do DieselDSP ficou sem as funções que valvulas() criava a cada amostra em cada cilindro (no Node com o tsx, cada uma passava por um Object.defineProperty do nome: dois terços do tempo), com a saída idêntica nos 125 cenários de tools/diesel-identidade.ts; a razão ao V16 caiu de 3,5× para 1,6× (três rodadas alternadas com o código de antes). O que sobra passa do portão com a máquina ocupada por dois motivos: a física (16 cilindros; no EMD, de 2 tempos, o dobro de eventos de válvula e de queima por volta; o resolvedor implícito do escape, 6 iterações, em todas as válvulas abertas, 21 % do tempo) e o JIT da própria ferramenta, que monta o V16, a Hilux, as três passadas e as sondas de calibração no mesmo processo e deixa o laço comum do EngineDSP megamórfico (a EMD sozinha num processo fica a ~1,2× o V16 e a 17–20 % do tempo real, como no worklet da página). A saída que o DIESEL.md prevê (baixar `solverIt` para 4 nos cilindros com razão de pressão > 3) muda o som, aprovado como está (docs/TECNICO.md → Diesel → CPU do laço de amostra). No navegador, antes desta mudança, a AUDITORIA mediu as duas locomotivas em 59 % do quantum na mediana e 87 a 91 % no p99.",
     "nota_folga": "teto de um lado só (+30 %) sobre a razão ao Chiron (W16 como V16) do Ronco, a referência do DIESEL.md 8.1, rodado alternado com o caso em trechos de 0,25 s: o tempo de CPU sozinho quase dobra com a máquina ocupada (a Duramax deu 46 % e 84 % em duas rodadas de 23/11/2026), a razão muda de 2 a 10 % entre rodadas"
   },
   "GE 7FDL-16 (4 tempos, 16 cilindros) em notch 8, 10 s em Node (tempo de CPU, mediana de 3)": {
     "grupo": "cpu",
-    "medido": 3.53,
+    "medido": 1.54,
     "unidade": "× V16",
     "folga": "+30 %",
     "alvo": "≤ 40% do tempo real (DIESEL.md 8.1)",
-    "motivo": "O custo é do DSP: 16 cilindros e o resolvedor implícito do escape (6 iterações) em todas as válvulas abertas (DIESEL.md 8.1, \"Riscos\"). A saída que o DIESEL.md prevê (baixar `solverIt` para 4 nos cilindros com razão de pressão > 3) mexe no DSP, fora das ferramentas, e o som do Diesel está aprovado como está (PLANO, 23/11/2026). No navegador, a AUDITORIA (robustez do áudio, CPU por família) mediu as duas locomotivas em 59 % do quantum na mediana e 87 a 91 % no p99.",
+    "motivo": "23/11/2026: o laço do DieselDSP ficou sem as funções que valvulas() criava a cada amostra em cada cilindro (no Node com o tsx, cada uma passava por um Object.defineProperty do nome: dois terços do tempo), com a saída idêntica nos 125 cenários de tools/diesel-identidade.ts; a razão ao V16 caiu de 3,5× para 1,6× (três rodadas alternadas com o código de antes). O que sobra passa do portão com a máquina ocupada por dois motivos: a física (16 cilindros; o resolvedor implícito do escape, 6 iterações, em todas as válvulas abertas, 23 % do tempo) e o JIT da própria ferramenta, que monta o V16, a Hilux, as três passadas e as sondas de calibração no mesmo processo e deixa o laço comum do EngineDSP megamórfico. A saída que o DIESEL.md prevê (baixar `solverIt` para 4 nos cilindros com razão de pressão > 3) muda o som, aprovado como está (docs/TECNICO.md → Diesel → CPU do laço de amostra). No navegador, antes desta mudança, a AUDITORIA mediu as duas locomotivas em 59 % do quantum na mediana e 87 a 91 % no p99.",
     "nota_folga": "teto de um lado só (+30 %) sobre a razão ao Chiron (W16 como V16) do Ronco, a referência do DIESEL.md 8.1, rodado alternado com o caso em trechos de 0,25 s: o tempo de CPU sozinho quase dobra com a máquina ocupada (a Duramax deu 46 % e 84 % em duas rodadas de 23/11/2026), a razão muda de 2 a 10 % entre rodadas"
   },
   "Duramax 6.6 V8 em plena carga travada, 10 s em Node (tempo de CPU, mediana de 3)": {
     "grupo": "cpu",
-    "medido": 2.01,
+    "medido": 0.997,
     "unidade": "× V16",
     "folga": "+30 %",
     "alvo": "≤ 40% do tempo real (DIESEL.md 8.1)",
-    "motivo": "sem diagnóstico. O portão do DIESEL.md é o da EMD em notches (o caso mais caro); a Duramax é o terceiro preset mais caro na tabela de CPU por família da AUDITORIA (35 % do quantum na mediana, 55 % no p99, no navegador) e, em plena carga travada, passa dos 40 % em Node.",
+    "motivo": "23/11/2026, à beira do portão: sem as funções que valvulas() criava a cada amostra (dois terços do tempo no Node com o tsx; saída idêntica nos 125 cenários de tools/diesel-identidade.ts), a razão ao V16 caiu de 2,0× para 1,0× e o tempo de CPU para 26–39 % do tempo real com a máquina ocupada (o V16 a 26–38 %): passa ou não do portão conforme a carga. Fica no retrato marcada `beira` (passar é aceito sem aviso de órfão; passar do portão cai no teto da razão). Antes: a Duramax é o terceiro preset mais caro na tabela de CPU por família da AUDITORIA (35 % do quantum na mediana, 55 % no p99, no navegador).",
+    "beira": true,
     "nota_folga": "teto de um lado só (+30 %) sobre a razão ao Chiron (W16 como V16) do Ronco, a referência do DIESEL.md 8.1, rodado alternado com o caso em trechos de 0,25 s: o tempo de CPU sozinho quase dobra com a máquina ocupada (a Duramax deu 46 % e 84 % em duas rodadas de 23/11/2026), a razão muda de 2 a 10 % entre rodadas"
   },
   "pesado · exterior · catc15 lenta: 1–2,5 kHz": {

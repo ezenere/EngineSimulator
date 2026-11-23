@@ -14,9 +14,11 @@
 // núcleos irmãos), a razão muda menos. A medida passa se a razão ficar abaixo do valor gravado mais a folga (+30 %, de um
 // lado só: ficar mais barato nunca reprova). Acima do teto: falha, até `--atualizar` (regrava a razão dos que passam do
 // portão; o que é novo entra com o motivo vazio e continua falhando até alguém escrever o motivo). Voltou para baixo do
-// portão: aviso de desvio órfão. Rode sozinho, como o `npm run verificar -- --cpu` faz.
+// portão: aviso de desvio órfão, a não ser que a entrada esteja marcada `beira: true` (como no tools/desvios.ts): o caso
+// fica perto do portão e passa ou não conforme a carga da máquina; passar é aceito sem aviso, e passar do portão cai no
+// teto da razão. Rode sozinho, como o `npm run verificar -- --cpu` faz.
 //
-//   npx tsx tools/diesel-cpu.ts [--atualizar]      (sai ≠ 0 se algum passar do teto, ou do portão fora do retrato)
+//   npx tsx tools/diesel-cpu.ts [--atualizar[=nome exato]]      (sai ≠ 0 se algum passar do teto, ou do portão fora do retrato)
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -77,6 +79,9 @@ function umaPassada(id: string, cfg: any) {
 }
 
 const op = lerOpcoes(process.argv.slice(2));
+// `--atualizar` regrava todas as medidas; `--atualizar=<nome exato>` só essa (repetível), como no teste:diesel. (Antes a
+// lista de nomes contava como "sim" e o nome dado não era conferido: qualquer --atualizar=… regravava as três.)
+const atualiza = (nome: string) => op.atualizar === true || (Array.isArray(op.atualizar) && op.atualizar.includes(nome));
 // (aquecimento fora da medida: o V16 e um diesel alternados, para o JIT do laço comum do EngineDSP chegar ao estado de
 // regime antes da primeira passada; sem isso a primeira razão da EMD saía 50% acima das outras duas)
 {
@@ -97,8 +102,9 @@ for (const [id, rotulo] of casos) {
   let estado: string, nota = '';
   if (fr <= PORTAO) {
     estado = 'ok   ';
-    if (e) { if (op.atualizar) { delete ret[nome]; mudou = true; avisos.push(`desvio órfão retirado do retrato: "${nome}"`); } else avisos.push(`desvio órfão: "${nome}" passa no portão (${f1(100 * fr)}%); tire do retrato com --atualizar`); }
-  } else if (op.atualizar) {
+    if (e?.beira) { if (atualiza(nome)) { ret[nome] = { ...e, medido: v }; mudou = true; nota = `à beira do portão: retrato regravado (era ${e.medido}× o V16)`; } }
+    else if (e) { if (atualiza(nome)) { delete ret[nome]; mudou = true; avisos.push(`desvio órfão retirado do retrato: "${nome}"`); } else avisos.push(`desvio órfão: "${nome}" passa no portão (${f1(100 * fr)}%); tire do retrato com --atualizar`); }
+  } else if (atualiza(nome)) {
     ret[nome] = { ...(e ?? { grupo: 'cpu', unidade: '× V16', folga: FOLGA, alvo, motivo: '' }), medido: v };
     mudou = true; estado = e?.motivo?.trim() ? 'desv ' : 'FALHA'; nota = e ? `retrato regravado (era ${e.medido}× o V16)` : 'desvio novo gravado no retrato: escreva o motivo';
   } else if (!e) { estado = 'FALHA'; nota = 'fora do portão, fora do retrato'; }
