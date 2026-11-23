@@ -1,0 +1,45 @@
+{
+ "nota": "Casos da medida dos médios do Diesel (tools/diesel-medios.py; TECNICO.md → Diesel → Quinta passada). Tudo no padrão da página: microfone ext, valores do preset. Gravações em referencias/diesel/ do checkout principal (fora do git). 'casada: false' = outro motor, outra posição ou outra carga: vale como faixa. Só existem gravações de fora com o motor trabalhando em ponto morto (aceleradas) ou de bordo; as de carga de verdade são de cabine e ficam nos casos `int` do tools/diesel-ouvido.json.",
+ "casos": [
+  {"id": "scaniav8-lenta", "preset": "scaniav8", "cond": "lenta", "titulo": "Scania R500 V8, lenta 600 rpm", "rpm": 600,
+   "real": "scania-v8-r560-lenta-acelerada.wav", "trecho": [1, 36], "rpmReal": 600, "ev": 8, "posicao": "de fora, perto"},
+  {"id": "scaniav8-arr40", "preset": "scaniav8", "cond": "arrancada", "pedal": 0.4, "dur": 34, "titulo": "Scania R500 V8, arrancada com 40% de pedal"},
+  {"id": "scaniav8-arr100", "preset": "scaniav8", "cond": "arrancada", "pedal": 1, "dur": 34, "titulo": "Scania R500 V8, arrancada com o pé no fundo",
+   "real": "scania-v8-r560-lenta-acelerada.wav", "trecho": [46.5, 49.5], "rpmReal": 1820, "ev": 8, "fmax": 22, "casada": false, "posicao": "de fora, perto; acelerada em ponto morto segurada a 1820 rpm"},
+
+  {"id": "volvod13-lenta", "preset": "volvod13", "cond": "lenta", "titulo": "Volvo FH D13, lenta 600 rpm", "rpm": 600,
+   "real": "volvo-fh500-partida-lenta.wav", "trecho": [10, 100], "rpmReal": 600, "ev": 6, "posicao": "de fora, 2–3 m"},
+  {"id": "volvod13-arr40", "preset": "volvod13", "cond": "arrancada", "pedal": 0.4, "dur": 34, "titulo": "Volvo FH D13, arrancada com 40% de pedal"},
+  {"id": "volvod13-arr100", "preset": "volvod13", "cond": "arrancada", "pedal": 1, "dur": 34, "titulo": "Volvo FH D13, arrancada com o pé no fundo"},
+
+  {"id": "catc15-lenta", "preset": "catc15", "cond": "lenta", "titulo": "Cat C15, lenta 702 rpm", "rpm": 702,
+   "real": "cat-c15-6nz-lenta.wav", "trecho": [24, 60], "rpmReal": 702, "ev": 6, "posicao": "de fora, ~2 m"},
+  {"id": "catc15-lenta-frente", "preset": "catc15", "cond": "lenta", "titulo": "Cat C15, lenta 702 rpm (gravação: outro ponto do caminhão, mais agudo)", "rpm": 702,
+   "real": "cat-c15-6nz-lenta.wav", "trecho": [60, 84], "rpmReal": 702, "ev": 6, "casada": false, "posicao": "de fora, de frente"},
+  {"id": "catc15-arr40", "preset": "catc15", "cond": "arrancada", "pedal": 0.4, "dur": 34, "titulo": "Cat C15, arrancada com 40% de pedal"},
+  {"id": "catc15-arr100", "preset": "catc15", "cond": "arrancada", "pedal": 1, "dur": 34, "titulo": "Cat C15, arrancada com o pé no fundo"},
+
+  {"id": "onibusisl-lenta", "preset": "onibusisl", "cond": "lenta", "titulo": "Ônibus ISL9, lenta 618 rpm", "rpm": 618,
+   "real": "onibus-urbano-lenta-fora.wav", "trecho": [8, 52], "rpmReal": 618, "ev": 6, "posicao": "de fora, de lado"},
+  {"id": "onibusisl-arr40", "preset": "onibusisl", "cond": "arrancada", "pedal": 0.4, "dur": 30, "titulo": "Ônibus ISL9, arrancada com 40% de pedal"},
+  {"id": "onibusisl-arr100", "preset": "onibusisl", "cond": "arrancada", "pedal": 1, "dur": 30, "titulo": "Ônibus ISL9, arrancada com o pé no fundo",
+   "real": "erf-e14-cummins-bordo.wav", "trecho": [76, 90], "rpmReal": 1450, "ev": 6, "casada": false, "posicao": "a bordo (mixagem), ERF com Cummins de 14 L"},
+
+  {"id": "hilux28-lenta", "preset": "hilux28", "cond": "lenta", "titulo": "Hilux 2.8, lenta 769 rpm (gravação: 1KD 3.0)", "rpm": 769,
+   "real": "hilux-1kd-lenta-aceleradas.wav", "trecho": [5, 12], "rpmReal": 769, "ev": 4, "posicao": "de fora, mais longe"},
+  {"id": "hilux28-arr40", "preset": "hilux28", "cond": "arrancada", "pedal": 0.4, "dur": 24, "titulo": "Hilux 2.8, arrancada com 40% de pedal"},
+  {"id": "hilux28-arr100", "preset": "hilux28", "cond": "arrancada", "pedal": 1, "dur": 24, "titulo": "Hilux 2.8, arrancada com o pé no fundo"},
+
+  {"id": "ram67-lenta", "preset": "ram67", "cond": "lenta", "titulo": "Ram 6.7 Cummins, lenta 700 rpm", "rpm": 700,
+   "real": "cummins67-lenta.wav", "trecho": [74, 96], "rpmReal": 700, "ev": 6, "posicao": "de fora, cofre e escape, 1–2 m"},
+  {"id": "ram67-lenta-perto", "preset": "ram67", "cond": "lenta", "titulo": "Ram 6.7 Cummins, lenta 700 rpm (gravação: microfone mais perto)", "rpm": 700,
+   "real": "cummins67-lenta.wav", "trecho": [56, 68], "rpmReal": 700, "ev": 6, "posicao": "de fora, mais perto"},
+  {"id": "ram67-arr40", "preset": "ram67", "cond": "arrancada", "pedal": 0.4, "dur": 24, "titulo": "Ram 6.7 Cummins, arrancada com 40% de pedal"},
+  {"id": "ram67-arr100", "preset": "ram67", "cond": "arrancada", "pedal": 1, "dur": 24, "titulo": "Ram 6.7 Cummins, arrancada com o pé no fundo"},
+
+  {"id": "psd73-lenta", "preset": "psd73", "cond": "lenta", "titulo": "F-250 7.3 Power Stroke, lenta 655 rpm (gravação: Power Stroke 6.0)", "rpm": 655,
+   "real": "powerstroke60-lenta.wav", "trecho": [10, 60], "rpmReal": 655, "ev": 8, "casada": false, "posicao": "de fora, 1–2 m"},
+  {"id": "psd73-arr40", "preset": "psd73", "cond": "arrancada", "pedal": 0.4, "dur": 24, "titulo": "F-250 7.3 Power Stroke, arrancada com 40% de pedal"},
+  {"id": "psd73-arr100", "preset": "psd73", "cond": "arrancada", "pedal": 1, "dur": 24, "titulo": "F-250 7.3 Power Stroke, arrancada com o pé no fundo"}
+ ]
+}

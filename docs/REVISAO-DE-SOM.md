@@ -606,6 +606,37 @@ o chocalho das engrenagens é de 1 a 10% do som ponderado A, e 0% em carga.
   interna.
 - A 2ª ordem de queima do 6 em linha em carga (153 Hz a 1535 rpm) sai 10 dB abaixo da gravação de cabine do C15.
 
+**Quinta passada: os médios, no padrão de quem ouve.** O dono aprovou o som acima ("agora sim é motor a diesel mesmo") e sentiu
+"um pouco de falta nos médios", "tanto acelerando quanto na lenta", ouvindo "no padrão" da página, sem mexer em controle
+nenhum. O retoque foi um campo só, o corpo da batida (`corpo`: quanto as chapas presas ao bloco, cárter e tampas, somam à
+irradiação dos modos de 400 Hz a 2,5 kHz), com +3 ou +4 dB em sete presets: os médios sobem 2 a 3 dB na lenta e com
+meio pedal e, com o pé no fundo, 2 a 3 dB em 1–2,5 kHz e 0 a 1,7 dB em 400–1000 Hz; o grave do escape, o turbo e o
+instante de cada pancada ficam onde estavam (`TECNICO.md` → Diesel → Quinta passada, com a tabela antes × depois ×
+gravação e a de volta atrás). O que ela ensinou:
+
+- **Meça onde o dono ouve, não onde há gravação.** As gravações de carga são de cabine, e a 4ª passada mediu a falta de
+  médios no ouvinte `int`. No microfone padrão (`ext`) a conta é outra: a carcaça do escape, que na cabine parecia o
+  caminho, ali alisa o pulso (o p90/p10 de 400–1000 Hz cai 2,8 dB no Cat com o pé no fundo e 3,6 dB na lenta, por
+  +0,2 dB de nível) e nas picapes soma 11 a 19 dB com o valor que servia aos caminhões. O gesto também é o do dono:
+  `tools/diesel-ouvido-render.ts --arrancada` liga, engata, pisa e deixa o câmbio do preset trocar; o render grava a
+  fase do virabrequim e a análise síncrona vale com o giro subindo.
+- **A âncora engana quando a banda âncora e a banda medida vêm da mesma fonte.** Na lenta do Scania e do Volvo,
+  150–400 Hz também é a batida: os médios "casavam" com as gravações relativos a ela e ficavam 3 a 5 dB baixos relativos
+  ao total. Nas picapes é o contrário (um buraco de 12 a 17 dB em 150–400 Hz põe os médios acima das gravações pela
+  âncora e abaixo pelo total). Olhe as duas medidas e o orçamento por fonte da banda âncora; a relativa ao total
+  depende do grave que o celular gravou, então nenhuma serve sozinha.
+- **Duas fontes pulsadas em instantes diferentes do ciclo alisam uma a outra.** O pulso do escape sai na abertura da
+  válvula e a pancada da queima no PMS; numa banda em que as duas pesam, somar qualquer uma enche o intervalo da outra.
+  Linhas a mais (HNR maior) podem vir com pulso a menos: meça o p90/p10 **da banda que subiu**, não só o de 1–6 kHz.
+- **E o HNR de uma banda cai sem entrar ruído nenhum** quando uma fonte presa ao giro, mas menos tonal, ganha peso sobre
+  outra mais tonal: a batida (HNR de +4 a +6 dB em 400–1000 Hz) contra as linhas do escape com o pé no fundo (8 a 19 dB).
+  O `ar` e o leito não se mexem; o HNR da banda cai 1 a 3 dB. É a pendência declarada desta passada.
+- **Um mecanismo linear não escolhe a condição.** O que sobe os médios da estrutura em carga sobe igual na lenta, e a
+  lenta, que é onde há gravação casada, vira o teto: o retoque parou em 2 a 3 dB com a falta de carga ainda em 3 a 8.
+  Mais que isso pede mexer na proporção entre o escape e a estrutura só em carga.
+- **No giro livre, só se isola fonte somada na saída.** Desligar a banda larga da turbina (que entra na rede de tubos)
+  muda a contrapressão, a trajetória do motor se afasta e a "contribuição" sai com 120 a 200% do nível ponderado A.
+
 ## Caso: Vapor: o chuff, não o sopro
 
 **Queixa** (a regra de gosto do dono, que vale acima da gravação): "ele exagera um pouco no som da admissão e no ruído branco audível. No real é mais assim mesmo, mas pro simulador ele tem que soar mais motor e menos som de ar do motor". Numa locomotiva a vapor o motor é o chuff: cada descarga do cilindro na chaminé, com ataque, corpo e cauda. O dono tinha achado o Vapor bom no geral; a ordem era medir primeiro e mexer só no que estivesse fora.

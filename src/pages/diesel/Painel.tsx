@@ -8,6 +8,7 @@ import { ChipGroup, Field, Section, Slider, dec as virgula, pct } from '../../ui
 import { LAYOUTS } from '../../engines/ronco/geometria';
 import { defaultFinal } from '../../engines/ronco/dsp';
 import { DRIVE_MODES, familyFor, type ControleDiesel, type EstadoDiesel } from './controle';
+import { ANTES_DOS_MEDIOS } from '../../engines/diesel/presets';
 import { clamp } from '../comum/controle';
 import { AguaDoMotor, Ambiente, br, Equalizacao, LIGADO, Microfone, Mixagem, NaVia, Observador, RelacoesDasMarchas, SomDeFundo, TemperaturasProntas, VolumeDoMotor } from '../comum/Painel';
 
@@ -110,8 +111,13 @@ const INJECOES = [
   { valor: 'common-rail', rotulo: 'Common-rail' }, { valor: 'rotativa', rotulo: 'Bomba rotativa' }, { valor: 'em-linha', rotulo: 'Bomba em linha' },
   { valor: 'unitaria', rotulo: 'Injetor-bomba' }, { valor: 'heui', rotulo: 'HEUI' }, { valor: 'pld', rotulo: 'Bomba-tubo-bico' },
 ];
+// valor em dB com sinal, e a marca da posição de antes de uma passada de som ao lado do valor de um controle
+const dB = (v: number) => `${v > 0 ? '+' : ''}${v} dB`;
+const antes = (era: number | undefined, v: number) => (era === undefined ? '' : v === era ? ' · como era' : ` · antes ${dB(era)}`);
 function Motor({ k, e }: P) {
   const { spec } = e;
+  // o que este preset tinha antes da 5ª passada (o `id` do preset de partida segue na especificação depois de mexer num controle)
+  const antesDosMedios = ANTES_DOS_MEDIOS[spec.id];
   const fam = familyFor(spec.layout, spec.cylinders, spec.tempos);
   const crank = fam.find((x) => x.id === spec.crank) || fam[0];
   const tem2T = familyFor(spec.layout, spec.cylinders, 2).length > 0;
@@ -156,7 +162,9 @@ function Motor({ k, e }: P) {
       </Field>
       <Slider id="cetano" rotulo="Número de cetano" min={40} max={55} passo={1} valor={spec.cetano || 48} formatar={(v) => `${v}${v >= 51 ? ' (europeu)' : v >= 48 ? ' (S10)' : ''}`} aoMudar={(v) => k.setSpec({ cetano: v }, nt)} />
       <Slider id="cam" rotulo="Cruzamento de válvulas" min={0} max={0.3} passo={0.01} valor={clamp(spec.cam || 0, 0, 0.3)} formatar={(v) => virgula(v, 2)} aoMudar={(v) => k.setSpec({ cam: v }, nt)} />
-      <Slider id="mecanica" rotulo="Batida e mecânica do motor (nível)" min={-20} max={40} passo={1} valor={spec.mecanica || 0} formatar={(v) => `${v > 0 ? '+' : ''}${v} dB`} aoMudar={(v) => k.setSpec({ mecanica: v }, nt)} />
+      {/* (5ª passada, os médios: entrou o corpo da batida; ao lado do valor fica a posição de antes) */}
+      <Slider id="mecanica" rotulo="Batida e mecânica do motor (nível)" min={-20} max={40} passo={1} valor={spec.mecanica || 0} formatar={(v) => `${dB(v)}${antes(antesDosMedios?.mecanica, v)}`} aoMudar={(v) => k.setSpec({ mecanica: v }, nt)} />
+      <Slider id="corpo" rotulo="Corpo da batida (cárter e tampas: os médios de cada pancada, 400 a 2500 Hz)" min={-6} max={12} passo={1} valor={spec.corpo ?? 0} formatar={(v) => `${dB(v)}${antes(antesDosMedios ? antesDosMedios.corpo ?? 0 : 0, v)}`} aoMudar={(v) => k.setSpec({ corpo: v }, nt)} />
       <Slider id="ressonancia" rotulo="Ressonância do bloco (quanto cada batida soa depois da pancada)" min={0.5} max={2.5} passo={0.05} valor={spec.ressonancia ?? 1}
         formatar={(v) => `${virgula(v, 2)}× · ${v < 0.8 ? 'seco' : v < 1.35 ? 'normal' : 'ressoa'}`} aoSoltar={(v) => k.setSpec({ ressonancia: v }, { render: false })} />
       <Slider id="desigualdade" rotulo="Diferença entre cilindros (para quem ouve)" min={0} max={2} passo={0.05} valor={spec.desigualdade ?? 1}

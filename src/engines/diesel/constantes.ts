@@ -102,6 +102,20 @@ export const ASPEREZA_FIXA = 0.5;
 // 137 mm, 1,1 kHz na locomotiva. É o que deixa a batida de um motor grande mais grave que a de um pequeno
 export const F_ASPEREZA = 2500;
 
+// Corpo da batida (5ª passada: os médios; TECNICO.md → Diesel → Quinta passada). Os modos do bloco não irradiam todos
+// por igual: de 400 a 2500 Hz quem irradia são as chapas grandes e finas presas a ele (o cárter, a tampa da
+// distribuição, as tampas de válvulas, a carcaça do volante), que respondem às mesmas pancadas e têm os seus modos
+// justamente aí. Os perfis das fontes (EST_COMB e os outros) são os de um bloco nu; com eles os médios de cada batida
+// ficavam 3 a 5 dB abaixo das gravações de fora em relação ao total, na lenta, e mais que isso acelerando. `corpo` (dB,
+// campo do preset; 0 = como era) é quanto essas chapas somam à irradiação de cada modo: um sino em escala
+// logarítmica, centrado em `f` Hz num cilindro de 100 mm (desce com a raiz do diâmetro, como os modos graves) e com
+// `largura` oitavas de desvio-padrão. Medido com +4 dB, com meio pedal: +2,3 a +3,4 dB em 400–1000 Hz, +2,6 a +3,2 dB
+// em 1–2,5 kHz, 0,0 a +0,5 dB em 150–400 Hz e, em 2,5–6 kHz, +0,5 a +1,0 dB nos caminhões e +1,2 a +1,6 dB nas
+// picapes (o sino delas fica mais alto). O grave do escape fica onde estava. Vale para tudo o que excita a estrutura
+// (a queima e os impactos), porque é a saída dela; a referência dos impactos (`refKnock`) é medida antes dos pesos, e
+// não muda
+export const CORPO = { f: 950, largura: 1.0 };
+
 // O cofre: a mecânica não chega a quem ouve só pelo caminho direto. O som do bloco bate no capô, no chão, na
 // carroceria e sai por baixo e pelas grades: cada pancada chega várias vezes ao longo de ~50 ms, e é isso (com as
 // válvulas e os injetores espalhados pelo ciclo) que impede o motor real de ficar mudo entre uma explosão e outra.
