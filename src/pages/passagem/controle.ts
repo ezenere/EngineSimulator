@@ -18,10 +18,10 @@
 // (umidade, temperatura). O ouvinte que anda vai no máximo a cada INTERVALO_OUVINTE ms; sliders, no máximo um por quadro.
 import { useSyncExternalStore } from 'react';
 import type { CadeiaDeAudio } from '../../ui';
-import type { Ambiente, Ouvinte, Trajetoria, FonteSonora, TelemetriaCena, LocalOuvinte, Solo, Vec3 } from '../../scene/tipos';
+import type { Ambiente, Ouvinte, Trajetoria, FonteSonora, TelemetriaCena, LocalOuvinte, Solo, Vec3, LugarAcustico } from '../../scene/tipos';
 import { Observador, OUVIDO_ABAIXO, type Destino, type ModoObservador } from './observador';
-import { Lugar } from './lugar';
-import { qualCenario, type Cenario } from './mundo/planta';
+import { Lugar, TUNEL, ESTACAO, CORTE, PONTE } from './lugar';
+import { qualCenario, ESTACAO_OUTRA, VALE, type Cenario } from './mundo/planta';
 import { pontoDeChegada, pontosDeVista, assento, type PontoDeVista } from './pontos';
 import type { Corpo, Portador, TelemetriaPortador, FamiliaMotor } from '../../carriers/tipos';
 import { ambientePassagem } from '../../scene/ambientes';
@@ -691,11 +691,21 @@ export class ControlePassagem {
   private pendOuv = false;
   private tOuv = -Infinity; private saltoEnviado = -1;
   private ambEnviado = '';
+  /** as medidas do lugar para a Cena (Ambiente.lugar, src/scene/lugar.ts): o ambiente depende de onde você está */
+  lugarAcustico(): LugarAcustico | undefined {
+    const lg = this.lugar(), t = lg.tun, E = ESTACAO;
+    if (t) return { tunel: { s0: t.ta, s1: t.tb, mLonge: t.mLonge, mPerto: t.mPerto, altura: t.h, nicho: TUNEL.nicho.fundo } };
+    if (lg.amb === 'estacao') return { estacao: { s0: -E.meio, s1: E.meio, mLonge: ESTACAO_OUTRA.telhado, mFundo: lg.bordaPlataforma + E.largura + E.fundo, teto: E.teto, mMuro: ESTACAO_OUTRA.muro, muro: ESTACAO_OUTRA.muroAlto } };
+    if (lg.amb === 'corte') return { corte: { ...CORTE } };
+    if (lg.amb === 'ponte') return { ponte: { m0: PONTE.longe, m1: PONTE.perto, espessura: PONTE.espessura, vale: PONTE.vale, fundo: VALE.fundo, borda: VALE.borda } };
+    return undefined;
+  }
   /** manda ambiente, trajetória e ouvinte; com `ir`, gera a resposta ao impulso de novo */
   mandarCena(ir = false) {
     this.pendCena = false;
     const a = this.audio; if (!a) return;
     const amb = this.ambienteCena();
+    amb.lugar = this.lugarAcustico();
     this.pendOuv = false; this.tOuv = performance.now(); this.saltoEnviado = this.obs.salto;
     a.send({ type: 'cena', amb, traj: this.traj, ouv: this.ouvinte() });
     const chave = JSON.stringify([amb.id, amb.solo, amb.reverb.rt60]);

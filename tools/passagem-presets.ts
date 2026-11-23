@@ -9,7 +9,9 @@
 // para ela; é a régua dos números de sempre, que não mudam com a tela nova (tools/cena/ouvinte-movel.ts prova que o
 // livre no mesmo ponto, de frente para a via, dá o mesmo som amostra a amostra). `--camera` mede com o observador da
 // página, como ele nasce: a cabeça virada para o veículo chegando muda a panorâmica, o ITD e o ILD, e na estação ele
-// fica em cima da plataforma (o ouvido mais alto).
+// fica em cima da plataforma (o ouvido mais alto); com o lugar (src/scene/lugar.ts) o ambiente é o de onde ele está. Com
+// `--camera` o mesmo preset é medido também com o ouvinte fixo: a coluna do L_AFmax mostra os dois, e a câmera mais de
+// 3 dB abaixo do fixo vira alerta (era o defeito da plataforma e da passarela até 23/11/2026).
 //
 // Como monta. A classe `ControlePassagem` de src/pages/passagem/controle.ts (a que a página usa) é carregada aqui
 // no Node, com uma cadeia de áudio de mentira cujo `send()` entrega cada mensagem (clonada, como o postMessage faz)
@@ -159,6 +161,8 @@ interface Resultado {
   dur: number; nFontes: number; fontesPagina: number; montagemMs: number;
   naoFinitos: number;
   lafmax: number; tMax: number; laeq: number; t10: number; medidorPagina: number; ambienteSoma: number;
+  /** (--camera) L_AFmax do mesmo preset com o ouvinte fixo de antes, ao lado da via a 1,6 m */
+  lafmaxFixo: number;
   picoPa: number; picoDbfs: number; fracAcima1: number; fracAcima07: number;
   fundo: number;
   cpuMedia: number; cpuP99: number;
@@ -325,7 +329,7 @@ function medir(r: Resultado, s: Sessao, som: ReturnType<typeof tocar>) {
 
 const vazio = (chave: string, tipo: 'preset' | 'combo', portador: string, familia: string, motorPreset: string | null): Resultado => ({
   chave, tipo, portador, familia, motorPreset, erro: null, dur: 0, nFontes: 0, fontesPagina: 0, montagemMs: 0, naoFinitos: 0,
-  lafmax: NaN, tMax: NaN, laeq: NaN, t10: NaN, medidorPagina: NaN, ambienteSoma: NaN, picoPa: NaN, picoDbfs: NaN, fracAcima1: NaN, fracAcima07: NaN, fundo: NaN,
+  lafmax: NaN, tMax: NaN, laeq: NaN, t10: NaN, medidorPagina: NaN, ambienteSoma: NaN, lafmaxFixo: NaN, picoPa: NaN, picoDbfs: NaN, fracAcima1: NaN, fracAcima07: NaN, fundo: NaN,
   cpuMedia: NaN, cpuP99: NaN, tele: { v: NaN, rpm: null, marcha: null, estado: null, machPonta: null, nrRel: null }, corte: null, faixa: null, falhas: [], alertas: [],
 });
 
@@ -353,6 +357,19 @@ async function rodarPreset(p: PresetPassagem): Promise<Resultado> {
     const v = p.vKmh / 3.6, L = s.c.corpo.comprimento;
     const dur = p.partida ? 20 : v < 0.5 ? 12 : Math.min(60, Math.max(12, (2 * s.c.x0 + L) / v));
     medir(r, s, tocar(s, dur, true));
+    // (--camera) o mesmo preset com o ouvinte fixo de antes: o observador no ponto de chegada não pode ficar muito abaixo
+    // dele. Até 23/11/2026, na plataforma e na passarela do túnel o campo reverberante caía com o ouvido mais alto
+    // (o envio levava a sombra do corpo vista dali: src/scene/lugar.ts) e a câmera ficava 2,8 a 3,9 dB abaixo; o que
+    // sobra é o direto dos truques, que o corpo esconde de quem está 0,75 a 0,9 m mais alto
+    if (CAMERA && !r.falhas.length) {
+      const f = await novaSessao(true);
+      f.c.ouvinteFixo = true;
+      f.c.carregarPreset(p); await f.c.disparar();
+      const rf = vazio(p.id, 'preset', p.portador, p.motor, p.motorPreset ?? null);
+      medir(rf, f, tocar(f, dur, true));
+      r.lafmaxFixo = rf.lafmax;
+      if (r.lafmax < rf.lafmax - 3) r.alertas.push(`a câmera no ponto de chegada fica ${(rf.lafmax - r.lafmax).toFixed(1)} dB abaixo do ouvinte fixo`);
+    }
   } catch (e) {
     r.erro = String((e as Error)?.stack ?? e).split('\n').slice(0, 3).join(' | ');
     r.falhas.push(`exceção: ${String((e as Error)?.message ?? e)}`);
@@ -433,7 +450,7 @@ const f1 = (x: number, d = 1) => (Number.isFinite(x) ? x.toFixed(d) : '—');
 function linhaMd(r: Resultado) {
   const veredito = r.falhas.length ? `**FALHA**: ${r.falhas.join('; ')}` : r.alertas.length ? `alerta: ${r.alertas.join('; ')}` : 'ok';
   const tele = [r.tele.rpm != null ? `${Math.round(r.tele.rpm)} rpm` : '', r.tele.marcha != null && r.portador === 'carro' ? `${r.tele.marcha}ª` : '', r.tele.machPonta != null ? `ponta M ${r.tele.machPonta.toFixed(2)}` : '', r.tele.nrRel != null ? `Nr ${(100 * r.tele.nrRel).toFixed(0)}%` : ''].filter(Boolean).join(', ');
-  return `| ${r.chave} | ${f1(r.lafmax)} | ${f1(r.laeq)} | ${Number.isFinite(r.ambienteSoma) ? (r.ambienteSoma >= 0 ? '+' : '') + f1(r.ambienteSoma) : '—'} | ${f1(r.picoPa, r.picoPa > 100 ? 0 : 1)} Pa (${f1(r.picoDbfs)} dBFS) | ${f1(100 * r.fracAcima1, 2)} | ${f1(r.cpuMedia, 0)} / ${f1(r.cpuP99, 0)} | ${f1(r.montagemMs, 0)} | ${tele || '—'} | ${r.faixa ? `${r.faixa[0]}–${r.faixa[1]}` : '—'} | ${veredito} |`;
+  return `| ${r.chave} | ${f1(r.lafmax)}${CAMERA && Number.isFinite(r.lafmaxFixo) ? ` (fixo ${f1(r.lafmaxFixo)})` : ''} | ${f1(r.laeq)} | ${Number.isFinite(r.ambienteSoma) ? (r.ambienteSoma >= 0 ? '+' : '') + f1(r.ambienteSoma) : '—'} | ${f1(r.picoPa, r.picoPa > 100 ? 0 : 1)} Pa (${f1(r.picoDbfs)} dBFS) | ${f1(100 * r.fracAcima1, 2)} | ${f1(r.cpuMedia, 0)} / ${f1(r.cpuP99, 0)} | ${f1(r.montagemMs, 0)} | ${tele || '—'} | ${r.faixa ? `${r.faixa[0]}–${r.faixa[1]}` : '—'} | ${veredito} |`;
 }
 const CABECALHO = '| Preset | L_AFmax dB(A) | L_Aeq dB(A) | Ambiente soma (dB) | Pico (× master 0,8) | % > 1,0 | CPU média / p99 (% do quantum) | Montagem (ms) | Motor na passagem | Faixa esperada | Veredito |\n|---|---|---|---|---|---|---|---|---|---|---|';
 
