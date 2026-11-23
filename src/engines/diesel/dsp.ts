@@ -696,7 +696,8 @@ export class DieselDSP extends EngineDSP {
   // velocidade que o came lhe dá, então a pancada cresce com a rotação. O assento é a pancada (a válvula fecha contra
   // a sede); na abertura só a folga do balancim é tomada
   // (métodos, não funções criadas dentro de `valvulas`: ela roda a cada amostra em cada cilindro, e cada função nova
-  // custava uma alocação e, no Node com o tsx, que guarda os nomes, um Object.defineProperty; ver TECNICO → CPU)
+  // custava uma alocação e, no Node com o tsx, que guarda os nomes, um Object.defineProperty; ver docs/TECNICO.md →
+  // Diesel → CPU do laço de amostra. Nada de função criada por amostra neste arquivo)
   kv0() { return (this.refKnock || 0.5) * K_VALV * (1 + 1.6 * (1 - this.warm)) * this.kValvulas; }
   kv() { return this.kv0() * clamp(this.rpmAvg / this.idle, 0.5, 4); }
 
