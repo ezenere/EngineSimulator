@@ -22,6 +22,8 @@ import { DoisPortasDiesel } from './escape';
 export interface CargaExterna { torque(omega: number): number; inercia: number }
 
 const RUG_FIXA = Math.sqrt(ASPEREZA_FIXA), RUG_SOLTA = Math.sqrt(1 - ASPEREZA_FIXA);
+/** o ângulo `x` foi cruzado entre a amostra anterior (`ap`) e esta (`a`) */
+const cruza = (ap: number, a: number, x: number) => ap < x && a >= x;
 const enbw = (fs: number, f: number, q: number) => Math.sqrt(Math.min(1, (Math.PI / 2) * (f / q) / (fs / 2)));
 
 // ---- Estrutura do motor: banco de modos (constantes.ts → EST). As tabelas (frequências, fatores de qualidade e os
@@ -689,28 +691,30 @@ export class DieselDSP extends EngineDSP {
     if (this.injTipo === 'em-linha' || this.injTipo === 'pld') this.impacto(2, this.N, k * kp * ref * 0.6 * this.kTiques);
   }
 
+  // Trem de válvulas: pancadas na estrutura (os cliques de ruído do Ronco, o clickEnv, ficam só para o relé das velas).
+  // O nível é relativo ao pico da batida de lenta quente; frio, as folgas batem mais; e a válvula assenta com a
+  // velocidade que o came lhe dá, então a pancada cresce com a rotação. O assento é a pancada (a válvula fecha contra
+  // a sede); na abertura só a folga do balancim é tomada
+  // (métodos, não funções criadas dentro de `valvulas`: ela roda a cada amostra em cada cilindro, e cada função nova
+  // custava uma alocação e, no Node com o tsx, que guarda os nomes, um Object.defineProperty; ver TECNICO → CPU)
+  kv0() { return (this.refKnock || 0.5) * K_VALV * (1 + 1.6 * (1 - this.warm)) * this.kValvulas; }
+  kv() { return this.kv0() * clamp(this.rpmAvg / this.idle, 0.5, 4); }
+
   // trem de válvulas, ar por ciclo e massa presa nos 2T (itens 8 e 9)
   valvulas(c, a, ap) {
     const evo = this.evo, evc = this.evc, ivo = this.ivo, ivc = this.ivc, rng = this.rng;
-    const cruza = (x) => ap < x && a >= x;
-    // Trem de válvulas: pancadas na estrutura (os cliques de ruído do Ronco, o clickEnv, ficam só para o relé das velas).
-    // O nível é relativo ao pico da batida de lenta quente; frio, as folgas batem mais; e a válvula assenta com a
-    // velocidade que o came lhe dá, então a pancada cresce com a rotação. O assento é a pancada (a válvula fecha contra
-    // a sede); na abertura só a folga do balancim é tomada
-    const kv0 = () => (this.refKnock || 0.5) * K_VALV * (1 + 1.6 * (1 - this.warm)) * this.kValvulas;
-    const kv = () => kv0() * clamp(this.rpmAvg / this.idle, 0.5, 4);
     if (this.tempos === 4) {
-      const fecha = cruza(evc) || cruza(ivc);
-      if (fecha || cruza(evo) || cruza(ivo)) { const k = 0.5 + 0.5 * rng.next(); this.impacto(1, c, k * (fecha ? 1 : 0.5) * kv()); }
-      if (cruza(ivo)) this.air[c] = 0;
+      const fecha = cruza(ap, a, evc) || cruza(ap, a, ivc);
+      if (fecha || cruza(ap, a, evo) || cruza(ap, a, ivo)) { const k = 0.5 + 0.5 * rng.next(); this.impacto(1, c, k * (fecha ? 1 : 0.5) * this.kv()); }
+      if (cruza(ap, a, ivo)) this.air[c] = 0;
       // (o pistão escravo do Jake abre a válvula contra 30–50 bar: a pancada no balancim é a metralhadora que se ouve do motor)
-      if (this.jakeOn && this.jakeCil[c] && cruza(712)) this.impacto(1, c, 16 * kv0());
+      if (this.jakeOn && this.jakeCil[c] && cruza(ap, a, 712)) this.impacto(1, c, 16 * this.kv0());
     } else {
-      if (cruza(evo) || cruza(evc)) { const k = 0.5 + 0.5 * rng.next(); this.impacto(1, c, k * (cruza(evc) ? 1 : 0.5) * kv()); }
-      if (cruza(ivo)) this.air[c] = 0;
-      if (cruza(ivc)) this.arPreso[c] = this.m[c];
+      if (cruza(ap, a, evo) || cruza(ap, a, evc)) { const k = 0.5 + 0.5 * rng.next(); this.impacto(1, c, k * (cruza(ap, a, evc) ? 1 : 0.5) * this.kv()); }
+      if (cruza(ap, a, ivo)) this.air[c] = 0;
+      if (cruza(ap, a, ivc)) this.arPreso[c] = this.m[c];
     }
-    if (cruza(evo)) {
+    if (cruza(ap, a, evo)) {
       const T = this.tCil(c);
       this.tEvoC[c] = T;
       const rpm = Math.max(this.rpmAvg, 30), dtEv = 60 / (rpm * this.N / (this.tempos / 2));
@@ -1118,7 +1122,6 @@ export class DieselDSP extends EngineDSP {
     const rpm = this.rpmAvg, ped = clamp(this.thr, 0, 1), it = this.idleTarget || this.idle;
     // ganho da planta (aceleração relativa por unidade de combustível) na rotação de referência
     const Kt = (this.mfMax * LHV * 0.4 * this.N) / (TAU * this.tempos) * Math.max(1, this.tqS || 1);
-    const P = (w0) => Kt / (Math.max(this.J, 1e-3) * Math.max(w0, 5));
     let f;
     let semAtuador = false;
     if (this.combExterno !== null) f = this.combExterno;
@@ -1142,7 +1145,7 @@ export class DieselDSP extends EngineDSP {
         // máxima) até "cheio" corresponda ao droop. Com o ganho 1/droop sobre o curso inteiro, metade do droop ia embora
         // no atrito (3,6% medidos no OM617 contra 7–9%). Em lenta (alavanca solta) nada muda
         const fNL = pw * clamp(this.atritoNm(alvo) / Math.max(1, Kt * 1.15), 0, 0.8);
-        const K0 = (1 - fNL) / dr, Pa = P((alvo * TAU) / 60);
+        const K0 = (1 - fNL) / dr, Pa = this.ganhoPlanta(Kt, (alvo * TAU) / 60);
         const Kh = Math.min(K0, 11 / Pa);
         this.gX += ((K0 - Kh) * e - this.gX) * (1 - Math.exp(-dtc / 0.5));
         this.gX = clamp(this.gX, -0.2, 1);
@@ -1157,14 +1160,14 @@ export class DieselDSP extends EngineDSP {
         const e = (this.rpmAlvo - rpmG) / this.rpmAlvo;
         // (gerador: ω_c 2,7 rad/s, o que dá o Kp 5 do DIESEL.md no QSX15; locomotiva 2,5; bancada 8)
         const wc = this.portador === 'locomotiva' ? 2.5 : this.portador === 'gerador' ? 2.7 : 8;
-        const Kp = wc / P((this.rpmAlvo * TAU) / 60), Ki = Kp * wc / (this.portador === 'locomotiva' && this.tempos === 2 && this.rpmAlvo < 250 ? 6 : 4);
+        const Kp = wc / this.ganhoPlanta(Kt, (this.rpmAlvo * TAU) / 60), Ki = Kp * wc / (this.portador === 'locomotiva' && this.tempos === 2 && this.rpmAlvo < 250 ? 6 : 4);
         this.gI = clamp(this.gI + Ki * e * dtc, 0, 1);
         f = clamp(Kp * e + this.gI, 0, 1);
       } else {
         // min-max: pedal manda combustível; PI de lenta isócrono; governador de máxima com rampa de 120 rpm
         const e = (it - rpmG) / it;
         const ativo = ped < 0.05 || rpmG < 1.05 * it;
-        const Kp = 9 / P((it * TAU) / 60), Ki = Kp * 9 / 2.5;
+        const Kp = 9 / this.ganhoPlanta(Kt, (it * TAU) / 60), Ki = Kp * 9 / 2.5;
         if (ativo && rpmG < 1.3 * it) this.gI = clamp(this.gI + Ki * e * dtc, 0, 0.6);
         const fIdle = ativo ? clamp(Kp * e + this.gI, 0, 1) : 0;
         f = Math.max(ped, fIdle) * clamp((this.rpmMax + 60 - rpmG) / 120, 0, 1);
@@ -1180,6 +1183,9 @@ export class DieselDSP extends EngineDSP {
     if (semAtuador && this.combExterno === null && this.state === 'run') this.fuelCmd = f;
     else this.fuelCmd += (f - this.fuelCmd) * (1 - Math.exp(-dtc / this.tauA));
   }
+
+  // ganho da planta do governador na rotação w0 (rad/s): aceleração relativa por unidade de combustível, Kt/(J·ω)
+  ganhoPlanta(Kt, w0) { return Kt / (Math.max(this.J, 1e-3) * Math.max(w0, 5)); }
 
   // torque de atrito do modelo numa rotação (N·m): o polinômio do Ronco mais o acréscimo do diesel (ver cargas())
   atritoNm(rpm) {
