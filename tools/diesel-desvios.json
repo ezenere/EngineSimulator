@@ -1,0 +1,949 @@
+{
+  "picape lenta quente (hilux28): dp/dθ máx": {
+    "grupo": "pressoes-a",
+    "medido": 2.992,
+    "unidade": "bar/°",
+    "folga": "±5 %",
+    "alvo": "3–6 bar/°",
+    "motivo": "2,97 bar/° (alvo 3–6): o instante da ignição passou a variar 10% (antes 16%) e a preparação da mistura a variar à parte; o atraso médio ficou 1% mais curto e a fração pré-misturada média caiu junto (4ª passada) [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (2,99 / 2,98 / 2,97 nas bases 0, 1000 e 2000, alvo 3–6 bar/°); fica declarada à beira, com teto.]",
+    "beira": true
+  },
+  "picape lenta quente (hilux28): T na abertura do escape": {
+    "grupo": "pressoes-a",
+    "medido": 489.2,
+    "unidade": "K",
+    "folga": "±5 %",
+    "alvo": "600–750 K",
+    "motivo": "zona única com o combustível de lenta realista (6–8 mg na picape, λ 8): a média do gás na abertura fica em 480–520 K; 600–750 K pediria 60% mais combustível ou a queima centrada a 35° depois do PMS"
+  },
+  "picape lenta fria −10 °C (hilux28): p_max": {
+    "grupo": "pressoes-a",
+    "medido": 57.09,
+    "unidade": "bar",
+    "folga": "±5 %",
+    "alvo": "40–55 bar",
+    "motivo": "a parede fria (340 K) baixa a temperatura na injeção só 40 K neste modelo (o DIESEL.md supõe 180 K): o atraso sobe 3% e o piloto continua acendendo antes do principal; a queima fria sai cedo e forte"
+  },
+  "picape lenta fria −10 °C (hilux28): ângulo do pico": {
+    "grupo": "pressoes-a",
+    "medido": 5.578,
+    "unidade": "°",
+    "folga": "±5 %",
+    "alvo": "8–15°",
+    "motivo": "a parede fria (340 K) baixa a temperatura na injeção só 40 K neste modelo (o DIESEL.md supõe 180 K): o atraso sobe 3% e o piloto continua acendendo antes do principal; a queima fria sai cedo e forte"
+  },
+  "picape lenta fria −10 °C (hilux28): dp/dθ máx": {
+    "grupo": "pressoes-a",
+    "medido": 4.55,
+    "unidade": "bar/°",
+    "folga": "±5 %",
+    "alvo": "5–9 bar/°",
+    "motivo": "a parede fria (340 K) baixa a temperatura na injeção só 40 K neste modelo (o DIESEL.md supõe 180 K): o atraso sobe 3% e o piloto continua acendendo antes do principal; a queima fria sai cedo e forte"
+  },
+  "picape lenta fria −10 °C (hilux28): T na abertura do escape": {
+    "grupo": "pressoes-a",
+    "medido": 521.3,
+    "unidade": "K",
+    "folga": "±5 %",
+    "alvo": "550–700 K",
+    "motivo": "zona única com o combustível de lenta realista (6–8 mg na picape, λ 8): a média do gás na abertura fica em 480–520 K; 600–750 K pediria 60% mais combustível ou a queima centrada a 35° depois do PMS"
+  },
+  "picape lenta fria −10 °C (hilux28): gás no coletor": {
+    "grupo": "pressoes-a",
+    "medido": 182.6,
+    "unidade": "°C",
+    "folga": "±5 %",
+    "alvo": "100–180 °C",
+    "motivo": "a parede fria (340 K) baixa a temperatura na injeção só 40 K neste modelo (o DIESEL.md supõe 180 K): o atraso sobe 3% e o piloto continua acendendo antes do principal; a queima fria sai cedo e forte [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (183 / 182 / 182 nas bases 0, 1000 e 2000, alvo 100–180 °C); fica declarada à beira, com teto.]",
+    "beira": true
+  },
+  "picape plena 3000 rpm, 2,4 bar (hilux28): ângulo do pico": {
+    "grupo": "pressoes-a",
+    "medido": 13.91,
+    "unidade": "°",
+    "folga": "±5 %",
+    "alvo": "10–14°",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (13,9 / 13,9 / 13,9 nas bases 0, 1000 e 2000, alvo 10–14°); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "picape plena 3000 rpm, 2,4 bar (hilux28): T na abertura do escape": {
+    "grupo": "pressoes-a",
+    "medido": 1319,
+    "unidade": "K",
+    "folga": "±5 %",
+    "alvo": "1100–1300 K",
+    "motivo": "1320 K, 1,5% acima da janela: o pico foi para 13° (a queima por mistura atrasa a liberação de calor)"
+  },
+  "picape plena 3000 rpm, 2,4 bar (hilux28): gás no coletor": {
+    "grupo": "pressoes-a",
+    "medido": 698.5,
+    "unidade": "°C",
+    "folga": "±5 %",
+    "alvo": "550–700 °C",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (699 / 698 / 699 nas bases 0, 1000 e 2000, alvo 550–700 °C); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "caminhão lenta 600 rpm (catc15): T na abertura do escape": {
+    "grupo": "pressoes-a",
+    "medido": 479.1,
+    "unidade": "K",
+    "folga": "±5 %",
+    "alvo": "600–700 K",
+    "motivo": "zona única com o combustível de lenta realista (6–8 mg na picape, λ 8): a média do gás na abertura fica em 480–520 K; 600–750 K pediria 60% mais combustível ou a queima centrada a 35° depois do PMS"
+  },
+  "caminhão plena 1900 rpm, 2,7 bar (catc15): p_max": {
+    "grupo": "pressoes-a",
+    "medido": 141.8,
+    "unidade": "bar",
+    "folga": "±5 %",
+    "alvo": "160–200 bar",
+    "motivo": "com 2,7 bar a 1900 rpm o C15 do modelo respira λ 2,5 (real ≈ 1,8): pouco calor por volume, pico de 140 bar a 10° e gás frio; o ar sobra porque o coletor fica a 310 K fixos (sem o aquecimento no compressor)"
+  },
+  "caminhão plena 1900 rpm, 2,7 bar (catc15): ângulo do pico": {
+    "grupo": "pressoes-a",
+    "medido": 9.543,
+    "unidade": "°",
+    "folga": "±5 %",
+    "alvo": "10–14°",
+    "motivo": "com 2,7 bar a 1900 rpm o C15 do modelo respira λ 2,5 (real ≈ 1,8): pouco calor por volume, pico de 140 bar a 10° e gás frio; o ar sobra porque o coletor fica a 310 K fixos (sem o aquecimento no compressor)"
+  },
+  "caminhão plena 1900 rpm, 2,7 bar (catc15): T na abertura do escape": {
+    "grupo": "pressoes-a",
+    "medido": 979.6,
+    "unidade": "K",
+    "folga": "±5 %",
+    "alvo": "1150–1300 K",
+    "motivo": "com 2,7 bar a 1900 rpm o C15 do modelo respira λ 2,5 (real ≈ 1,8): pouco calor por volume, pico de 140 bar a 10° e gás frio; o ar sobra porque o coletor fica a 310 K fixos (sem o aquecimento no compressor)"
+  },
+  "caminhão plena 1900 rpm, 2,7 bar (catc15): gás no coletor": {
+    "grupo": "pressoes-a",
+    "medido": 474.8,
+    "unidade": "°C",
+    "folga": "±5 %",
+    "alvo": "550–650 °C",
+    "motivo": "com 2,7 bar a 1900 rpm o C15 do modelo respira λ 2,5 (real ≈ 1,8): pouco calor por volume, pico de 140 bar a 10° e gás frio; o ar sobra porque o coletor fica a 310 K fixos (sem o aquecimento no compressor)"
+  },
+  "Jake a 1900 rpm (catc15): pressão no PMS": {
+    "grupo": "pressoes-a",
+    "medido": 67.46,
+    "unidade": "bar",
+    "folga": "±5 %",
+    "alvo": "35–50 bar",
+    "motivo": "o ar comprimido com o turbo girado pelo sopro do Jake passa de 50 bar no PMS; com a válvula do Jake maior (que baixaria o PMS) a rede do escape fica instável"
+  },
+  "EMD 710 lenta 269 rpm: ângulo do pico": {
+    "grupo": "pressoes-b",
+    "medido": 1.825,
+    "unidade": "°",
+    "folga": "±5 %",
+    "alvo": "5–10°",
+    "motivo": "lavagem de zona única: o ar que atravessa o cilindro direto para o escape esfria o coletor (136/361 °C) e a lenta de 2 ms de atraso acende antes do PMS"
+  },
+  "EMD 710 lenta 269 rpm: T na abertura do escape": {
+    "grupo": "pressoes-b",
+    "medido": 517.1,
+    "unidade": "K",
+    "folga": "±5 %",
+    "alvo": "650–750 K",
+    "motivo": "zona única com o combustível de lenta realista (6–8 mg na picape, λ 8): a média do gás na abertura fica em 480–520 K; 600–750 K pediria 60% mais combustível ou a queima centrada a 35° depois do PMS"
+  },
+  "EMD 710 lenta 269 rpm: gás no coletor": {
+    "grupo": "pressoes-b",
+    "medido": 136.3,
+    "unidade": "°C",
+    "folga": "±5 %",
+    "alvo": "180–250 °C",
+    "motivo": "lavagem de zona única: o ar que atravessa o cilindro direto para o escape esfria o coletor (136/361 °C) e a lenta de 2 ms de atraso acende antes do PMS"
+  },
+  "EMD 710 notch 8: ângulo do pico": {
+    "grupo": "pressoes-b",
+    "medido": 8.688,
+    "unidade": "°",
+    "folga": "±5 %",
+    "alvo": "10–14°",
+    "motivo": "lavagem de zona única: o ar que atravessa o cilindro direto para o escape esfria o coletor (136/361 °C) e a lenta de 2 ms de atraso acende antes do PMS"
+  },
+  "EMD 710 notch 8: gás no coletor": {
+    "grupo": "pressoes-b",
+    "medido": 360.5,
+    "unidade": "°C",
+    "folga": "±5 %",
+    "alvo": "480–560 °C",
+    "motivo": "lavagem de zona única: o ar que atravessa o cilindro direto para o escape esfria o coletor (136/361 °C) e a lenta de 2 ms de atraso acende antes do PMS"
+  },
+  "GE 7FDL lenta 440 rpm: dp/dθ máx": {
+    "grupo": "pressoes-c",
+    "medido": 2.033,
+    "unidade": "bar/°",
+    "folga": "±5 %",
+    "alvo": "2–4 bar/°",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (2,03 / 2,03 / 2,03 nas bases 0, 1000 e 2000, alvo 2–4 bar/°); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "GE 7FDL notch 8: p_max": {
+    "grupo": "pressoes-c",
+    "medido": 125.9,
+    "unidade": "bar",
+    "folga": "±5 %",
+    "alvo": "125–145 bar",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (126 / 126 / 126 nas bases 0, 1000 e 2000, alvo 125–145 bar); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "GE 7FDL notch 8: dp/dθ máx": {
+    "grupo": "pressoes-c",
+    "medido": 6.895,
+    "unidade": "bar/°",
+    "folga": "±5 %",
+    "alvo": "4–7 bar/°",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (6,89 / 6,88 / 6,88 nas bases 0, 1000 e 2000, alvo 4–7 bar/°); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "leve · cofre · hilux28 lenta: curtose 1–4 kHz": {
+    "grupo": "bandas-a",
+    "medido": 31.61,
+    "unidade": "",
+    "folga": "±8 %",
+    "alvo": "6–9",
+    "motivo": "referência interna lo-fi: no cofre a batida é uma pancada seca e o intervalo entre as explosões só tem o chocalho das engrenagens da distribuição (curtose 34 contra 6–9 do vídeo do 1GD, cujo intervalo também é enchido pelo ventilador, pela sala e pelo ruído da própria gravação; era 15 antes da 4ª passada, com o fundo mecânico liso, e 46 sem as engrenagens); o leito contínuo que daria a curtose do vídeo é o \"som de ar\" que o viés do dono tirou (4ª passada) [23/11/2026, mediana de 3 sementes: 31,6 (33,7 / 31,6 / 30,8).]",
+    "nota_folga": "folga alargada: o valor vai de 31,6 / 33,3 / 31,9 entre as bases 0, 1000 e 2000"
+  },
+  "leve · cofre · hilux28 lenta: p90/p10": {
+    "grupo": "bandas-a",
+    "medido": 19.63,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "15 ± 3 dB",
+    "motivo": "referência interna lo-fi (vídeo do 1GD no cofre): o p90/p10 de 15 dB só saía com o fundo mecânico liso enchendo o vão (o \"som de ar\" da lenta); sem ele o vão é enchido só pelo chocalho das engrenagens da distribuição (20 dB; 28 sem elas) e fica mais fundo que o do vídeo, cujo vão é também o ruído da própria gravação"
+  },
+  "leve · exterior · ram67 lenta fria: 1–2,5 kHz": {
+    "grupo": "bandas-b",
+    "medido": -3.319,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "−8 ± 4 dB",
+    "motivo": "referência interna (Cummins a −23 °C, vídeo): a mecânica +10 dB que o real3 pede no Cummins em lenta deixa o frio 5 dB mais agudo; o escape de 4\" irradia grave na câmera atrás [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (−3,32 / −3,4 / −3,81 nas bases 0, 1000 e 2000, alvo −8 ± 4 dB); fica declarada à beira, com teto.]",
+    "beira": true
+  },
+  "leve · exterior · ram67 lenta fria: centroide": {
+    "grupo": "bandas-b",
+    "medido": 220.9,
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "alvo": "270–450 Hz",
+    "motivo": "referência interna (Cummins a −23 °C, vídeo): a mecânica +10 dB que o real3 pede no Cummins em lenta deixa o frio 5 dB mais agudo; o escape de 4\" irradia grave na câmera atrás"
+  },
+  "leve · exterior · ram67 lenta fria: 1–4 kHz": {
+    "grupo": "bandas-b",
+    "medido": -2.928,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "−8 ± 4 dB",
+    "motivo": "referência interna (Cummins a −23 °C, vídeo): a mecânica +10 dB que o real3 pede no Cummins em lenta deixa o frio 5 dB mais agudo; o escape de 4\" irradia grave na câmera atrás"
+  },
+  "pesado · escape · catc15 lenta: 1–2,5 kHz": {
+    "grupo": "bandas-b",
+    "medido": -14.38,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "≤ −18 dB",
+    "motivo": "a mecânica que a câmera de lado pede vaza para o microfone do escape"
+  },
+  "pesado · escape · catc15 lenta: centroide": {
+    "grupo": "bandas-b",
+    "medido": 277.5,
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "alvo": "125–200 Hz",
+    "motivo": "a mecânica que a câmera de lado pede vaza para o microfone do escape"
+  },
+  "real3 · picape lenta (hilux28, ranger32, ram67): 60–150": {
+    "grupo": "real3-a",
+    "medido": 15.82,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-3.2 a 15.9 dB",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (15,8 / 15,9 / 15,8 nas bases 0, 1000 e 2000, alvo -3.2 a 15.9 dB); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "real3 · picape lenta (hilux28, ranger32, ram67): 6–12k": {
+    "grupo": "real3-a",
+    "medido": -24.05,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-23.6 a -7.0 dB",
+    "motivo": "4ª passada: acima de 6 kHz vale a física, não a gravação (PLANO, regra 3), e o que havia ali era o chiado dos tiques e do jato, que saiu (−24,0 dB contra −23,6 do arquivo mais escuro); o CV das alturas de pico sobe para 0,57 porque cada batida agora é um clique de forma fixa por cilindro, com um cilindro dominante: pela energia de cada explosão (kit ouvido, 1–6 kHz) a variação é 0,26–0,37 contra 0,21–0,44 das gravações [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (−24,1 / −24 / −24,1 nas bases 0, 1000 e 2000, alvo -23.6 a -7.0 dB); fica declarada à beira, com teto.]",
+    "beira": true
+  },
+  "real3 · picape lenta (hilux28, ranger32, ram67): CV do knock": {
+    "grupo": "real3-a",
+    "medido": 0.5581,
+    "unidade": "",
+    "folga": "±10 %",
+    "alvo": "0.14–0.32",
+    "motivo": "4ª passada: acima de 6 kHz vale a física, não a gravação (PLANO, regra 3), e o que havia ali era o chiado dos tiques e do jato, que saiu (−24,0 dB contra −23,6 do arquivo mais escuro); o CV das alturas de pico sobe para 0,57 porque cada batida agora é um clique de forma fixa por cilindro, com um cilindro dominante: pela energia de cada explosão (kit ouvido, 1–6 kHz) a variação é 0,26–0,37 contra 0,21–0,44 das gravações",
+    "nota_folga": "folga alargada: o valor vai de 0,558 / 0,516 / 0,533 entre as bases 0, 1000 e 2000"
+  },
+  "real3 · caminhão lenta (catc15, volvod13): 30–60": {
+    "grupo": "real3-b",
+    "medido": 5.819,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-8.3 a 2.7 dB",
+    "motivo": "o primeiro harmônico da ignição (30 Hz) sai 8 dB acima das gravações de 2–3 m: a irradiação de monopolo da chaminé (+6 dB/oitava) não basta para o pulso de 2 L por cilindro; o CV (0,28) é o da picape, um pouco irregular demais para o caminhão"
+  },
+  "real3 · caminhão lenta (catc15, volvod13): 6–12k": {
+    "grupo": "real3-b",
+    "medido": -28.88,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-24.4 a -11.0 dB",
+    "motivo": "4ª passada: −28,9 dB (faixa −24,4 a −11): acima de 6 kHz o que havia era o ruído dos tiques e do fundo mecânico; a parede do bloco de 137 mm corta a batida em 5,4 kHz. Acima de 6 kHz vale a física, não a gravação"
+  },
+  "real3 · caminhão lenta (catc15, volvod13): CV do knock": {
+    "grupo": "real3-b",
+    "medido": 0.3847,
+    "unidade": "",
+    "folga": "±8 %",
+    "alvo": "0.13–0.25",
+    "motivo": "o primeiro harmônico da ignição (30 Hz) sai 8 dB acima das gravações de 2–3 m: a irradiação de monopolo da chaminé (+6 dB/oitava) não basta para o pulso de 2 L por cilindro; o CV (0,28) é o da picape, um pouco irregular demais para o caminhão [23/11/2026: o CV está em 0,38 (sementes 0,38 / 0,36 / 0,41), não 0,28; a 4ª passada mediu nas picapes o efeito do clique de forma fixa por cilindro (0,57), sem conferir no caminhão.]",
+    "nota_folga": "folga alargada: o valor vai de 0,385 / 0,381 / 0,409 entre as bases 0, 1000 e 2000"
+  },
+  "real3 · gerador sem carga (gen500): 30–60": {
+    "grupo": "real3-d",
+    "medido": -25.62,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-19.6 a -9.6 dB",
+    "motivo": "o grupo gerador é ouvido pela câmera de veículo (ouvinte ext): sem a carenagem e o radiador do grupo, o grave do escape domina e a mecânica e o ventilador ficam 10–15 dB abaixo; falta o portador gerador da Cena com a posição do ouvinte ao lado do grupo"
+  },
+  "real3 · gerador sem carga (gen500): 60–150": {
+    "grupo": "real3-d",
+    "medido": 12,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-6.7 a 3.3 dB",
+    "motivo": "o grupo gerador é ouvido pela câmera de veículo (ouvinte ext): sem a carenagem e o radiador do grupo, o grave do escape domina e a mecânica e o ventilador ficam 10–15 dB abaixo; falta o portador gerador da Cena com a posição do ouvinte ao lado do grupo"
+  },
+  "real3 · gerador sem carga (gen500): 400–1k": {
+    "grupo": "real3-d",
+    "medido": -7.535,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-6.6 a 3.4 dB",
+    "motivo": "o grupo gerador é ouvido pela câmera de veículo (ouvinte ext): sem a carenagem e o radiador do grupo, o grave do escape domina e a mecânica e o ventilador ficam 10–15 dB abaixo; falta o portador gerador da Cena com a posição do ouvinte ao lado do grupo"
+  },
+  "real3 · gerador sem carga (gen500): 6–12k": {
+    "grupo": "real3-d",
+    "medido": -32.15,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-16.6 a -6.6 dB",
+    "motivo": "o grupo gerador é ouvido pela câmera de veículo (ouvinte ext): sem a carenagem e o radiador do grupo, o grave do escape domina e a mecânica e o ventilador ficam 10–15 dB abaixo; falta o portador gerador da Cena com a posição do ouvinte ao lado do grupo"
+  },
+  "real3 · gerador sem carga (gen500): centroide": {
+    "grupo": "real3-d",
+    "medido": 514.7,
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "alvo": "500–1000 Hz",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (515 / 512 / 512 nas bases 0, 1000 e 2000, alvo 500–1000 Hz); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "real3 · gerador sem carga (gen500): CV do knock": {
+    "grupo": "real3-d",
+    "medido": 0.2697,
+    "unidade": "",
+    "folga": "±5 %",
+    "alvo": "0.16–0.22",
+    "motivo": "sem diagnóstico. o grupo gerador é ouvido pela câmera de veículo (ouvinte ext): sem a carenagem e o radiador do grupo, o grave do escape domina e a mecânica e o ventilador ficam 10–15 dB abaixo; falta o portador gerador da Cena com a posição do ouvinte ao lado do grupo [O texto acima, da classe inteira, fala das bandas; o CV do knock acima da faixa não tem diagnóstico.]"
+  },
+  "real3 · gerador com carga (gen500): 30–60": {
+    "grupo": "real3-d",
+    "medido": -25.67,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-16.7 a -6.7 dB",
+    "motivo": "o grupo gerador é ouvido pela câmera de veículo (ouvinte ext): sem a carenagem e o radiador do grupo, o grave do escape domina e a mecânica e o ventilador ficam 10–15 dB abaixo; falta o portador gerador da Cena com a posição do ouvinte ao lado do grupo"
+  },
+  "real3 · gerador com carga (gen500): 400–1k": {
+    "grupo": "real3-d",
+    "medido": -16.76,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-8.5 a 1.5 dB",
+    "motivo": "o grupo gerador é ouvido pela câmera de veículo (ouvinte ext): sem a carenagem e o radiador do grupo, o grave do escape domina e a mecânica e o ventilador ficam 10–15 dB abaixo; falta o portador gerador da Cena com a posição do ouvinte ao lado do grupo"
+  },
+  "real3 · gerador com carga (gen500): 2,5–6k": {
+    "grupo": "real3-d",
+    "medido": -23.01,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-20.7 a -10.7 dB",
+    "motivo": "o grupo gerador é ouvido pela câmera de veículo (ouvinte ext): sem a carenagem e o radiador do grupo, o grave do escape domina e a mecânica e o ventilador ficam 10–15 dB abaixo; falta o portador gerador da Cena com a posição do ouvinte ao lado do grupo"
+  },
+  "real3 · gerador com carga (gen500): 6–12k": {
+    "grupo": "real3-d",
+    "medido": -34.68,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-27.5 a -17.5 dB",
+    "motivo": "o grupo gerador é ouvido pela câmera de veículo (ouvinte ext): sem a carenagem e o radiador do grupo, o grave do escape domina e a mecânica e o ventilador ficam 10–15 dB abaixo; falta o portador gerador da Cena com a posição do ouvinte ao lado do grupo"
+  },
+  "real3 · gerador com carga (gen500): CV do knock": {
+    "grupo": "real3-d",
+    "medido": 0.313,
+    "unidade": "",
+    "folga": "±20 %",
+    "alvo": "0.19–0.25",
+    "motivo": "sem diagnóstico. o grupo gerador é ouvido pela câmera de veículo (ouvinte ext): sem a carenagem e o radiador do grupo, o grave do escape domina e a mecânica e o ventilador ficam 10–15 dB abaixo; falta o portador gerador da Cena com a posição do ouvinte ao lado do grupo [O texto acima, da classe inteira, fala das bandas; o CV do knock acima da faixa não tem diagnóstico.]",
+    "nota_folga": "folga alargada: o valor vai de 0,313 / 0,319 / 0,265 entre as bases 0, 1000 e 2000"
+  },
+  "real3 · locomotiva lenta (emd710): 60–150": {
+    "grupo": "real3-e",
+    "medido": 18.02,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-4.5 a 6.4 dB",
+    "motivo": "a EMD em lenta é escura: faltam os ventiladores, o compressor de ar e os sopradores da carroceria que dão o agudo (e o centroide de 2,2 kHz) da gravação; o 60–150 sai alto pelo pulso de 2 tempos sem os 4 cilindros de folga entre bancadas"
+  },
+  "real3 · locomotiva lenta (emd710): 400–1k": {
+    "grupo": "real3-e",
+    "medido": -7.937,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-2.9 a 3.8 dB",
+    "motivo": "a EMD em lenta é escura: faltam os ventiladores, o compressor de ar e os sopradores da carroceria que dão o agudo (e o centroide de 2,2 kHz) da gravação; o 60–150 sai alto pelo pulso de 2 tempos sem os 4 cilindros de folga entre bancadas"
+  },
+  "real3 · locomotiva lenta (emd710): 6–12k": {
+    "grupo": "real3-e",
+    "medido": -30.25,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-19.8 a 5.5 dB",
+    "motivo": "a EMD em lenta é escura: faltam os ventiladores, o compressor de ar e os sopradores da carroceria que dão o agudo (e o centroide de 2,2 kHz) da gravação; o 60–150 sai alto pelo pulso de 2 tempos sem os 4 cilindros de folga entre bancadas"
+  },
+  "real3 · locomotiva lenta (emd710): centroide": {
+    "grupo": "real3-e",
+    "medido": 335.9,
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "alvo": "481–2244 Hz",
+    "motivo": "a EMD em lenta é escura: faltam os ventiladores, o compressor de ar e os sopradores da carroceria que dão o agudo (e o centroide de 2,2 kHz) da gravação; o 60–150 sai alto pelo pulso de 2 tempos sem os 4 cilindros de folga entre bancadas"
+  },
+  "real3 · EMD notch 8 (emd710): 30–60": {
+    "grupo": "real3-f",
+    "medido": -16.09,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-0.8 a 10.5 dB",
+    "motivo": "a EMD em notch 8 tem 60–150 Hz 16 dB acima de 150–400 nas gravações (ventiladores do radiador, motores de tração e o desequilíbrio entre bancadas a 15 Hz); o modelo tem a ignição de 240 Hz e o ruído da turbina, sem essas fontes"
+  },
+  "real3 · EMD notch 8 (emd710): 60–150": {
+    "grupo": "real3-f",
+    "medido": -2.718,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "12.2 a 18.3 dB",
+    "motivo": "a EMD em notch 8 tem 60–150 Hz 16 dB acima de 150–400 nas gravações (ventiladores do radiador, motores de tração e o desequilíbrio entre bancadas a 15 Hz); o modelo tem a ignição de 240 Hz e o ruído da turbina, sem essas fontes"
+  },
+  "real3 · EMD notch 8 (emd710): 400–1k": {
+    "grupo": "real3-f",
+    "medido": -7.08,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-7.5 a 1.6 dB",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (−7,08 / −7,08 / −7,05 nas bases 0, 1000 e 2000, alvo -7.5 a 1.6 dB); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "real3 · EMD notch 8 (emd710): 1–2,5k": {
+    "grupo": "real3-f",
+    "medido": -13.6,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-14.0 a 2.2 dB",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (−13,6 / −13,5 / −13,6 nas bases 0, 1000 e 2000, alvo -14.0 a 2.2 dB); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "real3 · EMD notch 8 (emd710): 2,5–6k": {
+    "grupo": "real3-f",
+    "medido": -20.04,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-7.8 a 3.1 dB",
+    "motivo": "4ª passada: −20,2 dB (faixa −7,8 a 3,1): o agudo do EMD em notch 8 era a banda larga da turbina, 94% do som ponderado A e a fonte dominante de 400 Hz a 6 kHz; caiu 22 dB e o que sobra do turbo é o apito em 8,1 kHz, 21 dB abaixo das ordens (gravação: 2 dB abaixo, o \"grito\"). O controle \"Apito do turbo\" sobe"
+  },
+  "real3 · EMD notch 8 (emd710): 6–12k": {
+    "grupo": "real3-f",
+    "medido": -21.21,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-10.7 a 6.7 dB",
+    "motivo": "a EMD em notch 8 tem 60–150 Hz 16 dB acima de 150–400 nas gravações (ventiladores do radiador, motores de tração e o desequilíbrio entre bancadas a 15 Hz); o modelo tem a ignição de 240 Hz e o ruído da turbina, sem essas fontes"
+  },
+  "real3 · EMD notch 8 (emd710): centroide": {
+    "grupo": "real3-f",
+    "medido": 352.5,
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "alvo": "340–3547 Hz",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (353 / 354 / 352 nas bases 0, 1000 e 2000, alvo 340–3547 Hz); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "real3 · GE 7FDL notch 8 (ge7fdl): 1–2,5k": {
+    "grupo": "real3-g",
+    "medido": -18.04,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-9.5 a 0.5 dB",
+    "motivo": "4ª passada: acima de 1 kHz a GE em notch 8 era só a banda larga da turbina (o motor não tinha nada ali); com ela 22 dB abaixo ficam −18 / −26 / −43 dB (gravação: −4,5 / −9,5 / −21) e o centroide em 170 Hz. Falta som de motor em carga nessa faixa (pendente), não ruído; na lenta a GE bate com a gravação (−11 / −20 dB)"
+  },
+  "real3 · GE 7FDL notch 8 (ge7fdl): 2,5–6k": {
+    "grupo": "real3-g",
+    "medido": -26.06,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-14.5 a -4.5 dB",
+    "motivo": "4ª passada: acima de 1 kHz a GE em notch 8 era só a banda larga da turbina (o motor não tinha nada ali); com ela 22 dB abaixo ficam −18 / −26 / −43 dB (gravação: −4,5 / −9,5 / −21) e o centroide em 170 Hz. Falta som de motor em carga nessa faixa (pendente), não ruído; na lenta a GE bate com a gravação (−11 / −20 dB)"
+  },
+  "real3 · GE 7FDL notch 8 (ge7fdl): 6–12k": {
+    "grupo": "real3-g",
+    "medido": -42.66,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-26.2 a -16.2 dB",
+    "motivo": "4ª passada: acima de 1 kHz a GE em notch 8 era só a banda larga da turbina (o motor não tinha nada ali); com ela 22 dB abaixo ficam −18 / −26 / −43 dB (gravação: −4,5 / −9,5 / −21) e o centroide em 170 Hz. Falta som de motor em carga nessa faixa (pendente), não ruído; na lenta a GE bate com a gravação (−11 / −20 dB)"
+  },
+  "real3 · GE 7FDL notch 8 (ge7fdl): centroide": {
+    "grupo": "real3-g",
+    "medido": 169,
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "alvo": "330–610 Hz",
+    "motivo": "4ª passada: acima de 1 kHz a GE em notch 8 era só a banda larga da turbina (o motor não tinha nada ali); com ela 22 dB abaixo ficam −18 / −26 / −43 dB (gravação: −4,5 / −9,5 / −21) e o centroide em 170 Hz. Falta som de motor em carga nessa faixa (pendente), não ruído; na lenta a GE bate com a gravação (−11 / −20 dB)"
+  },
+  "real3 · GE 7FDL notch 8 (ge7fdl): CV do knock": {
+    "grupo": "real3-g",
+    "medido": 0.1727,
+    "unidade": "",
+    "folga": "±5 %",
+    "alvo": "0.24–0.30",
+    "motivo": "sem diagnóstico. 4ª passada: acima de 1 kHz a GE em notch 8 era só a banda larga da turbina (o motor não tinha nada ali); com ela 22 dB abaixo ficam −18 / −26 / −43 dB (gravação: −4,5 / −9,5 / −21) e o centroide em 170 Hz. Falta som de motor em carga nessa faixa (pendente), não ruído; na lenta a GE bate com a gravação (−11 / −20 dB) [O texto acima fala das bandas; o CV do knock (0,17, abaixo da faixa de 0,24–0,30) não tem diagnóstico.]"
+  },
+  "envoltória · GE 7FDL notch 8 (ge7fdl; U23B 9,7): p90/p10 de 2–6 kHz": {
+    "grupo": "envoltoria-b",
+    "medido": 7.141,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "≥ 8.7 dB (gravações até 10.7)",
+    "motivo": "o agudo da GE em N8 é o ruído da turbina, que segue a pressão na entrada dela: no 7FDL-16 do preset os 8 pulsos por volta se fundem no coletor (6,8 dB, quase liso); a gravação é de um 7FDL-12 (6 por volta, 9,7 dB)"
+  },
+  "f1000mwm pé no fundo da lenta: λ < 1,3": {
+    "grupo": "fumaca-a",
+    "medido": 0,
+    "unidade": "s",
+    "folga": "±5 %",
+    "alvo": "0,5–1,5 s",
+    "motivo": "sem fumaça preta no transiente: o aspirado tem ar sobrando com o combustível máximo da ficha (λ mín ≈ 1,7; a subida de torque da bomba levava a 1,33 mas tirava a lenta do F-1000 da janela); na locomotiva o regulador de carga sobe junto com o giro (fazer a carga subir com o notch apagava o motor com o turbo vazio)"
+  },
+  "hilux28 pé no fundo da lenta: λ mínimo": {
+    "grupo": "fumaca-a",
+    "medido": 1.25,
+    "unidade": "",
+    "folga": "±5 %",
+    "alvo": "≥ 1,25",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (1,25 / 1,25 / 1,25 nas bases 0, 1000 e 2000, alvo ≥ 1,25); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "ge7fdl subindo cada notch: λ < 1,3": {
+    "grupo": "fumaca-b",
+    "medido": 0,
+    "unidade": "s",
+    "folga": "±5 %",
+    "alvo": "2–4 s por notch",
+    "motivo": "sem fumaça preta no transiente: o aspirado tem ar sobrando com o combustível máximo da ficha (λ mín ≈ 1,7; a subida de torque da bomba levava a 1,33 mas tirava a lenta do F-1000 da janela); na locomotiva o regulador de carga sobe junto com o giro (fazer a carga subir com o notch apagava o motor com o turbo vazio)"
+  },
+  "catc15 Jake 6: potência de frenagem": {
+    "grupo": "jake",
+    "medido": 65.75,
+    "unidade": "%",
+    "folga": "±5 %",
+    "alvo": "70–90% de 410 kW",
+    "motivo": "68% (alvo 70–90%): o turbo girado pelo Jake não chega à pressão de plena carga [23/11/2026: 66 %.]"
+  },
+  "scaniav8 freio de descarga: pulsos vs sem freio": {
+    "grupo": "jake",
+    "medido": -7.751,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "−15 a −20 dB",
+    "motivo": "a borboleta só atenua a boca e o jato; a rede do escape antes dela continua irradiando pelo coletor"
+  },
+  "f1000mwm: potência a 2800 rpm": {
+    "grupo": "potencia",
+    "medido": 68.31,
+    "unidade": "kW",
+    "folga": "±5 %",
+    "alvo": "66 kW ± 5%",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (68,3 / 68,7 / 69,2 nas bases 0, 1000 e 2000, alvo 66 kW ± 5%); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "hilux28 a 100 km/h em 6ª": {
+    "grupo": "veiculo-a",
+    "medido": 1604,
+    "unidade": "rpm",
+    "folga": "±5 %",
+    "alvo": "1700 ± 100 rpm",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (1604 / 1604 / 1604 nas bases 0, 1000 e 2000, alvo 1700 ± 100 rpm); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "om617 caça em lenta": {
+    "grupo": "governador-a",
+    "medido": [
+      1.882,
+      2
+    ],
+    "unidade": "",
+    "folga": "±1.6",
+    "alvo": "±1–2% a 0,6–1,2 Hz",
+    "motivo": "A dispersão das bombas mecânicas (±6,5% por elemento) move a lenta do OM617 (da lista antiga, que já dava a caça em ±2–3,6%; o droop do mesmo texto voltou a passar). [A2 (AUDITORIA T-DSL-02, T-DSL-09): muda de estado com a semente ([1,88 / 2] / [2,34 / 2] / [3,31 / 2,06] nas bases 0, 1000 e 2000, alvo ±1–2% a 0,6–1,2 Hz); fica declarada à beira, com teto.]",
+    "nota_folga": "folga absoluta (em pontos de %, e em Hz na frequência da caça): a mediana de 3 sementes vai de ±1,9 a ±3,3 % entre as bases 0, 1000 e 2000",
+    "beira": true
+  },
+  "hilux28 degrau de 30% do torque em lenta": {
+    "grupo": "governador-a",
+    "medido": [
+      7.932,
+      5.837
+    ],
+    "unidade": "",
+    "folga": "±8 %",
+    "alvo": "queda ≤ 8%, ±2% em < 2 s",
+    "motivo": "a lenta carregada oscila ±2% com a dispersão de ciclo a ciclo (atraso e injetor), e encosta na faixa por 5 s; a queda (7%) está na janela [23/11/2026, mediana de 3 sementes: queda de 7,9 % e 5,8 s para ficar a ±2 % (sementes 5,3 / 5,9 / 5,8 s).]",
+    "nota_folga": "folga alargada: o valor vai de [7,93 / 5,84] / [7,45 / 5,81] / [7,85 / 6] entre as bases 0, 1000 e 2000"
+  },
+  "gen500 degrau de 100% (ISO 8528 G2)": {
+    "grupo": "governador-b",
+    "medido": [
+      9.991,
+      3.04
+    ],
+    "unidade": "",
+    "folga": "±15 %",
+    "alvo": "queda ≤ 10%, ≤ 5 s",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): muda de estado com a semente ([9,99 / 3,04] / [10,2 / 2,83] / [10,3 / 2,73] nas bases 0, 1000 e 2000, alvo queda ≤ 10%, ≤ 5 s); fica declarada à beira, com teto.",
+    "nota_folga": "folga alargada: o valor vai de [9,99 / 3,04] / [10,2 / 2,83] / [10,3 / 2,73] entre as bases 0, 1000 e 2000",
+    "beira": true
+  },
+  "emd710 potência por notch": {
+    "grupo": "governador-c",
+    "medido": 3.157,
+    "unidade": "%",
+    "folga": "±5 %",
+    "alvo": "±3%",
+    "motivo": "3,2% num notch (alvo 3%)"
+  },
+  "pesado · exterior · onibusisl lenta: 1–2,5 kHz": {
+    "grupo": "projeto-a",
+    "medido": 1.053,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "−2,5 ± 2 dB",
+    "motivo": "sem diagnóstico. Alvo do projeto (DIESEL.md, tabela 2.6, linha 3: pesado, de fora e de lado, em lenta), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o Cat C15 na mesma condição passa nas cinco medidas. O ônibus fica 3 a 4 dB mais claro em 1–4 kHz relativo a 150–400 Hz e o centroide passa de 900 Hz. Pista não conferida: na lenta dos pesados o simulado tem pouca energia em 150–400 Hz (TECNICO, Diesel, 4ª passada, \"O grave da lenta sobra\"), e as bandas relativas a ela sobem."
+  },
+  "pesado · exterior · onibusisl lenta: centroide": {
+    "grupo": "projeto-a",
+    "medido": 1038,
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "alvo": "600–900 Hz",
+    "motivo": "sem diagnóstico. Alvo do projeto (DIESEL.md, tabela 2.6, linha 3: pesado, de fora e de lado, em lenta), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o Cat C15 na mesma condição passa nas cinco medidas. O ônibus fica 3 a 4 dB mais claro em 1–4 kHz relativo a 150–400 Hz e o centroide passa de 900 Hz. Pista não conferida: na lenta dos pesados o simulado tem pouca energia em 150–400 Hz (TECNICO, Diesel, 4ª passada, \"O grave da lenta sobra\"), e as bandas relativas a ela sobem."
+  },
+  "pesado · exterior · onibusisl lenta: 1–4 kHz": {
+    "grupo": "projeto-a",
+    "medido": 1.697,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "−2 ± 2 dB",
+    "motivo": "sem diagnóstico. Alvo do projeto (DIESEL.md, tabela 2.6, linha 3: pesado, de fora e de lado, em lenta), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o Cat C15 na mesma condição passa nas cinco medidas. O ônibus fica 3 a 4 dB mais claro em 1–4 kHz relativo a 150–400 Hz e o centroide passa de 900 Hz. Pista não conferida: na lenta dos pesados o simulado tem pouca energia em 150–400 Hz (TECNICO, Diesel, 4ª passada, \"O grave da lenta sobra\"), e as bandas relativas a ela sobem."
+  },
+  "EMD · lenta: 60–150": {
+    "grupo": "projeto-b",
+    "medido": 18,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "+8.4 ± 4 dB",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a SD70ACe dos notches 1 a 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o real3 da mesma condição contradiz a tabela (T-DSL-03). O mesmo do real3 da locomotiva em lenta: a EMD em lenta é escura: faltam os ventiladores, o compressor de ar e os sopradores da carroceria que dão o agudo (e o centroide de 2,2 kHz) da gravação; o 60–150 sai alto pelo pulso de 2 tempos sem os 4 cilindros de folga entre bancadas. (TECNICO, 4ª passada: o EMD em lenta segue com 400–1000 Hz 12 dB abaixo da gravação e 60–150 Hz 8 dB acima, relativos a 150–400 Hz.)"
+  },
+  "EMD · lenta: 400–1k": {
+    "grupo": "projeto-b",
+    "medido": -7.99,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "+3.3 ± 4 dB",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a SD70ACe dos notches 1 a 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o real3 da mesma condição contradiz a tabela (T-DSL-03). O mesmo do real3 da locomotiva em lenta: a EMD em lenta é escura: faltam os ventiladores, o compressor de ar e os sopradores da carroceria que dão o agudo (e o centroide de 2,2 kHz) da gravação; o 60–150 sai alto pelo pulso de 2 tempos sem os 4 cilindros de folga entre bancadas. (TECNICO, 4ª passada: o EMD em lenta segue com 400–1000 Hz 12 dB abaixo da gravação e 60–150 Hz 8 dB acima, relativos a 150–400 Hz.)"
+  },
+  "EMD · lenta: 2,5–6k": {
+    "grupo": "projeto-b",
+    "medido": -13.68,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-5.8 ± 4 dB",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a SD70ACe dos notches 1 a 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o real3 da mesma condição contradiz a tabela (T-DSL-03). O mesmo do real3 da locomotiva em lenta: a EMD em lenta é escura: faltam os ventiladores, o compressor de ar e os sopradores da carroceria que dão o agudo (e o centroide de 2,2 kHz) da gravação; o 60–150 sai alto pelo pulso de 2 tempos sem os 4 cilindros de folga entre bancadas. (TECNICO, 4ª passada: o EMD em lenta segue com 400–1000 Hz 12 dB abaixo da gravação e 60–150 Hz 8 dB acima, relativos a 150–400 Hz.)"
+  },
+  "EMD · lenta: 6–12k": {
+    "grupo": "projeto-b",
+    "medido": -30.28,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-13.3 ± 4 dB",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a SD70ACe dos notches 1 a 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o real3 da mesma condição contradiz a tabela (T-DSL-03). O mesmo do real3 da locomotiva em lenta: a EMD em lenta é escura: faltam os ventiladores, o compressor de ar e os sopradores da carroceria que dão o agudo (e o centroide de 2,2 kHz) da gravação; o 60–150 sai alto pelo pulso de 2 tempos sem os 4 cilindros de folga entre bancadas. (TECNICO, 4ª passada: o EMD em lenta segue com 400–1000 Hz 12 dB abaixo da gravação e 60–150 Hz 8 dB acima, relativos a 150–400 Hz.)"
+  },
+  "EMD · lenta: centroide": {
+    "grupo": "projeto-b",
+    "medido": 335.4,
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "alvo": "700 Hz ± 30%",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a SD70ACe dos notches 1 a 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o real3 da mesma condição contradiz a tabela (T-DSL-03). O mesmo do real3 da locomotiva em lenta: a EMD em lenta é escura: faltam os ventiladores, o compressor de ar e os sopradores da carroceria que dão o agudo (e o centroide de 2,2 kHz) da gravação; o 60–150 sai alto pelo pulso de 2 tempos sem os 4 cilindros de folga entre bancadas. (TECNICO, 4ª passada: o EMD em lenta segue com 400–1000 Hz 12 dB abaixo da gravação e 60–150 Hz 8 dB acima, relativos a 150–400 Hz.)"
+  },
+  "EMD · notch 8: 60–150": {
+    "grupo": "projeto-b",
+    "medido": -2.781,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "+2.7 ± 4 dB",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a SD70ACe dos notches 1 a 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o real3 da mesma condição contradiz a tabela (T-DSL-03). O mesmo do real3 da EMD em notch 8 (−2,8 dB aqui, abaixo dos +2,7 ± 4 da tabela e dos +14,2 a +16,3 do real3): as gravações têm os ventiladores do radiador, os motores de tração e o desequilíbrio entre bancadas a 15 Hz; o modelo tem a ignição de 240 Hz (dentro da banda de referência, 150–400 Hz) e o ruído da turbina, sem essas fontes."
+  },
+  "EMD · notch 8: 400–1k": {
+    "grupo": "projeto-b",
+    "medido": -7.047,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "+2.5 ± 4 dB",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a SD70ACe dos notches 1 a 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o real3 da mesma condição contradiz a tabela (T-DSL-03). O mesmo do real3 da EMD em notch 8: 4ª passada: −20,2 dB (faixa −7,8 a 3,1): o agudo do EMD em notch 8 era a banda larga da turbina, 94% do som ponderado A e a fonte dominante de 400 Hz a 6 kHz; caiu 22 dB e o que sobra do turbo é o apito em 8,1 kHz, 21 dB abaixo das ordens (gravação: 2 dB abaixo, o \"grito\"). O controle \"Apito do turbo\" sobe"
+  },
+  "EMD · notch 8: 1–2,5k": {
+    "grupo": "projeto-b",
+    "medido": -13.57,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-4.2 ± 4 dB",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a SD70ACe dos notches 1 a 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o real3 da mesma condição contradiz a tabela (T-DSL-03). O mesmo do real3 da EMD em notch 8: 4ª passada: −20,2 dB (faixa −7,8 a 3,1): o agudo do EMD em notch 8 era a banda larga da turbina, 94% do som ponderado A e a fonte dominante de 400 Hz a 6 kHz; caiu 22 dB e o que sobra do turbo é o apito em 8,1 kHz, 21 dB abaixo das ordens (gravação: 2 dB abaixo, o \"grito\"). O controle \"Apito do turbo\" sobe"
+  },
+  "EMD · notch 8: 2,5–6k": {
+    "grupo": "projeto-b",
+    "medido": -20.04,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-4 ± 4 dB",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a SD70ACe dos notches 1 a 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o real3 da mesma condição contradiz a tabela (T-DSL-03). O mesmo do real3 da EMD em notch 8: 4ª passada: −20,2 dB (faixa −7,8 a 3,1): o agudo do EMD em notch 8 era a banda larga da turbina, 94% do som ponderado A e a fonte dominante de 400 Hz a 6 kHz; caiu 22 dB e o que sobra do turbo é o apito em 8,1 kHz, 21 dB abaixo das ordens (gravação: 2 dB abaixo, o \"grito\"). O controle \"Apito do turbo\" sobe"
+  },
+  "EMD · notch 8: 6–12k": {
+    "grupo": "projeto-b",
+    "medido": -21.21,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-10.5 ± 4 dB",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a SD70ACe dos notches 1 a 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o real3 da mesma condição contradiz a tabela (T-DSL-03). O mesmo do real3 da EMD em notch 8: 4ª passada: −20,2 dB (faixa −7,8 a 3,1): o agudo do EMD em notch 8 era a banda larga da turbina, 94% do som ponderado A e a fonte dominante de 400 Hz a 6 kHz; caiu 22 dB e o que sobra do turbo é o apito em 8,1 kHz, 21 dB abaixo das ordens (gravação: 2 dB abaixo, o \"grito\"). O controle \"Apito do turbo\" sobe"
+  },
+  "EMD · notch 8: centroide": {
+    "grupo": "projeto-b",
+    "medido": 352.5,
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "alvo": "840 Hz ± 30%",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a SD70ACe dos notches 1 a 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a); o real3 da mesma condição contradiz a tabela (T-DSL-03). O mesmo do real3 da EMD em notch 8: 4ª passada: −20,2 dB (faixa −7,8 a 3,1): o agudo do EMD em notch 8 era a banda larga da turbina, 94% do som ponderado A e a fonte dominante de 400 Hz a 6 kHz; caiu 22 dB e o que sobra do turbo é o apito em 8,1 kHz, 21 dB abaixo das ordens (gravação: 2 dB abaixo, o \"grito\"). O controle \"Apito do turbo\" sobe"
+  },
+  "GE · lenta: 400–1k": {
+    "grupo": "projeto-c",
+    "medido": -10.98,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-1.7 ± 4 dB",
+    "motivo": "sem diagnóstico. Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a C36ME, 7FDL-16, da lenta ao notch 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a). A GE em lenta passa em 60–150, 1–2,5k, 2,5–6k e 6–12k Hz; 400–1000 Hz fica em −11 dB contra −1,7 ± 4 (o real3 não tem a GE em lenta)."
+  },
+  "GE · lenta: centroide": {
+    "grupo": "projeto-c",
+    "medido": 169.7,
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "alvo": "415 Hz ± 30%",
+    "motivo": "sem diagnóstico. Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a C36ME, 7FDL-16, da lenta ao notch 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a). 170 Hz contra 415 ± 30 %: com 400–1000 Hz 9 dB abaixo da tabela (a medida ao lado) o centroide fica abaixo da faixa."
+  },
+  "GE · notch 8: 60–150": {
+    "grupo": "projeto-c",
+    "medido": 9.53,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "+15.8 ± 4 dB",
+    "motivo": "sem diagnóstico. Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a C36ME, 7FDL-16, da lenta ao notch 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a). As duas referências da GE em notch 8 se contradizem (T-DSL-03): o real3 (U23B, 7FDL-12) pede +5,4 ± 5 dB e o simulado (+9,5) passa nele; a tabela 4.4 (7FDL-16) pede +15,8 ± 4."
+  },
+  "GE · notch 8: 400–1k": {
+    "grupo": "projeto-c",
+    "medido": -5.555,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-0.7 ± 4 dB",
+    "motivo": "sem diagnóstico. Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a C36ME, 7FDL-16, da lenta ao notch 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a). O simulado (−5,6 dB) fica 0,9 dB além da tolerância da tabela 4.4 (−0,7 ± 4) e passa no real3 da GE em notch 8 (U23B, 7FDL-12: −3 ± 5)."
+  },
+  "GE · notch 8: 1–2,5k": {
+    "grupo": "projeto-c",
+    "medido": -18.01,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-7.6 ± 4 dB",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a C36ME, 7FDL-16, da lenta ao notch 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a). O mesmo do real3 da GE em notch 8 (4ª passada): acima de 1 kHz a GE em notch 8 era só a banda larga da turbina (o motor não tinha nada ali); com ela 22 dB abaixo, falta som de motor em carga nessa faixa (pendente), não ruído."
+  },
+  "GE · notch 8: 2,5–6k": {
+    "grupo": "projeto-c",
+    "medido": -26.06,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-13.5 ± 4 dB",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a C36ME, 7FDL-16, da lenta ao notch 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a). O mesmo do real3 da GE em notch 8 (4ª passada): acima de 1 kHz a GE em notch 8 era só a banda larga da turbina (o motor não tinha nada ali); com ela 22 dB abaixo, falta som de motor em carga nessa faixa (pendente), não ruído."
+  },
+  "GE · notch 8: 6–12k": {
+    "grupo": "projeto-c",
+    "medido": -42.64,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-23 ± 4 dB",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a C36ME, 7FDL-16, da lenta ao notch 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a). O mesmo do real3 da GE em notch 8 (4ª passada): acima de 1 kHz a GE em notch 8 era só a banda larga da turbina (o motor não tinha nada ali); com ela 22 dB abaixo, falta som de motor em carga nessa faixa (pendente), não ruído."
+  },
+  "GE · notch 8: centroide": {
+    "grupo": "projeto-c",
+    "medido": 168.8,
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "alvo": "300 Hz ± 30%",
+    "motivo": "Alvo do projeto (DIESEL.md, tabela 4.4 e Apêndice A: a C36ME, 7FDL-16, da lenta ao notch 8, da beira da via), reposto como desvio declarado (AUDITORIA A6, T-DSL-04: tirado do teste em 3c0718a). O mesmo do real3 da GE em notch 8 (4ª passada): acima de 1 kHz a GE em notch 8 era só a banda larga da turbina (o motor não tinha nada ali); com ela 22 dB abaixo, falta som de motor em carga nessa faixa (pendente), não ruído."
+  },
+  "real3 · caminhão carga, cabine (scaniav8): 400–1k": {
+    "grupo": "real3-c",
+    "medido": -12.17,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-9.2 a -0.5 dB",
+    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
+  },
+  "real3 · caminhão carga, cabine (scaniav8): 1–2,5k": {
+    "grupo": "real3-c",
+    "medido": -17.43,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-15.0 a -4.6 dB",
+    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
+  },
+  "real3 · caminhão carga, cabine (scaniav8): 2,5–6k": {
+    "grupo": "real3-c",
+    "medido": -36.84,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-22.6 a -6.4 dB",
+    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
+  },
+  "real3 · caminhão carga, cabine (scaniav8): centroide": {
+    "grupo": "real3-c",
+    "medido": 223,
+    "unidade": "Hz",
+    "folga": "±5 %",
+    "alvo": "244–711 Hz",
+    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (223 / 223 / 224 nas bases 0, 1000 e 2000, alvo 244–711 Hz); fica declarada à beira, com teto.]",
+    "beira": true
+  },
+  "real3 · caminhão carga, cabine (scaniav8): CV do knock": {
+    "grupo": "real3-c",
+    "medido": 0.4471,
+    "unidade": "",
+    "folga": "±5 %",
+    "alvo": "0.17–0.39",
+    "motivo": "4ª passada: o médio e o agudo de carga na cabine eram o sopro do compressor (75–100% de cada banda de 400 Hz a 6 kHz), o \"som de mar\"; sem ele ficam 3 dB (400–1000 Hz), 2 dB (1–2,5 kHz) e 14 dB (2,5–6 kHz) abaixo da gravação mais escura da classe e o centroide em 224 Hz. O que falta é som de motor nessa faixa em carga (conteúdo tonal do escape e da carcaça dele: pendente no caminho compartilhado), não ruído. O CV das alturas de pico (0,44) segue a desigualdade entre cilindros"
+  },
+  "real3 · ônibus carga (onibusisl): 400–1k": {
+    "grupo": "real3-c",
+    "medido": -12.54,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-6.9 a 2.8 dB",
+    "motivo": "o ônibus carregado é 3 dB mais escuro em 400–1000 Hz que o mais escuro da classe (gravações de dentro do ônibus têm a carroceria e a rodagem) [23/11/2026: −12,5 dB, 5,6 dB abaixo do limite da classe (−6,9).]"
+  },
+  "real3 · ônibus carga (onibusisl): 1–2,5k": {
+    "grupo": "real3-c",
+    "medido": -15.01,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-14.5 a 3.0 dB",
+    "motivo": "4ª passada: −15,4 dB (faixa −14,5 a 3): o mesmo que no caminhão em carga; sem o sopro do compressor sobra a batida, 1 dB abaixo da gravação mais escura [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (−15 / −14,9 / −14,9 nas bases 0, 1000 e 2000, alvo -14.5 a 3.0 dB); fica declarada à beira, com teto.]",
+    "beira": true
+  },
+  "real3 · ônibus carga (onibusisl): 2,5–6k": {
+    "grupo": "real3-c",
+    "medido": -23.29,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-19.6 a -3.8 dB",
+    "motivo": "o agudo de carga do ônibus era o sopro liso do compressor (60–95% do som ponderado A); modulado e 6 dB abaixo, faltam 3–4 dB acima de 2,5 kHz contra as gravações de dentro do ônibus (carroceria, rodagem, ventilação), e o CV do knock cai para 0,10 sem o ruído do sopro por cima: a queima do ISL9 com injeção longa é regular demais"
+  },
+  "real3 · ônibus carga (onibusisl): 6–12k": {
+    "grupo": "real3-c",
+    "medido": -34.58,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "-31.4 a -12.0 dB",
+    "motivo": "o agudo de carga do ônibus era o sopro liso do compressor (60–95% do som ponderado A); modulado e 6 dB abaixo, faltam 3–4 dB acima de 2,5 kHz contra as gravações de dentro do ônibus (carroceria, rodagem, ventilação), e o CV do knock cai para 0,10 sem o ruído do sopro por cima: a queima do ISL9 com injeção longa é regular demais"
+  },
+  "real3 · ônibus carga (onibusisl): CV do knock": {
+    "grupo": "real3-c",
+    "medido": 0.5122,
+    "unidade": "",
+    "folga": "±10 %",
+    "alvo": "0.14–0.27",
+    "motivo": "o agudo de carga do ônibus era o sopro liso do compressor (60–95% do som ponderado A); modulado e 6 dB abaixo, faltam 3–4 dB acima de 2,5 kHz contra as gravações de dentro do ônibus (carroceria, rodagem, ventilação), e o CV do knock cai para 0,10 sem o ruído do sopro por cima: a queima do ISL9 com injeção longa é regular demais [23/11/2026: o CV do knock está em 0,51 (mediana de 3 sementes; de 0,49 a 0,57 entre elas), acima da faixa e não abaixo: a frase do CV acima é da 3ª passada. Sem diagnóstico do valor de hoje; a 4ª passada achou o mesmo efeito nas picapes (0,57: cada batida é um clique de forma fixa por cilindro, com um cilindro dominante), sem conferir no ônibus.]",
+    "nota_folga": "folga alargada: o valor vai de 0,512 / 0,552 / 0,55 entre as bases 0, 1000 e 2000"
+  },
+  "real3 · turbo: VGT do Cummins 6.7 em lenta": {
+    "grupo": "real3-tom",
+    "medido": 14.37,
+    "unidade": "dB",
+    "folga": "±1 dB",
+    "alvo": "+17 a +24 dB em ~7 kHz",
+    "motivo": "A2 (AUDITORIA T-DSL-02, T-DSL-09): passa nas três bases, por menos de 5 % da tolerância em pelo menos uma (14,4 / 14 / 15,1 nas bases 0, 1000 e 2000, alvo +17 a +24 dB em ~7 kHz); fica declarada à beira, com teto.",
+    "beira": true
+  },
+  "volvod13 carregado 0–85 km/h": {
+    "grupo": "veiculo-b",
+    "medido": 56.73,
+    "unidade": "s",
+    "folga": "±5 %",
+    "alvo": "60–90 s",
+    "motivo": "Desde 3098531 o câmbio automático leva o giro até perto da faixa vermelha com o pé no fundo, e o caminhão carregado usa a potência máxima em cada marcha: chega a 85 km/h em 57 s (antes, no modo econômico, que era o de fábrica dos caminhões, 83–84 s). [A2 (AUDITORIA T-DSL-02, T-DSL-09): fica fora do alvo nas três bases, a menos de 5 % da tolerância do limite em pelo menos uma (56,7 / 56,8 / 56,7 nas bases 0, 1000 e 2000, alvo 60–90 s); fica declarada à beira, com teto.]",
+    "beira": true
+  },
+  "EMD 16-710 (2 tempos, 16 cilindros) em notch 8, 10 s em Node (tempo de CPU, mediana de 3)": {
+    "grupo": "cpu",
+    "medido": 3.46,
+    "unidade": "× V16",
+    "folga": "+30 %",
+    "alvo": "≤ 40% do tempo real (DIESEL.md 8.1)",
+    "motivo": "O custo é do DSP: 16 cilindros (no EMD, de 2 tempos: o dobro de eventos de válvula e de queima por volta) e o resolvedor implícito do escape (6 iterações) em todas as válvulas abertas (DIESEL.md 8.1, \"Riscos\"). A saída que o DIESEL.md prevê (baixar `solverIt` para 4 nos cilindros com razão de pressão > 3) mexe no DSP, fora das ferramentas, e o som do Diesel está aprovado como está (PLANO, 23/11/2026). No navegador, a AUDITORIA (robustez do áudio, CPU por família) mediu as duas locomotivas em 59 % do quantum na mediana e 87 a 91 % no p99.",
+    "nota_folga": "teto de um lado só (+30 %) sobre a razão ao Chiron (W16 como V16) do Ronco, a referência do DIESEL.md 8.1, rodado alternado com o caso em trechos de 0,25 s: o tempo de CPU sozinho quase dobra com a máquina ocupada (a Duramax deu 46 % e 84 % em duas rodadas de 23/11/2026), a razão muda de 2 a 10 % entre rodadas"
+  },
+  "GE 7FDL-16 (4 tempos, 16 cilindros) em notch 8, 10 s em Node (tempo de CPU, mediana de 3)": {
+    "grupo": "cpu",
+    "medido": 3.53,
+    "unidade": "× V16",
+    "folga": "+30 %",
+    "alvo": "≤ 40% do tempo real (DIESEL.md 8.1)",
+    "motivo": "O custo é do DSP: 16 cilindros e o resolvedor implícito do escape (6 iterações) em todas as válvulas abertas (DIESEL.md 8.1, \"Riscos\"). A saída que o DIESEL.md prevê (baixar `solverIt` para 4 nos cilindros com razão de pressão > 3) mexe no DSP, fora das ferramentas, e o som do Diesel está aprovado como está (PLANO, 23/11/2026). No navegador, a AUDITORIA (robustez do áudio, CPU por família) mediu as duas locomotivas em 59 % do quantum na mediana e 87 a 91 % no p99.",
+    "nota_folga": "teto de um lado só (+30 %) sobre a razão ao Chiron (W16 como V16) do Ronco, a referência do DIESEL.md 8.1, rodado alternado com o caso em trechos de 0,25 s: o tempo de CPU sozinho quase dobra com a máquina ocupada (a Duramax deu 46 % e 84 % em duas rodadas de 23/11/2026), a razão muda de 2 a 10 % entre rodadas"
+  },
+  "Duramax 6.6 V8 em plena carga travada, 10 s em Node (tempo de CPU, mediana de 3)": {
+    "grupo": "cpu",
+    "medido": 2.01,
+    "unidade": "× V16",
+    "folga": "+30 %",
+    "alvo": "≤ 40% do tempo real (DIESEL.md 8.1)",
+    "motivo": "sem diagnóstico. O portão do DIESEL.md é o da EMD em notches (o caso mais caro); a Duramax é o terceiro preset mais caro na tabela de CPU por família da AUDITORIA (35 % do quantum na mediana, 55 % no p99, no navegador) e, em plena carga travada, passa dos 40 % em Node.",
+    "nota_folga": "teto de um lado só (+30 %) sobre a razão ao Chiron (W16 como V16) do Ronco, a referência do DIESEL.md 8.1, rodado alternado com o caso em trechos de 0,25 s: o tempo de CPU sozinho quase dobra com a máquina ocupada (a Duramax deu 46 % e 84 % em duas rodadas de 23/11/2026), a razão muda de 2 a 10 % entre rodadas"
+  }
+}

@@ -28,6 +28,7 @@
     "teste:diesel": "tsx tools/diesel-valida.ts",
     "lenta:diesel": "tsx tools/diesel-lenta.ts",
     "governador:diesel": "tsx tools/diesel-governador.ts",
+    "cpu:diesel": "tsx tools/diesel-cpu.ts",
     "troca:diesel": "tsx tools/troca.ts diesel",
     "troca:ronco": "tsx tools/troca.ts ronco",
     "troca:radial": "tsx tools/troca.ts radial",

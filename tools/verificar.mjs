@@ -4,9 +4,9 @@
 //   npm run verificar            tudo: tipos, paridades, teste:*, lenta:*, troca:*, build
 //   npm run verificar:rapido     o essencial em poucos minutos (paridades em amostra, famílias rápidas, trocas, build)
 //   npm run verificar -- --navegador     também os roteiros de navegador (pedem Chromium em /usr/bin/chromium)
-//   npm run verificar -- --cpu           também as medidas de tempo de CPU (cpu:radial, cpu:vapor, cpu:eletrico,
-//                                        cpu:rotativo, cpu:cena), no fim e à parte: saem numa tabela própria e não
-//                                        entram no resultado nem no código de saída
+//   npm run verificar -- --cpu           também as medidas de tempo de CPU (cpu:diesel, cpu:radial, cpu:vapor,
+//                                        cpu:eletrico, cpu:rotativo, cpu:cena), no fim e à parte: saem numa tabela
+//                                        própria e não entram no resultado nem no código de saída
 //   npm run verificar -- --so diesel,cena     só os passos cujo nome contém um dos trechos
 //   npm run verificar -- --parar              para na primeira falha
 //
@@ -46,7 +46,7 @@ const RAPIDOS = [
   ['build'],
 ];
 const NAVEGADORES = ['ronco', 'turbina', 'diesel', 'radial', 'rotativo', 'eletrico', 'vapor', 'passagem'].map((f) => [`navegador:${f}`]);
-const CPUS = ['radial', 'vapor', 'eletrico', 'rotativo', 'cena'].map((f) => [`cpu:${f}`]);
+const CPUS = ['diesel', 'radial', 'vapor', 'eletrico', 'rotativo', 'cena'].map((f) => [`cpu:${f}`]);
 
 let passos = RAPIDO ? RAPIDOS : COMPLETO;
 if (NAVEGADOR) passos = [...passos, ...NAVEGADORES]; // (depois do build: eles servem o dist/)

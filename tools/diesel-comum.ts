@@ -4,6 +4,8 @@
 import { DieselDSP } from '../src/engines/diesel/dsp';
 import { PRESETS, PADRAO_DIESEL, type PresetDiesel } from '../src/engines/diesel/presets';
 import { configCalibrada } from '../src/engines/diesel/config';
+import { spawn } from 'node:child_process';
+import { semear, indiceMediano, type Medida } from './desvios';
 
 export const SR = 48000;
 const B = 128;
@@ -83,13 +85,16 @@ export function renderizar(spec: PresetDiesel, cen: string | Cenario, op: { ouvi
   d.setConfig(cfg);
   const port = op.portador || c.portador || 'carro';
   d.message({ type: 'diesel', portador: port === 'nenhum0' ? (spec.portadores.includes('carro') ? 'carro' : spec.portadores[0]) : port });
+  // o ruído na semente atual de tools/desvios.ts (0 = a de fábrica, nada muda; AUDITORIA A2): a calibração fica com a de
+  // fábrica, como na página, e a semente é a fase do ruído no instante da partida
+  semear(d);
   const ev = c.eventos;
   const T = ev[ev.length - 1][0], n = Math.round(T * SR);
   const L = new Float32Array(n), R = new Float32Array(n);
   const bl = new Float32Array(B), br = new Float32Array(B);
   const tele: any[] = [];
   const passo = op.tele ?? 1024;
-  let ei = 0, nan = false, ultTele = -Infinity;
+  let ei = 0, nan = false, ultTele = -Infinity, pico = 0;
   for (let i = 0; i < n; i += B) {
     const t = i / SR;
     while (ei < ev.length && ev[ei][0] <= t) { ev[ei][1]?.(d); ei++; }
@@ -99,7 +104,13 @@ export function renderizar(spec: PresetDiesel, cen: string | Cenario, op: { ouvi
     d.process(bl, br, B);
     const k = Math.min(B, n - i);
     L.set(bl.subarray(0, k), i); R.set(br.subarray(0, k), i);
-    if (!nan && (!Number.isFinite(bl[0]) || !Number.isFinite(br[B - 1]) || !Number.isFinite(d.rpmAvg) || !Number.isFinite(d.p[0]))) nan = true;
+    // (todas as amostras do bloco, nos dois canais: conferir só a primeira da esquerda e a última da direita deixava passar
+    // um Infinity ou um NaN que não persistisse nos filtros; AUDITORIA A7, T-DSL-12. O pico vai junto, para a tabela)
+    for (let j = 0; j < k; j++) {
+      const a = Math.abs(bl[j]), b = Math.abs(br[j]);
+      if (!(a < Infinity) || !(b < Infinity)) nan = true; else if (a > pico || b > pico) pico = Math.max(pico, a, b);
+    }
+    if (!Number.isFinite(d.rpmAvg) || !Number.isFinite(d.p[0])) nan = true;
     if (i - ultTele >= passo) {
       ultTele = i;
       const m = d.telemetry();
@@ -108,7 +119,7 @@ export function renderizar(spec: PresetDiesel, cen: string | Cenario, op: { ouvi
         kW: m.kW, cargaKW: m.cargaKW, torque: m.torque, velas: m.velas, notch: m.notch, rpmAlvo: m.rpmAlvo, jake: m.jake, pBack: m.pBack, fuelInj: m.fuelInj });
     }
   }
-  return { L, R, tele, nan, d, cfg };
+  return { L, R, tele, nan, pico, d, cfg };
 }
 
 // ---- análise de sinal simples (bandas relativas a 150–400 Hz e afins ficam em diesel-bandas.ts)
@@ -116,3 +127,33 @@ export const rmsDb = (x: Float32Array, a = 0, b = x.length) => { let s = 0; for 
 export const media = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
 // telemetria num intervalo de tempo
 export const trecho = (tele: any[], t0: number, t1: number) => tele.filter((x) => x.t >= t0 && x.t < t1);
+
+// ---- sementes (AUDITORIA A2): as medidas de contagem, transiente e CV rodam com as sementes base, base+1 e base+2, uma
+// por processo (o filho lê a semente de SEMENTE, `iniciarSementes()` em tools/desvios.ts), e ficam com o caso mediano
+/** `ordem`: o escalar que escolhe o caso mediano entre as sementes quando `valor` é um vetor */
+export type LinhaDiesel = Medida & { ordem?: number };
+const fmtS = (x: number) => (Number.isFinite(x) ? (Math.abs(x) >= 100 ? x.toFixed(0) : Math.abs(x) >= 10 ? x.toFixed(1) : x.toFixed(2)) : String(x));
+const escalar = (l: LinhaDiesel) => l.ordem ?? (Array.isArray(l.valor) ? Math.max(...l.valor.map(Math.abs)) : (l.valor ?? NaN));
+
+/** medida a medida, a linha da semente cujo valor (ou `ordem`) é o mediano; o `medido` ganha os das três sementes */
+export function casoMediano(listas: LinhaDiesel[][]): Medida[] {
+  return listas[0].map((_, i) => {
+    const cs = listas.map((ls) => ls[i]);
+    if (cs.some((c) => !c || c.nome !== cs[0].nome)) throw new Error(`as sementes deram medidas diferentes em "${cs[0].nome}"`);
+    const v = cs.map(escalar), { ordem: _o, ...m } = cs[indiceMediano(v)];
+    // (o texto mostra o valor de cada semente; num vetor, os componentes; a escolha do mediano é pela `ordem`)
+    const txt = cs.map((c) => (Array.isArray(c.valor) ? c.valor.map(fmtS).join('/') : fmtS(c.valor ?? NaN)));
+    return new Set(txt).size > 1 ? { ...m, medido: `${m.medido} [sementes ${txt.join(' · ')}]` } : m;
+  });
+}
+
+/** roda `arquivo` num processo filho com `tsx`, a semente `semente` no ambiente, e devolve a saída padrão (a de erro
+ *  vai junto se `erro`) e o código de saída */
+export function filho(arquivo: string, argv: string[], op: { semente?: number; erro?: boolean } = {}) {
+  return new Promise<{ saida: string; codigo: number }>((ok) => {
+    const env = op.semente === undefined ? process.env : { ...process.env, SEMENTE: String(op.semente) };
+    const p = spawn(process.execPath, ['--import', 'tsx', arquivo, ...argv], { env, stdio: ['ignore', 'pipe', op.erro ? 'pipe' : 'inherit'] });
+    let s = ''; p.stdout!.on('data', (b) => (s += b)); if (op.erro) p.stderr!.on('data', (b) => (s += b));
+    p.on('close', (c) => ok({ saida: s, codigo: c ?? 1 }));
+  });
+}
