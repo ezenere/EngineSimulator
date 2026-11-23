@@ -1,0 +1,627 @@
+{
+ "hilux28 · partida": {
+  "hash": "7283157473ad4be6b4b0a9a8fc317da5647031cb872585569f1acfa454090403",
+  "seg": "18c37d24 dc7877c3 2de7fcbf 8644ad91 75fee873 9b999ad4 1549538c b5ca5b24 b5530d56 2b92ad90",
+  "cal": "956258ef"
+ },
+ "hilux28 · lentaFria": {
+  "hash": "ee90c683926f7f5b2e5e468cddb0979d86bc66e33d122e44a1046a9f3cb4856a",
+  "seg": "ad96d0bc 7e22d0a6 cb25ab66 74f6ed12 6c662c67 49da3f6a 6d04b5fb 67c903fb dc7e8a4d 1b0f184d",
+  "cal": "956258ef"
+ },
+ "hilux28 · arrancada": {
+  "hash": "9ac0d417e545c745cf437fa65cf0d56057c9cc69e22da6d764cbc8d438d1e17e",
+  "seg": "ce034695 3dfa7459 72a3df2f df6f6be7 8a938422 f4d32e71 3ecec26c 40679c23 b584fb4c b038905c",
+  "cal": "956258ef"
+ },
+ "hilux28 · peNoFundo": {
+  "hash": "397f7fa5a9f418a5a45a2e9ce701b06a23099a3e04b00717bcce67a81b55bbc1",
+  "seg": "1a84df02 551ec160 2344a344 9f430c77 b5b14661 11f8232d bb1d386e aeefd5a2 560d974b f65e5a8e",
+  "cal": "956258ef"
+ },
+ "hilux28 · trocaCarga": {
+  "hash": "59b325da45b2a60b8b6968d0ca1ad7bfc7ae05befa745c2897fb2ff30913eca4",
+  "seg": "a5a40ab9 15218ca8 26b6e2a1 8e19f4b3 a9a9b534 71ddb550 5ab7eeef a0b564b4 32bf0981 047e3d23",
+  "cal": "956258ef"
+ },
+ "hilux28 · plena": {
+  "hash": "7f77134a4902e92022e2169f88780a0f7a5e9791d55e42d75ff2677ae4edde65",
+  "seg": "9500781b 1d9fcaac ccd08f3e 0e000bff b9a69744 65aec2ab 47eda567 caeaba73 13718e47 b16006dd",
+  "cal": "956258ef"
+ },
+ "hilux28 · bancada": {
+  "hash": "a6cf109b861e112e99debb7fd91eb938f05fc0a7e9187aa67688c601e051966b",
+  "seg": "28d93b53 d39a62d6 f7ec3d39 3f997f16 3b2a312b 19ffcda4 7db7e24e 1ffa8140 50e65db0 dc9b49af",
+  "cal": "956258ef"
+ },
+ "hilux28 · trocaConfig": {
+  "hash": "76fe16dd2588e9912681e89557428a2189410d0dc0b7f978b837ec12d0103ae4",
+  "seg": "1a84df02 551ec160 9e5401ba 24ef04b4 05e695d6 f75a70b9 8e2bd560 fe342c32 d7008388 4c8720f6",
+  "cal": "956258ef"
+ },
+ "ranger32 · partida": {
+  "hash": "e81b9c28613313e87bdfb00b4549aac8915a1d6d47ac3e97fbd796f2abe9ffec",
+  "seg": "064b0fe0 cce92e82 afc48612 60631149 79dc7970 085da455 cb505fe9 e37fbc67 8db41922 7bc6bed1",
+  "cal": "c351ebcc"
+ },
+ "ranger32 · lentaFria": {
+  "hash": "d9fbfb26ce83e48b18a249bdbd09f21cc8935d19b9e588d694fc4a588d945dd9",
+  "seg": "2fb7e958 900f3a93 2d3ab2f1 4d18edbd 501e6a8c d7240103 46b3a6e7 fa3eedca c5c30ca2 b8a5b7ca",
+  "cal": "c351ebcc"
+ },
+ "ranger32 · arrancada": {
+  "hash": "ae3e582d6f40efebfec63a6446a79038af13ad13a11811ee74e5e8eb0ac87f3d",
+  "seg": "88d448ef e96c2734 2a7e35fe fb749cd8 f7749c17 fa1f26cb e2f0d2ce 2d4b7f3d 57c226f7 91691018",
+  "cal": "c351ebcc"
+ },
+ "ranger32 · peNoFundo": {
+  "hash": "45a81a0267609e6b78946bbe5eefb8ca2ec7a8485561e473841e24dd1c4167b0",
+  "seg": "92236456 ae01a1f0 2d343581 689a42d5 ef2522a0 14e7b1dd efb35518 43573a85 6780609d d8699894",
+  "cal": "c351ebcc"
+ },
+ "ranger32 · trocaCarga": {
+  "hash": "c1c13dc7f7e3b1ef39ab2b90b97ff816942c57696a672eb5af504f86c0254441",
+  "seg": "a6e35865 fc3d92fe 4ebdc681 46bf50ad c6ffa27f efe4f797 3e1d027c 9c3730ab 02bd66b3 8fb28d3d",
+  "cal": "c351ebcc"
+ },
+ "ranger32 · plena": {
+  "hash": "86a4fee20d5d69dcd9b2a8b0ec447321de003319d3e1f60fa495ed17e4633879",
+  "seg": "73fca467 352e986b 9fbf11fd 778a91a4 04f2aca4 d460c9c5 c09fca1f ca200cb8 68e863fa 0820eef6",
+  "cal": "c351ebcc"
+ },
+ "ranger32 · bancada": {
+  "hash": "5568623d5b877959943ce72ab0340641ee43f1300440a6143d9f458a775c6295",
+  "seg": "cb819bd4 5fe5c9ef d5c6ab47 68908250 5644f36b d9546b9d 6b5f8c45 5c4682ea a4f86ba9 e61adfed",
+  "cal": "c351ebcc"
+ },
+ "ram67 · partida": {
+  "hash": "d1dfaaa874b93e627a8f3d1d98d5367d119f62f4c443f6847523018e08bad140",
+  "seg": "af221d29 3dd605ae ea35fccf 9bddc3be c7b8efbf 4cc243ac f48a2abb c51d562a bcfd9190 a5867ee2",
+  "cal": "64889025"
+ },
+ "ram67 · lentaFria": {
+  "hash": "0243ab5fab95268bdc303bb9704ac1f0f9f048523bf970eca88d55e211b9f2e0",
+  "seg": "88fe336f 6cdaa076 110f20e6 dfead561 e574bcbc 41d2a341 11b47fbc de9da360 afa37c1a c373691f",
+  "cal": "64889025"
+ },
+ "ram67 · arrancada": {
+  "hash": "74b1ceea5afdd266197d3a9e587e8833b7a5ca6543b4b48a8268ced98b56e1f3",
+  "seg": "ed63570d 482b3ef7 abb66f3c 4f8ef8a4 1fdf2575 a48fc583 d465f4b6 262eca7e 214466cc 18dbf66d",
+  "cal": "64889025"
+ },
+ "ram67 · peNoFundo": {
+  "hash": "f7c5037c36f0e89b12e7918f6489b91e295b18f61da455777df5c7da2e4d37dc",
+  "seg": "76c529c9 b033a84c 931d1c25 4140a957 f8d515cf ff3f7572 cb9e645b 081af1aa 73e2952d 79896402",
+  "cal": "64889025"
+ },
+ "ram67 · trocaCarga": {
+  "hash": "d963551ebe86dc4fa3c22b416be68cfc7ffb97571d867830d8940632371c95c9",
+  "seg": "55aa5143 e031d20c 3f5fb882 77c04d4f c264f280 166c817d 43a95149 670006ea fb4c59a7 49d4d32e",
+  "cal": "64889025"
+ },
+ "ram67 · plena": {
+  "hash": "1bf0cdb5eaa2c5e99e44909db756032bb8b3952da28afbf0284edc04643ceec1",
+  "seg": "73a1925a 0ad73dbc c39d6496 70797ca2 dce61dcd 7e989ea5 5c4c5081 7f227bde cd4047b1 aa9ad133",
+  "cal": "64889025"
+ },
+ "ram67 · freioTravado": {
+  "hash": "277e2db5776cf1c52506151d61184ef638cb55aa6ac5127b7122997ef3c32e34",
+  "seg": "33ef1872 9082b66c 6a61f1e8 a8bf2cad 7d13a955 a1674115 f8856d5d 5543746e 85e36b49 8b6d8137",
+  "cal": "64889025"
+ },
+ "ram67 · bancada": {
+  "hash": "027a57104e3813f27c65db752e4931e677257e4352ff31036d70ff63a2264767",
+  "seg": "d54e3ce1 4fe2161d f9f8a3d1 fe927feb 53e060ac 68656e0d 03e621fb 0d6d990c c29ac8cd eb873de4",
+  "cal": "64889025"
+ },
+ "duramax66 · partida": {
+  "hash": "96d78739f578241cd592ae597a32992097327e5e7ebfa37a096bd076514889e0",
+  "seg": "4ed619f4 cf8adc48 586c3a5c 69850eb8 a11e390c 60ee6439 da9bb1d0 c9e5ad29 fe020fec d20bdb0b",
+  "cal": "b73d1aad"
+ },
+ "duramax66 · lentaFria": {
+  "hash": "ef9681e448999ebf40e9664e4c7c365ad358efdc14db102ead37639342bc239d",
+  "seg": "a5dadf00 d12b5c2b 914d28e6 918029c9 5292f390 85e81779 48121260 05545523 85fc8c4b 464c0697",
+  "cal": "b73d1aad"
+ },
+ "duramax66 · arrancada": {
+  "hash": "714ad5b862aeceae9c7397e6af1ce619f322823752581a5156136f2316303070",
+  "seg": "ab9642f5 35cc38fd e0d49977 798ce4f1 65b36c35 42d7d59d f5b1e976 5db416c5 77d63253 c322058c",
+  "cal": "b73d1aad"
+ },
+ "duramax66 · peNoFundo": {
+  "hash": "e14bedc7541d925a5725e2be032df2eaec9f02dd8e466bbe51069f62990182f9",
+  "seg": "c2a31b29 0e04a623 6683afe0 f9a088b8 3ed121d4 c8df6483 21d62317 1059c7ff 6e91d975 9f528b65",
+  "cal": "b73d1aad"
+ },
+ "duramax66 · trocaCarga": {
+  "hash": "272709430dda4785847c2a5620307ae38bf318f1cfed453da2377dc6478432eb",
+  "seg": "299d4e76 dcb3c431 ef80029d 8dfb3349 bfde3391 55ebb7b9 d4926146 55dadc5c d3ad165c 93c174b9",
+  "cal": "b73d1aad"
+ },
+ "duramax66 · plena": {
+  "hash": "b3fa997f4ba1fd19548543e2170044aedcfc8cb4fd8fbafb1370301ab1389afa",
+  "seg": "671bfe6b 22256205 2ca87aef 4508d92b 6c9fe67d 2ee875b1 cd33e67b fd756cad 8bcb2c73 d231d80b",
+  "cal": "b73d1aad"
+ },
+ "duramax66 · freioTravado": {
+  "hash": "c6486f1a2f074cc5df8c58024a91f037fa0406c0a7cb84ea7caa9fad84b1853c",
+  "seg": "6a509965 d6a1b719 8a8ff25e 780b0fb2 dc7260c3 692511f0 0451cc9b 2de43da3 b47895b7 1b339b70",
+  "cal": "b73d1aad"
+ },
+ "duramax66 · bancada": {
+  "hash": "21dcb293e055cd355c71a9880c108b6d78fda1f2146bdada3a0d0db7ba9cfc3d",
+  "seg": "39895caa 7b4d7cb9 4cab4787 64aafec3 16ac9094 e22dd1a5 30bb700a 289443b9 95ce0dce 28e67ab3",
+  "cal": "b73d1aad"
+ },
+ "psd73 · partida": {
+  "hash": "4be5d7fae9081295cb6ba25806347cb50f31222d27433e89657d7d1026578cd0",
+  "seg": "b31af238 26c59725 c19e6102 3d01c9d3 5880709e 38e5d85a b540cce5 51c0e3e2 14ef61c9 df82e3c9",
+  "cal": "222514b4"
+ },
+ "psd73 · lentaFria": {
+  "hash": "f29ededadda8c39b55637bae7fd7a36455029f60fdf7feeee80149bfc9f31c33",
+  "seg": "58e063f6 9882ed40 284dcfbc 45f9f6d4 dc5e275c ef401508 0671553b dd0ba5e7 1ccfbe49 9cdc76a4",
+  "cal": "222514b4"
+ },
+ "psd73 · arrancada": {
+  "hash": "9dd1347f38a087682e47e329adfca1c022893ea0aaacaee66d256b71daccdb17",
+  "seg": "b9aef4cb 601f7b9c d0d97070 8e3562b4 d7a40810 bb48e33c f179535b 8fab179f e332bb2f 6f6d3eb5",
+  "cal": "222514b4"
+ },
+ "psd73 · peNoFundo": {
+  "hash": "aadccfc55675d3635671bb267076656f1854c6c15619414b0945ed022a7a2c3b",
+  "seg": "4b617bfb 3e5f8d2f a609ff8e c717ce09 d2044c90 164c11c7 a2626269 4b72cb33 1bc7e82c 5574959a",
+  "cal": "222514b4"
+ },
+ "psd73 · trocaCarga": {
+  "hash": "6c2ccd2e751b4e52a5c19d952915cf2f3cfab2da1ccd30662f460a11d4e18ead",
+  "seg": "42fb8109 9501c1f4 69012bb9 902ed318 3ce0abb3 d0f0add3 a5304187 72a426f9 3334c211 3e8ea460",
+  "cal": "222514b4"
+ },
+ "psd73 · plena": {
+  "hash": "35ac29fb63f7a9082e82af79b149ebfdfd0322dd369b046880b723fa5410944f",
+  "seg": "a15fa4f6 39050149 7c833f4a e1463ef3 9b474cb4 c4c75139 d28bebfd 813dd45c 6c14078d 73c7bec5",
+  "cal": "222514b4"
+ },
+ "psd73 · bancada": {
+  "hash": "55e8be7a14022cf2bdb4b629b54ffca4dc655aed66f7c912f5b6ce888f0bff97",
+  "seg": "ecbb56a2 984654f4 b064b149 e388c8cb fa8944cc 445e04d1 361d1f9f b691670b d6c3dd87 9e2b93e3",
+  "cal": "222514b4"
+ },
+ "om617 · partida": {
+  "hash": "6be97d0759a9729de8cd31bef4136dd67573b816890f4e98e70185dabaaac4d5",
+  "seg": "e9962fcc 8ec96843 97383d24 561aa666 69290b49 1c63f65f 6ac34660 e9ea74a1 2b9adb4b 0923c276",
+  "cal": "d04e7097"
+ },
+ "om617 · lentaFria": {
+  "hash": "3d6ea1341fe89c8ce9673c1ebc60f7c4be984dee3f424529ce7388d97033a6fc",
+  "seg": "2f11f9ae 1f16a137 b4a14a95 e82f151b 4bc14063 4a022923 f0680b4d 1cb44279 ab7fb64d bbb0d1ec",
+  "cal": "d04e7097"
+ },
+ "om617 · arrancada": {
+  "hash": "e9aab563f296f21fa55e1a1a4a7f9baeeb6336eb0e4c6b98f6b6f5bac8cd03da",
+  "seg": "89078d88 06eedcaf e3c07ab0 e9db5e96 b870bf6c b0e0609e 1cf04fd6 f1661ed0 cc5cab58 e0b9b409",
+  "cal": "d04e7097"
+ },
+ "om617 · peNoFundo": {
+  "hash": "af22fdf865831037c622539eeff32fc859623e84e11dc8353fd71826a79d12d2",
+  "seg": "1c8ea1fd 0ef95744 4afbc8f1 022f68f3 e7495274 be083637 2826e9a8 a755c05a 186834ca 9474fcab",
+  "cal": "d04e7097"
+ },
+ "om617 · trocaCarga": {
+  "hash": "3c072e0ccb14abc4d7d150e8e230f391650c5c918ef036e0ea2cfe9880768939",
+  "seg": "e68e0208 7015429d 4a7a34ca 04e3cba2 6a95f41c ed177387 95277970 5fe08bc4 c5ffcf9c 83abd2b3",
+  "cal": "d04e7097"
+ },
+ "om617 · plena": {
+  "hash": "d6a64e30640aa775428724bbe11d13b5483bd66878b8cfc65dd38e5a424be3df",
+  "seg": "baa90394 1b4cd2ec d5aae478 25f4e530 af5ff3ae 10db27d6 104ae95a 95a691f0 686459ff 3d057541",
+  "cal": "d04e7097"
+ },
+ "om617 · bancada": {
+  "hash": "ff94e37d8bdad2819e278c2e010274314cb9d179c37be9fd7b387c7f11defdc0",
+  "seg": "3d6307d3 fd384e81 3770166c 915939c3 e168fa2d fee90ef2 cc1aeb40 1a0a5aa9 508cde58 73e05653",
+  "cal": "d04e7097"
+ },
+ "tdi19 · partida": {
+  "hash": "8b56c730b8e72b305912812da3ab3776b98b13c254b04c54b770c2d19fefbee2",
+  "seg": "cdcf22cb faa69d51 13f16799 153685cb 0f58829b b991026a c0ca71ea 40d1240d de52dfbb 319ad76a",
+  "cal": "d2cb46a0"
+ },
+ "tdi19 · lentaFria": {
+  "hash": "ee8620435129f003e7aa7bdd4ac6d5802dcc6c4a462f7211af793fa5b40399a1",
+  "seg": "846ec823 bc467a90 1ca558e6 0f40652e 759b484c f049ff36 b9c5658f 1db3af9c 804a1e6d 17576549",
+  "cal": "d2cb46a0"
+ },
+ "tdi19 · arrancada": {
+  "hash": "7fe9a5c3d0c9667b38e196dd2187afac55fcf1b134e62c52d18bd14aa5377c72",
+  "seg": "244fb965 7c878fd9 88242f98 a8d2f9ac 7dd3c7a1 dd5f7a27 d0075438 74186071 28dde084 995908ff",
+  "cal": "d2cb46a0"
+ },
+ "tdi19 · peNoFundo": {
+  "hash": "86755a4bf97e45684a253860b5add7f6bfad4c67d133bfe2da76640e00f53348",
+  "seg": "fd3677bc 529fd53b 77c9225d 2282b64e 28a04a2f f1f3dc96 caf4c365 11ed5c82 f056aa7a 29c077b8",
+  "cal": "d2cb46a0"
+ },
+ "tdi19 · trocaCarga": {
+  "hash": "5f7b7af56975971c64bcfea7e65e815fbe5b1bf96c4613ac57b83f182942148e",
+  "seg": "46d0c65f 09621cb0 1bd5fd3f 8c444dea fcc9b584 11afb46f c2a63dd9 62dcf5f8 943d22b3 8c2f6ed3",
+  "cal": "d2cb46a0"
+ },
+ "tdi19 · plena": {
+  "hash": "3a19fcc774352d8f84d028d3a0220464f8adb498546ec80e6fc02ec6858fd036",
+  "seg": "4a4d570b f62e88c5 4ffdb5f0 755e0958 c37eacf4 568f2b32 c3134d8a 4bca1348 bd499009 7150f14e",
+  "cal": "d2cb46a0"
+ },
+ "tdi19 · bancada": {
+  "hash": "e7bdbcff51a5ee432cfa6097dc8b0583fbe947ec8b6c42cd9b2dcfbd6051c63b",
+  "seg": "a6665524 94a00628 effcf87a a86ddf98 264e39c9 1e437b35 4957827d 0581637f 46c30bed cf48f9d1",
+  "cal": "d2cb46a0"
+ },
+ "f1000mwm · partida": {
+  "hash": "bbddc214021867c877abe5628fc7cc52791e83e91aaf68baa8edf7f3a27c0313",
+  "seg": "d265a7de d10a41f1 4f21667a d1904782 4d086dab 76aa13c1 8c4b981c 89e94e79 7e7bfbfa 049543b0",
+  "cal": "2dde58cb"
+ },
+ "f1000mwm · lentaFria": {
+  "hash": "b385e29fa85b8ad45cd940fd2533e2881715124168d1bb7bc371fce7492da9bb",
+  "seg": "b307f819 22e44f57 57c1a68e 0455c5df fcde42fa 85a8e74c fabb5f33 39463bae 22a9585b a939a583",
+  "cal": "2dde58cb"
+ },
+ "f1000mwm · arrancada": {
+  "hash": "b57be4749f3b03430d4900bcded39fef98437dd5d863cf1f26acd77b35c143c0",
+  "seg": "09b03d3c 23ccbd5d 830568e7 e298ca4f 0a9c58e0 954bbb0a c3a87b14 a77276cb 364e52ca 91a6c1c7",
+  "cal": "2dde58cb"
+ },
+ "f1000mwm · peNoFundo": {
+  "hash": "8369bd5adf38a21b19d602753a8cfce42d4bfcfd3af263ef23375d3deba2c78a",
+  "seg": "d8ae99f0 49ef94c8 2952c686 f62130b2 a249da4f edb1b85c 04345d29 0266e042 1aaf1b66 af4e54c8",
+  "cal": "2dde58cb"
+ },
+ "f1000mwm · trocaCarga": {
+  "hash": "59eff13a74c88f68be7ebaacbdbe68db79256fcc7be3ff827501dfd9f498a33e",
+  "seg": "1b6890b2 028bed80 6b2c05e5 f565acf7 e546612f 438eeda7 ea367028 6e0aa40c c0952aac d57939e4",
+  "cal": "2dde58cb"
+ },
+ "f1000mwm · plena": {
+  "hash": "58cc31e184c6c238431ac1dfc8422b88edf05f9019959783bc66fd491919a1bf",
+  "seg": "f415d3c6 7a70bcf7 06e077d0 605cc3e1 a87dc9ec 7757ec44 5721fef6 e83ecb28 d6766e3b c141f70f",
+  "cal": "2dde58cb"
+ },
+ "f1000mwm · bancada": {
+  "hash": "942dd038f903f9167b8220d45076031f49273f9a8395fcba5ee417873d103160",
+  "seg": "6fb70258 169e081b f8f491e5 3694f502 ece0c729 035f2d12 5c16c92d ac36ece6 1d287a95 e39fd8e7",
+  "cal": "2dde58cb"
+ },
+ "scaniav8 · partida": {
+  "hash": "b551b3666694271c1c3dce7c04bcd7026810122a708e05305fe7c099f7c46345",
+  "seg": "b5abc1a3 4afa4dac c9f4d9dd 67015401 aefda948 e62437c6 a582af9e 67888c54 40cebd53 3b87cb9f",
+  "cal": "06b6ac88"
+ },
+ "scaniav8 · lentaFria": {
+  "hash": "5ba4e1d9c9dcef7af0c04de39a4b31c21594e7cf702762cab389262d0c4da685",
+  "seg": "14da1a8e 89535565 d0952e82 4da14829 ba57b3f2 9e908400 6d6272d1 9b1b1fdd 002cb21b e9ab04ac",
+  "cal": "06b6ac88"
+ },
+ "scaniav8 · arrancada": {
+  "hash": "8cb7acb37839521f0d49beb0e8c6456fb13fa7396b1ca0392cacc279cbf89c1d",
+  "seg": "cd11734a 8ed1d4f0 df72126e 5302edf0 6c2a0d3f d027596d ba018ab3 a2562b09 3bd6e64d 79a5b34d",
+  "cal": "06b6ac88"
+ },
+ "scaniav8 · peNoFundo": {
+  "hash": "3600a4434dadf0a827252003e353a78729ac0cd32f263f47de9d92190914ac56",
+  "seg": "95c4458c 918c7b20 73760ee9 d95a339d 8567396d 11c56c5a dece6484 90f7e81c 69189e7c f8bfe134",
+  "cal": "06b6ac88"
+ },
+ "scaniav8 · trocaCarga": {
+  "hash": "15b09e3763b71fc54e80d592564e0b2f900de81ba84fcf82c0929b82375fd352",
+  "seg": "d508220b 1303629f ba4cfd69 cd42067e 2d9900d6 8e887b6d 96f88c5e e12edb64 7d2e34aa 050c166e",
+  "cal": "06b6ac88"
+ },
+ "scaniav8 · plena": {
+  "hash": "fe8966889871dd5a6b46514a9c189a262d2952cfd1edd9fd5626efa1db5d0904",
+  "seg": "fc0c26f2 1a22d5d0 bd618815 f873ac25 336a196d f498b45c 92324a5b 770b6111 fbb5c0c8 5bc7200f",
+  "cal": "06b6ac88"
+ },
+ "scaniav8 · freioTravado": {
+  "hash": "4a5901a75196867e985019b7eb7433bf532bc48ebcd62f068dcad6ad700cb134",
+  "seg": "93d380fb a32c816c dd974e6f 8eface19 dbc0777f ee75e324 dfd272ef aa73113e 7e293ae1 9e01aca9",
+  "cal": "06b6ac88"
+ },
+ "scaniav8 · degraus": {
+  "hash": "c663ae981ab327df8e13eaa0d6c67bdcef9ef175014369ae29fdb266b4bcba03",
+  "seg": "2c426a8e 1ade20c0 db6d4cc7 21d7e94e 880aa465 b131757a 4f6b585f c8dee920 d8abf052 dc29b864",
+  "cal": "06b6ac88"
+ },
+ "scaniav8 · bancada": {
+  "hash": "d504caa166f4824ecfdba5261bb0c035eb52988d7e0ec8f409b1ac3d15990967",
+  "seg": "2987c60e 195db18a d09b29af 7469bfba 8e24664f ac34a999 b786f5e7 5d620d40 902f873d 2eadf3a8",
+  "cal": "06b6ac88"
+ },
+ "scaniav8 · trocaConfig": {
+  "hash": "1530e7b1cfd39aba965a33e2c58a8c513bc43ab4cca98bf331c8b8b774e6551b",
+  "seg": "95c4458c 918c7b20 42374a1f 3590cadd b2f250eb 38b403c3 f3b85612 18a237e7 bfbc7654 262e91d3",
+  "cal": "06b6ac88"
+ },
+ "volvod13 · partida": {
+  "hash": "68905796f43e2d5cd38dd9ec77b4b875f94a9ab6320d37b702df6ced67079e10",
+  "seg": "306779c2 51fe3298 b888de5e b9f58597 eee8ab44 bd3f6379 d9986a96 b44396b2 f96899c9 9de0e79a",
+  "cal": "7b5ec977"
+ },
+ "volvod13 · lentaFria": {
+  "hash": "89633d757046855e4e9fec1ccbe957f0fb322a066803078cb8c3b06cdcca38ca",
+  "seg": "7a28618e e1a9a6f7 48a81de3 6be7c4af f556e043 928ebb41 2ebb3bcf aaa46af9 02690859 162ae543",
+  "cal": "7b5ec977"
+ },
+ "volvod13 · arrancada": {
+  "hash": "7fea383870bb1f302d7ba8847834bc0147b440a681d262cf102fd948d48f68d1",
+  "seg": "4f2b3835 5f350e88 b98b957c 5dcb2f4a cce1c024 b6e7b320 8cf22271 20968ae4 3db7b8de 5f929112",
+  "cal": "7b5ec977"
+ },
+ "volvod13 · peNoFundo": {
+  "hash": "283c7c9021206e76a7c23459a2f21c178dc327b688c61eaaa41e1a54fafc963e",
+  "seg": "bac9fe4b 420ed97f 0ba5be0c d57fe923 d0d320aa a4cead9a 50ef464b 474a8257 c748fcb6 d7781492",
+  "cal": "7b5ec977"
+ },
+ "volvod13 · trocaCarga": {
+  "hash": "40d89f7e465c703d81b21aa1282c5984c242bfb878fe74902acee74ee1976922",
+  "seg": "183f44d5 cb2ef320 97d01225 f5d99443 e7d05622 c7d95619 f3253326 ba29d682 26a4ae19 21d2d365",
+  "cal": "7b5ec977"
+ },
+ "volvod13 · plena": {
+  "hash": "afdc6a9e71e1f5627be3bc0cd2df327d93ab81bade8fddab57ce4177d38ec018",
+  "seg": "467d4833 d62ef236 a3123690 ae54db9c 1e077325 749a2d82 e4732627 025a90df ce52beb8 d57c359a",
+  "cal": "7b5ec977"
+ },
+ "volvod13 · freioTravado": {
+  "hash": "43ded1c2bb26eaa4431ac73620b0d56cc797d9cfcf2445aa58544b008044cbdd",
+  "seg": "dd65cc9b a9632320 64feb6fa 46213818 0680ee84 7b1cfdaa fa215713 0c026372 b2e27eef d1b69826",
+  "cal": "7b5ec977"
+ },
+ "volvod13 · degraus": {
+  "hash": "78141f3446292631b75ee77aeaa7b49e47224e11a38e637faa03478879b543a2",
+  "seg": "41b400bf d89db502 74d493ea 7cf18a19 061fcdef 1113c1f9 86603b39 0041f379 5f61f796 2e78e8a9",
+  "cal": "7b5ec977"
+ },
+ "volvod13 · bancada": {
+  "hash": "7e8fdb8413a26269c6f58a2771023a71b6de3c239926c7e7e14e65926872b80d",
+  "seg": "f4fc475d c645a8db 8fc3a158 7736966d 4b444a60 bc196510 05add4fb 9003f5bf 88e329fc 9fe0d190",
+  "cal": "7b5ec977"
+ },
+ "catc15 · partida": {
+  "hash": "b77f24aeaecac2a312182a8d2fa6db83e1ac9af7a61aa3c0f54f10652d27f1a0",
+  "seg": "587c80f7 9c19b67c 8f383d1f 7489d04c a1aff0f7 c5c71781 dd455d53 99c28d02 891e56e5 d2676421",
+  "cal": "0b73ac7b"
+ },
+ "catc15 · lentaFria": {
+  "hash": "8a1d0632680934e9baf68274cd14ffc4ef16cbc718e4333f915cf6e257667666",
+  "seg": "548cb219 590e30a4 9dab175d d01ace27 7433cc53 99dfceb6 0ac76143 d59ed732 fbda127d 86c3a30b",
+  "cal": "0b73ac7b"
+ },
+ "catc15 · arrancada": {
+  "hash": "4e21bc1128b1973d76c5587bd438bf679aff6c2c6cb700aaa44e2d221e515636",
+  "seg": "25e288db 954fb92c d1a4a6ac aaeb4868 1604247e 7660b296 b2921e3e cdffce0f 26ab4699 e9b7859c",
+  "cal": "0b73ac7b"
+ },
+ "catc15 · peNoFundo": {
+  "hash": "02d65a9419c27b027617f9ffd2f0972407d017ca40007144edbca5b0ba61c27a",
+  "seg": "4aadeeeb f46efb96 38caad29 93b6d387 f444f265 d9b9b873 5e1c5520 a5c62fdf f93ed2da 9c8b140c",
+  "cal": "0b73ac7b"
+ },
+ "catc15 · trocaCarga": {
+  "hash": "feed33478113e6523d3e8abe3aeed73d632e1a4190cdb3c0981a415c2a3c01d6",
+  "seg": "8917bc81 af322702 e62db0d5 b3bd0280 c3d7a96c 79a6418d 3e1c1af9 6654712f 260399ea 3b418f6a",
+  "cal": "0b73ac7b"
+ },
+ "catc15 · plena": {
+  "hash": "2a728d429bd6255feeca1158b2dabd6ad0bdd57d5329d749d6a075aab5246445",
+  "seg": "e344955f 1a67a007 5198d4dd 4f523a3e fba32e75 d85071ec 092098f0 5e65041a 7d42aa35 ca325d13",
+  "cal": "0b73ac7b"
+ },
+ "catc15 · freioTravado": {
+  "hash": "03071ea778ffed4ea804421d28b45e60be1c2c58ae0b0898c346e819c13ee726",
+  "seg": "b2e0b371 43177823 78d044e9 b5266dee a137b17d f259639c 1c1b6652 39c95fbc 5b889a55 18520049",
+  "cal": "0b73ac7b"
+ },
+ "catc15 · degraus": {
+  "hash": "9f4fc7998b7f9c87b09cda178261f862bf4e494e638da1e9e3b3df342a922969",
+  "seg": "d4a2baeb 1a1bb6bf a886cac2 82bb8f77 bdc6db16 a0454e77 3bd455b2 3b503a52 83bde99b a0e0bccf",
+  "cal": "0b73ac7b"
+ },
+ "catc15 · bancada": {
+  "hash": "adb691a44aca33ab0761ceb303db73f76eb0069730eef808bd1b87a22a268835",
+  "seg": "16f4757d 98832659 d5f4fab9 2d3656a0 346ed668 ee862c14 f293baed d8d8f08f e55e263d e6c4c33e",
+  "cal": "0b73ac7b"
+ },
+ "onibusisl · partida": {
+  "hash": "9ce1084f2e0016250790de713d45050a7b71d1d3d16573b2d1311aa5ef950544",
+  "seg": "91aba3ba 39c34162 5d1062cd 21929972 9b1a6d4b 287d8c28 999d2306 fa54208c 876d39ec 56b17eef",
+  "cal": "4de34d58"
+ },
+ "onibusisl · lentaFria": {
+  "hash": "dd71113b9f7e866fd41a8ece31bf37fac42e340feb90d1e0a49c48b6c36e8d35",
+  "seg": "47f16481 daa047c8 3cfdfacb 6955de49 1bbcd521 d16affc0 19016487 6f2cf589 968f1ffd 84a0d8c5",
+  "cal": "4de34d58"
+ },
+ "onibusisl · arrancada": {
+  "hash": "99eb54d2b18548a2327c7804653e5c2c51dedb2c8789447418cd1fe42c02b9a8",
+  "seg": "fd26565d 88afc8a2 8e30066b 48950716 d2f842cc a90f85f4 c062c0a7 f4fb2926 a31f386e 8590033e",
+  "cal": "4de34d58"
+ },
+ "onibusisl · peNoFundo": {
+  "hash": "76a7dce3b6718f8f034958fa7f893e8db250d7ecd8d29f4e7eee287daee68fef",
+  "seg": "22772621 5e436d6a 5abd66ce dcdb7ee8 609d7a79 c0612321 cf23911f ee720c84 d4a4de9e f04b2425",
+  "cal": "4de34d58"
+ },
+ "onibusisl · trocaCarga": {
+  "hash": "2aaf158175054d2cbb2f0bae5ce5d752863bc91abc140e18bc5843f7f4989ad3",
+  "seg": "92e432d8 89b71ecb dcedc9f8 75d1f0b9 4c040eed 9d81f889 ea1e8018 05b416ef d4624698 48e90faf",
+  "cal": "4de34d58"
+ },
+ "onibusisl · plena": {
+  "hash": "dd30c29418ab2ae2244591ec238d7190a37014f71b0f25e5f19383a6e8fb26d7",
+  "seg": "3542e077 54f41376 48042a2d afb5d510 eea19836 fca1c132 3cc3d2b6 59c3d0a7 e8df74b4 de781c4c",
+  "cal": "4de34d58"
+ },
+ "onibusisl · freioTravado": {
+  "hash": "acb23a68e5087304a998aa02b9e2b5980966b1b12fd306573937fe7e9104c41a",
+  "seg": "149ba12f d50bc28c 479dc7dc 0fefb1ef d99f3e2d e325d541 deaec21d 919d60b7 e04bd77c 1ba07153",
+  "cal": "4de34d58"
+ },
+ "onibusisl · degraus": {
+  "hash": "2d35a7c6e7b19c0081126f1b804c03da0ef8e17c07e7f7736c31972e469b2d67",
+  "seg": "8bb65b09 8bb94e11 a0e8b651 aaec0492 e3eb08c3 575d6ac6 acdb45c6 8146d458 882e4186 276e3a59",
+  "cal": "4de34d58"
+ },
+ "onibusisl · bancada": {
+  "hash": "1d2a4041ea586077a6663bdf46340cfa1884ed8338408dcbd8368f024c70125e",
+  "seg": "c4e52f96 e0bd19f0 f5167955 0c811530 aef99c0c d5d023d6 c10ea18a d9752d59 7dcd73ad 268da4ce",
+  "cal": "4de34d58"
+ },
+ "dd6v92 · partida": {
+  "hash": "d30fe3362324df5c47a62f9b2e66dce2ad763c43b2add243db4e1865dd85cfb3",
+  "seg": "38024586 53dce12a 67d620a8 aa20d7b7 1200baa4 bfa6c17a f8971912 73a1ca4f 08e6603e 69f4a145",
+  "cal": "6be0456e"
+ },
+ "dd6v92 · lentaFria": {
+  "hash": "40f0957981ebbf1717f220702f21f07d148b69e2f71731a6b0457731a28602c0",
+  "seg": "f3d8e303 259ee6ba 786b59f4 d317da50 6e4c1d89 cd979ef2 bb091568 34ff14c3 80387d63 477b24fa",
+  "cal": "6be0456e"
+ },
+ "dd6v92 · arrancada": {
+  "hash": "4894d9c262f105efb8890345014e388af8e1677d925db8ad7f56a7c24f31fc83",
+  "seg": "fb66bac7 c47d5c51 c0f0453e 790c8df2 e764d67f 0add2c35 50cff8b5 a7073c87 fed6c60e bad0bd5d",
+  "cal": "6be0456e"
+ },
+ "dd6v92 · peNoFundo": {
+  "hash": "4791545663000f66146c80e711e3a0323f9fc0eade7e53edf87c9ed69a33ac3b",
+  "seg": "f5bee5f1 64fe5368 e2fa47fd 71c35758 7b1c3549 5836d02b 3f404dee 2ae645f0 30e83462 489af390",
+  "cal": "6be0456e"
+ },
+ "dd6v92 · trocaCarga": {
+  "hash": "27bc8061977a06ed5995dc0e451b9b53c797ed50a9a0af18f0fc0c2847556d49",
+  "seg": "5ec83513 2d6cd44d 6b9cbe29 f280c4e9 20a0e50b fdd41bb7 8aed7128 20b5767c db97ff93 7b0d42a6",
+  "cal": "6be0456e"
+ },
+ "dd6v92 · plena": {
+  "hash": "52fca25d42ed16b2a37fa6516aeb525a95d0775623b48710a9fbf1170aba06bd",
+  "seg": "1e1b2fac 3893c213 5df66e61 be2fbe36 4db58349 b88cf2ae 6384b787 0fb00d00 450c3163 8b22e54d",
+  "cal": "6be0456e"
+ },
+ "dd6v92 · bancada": {
+  "hash": "2d3b4f3f350163fea8981c5e57a65a64d5d52be87b54d48ae6f48f87af52fcca",
+  "seg": "52d19a72 7d0ac140 34a05c69 95b3c603 e3fc7dea 5a363411 bc466b1f f13ee729 73cea215 29edae18",
+  "cal": "6be0456e"
+ },
+ "gen500 · partida": {
+  "hash": "01577a58e049681533bb41b9736cb0251bde63779152eb78bdba928a8da7ec7e",
+  "seg": "97ceb6e1 670a322f ee99d315 a2cd0163 5010168f b6f1a762 ee35ba2e 41f01afb e99fd2b1 462c1d1d",
+  "cal": "bce48ac6"
+ },
+ "gen500 · lentaFria": {
+  "hash": "ed70fdb943ec318dbc9261bf2ac054877afbb3a51c1bd8588566d818ece067ab",
+  "seg": "f4fae382 8da8f71b de071c67 a83f8e20 d2b54f30 ce9105de 409023ef 62922e3e 00b403cd 6173e4e7",
+  "cal": "bce48ac6"
+ },
+ "gen500 · plena": {
+  "hash": "a647ed844d482fa109d96a39beb89c0f1d4f392c8babe2bb91a56cd10509d700",
+  "seg": "2a162ba5 8fb652f2 286e04d7 179cc3e0 80de8517 edbcb818 b4bb4314 d638780e 49e50211 b5cf6811",
+  "cal": "bce48ac6"
+ },
+ "gen500 · degraus": {
+  "hash": "b87ceac9a3a2a710fd631cda40d1bad9531cc3cd0dd50798e3637c36553ab074",
+  "seg": "4168ce69 a156b5df bf8480a8 d1f5572f f419bbd0 5d78bff0 e4a67adf f8b52055 a1ce36f3 a458e379",
+  "cal": "bce48ac6"
+ },
+ "gen500 · trocaCarga": {
+  "hash": "7e0ab7877c90b39a1f25aeca1f55c123ce7ab5d36a62079f7fda66001b29a958",
+  "seg": "bf385f7a ba38f3ae cb96bb83 c59e94a6 85d8e13d 57f9cfd9 ec62d86b 958ca41e c44f8395 0575f18d",
+  "cal": "bce48ac6"
+ },
+ "gen500 · bancada": {
+  "hash": "9a48aa076551f3cf00c3295956ab315c12504c84ab63490412066913c0f76e20",
+  "seg": "f428f220 e7b7491c e98677b1 79dd7cfe 20f2c3b5 f866f47e fbe15c7a 87f74ebd 39f2b0fb 7644253a",
+  "cal": "bce48ac6"
+ },
+ "gen500 · trocaConfig": {
+  "hash": "28f214c92725d8b20b6e360bac5e670407ccdcaa7c30d75a2296b26a34bc82d8",
+  "seg": "ad3bd4ea 67bf6511 1b7c4af3 7c061f9f d06446e0 3553e908 9088338e 4484ab1f be712243 9d15fe07",
+  "cal": "bce48ac6"
+ },
+ "emd710 · partida": {
+  "hash": "465e14eb8bdb77fb0e40bb1605709ce3b8a908137b5af86f2280d1d7b71399d9",
+  "seg": "5393f782 7c6333b0 fdec74ff 960d5ebe 3c3d554f 51ea0180 096a99d3 7343c327 caf6ac48 f39519df",
+  "cal": "7a71cf37"
+ },
+ "emd710 · lentaFria": {
+  "hash": "85986439a358c21ea00513668583195698f666213c6836f8f434f41f856c0917",
+  "seg": "613aec2a 752ef0f3 c1f43e11 98e642a5 ead3c4c5 af291e8d 2dcdb46c f605f416 4013d2ea 2aa2f018",
+  "cal": "7a71cf37"
+ },
+ "emd710 · notch1": {
+  "hash": "4dde1ef0e5eb983fcddffbf94394090dd730daad5029abed4680c98450a792a9",
+  "seg": "6763af7f b8cb0109 bd1fc557 4725d161 0896064b d8648971 5114aab6 b2b7fb6b 53ac1ffd c868416a",
+  "cal": "7a71cf37"
+ },
+ "emd710 · notch4": {
+  "hash": "e2fcf525bff8a7394ff76d63fa9ecf2e583330211412d942126f838f1a0b4765",
+  "seg": "014646b9 2031edab 69a4267e 6f3cc96c 84e39f09 5cbf8fcd 9e8c07dd f0d212a3 4822040a 765e6e53",
+  "cal": "7a71cf37"
+ },
+ "emd710 · notch8": {
+  "hash": "37eddc8a8bdd0b3dbfb811ac9d309d2d77f8d88b3004d54e9031cf6f7d7bc991",
+  "seg": "bf6a4584 e3900fcf c960bae5 a5fc5bd2 96fe1fd8 44cd7a69 d1759ce9 032504e6 1ac6e2d0 10c6a51d 3ebf68d8 7f910894 36341a06 c7ed5e2b 98c779f6 8d299a72 c0404eca a755cb54 6d377b3d 4181d7b1 9cf58de7 f2dcc2c9",
+  "cal": "7a71cf37"
+ },
+ "emd710 · trocaCarga": {
+  "hash": "febfc8fe2c39ba86707615b5f225e4ccd18953311142d43cca75b1ebd3212a3e",
+  "seg": "53f092ef 5e312ee7 048e41c2 50c5652c ba625b9d 6a06aaf0 d247dd6a b021fd0d 54a9da6a eab70a8b",
+  "cal": "7a71cf37"
+ },
+ "emd710 · bancada": {
+  "hash": "89f47a2092e8aa2bd8ec94fd5b5a6220c4d06cd3c91149aba4cbc01c75249a96",
+  "seg": "af09fcd4 c58b2ffc c9d2007e 4a70f106 85e770f7 3f7aa79c 4f2a9493 174380a4 b5467164 049310ef",
+  "cal": "7a71cf37"
+ },
+ "emd710 · trocaConfig": {
+  "hash": "913ddc4d2eb7daf73241930cadf1a81867b8743b7387ac078fb46628e6d337bd",
+  "seg": "d343c9dc 6bc7f197 b02c2161 53869fc4 46057bb4 3cd179f5 c5e5208b 7ae6b719 9e3e7b4b 757c8f0d",
+  "cal": "7a71cf37"
+ },
+ "ge7fdl · partida": {
+  "hash": "3967ee9c4cdb0ee2031a20209fefb6cb9e56093801fe8682375e49fc8ccca271",
+  "seg": "9272c474 e915eea1 d7da58fe 5c0f4dd6 0792c623 1bcc32b6 32087278 b7608f51 8c7968a2 bd636d0a",
+  "cal": "8e317d9a"
+ },
+ "ge7fdl · lentaFria": {
+  "hash": "cb3e6aca89caf52779a97770be68bf49ed5026d72428cc9efb733f4a6e561df1",
+  "seg": "bc4eeb96 ba98563f ddcbcd19 01db5e16 56968691 4e59008e ad600afb 612af092 caa39367 66e9010f",
+  "cal": "8e317d9a"
+ },
+ "ge7fdl · notch1": {
+  "hash": "f04d44a9424e4d1b1afb7265410c4adaa0632e1f4d269debd24d8bea676240f7",
+  "seg": "068f2e05 ec56e6af 0095d5ac d01130fc b18877d2 99ea6bf5 5b6cdb77 c5a7ca94 145ee29a 85abd5e6",
+  "cal": "8e317d9a"
+ },
+ "ge7fdl · notch4": {
+  "hash": "099c934c5fb1345aaa89ac46d05150bd9a58b67921df7d00a17736bf3781180d",
+  "seg": "ca08ae41 1d5f4334 192d0102 036733b9 0f3e9bd8 3c0117b6 479cd2fa b0b337c6 743a2c5f 3a1facf4",
+  "cal": "8e317d9a"
+ },
+ "ge7fdl · notch8": {
+  "hash": "2b1019309a3a87b64cd72bef7cfc9f74d331fff93e33dad008630daa7e51a177",
+  "seg": "91bff568 3efe9315 16394203 1059fec9 c9d37efe 285545cc 1b9c99c7 68f28b32 69464279 1b0a9308 4b06420e 339c629e f86fde32 0a818782 72ee09ea 019f94c2 ffbbcbd8 6cae4ecf 5c78e2e3 708ee67f 65824422 030e225e",
+  "cal": "8e317d9a"
+ },
+ "ge7fdl · trocaCarga": {
+  "hash": "591ea3f1229080eec3cb03a99a3dbd1e1034f4a7a04e1761f97135ae883ec3ac",
+  "seg": "bbe65ffb dca6279e efb4dcb3 04a3297e 6c4589c9 8d672934 2c9c50f0 0d8a485e 29e244e4 3d989309",
+  "cal": "8e317d9a"
+ },
+ "ge7fdl · bancada": {
+  "hash": "9b9d951fd7a6d5201324b1954b73402d0fbadcff1641649ac71d993918e2a1dd",
+  "seg": "91bff568 dc6a6d2d 4a561139 1c5e97b1 a87090ac bf8343bd 277068c0 59608c5f d149948c 95e35cd8",
+  "cal": "8e317d9a"
+ }
+}
