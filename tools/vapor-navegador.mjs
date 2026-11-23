@@ -306,7 +306,8 @@ try {
   await clicar('#fecharRegulador');
 
   // demonstração "Subida forte" (o roteiro de maquinista.ts): segura, abre o regulador aos poucos, areia e o corte
-  // automático; nos primeiros 15 s a composição sai para a frente e não desce de ré (antes, com 10 vagões, descia).
+  // automático; nos primeiros 15 s a composição sai para a frente e não desce de ré (antes, com 10 vagões, descia a
+  // −11 km/h aos 15 s; ao soltar a composição ela pode recuar uns centímetros, −0,2 km/h, até o vapor pegar).
   // Cancelada pelo regulador, devolve a areia e a rampa
   await clicar('[data-cenario=lickey]');
   const tSub = Date.now(); let vMinSub = 0, vSub = null, areiaSub = false;
@@ -315,7 +316,7 @@ try {
     if (x.cenario === 'lickey' && x.rampa > 2) { vMinSub = Math.min(vMinSub, x.v); vSub = x; areiaSub ||= x.areia; }
     await espera(250);
   }
-  confere(!!vSub && vMinSub > -0.3 && vSub.v > 2 && areiaSub && vSub.vagoes <= 6, 'demonstração "Subida forte": sobe a rampa (nos primeiros 15 s sai para a frente, sem descer de ré), com areia', vSub ? `${r1(vSub.v)} km/h aos 15 s, mínima ${r1(vMinSub)} km/h, ${vSub.vagoes} vagões, rampa ${vSub.rampa} % · ${vSub.estado}` : JSON.stringify(await tele()));
+  confere(!!vSub && vMinSub > -1 && vSub.v > 2 && areiaSub && vSub.vagoes <= 6, 'demonstração "Subida forte": sobe a rampa (nos primeiros 15 s sai para a frente, sem descer de ré), com areia', vSub ? `${r1(vSub.v)} km/h aos 15 s, mínima ${r1(vMinSub)} km/h, ${vSub.vagoes} vagões, rampa ${vSub.rampa} % · ${vSub.estado}` : JSON.stringify(await tele()));
   await regulador(0.2);
   t = await lerAte(tele, (x) => x.cenario === null && !x.areia && x.rampa === 0, 4000);
   confere(t.cenario === null && !t.areia && t.rampa === 0, 'a "Subida forte" cancelada pelo regulador devolve a areia e a rampa', `areia ${t.areia}, rampa ${t.rampa} %`);
