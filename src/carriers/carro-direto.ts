@@ -51,7 +51,8 @@ export class CarroDireto extends PortadorComMotor {
     const m = this.vapor;
     if (m) {
       const vc: any = { acelerador: 0, ignicao: c.ignicao !== false, partida: false };
-      for (const k of ['regulador', 'cutoff', 'apito', 'fogo', 'freio', 'mixAr', 'mixMec']) if ((c as any)[k] !== undefined) vc[k] = (c as any)[k];
+      // (`trilho`: a estrada seca ou molhada; a aderência é a do pneu, constantes.ts → ADERENCIA)
+      for (const k of ['regulador', 'cutoff', 'apito', 'fogo', 'freio', 'trilho', 'mixAr', 'mixMec']) if ((c as any)[k] !== undefined) vc[k] = (c as any)[k];
       // o Stanley se dirige pelo acelerador (a válvula de vapor) com o reverser adiante, em corte médio
       if (c.regulador === undefined && c.pedal !== undefined && (c as any).cutoff === undefined) { vc.regulador = c.pedal; vc.cutoff = 0.5; }
       m.comandar(vc);

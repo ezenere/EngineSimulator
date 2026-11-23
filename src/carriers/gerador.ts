@@ -45,6 +45,8 @@ export const rpmGerador = (polos: number, fRede: number) => (120 * fRede) / polo
 export const DEGRAUS_CARGA = [0, 0.25, 0.5, 0.75, 1] as const;
 /** ganhos do governador (por % de erro de rotação; combustível em fração). CENA.md: 0,5 e 0,5 (instável com o atraso). */
 export const GOV_GERADOR = { kp: 0.07, ki: 0.05 };
+/** (vapor) os campos do comando que o portador passa à máquina a vapor (`Gerador.comandar`) */
+const CHAVES_VAPOR_GERADOR = ['apito', 'fogo', 'injetor', 'bombaAr', 'soprador', 'mixAr', 'mixMec'] as const;
 
 /** ruído largo do ventilador: passa-banda em 1 kHz */
 class RuidoLargo extends FonteRuido {
@@ -98,6 +100,19 @@ export class Gerador extends PortadorComMotor {
   carga() { return this.cargaG; }
   gRel = 0;
   acoplar(m: import('./tipos').Motor | null) { this.gRel = 0; super.acoplar(m); }
+  /**
+   * (vapor, aditivo: o diesel e as outras famílias não passam por aqui) a máquina a vapor recebe do comando o que não é do
+   * governador: o apito de fábrica, o fogo, o injetor, o soprador e a mistura. O regulador e o corte ficam com o
+   * governador (o de esferas da estacionária, ou o PI daqui). Antes só o `rpmAlvo` chegava, e o apito do Corliss não soava
+   */
+  comandar(c: import('./tipos').ComandoPortador) {
+    super.comandar(c);
+    const m = this.motor;
+    if (!m || m.familia !== 'vapor') return;
+    const vc: Record<string, unknown> = {}; let tem = false;
+    for (const k of CHAVES_VAPOR_GERADOR) { const v = (c as unknown as Record<string, unknown>)[k]; if (v !== undefined) { vc[k] = v; tem = true; } }
+    if (tem) m.comandar({ acelerador: 0, ignicao: this.cmd.ignicao !== false, partida: false, ...vc } as import('../scene/tipos').ComandoMotor);
+  }
 
   /**
    * Alternador: 2·f_rede e os harmônicos ímpares dele (100/300/500 Hz em 50 Hz; 120/360/600 em 60 Hz) e o

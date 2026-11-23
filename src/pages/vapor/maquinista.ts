@@ -137,6 +137,33 @@ export class CorteAutomatico {
   }
 }
 
+// ---------------------------------------------------------------- a demonstração "Subida forte"
+// A subida pesada de VAPOR.md 1.9 (a rampa de Lickey, 2,65 %): a máquina trabalha no limite, com o regulador todo aberto,
+// o corte longo, chuffs fortes e lentos que vão apressando, e a caldeira caindo. O roteiro de antes (10 vagões, o
+// regulador todo aberto de uma vez, corte fixo de 55 %, sem areia) fazia a K4s descer de ré: 636 t pedem 165 kN na
+// rampa, e com o corte de 55 % ela não chega a isso (a composição descia a −17 km/h aos 60 s; a D51, a −29, patinando).
+// A Lickey tinha máquinas de reforço atrás; aqui a
+// composição é menor e a máquina sobe como um maquinista a levaria: segura parada até o vapor encher os cilindros,
+// abre o regulador aos poucos, joga areia a subida toda (a aderência vai de 0,22 a 0,30) e deixa o corte com o
+// automático, que sai no máximo (o da tabela mais a correção da rampa), encurta com a velocidade e alivia se a roda
+// patinar. O teste roda este roteiro com a mesma lei (`npm run teste:vapor -- conducao`: a K4s, a D51 e o Big Boy);
+// simuladas offline, as 10 locomotivas sobem (12 a 47 km/h aos 60 s, nenhuma desce de ré).
+export type RoteiroSubida = {
+  vagoes: number; rampa: number; dur: number;
+  /** segundos com a composição segura parada (o vapor enchendo a caixa e os cilindros) */
+  segura: number;
+  /** [s, regulador] desde o início */
+  regulador: readonly (readonly [number, number])[];
+  /** corte: 'auto' = o corte automático da página; um número = a reversão fixa nesse corte */
+  corte: number | 'auto';
+  areia: boolean;
+};
+export const SUBIDA_FORTE: RoteiroSubida = {
+  vagoes: 5, rampa: 2.65, dur: 60, segura: 2.5,
+  regulador: [[0, 0.35], [1, 0.55], [2, 0.75], [4, 0.9], [6, 1]],
+  corte: 'auto', areia: true,
+};
+
 // ---------------------------------------------------------------- linha de estado
 // A primeira coisa que o palco diz: em que pé a máquina está e o que fazer agora. Pura (sem DOM): os mostradores
 // escrevem o resultado no requestAnimationFrame.
@@ -198,10 +225,13 @@ export function linhaDeEstado(e: EntradaEstado): LinhaDeEstado {
   if (e.freando) return { titulo: 'Parada no freio', detalhe: 'Solte o freio (Espaço) e abra o regulador para partir', tom: 'neutro' };
   if (e.reguladorEfetivo <= 0.02) return { titulo: e.jaAndou ? 'Parada · pronta para partir' : 'Pronta para partir: abra o regulador', detalhe: `${e.jaAndou ? 'Abra o regulador para sair' : 'Arraste a alavanca do regulador para cima, ou segure W'}${e.corteAuto ? (e.sentido === -1 ? ' · sentido: ré' : '') : ` · ${comando}`}${caldeira}`, tom: 'ok' };
   if (e.presaHa > 4) {
+    // (o trator preso pela patinagem de duas amostras, que pedia "ponha em N e engate a 1ª de novo", foi corrigido no
+    // motor: src/engines/vapor/dsp.ts, `dinamica`; parado no ponto morto, o corte automático balança a reversão)
+    const vagoes = e.portador === 'locomotiva' ? ' ou tire vagões no painel' : '';
     const dica = e.patinando ? `Feche um pouco o regulador${e.temAreia ? ' e segure E (areia)' : ''}`
-      : e.portador === 'trator' ? 'Ponha em N e engate a 1ª de novo'
-      : e.rampa > 0.5 ? `A rampa é forte para esta composição: abra mais o regulador${e.temAreia ? ', segure E (areia)' : ''} ou tire vagões no painel`
-      : e.regulador < 0.5 ? 'Abra mais o regulador' : 'Abra mais o regulador ou tire vagões no painel';
+      : e.portador === 'trator' && e.marcha === 2 && e.regulador >= 0.5 ? 'Abra mais o regulador ou engate a 1ª (a 2ª tem a metade da força)'
+      : e.rampa > 0.5 ? `A rampa é forte para esta ${e.portador === 'locomotiva' ? 'composição' : 'máquina'}: abra mais o regulador${e.temAreia ? ', segure E (areia)' : ''}${vagoes}`
+      : e.regulador < 0.5 ? 'Abra mais o regulador' : `Abra mais o regulador${vagoes}`;
     return { titulo: 'A máquina não sai do lugar', detalhe: `${dica}${caldeira}`, tom: 'aviso' };
   }
   return { titulo: 'Saindo…', detalhe: `O vapor está enchendo os cilindros · ${comando} · regulador ${pctTxt(e.regulador)}`, tom: 'ok' };

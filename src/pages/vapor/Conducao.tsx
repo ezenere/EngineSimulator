@@ -180,6 +180,12 @@ export function Conducao({ k, refs }: { k: ControleVapor; refs: RefsConducao }) 
           <Field rotulo="Carga do eixo de transmissão">
             <ChipGroup id="carga" classe="num" opcoes={[0, 0.25, 0.5, 0.75, 1].map((f) => ({ valor: f, rotulo: pct(f) }))} atual={e.carga} aoEscolher={(v) => k.setCarga(v)} />
           </Field>
+          {/* o apito de fábrica (o portador gerador passa o apito ao motor desde 23/11/2026) */}
+          <div className="segurar-linha">
+            <BotaoDeSegurar id="botaoApito" classe="key wide segurar apito" ativo={e.apitando} aoMudar={(on) => k.apitar(on)} titulo="Segure para apitar (H): o apito da fábrica">
+              <b>Apito</b><small>segure · H</small>
+            </BotaoDeSegurar>
+          </div>
           <p className="note">A máquina de moinho não se dirige: o governador de esferas mexe no corte e no regulador para segurar a rotação quando a carga muda.</p>
         </div>
       ) : (

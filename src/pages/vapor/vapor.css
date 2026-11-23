@@ -31,7 +31,8 @@
 .estado-texto span { font-size: var(--t-nota); color: var(--muted); line-height: 1.35; }
 
 .comandos { display: grid; grid-template-columns: auto minmax(0, 1.1fr) minmax(0, 1fr); grid-template-areas: "reg dir maos"; gap: var(--e-4); align-items: stretch; min-width: 0; }
-.comandos.fixa { grid-template-columns: minmax(0, 1fr); grid-template-areas: none; gap: var(--e-2); }
+.comandos.fixa { grid-template-columns: minmax(0, 1fr) minmax(120px, 220px); grid-template-areas: none; gap: var(--e-2) var(--e-4); align-items: end; }
+.comandos.fixa .note { grid-column: 1 / -1; }
 
 /* a alavanca do regulador: trilho largo, punho com garra, marcas à direita; fica onde foi deixada */
 .regulador { grid-area: reg; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: var(--e-2); justify-items: stretch; min-width: 112px; }
@@ -106,6 +107,7 @@
   .vapor .painel-vapor { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 260px auto auto 130px auto; grid-template-areas: "cond" "mano" "tele" "fita" "scope" "rodape"; }
   .conducao { padding: var(--e-3) var(--e-2); }
   .comandos { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "reg dir" "maos maos"; gap: var(--e-3); }
+  .comandos.fixa { grid-template-columns: minmax(0, 1fr); }
   .regulador { min-width: 104px; }
   .alavanca { height: 168px; }
   .estado-texto strong { font-size: 21px; }

@@ -62,8 +62,29 @@ export function eventos(c: number): { avanco: number; r: number; k: number } {
 /** corte pelo reverser (1.2): c = 0,15 + 0,70·|cutoff| */
 export const cortePorReverser = (cutoff: number) => 0.15 + 0.7 * Math.min(1, Math.abs(cutoff));
 
-/** adesão (1.7): μ seco, molhado, com areia */
+/** adesão (1.7): μ seco, molhado, com areia (roda de aço no trilho) */
 export const MU = { seco: 0.22, molhado: 0.12, areia: 0.3 } as const;
+
+/**
+ * Rodagem: onde a roda motriz apoia. A aderência (μ de pico, o limite da roda presa) vem dela, e não da família:
+ *   - `trilho`: roda de aço no trilho (as locomotivas): `MU`, de 1.7; patinando, a curva de Polach (dsp.ts);
+ *   - `pneu`: pneu na estrada (o Stanley): asfalto seco 0,8 e molhado 0,5, o lado de baixo das faixas de pico de Wong,
+ *     "Theory of Ground Vehicles", tab. 1.3 (asfalto e concreto secos 0,8–0,9; asfalto molhado 0,5–0,7), para o pneu
+ *     estreito de 1920; patinando sobra 0,88 (o valor de deslizamento sobre o de pico na mesma tabela: 0,75/0,85);
+ *   - `ferro`: roda de ferro com garras na estrada (o trator): seca 0,40, entre a sapata de aço com garras no concreto
+ *     (0,45, a tabela de tração do Caterpillar Performance Handbook, a mesma de Peurifoy) e o metal escorregando no
+ *     asfalto da reconstituição de acidentes (0,3–0,5); molhada 0,22, a razão molhado/seco do aço no trilho (0,12/0,22).
+ *     Patinando sobra 0,9 (o valor que o motor já usava). Sem areia (só a locomotiva tem areeiro).
+ * Os números da tabela de Wong e da do Caterpillar estão escritos de memória (a tarefa não podia baixar nada): conferir.
+ */
+export type Rodagem = 'trilho' | 'pneu' | 'ferro';
+export const ADERENCIA: Record<Rodagem, { seco: number; molhado: number; areia: number | null; desliza: number }> = {
+  trilho: { seco: MU.seco, molhado: MU.molhado, areia: MU.areia, desliza: 1 },
+  pneu: { seco: 0.8, molhado: 0.5, areia: null, desliza: 0.88 },
+  ferro: { seco: 0.4, molhado: 0.22, areia: null, desliza: 0.9 },
+};
+/** a rodagem de cada família (o barco e a estacionária não têm roda motriz no chão: massa aderente 0) */
+export const rodagemDe = (familia: string): Rodagem => (familia === 'carro' ? 'pneu' : familia === 'trator' ? 'ferro' : 'trilho');
 
 /** Davis (Apêndice B): R = m·(6,4 + 0,13·v) + 0,0045·A·v² N, m em t, v em km/h, A em m² */
 export const davis = (mT: number, vKmh: number, area: number) => mT * (6.4 + 0.13 * vKmh) + 0.0045 * area * vKmh * vKmh;
