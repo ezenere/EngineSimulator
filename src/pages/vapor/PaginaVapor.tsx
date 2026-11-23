@@ -1,16 +1,19 @@
-// Página do Vapor (docs/VAPOR.md 6): famílias e máquinas em chips, manômetro, fita de escapes e leituras, onda e
-// espectro (o instrumento comum das páginas de motor, src/ui/onda.ts, com as notas do apito marcadas), cenários e o
-// painel. O som é a Cena (processador `vapor` = CenaDSP com o portador do preset e o VaporDSP), com a cadeia da Passagem
-// (escala absoluta, reverberação por banda). O React monta a estrutura; o estado fica em ControleVapor e os mostradores
-// são desenhados num só requestAnimationFrame lendo a telemetria de um campo.
+// Página do Vapor (docs/VAPOR.md 6): famílias e máquinas em chips; no palco, primeiro a condução (a linha de estado, a
+// alavanca do regulador, o sentido com o corte automático, o apito e o freio de segurar: Conducao.tsx), depois o
+// manômetro e as leituras, a fita dos escapes e a tração, a onda e o espectro (o instrumento comum das páginas de
+// motor, src/ui/onda.ts, com as notas do apito marcadas) e, por último, as demonstrações; o painel. O som é a Cena
+// (processador `vapor` = CenaDSP com o portador do preset e o VaporDSP), com a cadeia da Passagem (escala absoluta,
+// reverberação por banda). O React monta a estrutura; o estado fica em ControleVapor e os mostradores são desenhados
+// num só requestAnimationFrame lendo a telemetria de um campo.
 import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AudioShell, Barra, BotaoIgnicao, FamilyNav, OndaEEspectro, PresetNav, PERFIL_PASSAGEM, useAudioShell } from '../../ui';
 import { CenaDSP } from '../../scene/dsp-cena';
 import urlVapor from '../../worklet/processador-vapor.ts?worker&url';
 import { PRESETS_VAPOR, FAMILIAS_VAPOR, type FamiliaVapor } from '../../engines/vapor/presets';
-import { ControleVapor, CENARIOS, fmt } from './controle';
+import { ControleVapor, fmt, temAreia, temFreio, temSino, temTorneiras } from './controle';
 import { Painel } from './Painel';
-import { desenharManometro, desenharFita, escreverLeituras, MedidorPico, type Leituras } from './mostradores';
+import { Conducao, Demonstracoes, type RefsConducao } from './Conducao';
+import { desenharManometro, desenharFita, escreverConducao, escreverLeituras, MedidorPico, type Leituras } from './mostradores';
 import { usarTeclado } from './teclado';
 
 const PRESETS_NAV = PRESETS_VAPOR.map((p) => ({ id: p.id, name: p.nome, tag: p.tag, family: p.familia }));
@@ -32,6 +35,10 @@ function Interior({ k }: { k: ControleVapor }) {
   const e = useSyncExternalStore(k.assinar, k.obter);
   const cvM = useRef<HTMLCanvasElement>(null), cvF = useRef<HTMLCanvasElement>(null), cvS = useRef<HTMLCanvasElement>(null);
   const leituras = useRef<Leituras>({});
+  const refsCond = useRef<RefsConducao>({});
+  // (o laço de desenho lê o estado do áudio de agora, não o da renderização em que foi montado)
+  const audioAgora = useRef({ ligado: false, erro: null as string | null });
+  audioAgora.current = { ligado: estado === 'pronto', erro: erro ? String((erro as Error)?.message || erro) : null };
   usarTeclado(k);
 
   useEffect(() => {
@@ -45,6 +52,7 @@ function Interior({ k }: { k: ControleVapor }) {
       if ((n++ & 1) === 0) {
         if (cvM.current) desenharManometro(k, cvM.current);
         escreverLeituras(k, leituras.current, pk);
+        escreverConducao(k, refsCond.current, audioAgora.current.ligado, audioAgora.current.erro);
       }
       if (cvF.current) desenharFita(k, cvF.current);
       if (cvS.current) {
@@ -77,6 +85,7 @@ function Interior({ k }: { k: ControleVapor }) {
       </nav>
 
       <main className="palco painel-vapor">
+        <Conducao k={k} refs={refsCond.current} />
         <section className="manometro" aria-label="Manômetro">
           <canvas id="manometro" ref={cvM} role="img" aria-label="Manômetro: pressão da caldeira e da caixa de vapor" />
         </section>
@@ -94,17 +103,17 @@ function Interior({ k }: { k: ControleVapor }) {
         <section className="scope-wrap" aria-label="Forma de onda e espectro">
           <canvas id="scope" ref={cvS} role="img" aria-label="Forma de onda e espectro do som no ouvido do observador" />
         </section>
-        <section className="drive">
-          <div className="gearbox" id="cenarios" role="group" aria-label="Cenários">
-            <div className="gear-read"><span className="k">Cenários</span></div>
-            {CENARIOS.map((c) => (
-              <button key={c.id} type="button" className="key wide" data-cenario={c.id} aria-pressed={e.cenario === c.id} title={c.titulo}
-                onClick={() => (e.cenario === c.id ? k.pararCenario() : void k.cenario(c.id).catch((err) => console.error(err)))}>{c.nome}</button>
-            ))}
-          </div>
+        <div className="rodape">
+          <Demonstracoes k={k} />
           {P.nota && <p className="note">{P.nota}</p>}
-          <p className="hints"><kbd>W</kbd>/<kbd>S</kbd> regulador · <kbd>X</kbd> fecha · <kbd>A</kbd>/<kbd>D</kbd> reversão · <kbd>H</kbd> apito (segure) · <kbd>B</kbd> sino · <kbd>E</kbd> areia (segure) · <kbd>T</kbd> torneiras · <kbd>Espaço</kbd> freio · <kbd>I</kbd> injetor</p>
-        </section>
+          {k.portador !== 'gerador' && (
+            <p className="hints">
+              <kbd>W</kbd>/<kbd>S</kbd> regulador · <kbd>X</kbd> fecha · <kbd>H</kbd> apito (segure)
+              {temFreio(k.portador) && <> · <kbd>Espaço</kbd> freio (segure)</>} · <kbd>A</kbd>/<kbd>D</kbd> reversão à mão
+              {temSino(P) && <> · <kbd>B</kbd> sino</>}{temAreia(P) && <> · <kbd>E</kbd> areia (segure)</>}{temTorneiras(P) && <> · <kbd>T</kbd> torneiras</>} · <kbd>I</kbd> injetor
+            </p>
+          )}
+        </div>
       </main>
 
       <aside className="controls" id="controls" aria-label="Controles da máquina" data-audio={estado}>

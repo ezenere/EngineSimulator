@@ -1,6 +1,8 @@
-// Teclado do Vapor (VAPOR.md 6): W/S sobem e descem o regulador (0 → 100% em 1 s, seguradas) · X fecha o regulador ·
-// A/D reverser (seguradas) · H apito SEGURÁVEL · B sino · E areia segurável · T torneiras · Espaço freio segurável ·
-// I injetor. Ignora as teclas quando o foco está num campo de texto.
+// Teclado do Vapor (VAPOR.md 6): W/S (↑/↓) movem a alavanca do regulador (0 → 100% em 1 s, seguradas; ela fica onde
+// parou) · X fecha o regulador · A/D (←/→) pegam a reversão à mão (desligam o corte automático) · H apito SEGURÁVEL ·
+// B sino · E areia segurável · T torneiras (automático → abertas → fechadas) · Espaço freio segurável · I injetor.
+// Ignora as teclas quando o foco está num campo de texto. Perder o foco da janela ou esconder a aba solta tudo o que
+// estava seguro (apito, freio, areia, as teclas das alavancas): o apito não fica preso.
 import { useEffect } from 'react';
 import type { ControleVapor } from './controle';
 
@@ -8,7 +10,7 @@ export function usarTeclado(k: ControleVapor) {
   useEffect(() => {
     const campo = (e: KeyboardEvent) => { const a = e.target as HTMLInputElement | null; return !!a && a.tagName === 'INPUT' && a.type === 'text'; };
     const down = (e: KeyboardEvent) => {
-      if (campo(e)) return;
+      if (campo(e) || e.ctrlKey || e.metaKey || e.altKey) return;
       const c = e.code;
       if (c === 'KeyW' || c === 'ArrowUp') { e.preventDefault(); k.teclas.w = true; return; }
       if (c === 'KeyS' || c === 'ArrowDown') { e.preventDefault(); k.teclas.s = true; return; }
@@ -33,9 +35,13 @@ export function usarTeclado(k: ControleVapor) {
       else if (c === 'Space') k.frear(false);
       else if (c === 'KeyE') k.areia(false);
     };
-    // perder o foco solta tudo o que estava segurado (o apito não fica preso)
-    const blur = () => { k.teclas.w = k.teclas.s = k.teclas.a = k.teclas.d = false; k.apitar(false); k.frear(false); k.areia(false); };
-    window.addEventListener('keydown', down); window.addEventListener('keyup', up); window.addEventListener('blur', blur);
-    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur); };
+    const solta = () => k.soltarTudo();
+    const visivel = () => { if (document.hidden) k.soltarTudo(); };
+    window.addEventListener('keydown', down); window.addEventListener('keyup', up); window.addEventListener('blur', solta);
+    document.addEventListener('visibilitychange', visivel);
+    return () => {
+      window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', solta);
+      document.removeEventListener('visibilitychange', visivel);
+    };
   }, [k]);
 }

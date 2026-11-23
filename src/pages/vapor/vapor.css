@@ -1,34 +1,114 @@
-/* Página do Vapor: manômetro (solto, como os outros mostradores redondos) e leituras em cima, a faixa dos escapes e da
-   tração, a onda e o espectro (a `.scope-wrap` das outras páginas, na mesma altura), os cenários embaixo. Peças e
-   tokens de src/ui/estilo.css. */
+/* Página do Vapor. No palco, primeiro a condução (a linha de estado e, embaixo dela, a alavanca do regulador, o sentido
+   com o corte automático, o apito e o freio de segurar), com o manômetro ao lado; depois as leituras e a faixa dos
+   escapes e da tração, a onda e o espectro, e por último as demonstrações. Peças e tokens de src/ui/estilo.css. */
 .vapor .painel-vapor {
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto 150px auto;
-  grid-template-areas: "mano tele" "fita fita" "scope scope" "drive drive";
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(96px, 1fr) auto;
+  grid-template-areas: "cond mano" "tele fita" "tele scope" "rodape rodape";
 }
-.manometro { grid-area: mano; min-height: 260px; min-width: 0; }
+.manometro { grid-area: mano; min-height: 220px; min-width: 0; }
 #manometro { width: 100%; height: 100%; display: block; }
-.vapor .telemetria { grid-area: tele; align-content: center; min-width: 0; --larg-chave: 96px; }
-.fita { grid-area: fita; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--e-4); align-items: end; min-width: 0; }
-.fita .quadro { height: 56px; }
-.esforco { height: 12px; margin-block: 22px; border: 1px solid var(--line-forte); border-radius: var(--r-pilula); overflow: hidden; background: var(--panel); }
+.vapor .telemetria { grid-area: tele; align-content: start; min-width: 0; --larg-chave: 96px; gap: 2px; }
+.vapor .telemetria .ro-row.grande .v { font-size: 18px; }
+.fita { grid-area: fita; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--e-2); align-content: start; min-width: 0; }
+.fita .quadro { height: 48px; }
+.esforco { height: 12px; margin-block: 4px; border: 1px solid var(--line-forte); border-radius: var(--r-pilula); overflow: hidden; background: var(--panel); }
 .esforco i { display: block; height: 100%; width: 0%; background: var(--gold); transition: width .1s; }
 .esforco i.patina { background: var(--hot); }
-.vapor .drive { display: grid; gap: var(--e-2); justify-content: stretch; }
-/* (notebook de 768 px de altura: numa linha a mais a onda tiraria do manômetro a altura das leituras, que passavam por
-   cima das faixas; ela vai para o lado dos escapes, que ficam um sobre o outro, numa linha de altura fixa) */
+.vapor .rodape { grid-area: rodape; display: grid; gap: var(--e-2); min-width: 0; }
+
+/* ---- condução */
+.conducao { grid-area: cond; display: grid; gap: var(--e-3); align-content: start; min-width: 0; padding: var(--e-3); border: 1px solid var(--line-forte); border-radius: var(--r); background: var(--panel); }
+/* a linha de estado: o que a máquina está fazendo e o que fazer agora */
+.estado { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--e-3); align-items: start; min-height: 52px; }
+.estado-ponto { width: 12px; height: 12px; margin-top: 8px; border-radius: 50%; background: var(--muted); }
+.estado[data-tom="ok"] .estado-ponto { background: var(--gold); box-shadow: 0 0 10px color-mix(in srgb, var(--gold) 70%, transparent); }
+.estado[data-tom="aviso"] .estado-ponto { background: var(--hot); box-shadow: 0 0 10px var(--hot); }
+.estado-texto { display: grid; gap: 2px; min-width: 0; }
+.estado-texto strong { font: 700 24px/1.1 var(--f-display); letter-spacing: 0.04em; color: var(--ink); text-wrap: balance; }
+.estado[data-tom="ok"] strong { color: var(--gold); }
+.estado[data-tom="aviso"] strong { color: var(--hot); }
+.estado-texto span { font-size: var(--t-nota); color: var(--muted); line-height: 1.35; }
+
+.comandos { display: grid; grid-template-columns: auto minmax(0, 1.1fr) minmax(0, 1fr); grid-template-areas: "reg dir maos"; gap: var(--e-4); align-items: stretch; min-width: 0; }
+.comandos.fixa { grid-template-columns: minmax(0, 1fr); grid-template-areas: none; gap: var(--e-2); }
+
+/* a alavanca do regulador: trilho largo, punho com garra, marcas à direita; fica onde foi deixada */
+.regulador { grid-area: reg; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: var(--e-2); justify-items: stretch; min-width: 112px; }
+.regulador-cab { display: flex; justify-content: space-between; align-items: baseline; gap: var(--e-2); }
+.regulador-cab .k, .demos-cab .k { color: var(--muted); font-size: var(--t-micro); letter-spacing: 0.08em; text-transform: uppercase; }
+.regulador-cab output { font: 600 18px/1 var(--f-mono); color: var(--gold); }
+.alavanca { position: relative; height: 150px; cursor: ns-resize; touch-action: none; user-select: none; -webkit-user-select: none; border-radius: var(--r); }
+.alavanca:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.alavanca-trilho { position: absolute; left: 14px; top: 12px; bottom: 12px; width: 30px; border-radius: 15px; border: 1px solid var(--line-forte); background: var(--bg); overflow: hidden; }
+.alavanca-cheio { position: absolute; inset: auto 0 0 0; background: linear-gradient(to top, var(--gold), color-mix(in srgb, var(--gold) 45%, var(--hot))); }
+.alavanca-cheio.morto { background: repeating-linear-gradient(-45deg, var(--line-forte) 0 6px, transparent 6px 12px); }
+.alavanca-marcas { position: absolute; left: 58px; right: 0; top: 12px; bottom: 12px; pointer-events: none; }
+.alavanca-marcas span { position: absolute; left: 0; transform: translateY(50%); font: 500 var(--t-micro) var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.alavanca-marcas span::before { content: ""; display: inline-block; width: 6px; height: 1px; margin-right: 4px; vertical-align: middle; background: var(--faint); }
+/* (o punho anda entre o pé e o topo do trilho, com 12 px de folga em cima e embaixo: a posição vem do componente) */
+.alavanca-punho { position: absolute; left: 1px; bottom: 12px; width: 56px; height: 24px; transform: translateY(50%); display: flex; justify-content: center; align-items: center; gap: 4px;
+  border-radius: 5px; background: var(--ink); border: 2px solid var(--bg); box-shadow: 0 2px 6px rgb(0 0 0 / 0.55); pointer-events: none; }
+.alavanca-punho i { width: 2px; height: 10px; border-radius: 1px; background: var(--line-forte); }
+
+.direcao { grid-area: dir; display: grid; gap: var(--e-3); align-content: start; min-width: 0; }
+.sentido { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--e-chip); }
+.sentido .key { padding: 0 8px; min-height: 44px; line-height: 1.15; }
+.auto-linha { display: flex; align-items: center; flex-wrap: wrap; gap: var(--e-2) var(--e-3); }
+.auto-chave { display: inline-flex; align-items: center; gap: var(--e-2); min-height: 36px; }
+.auto-chave .chave { position: relative; width: 30px; height: 16px; border-radius: 8px; background: var(--line-forte); transition: background .15s; }
+.auto-chave .chave::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--ink); transition: left .15s; }
+.auto-chave[aria-checked="true"] { border-color: var(--gold); color: var(--gold); background: color-mix(in srgb, var(--gold) 9%, var(--raise)); }
+.auto-chave[aria-checked="true"] .chave { background: var(--gold); }
+.auto-chave[aria-checked="true"] .chave::after { left: 16px; background: var(--bg); }
+.auto-corte { font-size: var(--t-nota); color: var(--muted); }
+
+.maos { grid-area: maos; display: grid; gap: var(--e-3); align-content: start; min-width: 0; }
+.segurar-linha { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: var(--e-2); }
+.key.segurar { display: grid; place-content: center; gap: 2px; min-height: 56px; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; text-align: center; }
+.key.segurar b { font: 700 18px/1 var(--f-display); letter-spacing: 0.06em; text-transform: uppercase; }
+.key.segurar small { font: 500 var(--t-micro)/1.2 var(--f-mono); color: var(--muted); letter-spacing: 0.04em; }
+.key.segurar[aria-pressed="true"] small { color: inherit; }
+.key.segurar.apito[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); background: color-mix(in srgb, var(--gold) 20%, var(--raise)); }
+.key.segurar.freio[aria-pressed="true"] { border-color: var(--hot); color: var(--hot); background: color-mix(in srgb, var(--hot) 14%, var(--raise)); }
+.acoes.miudas { gap: var(--e-chip); }
+.acoes.miudas .chip { min-height: 36px; }
+/* (a areia é de segurar, com cara de botão miúdo) */
+.chip.segurar-chip { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.chip.fechar { min-height: 32px; }
+
+/* ---- demonstrações: os roteiros, num lugar secundário */
+.demos { display: grid; gap: var(--e-2); min-width: 0; }
+.demos-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--e-1) var(--e-3); }
+.demos .chip[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+
+/* (notebook de 768 px de altura: a condução encolhe, as leituras ficam em duas colunas e a onda baixa) */
 @media (min-width: 1101px) and (max-height: 820px) {
-  .vapor .painel-vapor { grid-template-rows: minmax(0, 1fr) 120px auto; grid-template-areas: "mano tele" "fita scope" "drive drive"; gap: var(--e-3); }
-  .fita { grid-template-columns: minmax(0, 1fr); gap: var(--e-2); align-items: start; }
-  .fita .quadro { height: 44px; }
-  .esforco { margin-block: 4px; }
-  .manometro { min-height: 220px; }
+  .vapor .painel-vapor { gap: var(--e-3); grid-template-rows: auto auto minmax(80px, 1fr) auto; }
+  .alavanca { height: 140px; }
+  .key.segurar { min-height: 52px; }
+  .estado { min-height: 44px; }
+  .estado-texto strong { font-size: 21px; }
+  .vapor .telemetria { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--e-4); }
+  .vapor .telemetria .ro-row { --larg-chave: 74px; }
+  .vapor .telemetria .ro-row .v { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* (as demonstrações numa linha só: o nome, os botões; a explicação fica na dica e na linha de estado) */
+  .demos { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--e-3); }
+  .demos-cab .note { display: none; }
 }
 @media (max-width: 1100px) {
-  .vapor .painel-vapor { grid-template-rows: 340px auto 150px auto; }
+  .vapor .painel-vapor { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); grid-template-rows: auto 320px auto 150px auto; grid-template-areas: "cond cond" "mano tele" "fita fita" "scope scope" "rodape rodape"; }
+  .fita { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: var(--e-4); align-items: end; }
+  .fita .quadro { height: 56px; }
+  .esforco { margin-block: 22px; }
 }
 @media (max-width: 720px) {
-  .vapor .painel-vapor { grid-template-columns: minmax(0, 1fr); grid-template-rows: 280px auto auto 130px auto; grid-template-areas: "mano" "tele" "fita" "scope" "drive"; }
+  .vapor .painel-vapor { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 260px auto auto 130px auto; grid-template-areas: "cond" "mano" "tele" "fita" "scope" "rodape"; }
+  .conducao { padding: var(--e-3) var(--e-2); }
+  .comandos { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "reg dir" "maos maos"; gap: var(--e-3); }
+  .regulador { min-width: 104px; }
+  .alavanca { height: 168px; }
+  .estado-texto strong { font-size: 21px; }
   .fita { grid-template-columns: minmax(0, 1fr); gap: var(--e-3); }
   .esforco { margin-block: 4px; }
 }
