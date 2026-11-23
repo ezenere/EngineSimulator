@@ -1107,8 +1107,11 @@ export class EngineDSP implements DSPDeAudio {
               const ov = this.overrun;
               if (combust) { pr = 0.015; k = 0.7; if (this.av) { pr = this.prAv; k = this.kEstouroAv; } } // falha de ignição (válvulas flutuando, comando bravo): mistura inteira, mas quase nunca acende
               else if (this.launching && this.limiter) { rate = 20; k = 0.8; } // 2-step com corte
-              else if (this.limiter) [rate, k, wet] = { ign: [25, 0.7, true], partial: [8, 0.6, true] }[this.limType] || [0.5, 0.3, false]; // (corte de injeção: só o filme de combustível do coletor)
-              else if (this.shifting && this.shiftCut) [rate, k] = this.ignCut ? [40, 0.8] : [5, 0.5];
+              // (corte de injeção: só o filme de combustível do coletor). Por extenso, sem a tabela `{ ign, partial }[limType]` nem os
+              // vetores: a leitura de um objeto novo pelo nome desotimizava o laço inteiro a cada vez no V8 ("unexpected name in
+              // keyed access"), e o motor no corte rodava fora do código otimizado, a 80–100 % do tempo real e ~1 GB/s de lixo
+              else if (this.limiter) { const lt = this.limType; if (lt === 'ign') { rate = 25; k = 0.7; wet = true; } else if (lt === 'partial') { rate = 8; k = 0.6; wet = true; } else { rate = 0.5; k = 0.3; wet = false; } }
+              else if (this.shifting && this.shiftCut) { if (this.ignCut) { rate = 40; k = 0.8; } else { rate = 5; k = 0.5; } }
               else if (dfco) {
                 if (this.als) { rate = 22; k = 1.1; floor = 0.6; lit = true; }
                 else if (ov === 'lean') { rate = 1; k = 0.5; } // carburador: a mistura da desaceleração é rica e raramente acende (o pipoco frequente é vazamento no escape)
