@@ -128,7 +128,7 @@ Todas as famílias tiveram a passada de som medida com o kit e estão mescladas 
 
 ### Veredito do dono (23/11/2026)
 
-**Diesel aprovado:** "ficou muito bom. O Diesel tá excelente! Agora sim é motor a diesel mesmo. Senti um pouco de falta nos médios ainda no diesel, mas mesmo assim ficou excelente!" O Diesel de `6ec6742` (quarta passada) passa a ser a referência: nada nele pode piorar. As outras famílias seguem sem veredito.
+**Diesel aprovado:** "ficou muito bom. O Diesel tá excelente! Agora sim é motor a diesel mesmo. Senti um pouco de falta nos médios ainda no diesel, mas mesmo assim ficou excelente!" O Diesel de `6ec6742` (quarta passada) passa a ser a referência: nada nele pode piorar. As outras famílias seguem sem veredito. Perguntado onde falta o médio: "tanto acelerando quanto na lenta"; e como ouve: "Eu ouço no padrão. Não mexo" (o que vale é o padrão da página: microfone `ext`, equalização zerada, valores do preset; melhora que só existe num controle fora do padrão não existe para ele).
 
 O que vem para o Diesel, nesta ordem:
 
