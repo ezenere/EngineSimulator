@@ -21,6 +21,7 @@ import type { CadeiaDeAudio } from '../../ui';
 import type { Ambiente, Ouvinte, Trajetoria, FonteSonora, TelemetriaCena, LocalOuvinte, Solo, Vec3 } from '../../scene/tipos';
 import { Observador, OUVIDO_ABAIXO, type Destino, type ModoObservador } from './observador';
 import { Lugar } from './lugar';
+import { qualCenario, type Cenario } from './mundo/planta';
 import { pontoDeChegada, pontosDeVista, assento, type PontoDeVista } from './pontos';
 import type { Corpo, Portador, TelemetriaPortador, FamiliaMotor } from '../../carriers/tipos';
 import { ambientePassagem } from '../../scene/ambientes';
@@ -479,10 +480,14 @@ export class ControlePassagem {
   private lugarCache: { chave: string; l: Lugar } | null = null;
   /** o lugar onde o observador anda (paredes, plataforma, tabuleiro), refeito quando ambiente, via ou corpo mudam */
   lugar(): Lugar {
-    const amb = this.ambienteCena(), w = this.corpo.segmentos[0]?.largura ?? 2, mChegada = this.traj.lateral + w / 2;
-    const chave = JSON.stringify([amb.id, amb.tunel, this.traj.tipo, this.traj.comprimento, this.traj.raioCurva, this.traj.sentido, w, mChegada]);
-    if (this.lugarCache?.chave !== chave) this.lugarCache = { chave, l: new Lugar({ ambiente: amb.id, via: this.via, tunel: amb.tunel, larguraCorpo: w, mChegada }) };
+    const amb = this.ambienteCena(), w = this.corpo.segmentos[0]?.largura ?? 2, mChegada = this.traj.lateral + w / 2, cenario = this.cenario();
+    const chave = JSON.stringify([amb.id, amb.tunel, this.traj.tipo, this.traj.comprimento, this.traj.raioCurva, this.traj.sentido, w, mChegada, cenario]);
+    if (this.lugarCache?.chave !== chave) this.lugarCache = { chave, l: new Lugar({ ambiente: amb.id, via: this.via, tunel: amb.tunel, larguraCorpo: w, mChegada, cenario }) };
     return this.lugarCache.l;
+  }
+  /** o cenário em volta da via (mundo/planta.ts): a rua do carro, o aeródromo, a ferrovia, o pátio… */
+  cenario(): Cenario {
+    return qualCenario({ ambiente: this.ambiente, portador: this.portador, motor: this.motor, motorPreset: this.motorPreset, altitude: this.traj.altitude });
   }
   /** o ponto de chegada do preset (ou do portador), recalculado agora */
   pontoDeChegada(): Destino { return pontoDeChegada(this); }

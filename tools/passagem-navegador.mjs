@@ -212,6 +212,9 @@ confere(!!q3d, 'cena 3D desenhando (WebGL)', q3d || aviso);
 // cena opaca: nenhum material transparente na vista padrão (vista técnica desligada)
 const transp = await ev(`(() => { const k = window.__passagem.cena.current; if (!k) return null; const l = []; k.scene.traverseVisible((o) => { const m = o.material; for (const x of (Array.isArray(m) ? m : m ? [m] : [])) if (x.transparent || x.opacity < 1) l.push(o.type + ':' + x.type); }); return l; })()`);
 confere(Array.isArray(transp) && transp.length === 0, 'cena padrão toda opaca', transp);
+// (etapa 2: o túnel no morro, o trem-bala com o modelo e a sombra do sol; lá dentro, o morro e o resto de fora somem)
+const tun3d = await lerAte(() => ev(`(() => { const k = window.__passagem.cena.current, c = window.__passagem.c; return k && { cen: k.mundo?.cenario, fora: k.mundo?.morro ? k.mundo.morro.visible : null, sol: k.sol.intensity, sombra: k.renderer.shadowMap.enabled, segs: k.segs.length, corpo: c.corpo.segmentos.length, rodas: k.rodas.length }; })()`), (r) => r?.cen === 'tunel' && r.segs === r.corpo, 8000);
+confere(tun3d?.cen === 'tunel' && tun3d.fora === false && tun3d.sol === 0 && tun3d.sombra && tun3d.segs === tun3d.corpo && tun3d.rodas > 0, 'túnel no morro: dentro do tubo o sol se apaga e o de fora some; o trem com um grupo por vagão e as rodas em instâncias', tun3d);
 const ajudaSome = await lerAte(() => ev(`document.getElementById('ajuda').hidden`), (h) => h === true, 14000);
 confere(ajudaSome === true, 'a ajuda some sozinha');
 
@@ -239,13 +242,17 @@ confere(conv.n === false && conv.dur > 5.5, 'reverberação da Cena: resposta po
 
 // acompanha a passagem: 600 m a 97 m/s → nariz abeam em ~6,2 s, cauda em ~8,8 s
 let maxTun = 0, maxP = -1e9, minP = 1e9, maxA = -1e9, tunT = null, narizT = null, vMax = 0;
+// (o nariz só conta depois de ser visto antes de você: a primeira telemetria depois de disparar pode ainda trazer a
+// posição de antes do reposicionamento, com o nariz já "passado", e a conta saía 0 s)
+let narizAntes = false;
 // O nível de cada passagem é o máximo que o medidor da página guarda a cada quadro (`med.maxA`, zerado antes da janela)
 const zeraMax = () => ev(`(window.__passagem.med.zerarMax(), true)`);
 await zeraMax();
 await janela(() => ev(`(() => { const t = ${P}.tele; const m = window.__passagem.med; return t && { tun: t.pressao.tunel, max: t.pressao.max, min: t.pressao.min, nariz: t.pressao.nariz, dBA: m.maxA, xi: ${P}.xiNariz(t.portador.s), v: t.portador.v }; })()`),
   async (r, dt) => {
     if (r.tun > maxTun) maxTun = r.tun; if (tunT == null && r.tun > 500) tunT = dt;
-    if (narizT == null && r.xi > 0) { narizT = dt; if (foto) { await espera(500); await fotografar(foto.replace(/\.png$/, '-abeam.png')); } }
+    if (r.xi < 0) narizAntes = true;
+    if (narizT == null && narizAntes && r.xi > 0) { narizT = dt; if (foto) { await espera(500); await fotografar(foto.replace(/\.png$/, '-abeam.png')); } }
     if (Math.abs(r.nariz) > 0) { maxP = Math.max(maxP, r.max - r.tun); minP = Math.min(minP, r.min - r.tun); }
     if (Number.isFinite(r.dBA)) maxA = Math.max(maxA, r.dBA);
     vMax = Math.max(vMax, r.v);
@@ -454,6 +461,9 @@ await clicar('.preset[data-id="rx7-rua"]');
 await ate(`!${P}.calibrando`, 30000);
 const portR = await ultimaAte('portador', (m) => m.tipo === 'carro' && m.motor?.cfg?.id === 'rx7fd', 25000);
 confereMsg(portR?.tipo === 'carro' && portR.motor?.familia === 'rotativo' && portR.motor.cfg.id === 'rx7fd' && portR.motor.cfg.kAbs > 0, 'carro montado com o Wankel do RX-7 calibrado na página (kAbs)', portR && { tipo: portR.tipo, motor: portR.motor?.familia, id: portR.motor?.cfg.id, kAbs: portR.motor?.cfg.kAbs });
+// (etapa 2: a rua de bairro, com a calçada de 15 cm em que você nasce e as casas que não se atravessam)
+const rua = await lerAte(() => ev(`(() => { const c = ${P}, k = window.__passagem.cena.current, lg = c.lugar(); return { cen: c.cenario(), mundo: k?.mundo?.cenario, z: +c.obs.pos[2].toFixed(2), casas: lg.obstaculos.length, parede: (() => { const o = lg.obstaculos.find((x) => x.m0 > 0); if (!o) return null; const sc = (o.s0 + o.s1) / 2, a = lg.mundo(sc, o.m0 - 1, 1.65), n = lg.mundo(sc, o.m0 + 1, 1.65); lg.limitar(a, n, false, 1.65); return +(lg.projetar(n[0], n[1]).m - o.m0).toFixed(2); })() }; })()`), (r) => r.mundo === 'rua', 8000);
+confere(rua?.cen === 'rua' && rua.mundo === 'rua' && Math.abs(rua.z - 1.8) < 0.01 && rua.casas > 20 && rua.parede != null && rua.parede < 0, 'RX-7 na rua: o cenário da rua, você na calçada (olho a 1,8 m), a parede da casa segura o passo', rua);
 await clicar('#ignicao');
 let maxR = -1e9, rpmR = 0;
 await zeraMax();
@@ -469,6 +479,9 @@ await clicar('.preset[data-id="locomotiva-patio"]');
 await ate(`!${P}.calibrando`, 30000);
 const portL = await ultimaAte('portador', (m) => m.tipo === 'locomotiva' && m.motor?.familia === 'diesel', 25000);
 confereMsg(portL?.tipo === 'locomotiva' && portL.motor?.familia === 'diesel' && portL.motor.cfg.uso === 'locomotiva' && portL.comando?.notch === 8, 'locomotiva montada com o EMD 710 (uso locomotiva) e notch 8', portL && { tipo: portL.tipo, motor: portL.motor?.familia, uso: portL.motor?.cfg.uso, notch: portL.comando?.notch });
+// (etapa 2: o pátio de manobras e o modelo da SD70ACe: um grupo por segmento, as rodas dos truques em instâncias)
+const patio = await lerAte(() => ev(`(() => { const c = ${P}, k = window.__passagem.cena.current; return { cen: k?.mundo?.cenario, segs: k?.segs.length, corpo: c.corpo.segmentos.length, rodas: (k?.rodas ?? []).reduce((a, r) => a + r.itens.length, 0) }; })()`), (r) => r.cen === 'patio-ferro' && r.segs === r.corpo, 8000);
+confere(patio?.cen === 'patio-ferro' && patio.segs === patio.corpo && patio.rodas === 12, 'locomotiva no pátio de manobras: o modelo com um grupo por segmento e as 12 rodas dos truques girando', patio);
 await clicar('#ignicao');
 let rpmL = 0, maxL = -1e9;
 await zeraMax();

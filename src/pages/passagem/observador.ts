@@ -118,7 +118,7 @@ export class Observador {
     if (!andou) {
       this.velReal[0] = 0; this.velReal[1] = 0; this.velReal[2] = 0;
       // parado: a pé o olho ainda acompanha o chão (o lugar mudou de baixo dele)
-      if (this.modo === 'pe' && lugar) { const z = lugar.chao(this.pos[0], this.pos[1]) + OLHO; if (Math.abs(z - this.pos[2]) > 1e-4) { this.pos[2] += (z - this.pos[2]) * Math.min(1, dt / 0.08); this.mudou = true; } }
+      if (this.modo === 'pe' && lugar) { const z = lugar.chao(this.pos[0], this.pos[1], this.pos[2]) + OLHO; if (Math.abs(z - this.pos[2]) > 1e-4) { this.pos[2] += (z - this.pos[2]) * Math.min(1, dt / 0.08); this.mudou = true; } }
       return;
     }
     const ant: V3 = [this.pos[0], this.pos[1], this.pos[2]];

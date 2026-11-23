@@ -26,6 +26,7 @@ import type { Via } from '../../scene/trajetoria';
 import { PontoVia } from '../../scene/trajetoria';
 import { secaoTunel } from '../../scene/ambientes';
 import type { Tunel } from '../../scene/tipos';
+import { type Cenario, type Obstaculo, RUA, RUA_M, ESTACAO_OUTRA, alturaMorro, alturaVale, construcoes, obstaculos } from './mundo/planta';
 
 /** m, altura da plataforma da estação (a borda junto do piso do trem) */
 export const PLATAFORMA = 0.9;
@@ -52,6 +53,8 @@ export interface ParamsLugar {
   ambiente: string; via: Via; tunel?: Tunel; larguraCorpo: number;
   /** m da via do ponto de chegada (lateral + meia largura do corpo): a passarela e o passeio chegam até ele */
   mChegada: number;
+  /** o cenário em volta (mundo/planta.ts): a calçada da rua, o morro do túnel, as casas que não se atravessam */
+  cenario?: Cenario;
 }
 
 export class Lugar {
@@ -63,8 +66,12 @@ export class Lugar {
   /** ponte: a borda do passeio do lado da via, e se a segunda via cabe antes dele */
   readonly passeio: number;
   readonly segundaViaNaPonte: boolean;
+  readonly cenario: Cenario | null;
+  /** as casas, galpões e hangares do cenário (caixas em s, m) */
+  readonly obstaculos: Obstaculo[];
   constructor(p: ParamsLugar) {
-    this.amb = p.ambiente; this.via = p.via;
+    this.amb = p.ambiente; this.via = p.via; this.cenario = p.cenario ?? null;
+    this.obstaculos = this.cenario ? obstaculos(construcoes(this.cenario, { tipo: p.via.tipo, comp: p.via.comp, R: p.via.R, ls: p.via.ls })) : [];
     this.borda = p.larguraCorpo / 2 + ESTACAO.folga;
     if (p.tunel) {
       const sec = secaoTunel(p.tunel.area), mPerto = -sec.paredeOuvinte;
@@ -138,17 +145,28 @@ export class Lugar {
     return this.noTrecho(c - n.largura, t.ta, t.tb) && this.noTrecho(c + n.largura, t.ta, t.tb) ? c : NaN;
   }
 
-  /** altura do chão onde se pisa (a pé) no ponto (x, y) do mundo */
-  chao(x: number, y: number): number {
+  /**
+   * altura do chão onde se pisa (a pé) no ponto (x, y) do mundo; `zRef`, a altura de onde se vem (o olho): no túnel ela
+   * separa o piso de dentro do alto do morro, e nas casas o chão da rua do telhado
+   */
+  chao(x: number, y: number, zRef = 0): number {
     const q = this.projetar(x, y);
-    return this.chaoSM(q.s, q.m);
+    return this.chaoSM(q.s, q.m, zRef);
   }
-  private chaoSM(s: number, m: number): number {
+  private chaoSM(s: number, m: number, zRef = 0): number {
     if (this.amb === 'corte') { const a = Math.abs(m); return a <= CORTE.m0 ? 0 : a >= CORTE.m1 ? CORTE.alto : (a - CORTE.m0) * (CORTE.alto / (CORTE.m1 - CORTE.m0)); }
-    if (this.amb === 'estacao' && this.noTrecho(s, -ESTACAO.meio, ESTACAO.meio) && m >= this.borda && m <= this.borda + ESTACAO.largura + ESTACAO.fundo) return PLATAFORMA;
-    if (this.amb === 'ponte') return m >= this.passeio && m <= PONTE.perto ? PONTE.meioFio : m >= PONTE.longe && m <= PONTE.perto ? 0 : PONTE.vale;
+    if (this.amb === 'estacao' && this.noTrecho(s, -ESTACAO.meio, ESTACAO.meio) && ((m >= this.borda && m <= this.borda + ESTACAO.largura + ESTACAO.fundo) || (m >= ESTACAO_OUTRA.plataforma[0] && m <= ESTACAO_OUTRA.plataforma[1]))) return PLATAFORMA;
+    if (this.amb === 'ponte') return m >= this.passeio && m <= PONTE.perto ? PONTE.meioFio : m >= PONTE.longe && m <= PONTE.perto ? 0 : alturaVale(m, PONTE.vale);
     const t = this.tun;
-    if (t && m >= t.borda && this.noTrecho(s, t.ta, t.tb) && (m <= t.mPerto || (m <= t.mPerto + TUNEL.nicho.fundo && !Number.isNaN(this.nichoEm(s))))) return TUNEL.passarela;
+    if (t) {
+      // dentro do tubo (abaixo do teto): a passarela e os nichos; fora dele, ou em cima, o morro
+      const noTubo = this.noTrecho(s, t.ta, t.tb) && m >= t.mLonge - 0.5 && m <= t.mPerto + TUNEL.nicho.fundo + 0.5 && zRef < t.h + 0.5;
+      if (noTubo) return m >= t.borda && (m <= t.mPerto || (m <= t.mPerto + TUNEL.nicho.fundo && !Number.isNaN(this.nichoEm(s)))) ? TUNEL.passarela : 0;
+      return this.via.tipo === 'reta' ? alturaMorro(t, s, m) : 0;
+    }
+    if (this.cenario === 'rua' && ((m >= RUA_M.perto && m <= RUA_M.calcadaPerto) || (m <= RUA_M.longe && m >= RUA_M.calcadaLonge))) return RUA.meioFio;
+    // em cima de uma casa (voando, descendo no telhado)
+    for (const o of this.obstaculos) if (zRef >= o.h && s >= o.s0 && s <= o.s1 && m >= o.m0 && m <= o.m1) return o.h;
     return 0;
   }
 
@@ -175,7 +193,7 @@ export class Lugar {
         // atravessar a parede do fundo
         if ((a.m < fundo) !== (m < fundo) && (z < ESTACAO.teto + 0.5 || ant[2] < ESTACAO.teto + 0.5)) m = a.m < fundo ? fundo - FOLGA : fundo + FOLGA;
         // atravessar a cobertura (de cima para baixo ou de baixo para cima)
-        if (m < fundo && m > -4) {
+        if (m < fundo && m > ESTACAO_OUTRA.telhado) {
           if (sobA && z > ESTACAO.teto - FOLGA) z = ESTACAO.teto - FOLGA;
           else if (!sobA && ant[2] >= ESTACAO.teto && z < ESTACAO.teto + 0.4) z = ESTACAO.teto + 0.4;
         }
@@ -205,8 +223,17 @@ export class Lugar {
         }
       }
     }
-    // o chão: a pé, a altura é a do chão onde pisa; voando, não desce abaixo dele
-    const ch = this.chaoSM(s, m);
+    // as casas e galpões: não se atravessa a parede (a pé nem voando abaixo do telhado)
+    for (const o of this.obstaculos) {
+      if (s < o.s0 - FOLGA || s > o.s1 + FOLGA || m < o.m0 - FOLGA || m > o.m1 + FOLGA || Math.max(z, ant[2]) - (voo ? 0 : olho) >= o.h) continue;
+      if (a.s < o.s0 - FOLGA * 0.5) s = o.s0 - FOLGA; else if (a.s > o.s1 + FOLGA * 0.5) s = o.s1 + FOLGA;
+      else if (a.m < o.m0) m = o.m0 - FOLGA; else m = o.m1 + FOLGA;
+    }
+    // o chão: a pé, a altura é a do chão onde pisa; voando, não desce abaixo dele. Um degrau de mais de 1 m (a testa do
+    // emboque, a ala, a parede de uma casa) não se sobe andando: o passo volta
+    let ch = this.chaoSM(s, m, ant[2]);
+    const chA = this.chaoSM(a.s, a.m, ant[2]);
+    if (ch - (voo ? ant[2] - 0.3 : chA) > 1.0 && (Math.abs(s - a.s) > 1e-6 || Math.abs(m - a.m) > 1e-6)) { s = a.s; m = a.m; ch = chA; }
     if (!voo) z = ch + olho;
     else z = Math.max(ch + 0.3, Math.min(600, z));
     this.mundo(s, m, z, nova as [number, number, number]);
