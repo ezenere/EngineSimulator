@@ -55,6 +55,7 @@ import { PRESETS, PADRAO_DIESEL } from '../src/engines/diesel/presets';
 import { configCalibrada } from '../src/engines/diesel/config';
 import { CENARIOS, type Cenario } from './diesel-comum';
 import { CEN_EXTRA } from './diesel-fontes';
+import { semear } from './desvios';
 
 const SR = 48000, B = 128;
 export const AR = ['jato', 'valvula', 'chiadoAdm', 'sopro', 'turbina', 'wastegate', 'fundo'] as const;
@@ -114,6 +115,7 @@ function novo(id: string, op: Op) {
   d.params.listener = op.ouvinte; d.params.ambSound = op.ambiente;
   d.setConfig(config(id, op.campo));
   d.message({ type: 'diesel', portador: sp.portadores.includes('carro') ? 'carro' : sp.portadores[0] });
+  semear(d); // (a semente atual de tools/desvios.ts; 0 = a de fábrica, nada muda; `op.semente` abaixo ainda manda no sorteio principal)
   for (const f of op.sem) escalar(d, f, 0);
   for (const [f, g] of op.escala) escalar(d, f, g);
   if (op.semente !== undefined) d.rng.s = op.semente >>> 0 || 1;
