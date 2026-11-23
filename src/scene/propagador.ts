@@ -12,13 +12,16 @@ import type { Corpo, Segmento } from '../carriers/tipos';
 import { C_SOM, MAX_FONTES, R_MIN, DIST_ANEL, ITD_MAX } from './constantes';
 import { k1 } from './filtros';
 import { corteAr, alfa1k, POLO_POR_CORTE } from './ar';
-import { CalculoSombra, ganhosShelf } from './sombra';
+import { CalculoSombra, ganhosShelf, maekawaDb } from './sombra';
+import { AC_C, AC_DENTRO, AC_M, AC_S, AC_Z, type LugarCena } from './lugar';
 import { PontoVia, type Via, type Historico } from './trajetoria';
 import { raizesEmissao } from './supersonico';
 
 const TAU = Math.PI * 2;
 const ITD_ANEL = 128;          // amostras (2,7 ms a 48 kHz)
 const LARGURA_PAN = 0.5;       // ver docs/TECNICO.md: pan inteiro (lei de −3 dB) zeraria o ouvido oposto a 90°
+/** s: constante de tempo da ocultação pelo lugar (a borda da boca raspando a linha de visada não vira degrau) */
+const TAU_LUGAR = 0.025;
 
 /** Geometria do ouvinte num instante (preenchida pela Cena a cada bloco de controle). */
 export class GeoOuvinte {
@@ -86,7 +89,16 @@ const S_ATRASOMS = 44;
 const S_B1 = 45;
 const S_X1 = 46;
 const S_X2 = 47;
-const N_ESTADO = 48;
+// (extensão, o lugar) sombra própria do envio (a do corpo vista da altura de referência) e a ocultação pelo lugar, suavizada
+const S_SEA = 48;
+const S_SEB = 49;
+const S_SEAALVO = 50;
+const S_SEBALVO = 51;
+const S_PA = 52;
+const S_PB = 53;
+const S_E100 = 54;
+const S_E1K = 55;
+const N_ESTADO = 56;
 export const S_ESTADO = { sa: S_SA, sb: S_SB, fade: S_FADE, ganhoDb: S_GANHODB };
 
 export class EstadoFonte {
@@ -128,6 +140,7 @@ export class EstadoFonte {
     this.anel = new Float32Array(n); this.mask = n - 1; this.cap = n - 512;
     const v = this.s;
     v[S_FADE] = 1; v[S_KAR] = 0; v[S_KARALVO] = 1; v[S_B1] = 0; v[S_SA] = 1; v[S_SB] = 1; v[S_SAALVO] = 1; v[S_SBALVO] = 1;
+    v[S_SEA] = 1; v[S_SEB] = 1; v[S_SEAALVO] = 1; v[S_SEBALVO] = 1;
     v[S_IL] = 1; v[S_IR] = 1; v[S_ILALVO] = 1; v[S_IRALVO] = 1; v[S_PL] = 1; v[S_PR] = 1; v[S_PLALVO] = 1; v[S_PRALVO] = 1;
     v[S_PESO] = 1; v[S_R] = 1; v[S_THETA] = 90; v[S_GANHODB] = -120;
   }
@@ -150,6 +163,20 @@ export class Propagador {
   soloLargura = Infinity;
   /** velocidade do som (m/s): 343 a 20 °C; o modo de testes muda pela temperatura (definirTemperatura na Cena) */
   c = C_SOM;
+  /**
+   * (extensão, src/scene/lugar.ts) o lugar, quando o ambiente depende de onde se está (ouvinte livre com
+   * `Ambiente.lugar`): acoplamento de cada fonte ao campo reverberante e ocultação do caminho direto. null = como antes.
+   * O ouvinte do bloco está em `lugar.ouv` (s, m, z e o acoplamento dele), posto pela Cena antes de `trecho`.
+   */
+  lugar: LugarCena | null = null;
+  /**
+   * (extensão) altura (m) do ouvido de referência do envio: a sombra do corpo que o envio leva é a vista dali, na mesma
+   * posição horizontal do ouvinte, e não a do ouvido (a potência que a fonte põe no campo reverberante não depende da
+   * altura de quem ouve). NaN = a do ouvido, como antes (ouvinte fixo e gimbal).
+   */
+  zRefEnvio = NaN;
+  /** (extensão) altura do plano refletor do solo (0 = o chão da via; embaixo da ponte, o vale) */
+  zSolo = 0;
   regras: RegrasLocal = { diretividade: true, sombra: true, solo: true, binaural: true, rota: null, envio: 1 };
   kSh: number; kHb: number; kIld: number;
   iteracoesExtra = 0;
@@ -197,10 +224,10 @@ export class Propagador {
    * no instante tRec. Preenche o rascunho `rs` com a geometria no instante de emissão. Devolve τ (s).
    */
   /** rascunho do resolvedor (Float64Array: escrever doubles em campos de objeto aloca no V8) */
-  rs = new Float64Array(15);   // sx sy sz ux uy uz r cT uN v tx ty nx ny τ
+  rs = new Float64Array(16);   // sx sy sz ux uy uz r cT uN v tx ty nx ny τ s(abscissa da fonte na emissão)
   resolver(es: EstadoFonte, cam: number, tRec: number, O: GeoOuvinte) {
     const h = this.hist, via = this.via, p = this.pv, pv = p.v, rs = this.rs, hr = h.res;
-    const oz = cam === 0 ? O.z : -O.z, ox = O.x, oy = O.y;
+    const oz = cam === 0 ? O.z : 2 * this.zSolo - O.z, ox = O.x, oy = O.y;
     const bx = es.bx, by = es.by, bz = es.bz;
     let tau = es.tau[cam], r = 1, sx = 0, sy = 0, sz = 0;
     const lim = 1 / this.fs;
@@ -222,7 +249,7 @@ export class Propagador {
     rs[10] = pv[2]; rs[11] = pv[3]; rs[12] = pv[4]; rs[13] = pv[5];
     rs[7] = ux * pv[2] + uy * pv[3]; rs[8] = ux * pv[4] + uy * pv[5];
     rs[9] = hr[1];   // v no instante de emissão (h.ler já leu s e v juntos)
-    rs[14] = tau;
+    rs[14] = tau; rs[15] = pv[6];
   }
 
   /**
@@ -240,6 +267,8 @@ export class Propagador {
     const fs = this.fs, F = this.fontes, R = this.regras;
     const usaSolo = R.solo && this.soloGanho > 0;
     const corpo = this.corpo;
+    if (this.lugar !== null) this.kLugar = 1 - Math.exp(-N / (TAU_LUGAR * fs));
+    this.nTrecho++;
     for (let i = 0; i < F.length; i++) {
       const es = F[i];
       // ---------------- geometria no fim do trecho
@@ -253,7 +282,9 @@ export class Propagador {
         if (conv > 4) conv = 4;
         // dτ/dt = û·(v_s − v_O)/(c + û·v_s), û = ouvinte → fonte
         const usv = -rs[9 /*v*/] * rs[7 /*cT*/];
-        const uvo = -(rs[3 /*ux*/] * O.vx + rs[4 /*uy*/] * O.vy + rs[5 /*uz*/] * O.vz);
+        // (a imagem do ouvido no solo anda com −v_z: com o ouvinte livre subindo ou descendo, a derivada do caminho da
+        // imagem com +v_z errava a parábola do atraso e o reflexo zipava a 750 Hz; o fixo e o gimbal têm v_z = 0)
+        const uvo = -(rs[3 /*ux*/] * O.vx + rs[4 /*uy*/] * O.vy + rs[5 /*uz*/] * (cam === 0 ? O.vz : -O.vz));
         const dtau = (usv - uvo) / (this.c + usv);
         let gd = 1;
         // (fora, a diretividade vale sempre, 3.3; as fontes `dentro` dos portadores são omni [0…0], e as do cofre
@@ -282,23 +313,65 @@ export class Propagador {
             fc *= POLO_POR_CORTE;
             arBilinear(es.s, fc, fs);
           }
-          let A100 = 0, A1k = 0;
+          let A100 = 0, A1k = 0, E100 = 0, E1k = 0;
           if (R.sombra && !es.f.dentro) {
             const sg = es.seg;
             const lyO = es.by + rs[6 /*r*/] * rs[8 /*uN*/], lzO = es.bz + rs[6 /*r*/] * rs[5 /*uz*/];
             const se = this.sombra.ent;
             se[0] = es.by; se[1] = es.bz; se[2] = lyO; se[3] = lzO; se[4] = rs[6] * rs[7]; se[5] = sg.largura; se[6] = sg.altura; se[7] = sg.zPiso;
             this.sombra.calcularV();
-            A100 = this.sombra.a100; A1k = this.sombra.a1k;
+            A100 = this.sombra.a100; A1k = this.sombra.a1k; E100 = A100; E1k = A1k;
+            // (extensão) a sombra que o envio leva: a do corpo vista do ouvido de referência (zRefEnvio), na mesma posição
+            // horizontal; o ouvido mais alto (a plataforma, a passarela) vê mais corpo na frente dos truques, mas o
+            // campo reverberante do lugar recebe a mesma potência
+            // (ela muda devagar: refeita a cada 4 blocos de controle, alternando as fontes, e guardada entre um e outro)
+            const lzR = this.zRefEnvio - this.alt;
+            if (lzR === lzR && Math.abs(lzR - lzO) > 1e-6) {
+              if (this.primeiro || ((this.nTrecho + i) & 3) === 0) {
+                se[3] = lzR; this.sombra.calcularV();
+                es.s[S_E100] = this.sombra.a100; es.s[S_E1K] = this.sombra.a1k;
+              }
+              E100 = es.s[S_E100]; E1k = es.s[S_E1K];
+            } else { es.s[S_E100] = A100; es.s[S_E1K] = A1k; }
           }
-          ganhosShelf(A100, A1k, this.shelf);
-          es.s[S_SAALVO] = this.shelf[0]; es.s[S_SBALVO] = this.shelf[1];
-          es.s[S_GANHODB] = 20 * Math.log10(g * Math.pow(10, -A100 / 20) / es.refDist + 1e-12);
           // envio: 1/√r como o roadS do Ronco (1,2/√r com a fonte a 5 m); sem a diretividade (o campo
           // reverberante recebe a potência irradiada em todas as direções). Em ambientes que guiam o som
           // (túnel) o expoente da distância é menor: `expEnvio`.
+          let rEnv = rs[6 /*r*/], cEnv = 1;
+          const LG = this.lugar;
+          if (LG !== null) {
+            // (extensão, lugar.ts) a fonte em coordenadas da via: s na emissão, m = −sentido·y, z
+            const q = LG.q, ac = this.ac, lo = LG.ouv;
+            q[6] = rs[15]; q[7] = -this.via.sentido * es.by; q[8] = this.alt + es.bz;
+            LG.acoplar(ac, 0);
+            // envio: dentro e dentro, como antes; senão a lei da distância entre os pontos de acoplamento e o produto dos
+            // acoplamentos (a boca irradiando o campo de dentro, recíproco)
+            if (!(ac[AC_DENTRO] === 1 && lo[3 + AC_DENTRO] === 1)) {
+              const ds = ac[AC_S] - lo[3 + AC_S], dm = ac[AC_M] - lo[3 + AC_M], dz = ac[AC_Z] - lo[3 + AC_Z];
+              rEnv = Math.sqrt(ds * ds + dm * dm + dz * dz); cEnv = ac[AC_C] * lo[3 + AC_C];
+            }
+            // caminho direto: a ocultação pelo lugar (a boca, o telhado, o alto do corte, a laje da ponte), suavizada
+            let P100 = 0, P1k = 0;
+            if (R.sombra) {
+              q[0] = q[6]; q[1] = q[7]; q[2] = q[8]; q[3] = lo[0]; q[4] = lo[1]; q[5] = lo[2];
+              LG.delta();
+              if (q[9] > -1e6) { P100 = maekawaDb(q[9], 100, this.c); P1k = maekawaDb(q[9], 1000, this.c); }
+            }
+            if (this.primeiro) { es.s[S_PA] = P100; es.s[S_PB] = P1k; }
+            else { es.s[S_PA] += this.kLugar * (P100 - es.s[S_PA]); es.s[S_PB] += this.kLugar * (P1k - es.s[S_PB]); }
+            A100 += es.s[S_PA]; A1k += es.s[S_PB];
+            // (a céu aberto, sem recinto, o pouco de reverberação do lugar é o que reflete em volta da fonte: a laje da
+            // ponte o tapa como tapa o direto, para quem está embaixo dela)
+            if (LG.ocultaEnvio) { E100 += es.s[S_PA]; E1k += es.s[S_PB]; }
+          }
+          ganhosShelf(A100, A1k, this.shelf);
+          es.s[S_SAALVO] = this.shelf[0]; es.s[S_SBALVO] = this.shelf[1];
+          if (E100 !== A100 || E1k !== A1k) ganhosShelf(E100, E1k, this.shelf);
+          es.s[S_SEAALVO] = this.shelf[0]; es.s[S_SEBALVO] = this.shelf[1];
+          es.s[S_GANHODB] = 20 * Math.log10(g * Math.pow(10, -A100 / 20) / es.refDist + 1e-12);
           // (o envio é tirado do sinal já com o ganho direto g = conv·D·refDist/r, então aqui vai a razão)
-          const gEnvio = conv * (es.refDist / 5) * 1.2 * Math.pow(Math.max(rs[6 /*r*/], 3), -this.expEnvio) * Math.pow(3, this.expEnvio - 0.5);
+          let gEnvio = conv * (es.refDist / 5) * 1.2 * Math.pow(Math.max(rEnv, 3), -this.expEnvio) * Math.pow(3, this.expEnvio - 0.5);
+          if (cEnv !== 1) gEnvio *= cEnv;
           es.s[S_GSALVO] = g > 1e-12 ? (R.envio * gEnvio) / g : 0;
           // cabeça: direção de chegada = ouvinte → ponto de emissão
           const dx = -rs[3 /*ux*/], dy = -rs[4 /*uy*/];
@@ -325,7 +398,7 @@ export class Propagador {
           // reflexão: só onde o ponto de reflexão cai sobre o solo refletor (ponte: tabuleiro)
           let ok = 1;
           if (this.soloLargura < Infinity) {
-            const fr = es.bz + this.alt, fo = O.z, t = fr / Math.max(1e-6, fr + fo);
+            const fr = es.bz + this.alt - this.zSolo, fo = O.z - this.zSolo, t = fr / Math.max(1e-6, fr + fo);
             const yr = rs[1 /*sy*/] + (O.y - rs[1 /*sy*/]) * t - this.via.yOuvinte;
             ok = Math.abs(yr) <= this.soloLargura ? 1 : 0;
           }
@@ -357,6 +430,10 @@ export class Propagador {
     void corpo;
   }
   alvoD = new Float64Array(2); alvoDD = new Float64Array(2);
+  /** rascunho da saída de LugarCena.acoplar para a fonte (AC_*) e o coeficiente da suavização da ocultação no trecho */
+  ac = new Float64Array(6); kLugar = 0;
+  /** contador de trechos (a sombra de referência do envio é refeita a cada 4, alternando as fontes) */
+  nTrecho = 0;
 
   /**
    * Trecho com o resolvedor fechado do jet-dsp (CENA 2.1, decisão: M ≥ 0,9 numa reta). Para cada fonte e caminho
@@ -386,7 +463,7 @@ export class Propagador {
       const a = es.anel, m = es.mask | 0, cap = es.cap | 0;
       for (let k = 0; k < N; k++) { tmp[k] = 0; tmpI[k] = 0; }
       for (let cam = 0; cam < (usaSolo ? 2 : 1); cam++) {
-        const oz = cam === 0 ? O.z : -O.z;
+        const oz = cam === 0 ? O.z : 2 * this.zSolo - O.z;
         const Q = (sy - O.y) * (sy - O.y) + (sz - oz) * (sz - oz);
         const rr = raizesEmissao(A, v, Q, this.raiz, c);
         if (i === 0 && cam === 0) this.cone = rr.cone;
@@ -506,6 +583,7 @@ export class Propagador {
     let g1 = es.g[0], g2 = es.g[1];
     const dg1 = (es.gAlvo[0] - g1) * invN, dg2 = (es.gAlvo[1] - g2) * invN;
     let sa = es.s[S_SA], sb = es.s[S_SB]; const dsa = (es.s[S_SAALVO] - sa) * invN, dsb = (es.s[S_SBALVO] - sb) * invN;
+    let ea = es.s[S_SEA], eb = es.s[S_SEB]; const dea = (es.s[S_SEAALVO] - ea) * invN, deb = (es.s[S_SEBALVO] - eb) * invN;
     let pL = es.s[S_PL], pR = es.s[S_PR]; const dpL = (es.s[S_PLALVO] - pL) * invN * es.s[S_PESO], dpR = (es.s[S_PRALVO] - pR) * invN * es.s[S_PESO];
     pL *= es.s[S_PESO]; pR *= es.s[S_PESO];
     let dL = es.s[S_DL], dR = es.s[S_DR]; const ddL = (es.s[S_DLALVO] - dL) * invN, ddR = (es.s[S_DRALVO] - dR) * invN;
@@ -553,8 +631,9 @@ export class Propagador {
       // sombra do corpo: shelf em 400 Hz
       sl += kSh * (a2 - sl);
       let y = sb * a2 + (sa - sb) * sl;
-      // envio (antes da cabeça)
-      const e = y * gs;
+      // envio (antes da cabeça), com a sombra própria dele: a do corpo vista do ouvido de referência, sem a do lugar
+      // (com o ouvinte fixo e o gimbal ela é a do direto, e e = y·gs como antes)
+      const e = (eb * a2 + (ea - eb) * sl) * gs;
       eL[ini + k] += e * (1 - ps); eR[ini + k] += e * (1 + ps);
       // sombra da cabeça para trás (> 3 kHz)
       hb += kHb * (y - hb); y -= cb * (y - hb);
@@ -571,12 +650,12 @@ export class Propagador {
       oL[ini + k] += xl * pL; oR[ini + k] += xr2 * pR;
       // rampas
       D1 += inc1; inc1 += dd1; g1 += dg1;
-      sa += dsa; sb += dsb; pL += dpL; pR += dpR; dL += ddL; dR += ddR; iL += diL; iR += diR; cb += dcb; gs += dgs; ps += dps;
+      sa += dsa; sb += dsb; ea += dea; eb += deb; pL += dpL; pR += dpR; dL += ddL; dR += ddR; iL += diL; iR += diR; cb += dcb; gs += dgs; ps += dps;
       if (xfOn) { xf += dxf; if (xf > 1) xf = 1; }
       w++;
     }
     es.g[0] = es.gAlvo[0]; es.g[1] = es.gAlvo[1];
-    es.s[S_SA] = es.s[S_SAALVO]; es.s[S_SB] = es.s[S_SBALVO]; es.s[S_PL] = es.s[S_PLALVO]; es.s[S_PR] = es.s[S_PRALVO]; es.s[S_DL] = es.s[S_DLALVO]; es.s[S_DR] = es.s[S_DRALVO];
+    es.s[S_SA] = es.s[S_SAALVO]; es.s[S_SB] = es.s[S_SBALVO]; es.s[S_SEA] = es.s[S_SEAALVO]; es.s[S_SEB] = es.s[S_SEBALVO]; es.s[S_PL] = es.s[S_PLALVO]; es.s[S_PR] = es.s[S_PRALVO]; es.s[S_DL] = es.s[S_DLALVO]; es.s[S_DR] = es.s[S_DRALVO];
     es.s[S_IL] = es.s[S_ILALVO]; es.s[S_IR] = es.s[S_IRALVO]; es.s[S_CB] = es.s[S_CBALVO]; es.s[S_GS] = es.s[S_GSALVO]; es.s[S_PS] = es.s[S_PSALVO];
     es.s[S_X1] = x1; es.s[S_X2] = x2;
     es.s[S_GR] = gr; es.s[S_A1] = a1; es.s[S_A2] = a2; es.s[S_SL] = sl; es.s[S_HB] = hb; es.s[S_LPL] = lpL; es.s[S_LPR] = lpR; es.s[S_ITDW] = iw;

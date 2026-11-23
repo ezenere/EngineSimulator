@@ -8,7 +8,8 @@
 //        'aviao' (jato), 'rotor' com motor (pistão de aviação do Ronco, radial do S-55), 'helice' com radial ou pistão de
 //        aviação. `motor` = { familia, cfg }: o cfg do preset já calibrado na thread principal
 //        (prepararMotorRonco / prepararMotorDiesel / prepararMotorRadial; o da Turbina é o preset cru)
-//   { type: 'cena', amb?, traj?, ouv? }                                configura/atualiza (rampas de 20 ms)
+//   { type: 'cena', amb?, traj?, ouv? }                                configura/atualiza (rampas de 20 ms); `amb.lugar`
+//        (opcional) são as medidas do lugar: com o ouvinte livre, o ambiente passa a ser o de onde ele está (lugar.ts)
 //   { type: 'comando', ...ComandoPortador }                            velocidade fixa etc.
 //   { type: 'params', master?, posicao? }                              master e posição s do corpo
 //   { type: 'ar', ur?, temperatura? }                                  umidade (%) e temperatura (°C) do ar

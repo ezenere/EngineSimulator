@@ -107,6 +107,32 @@ export interface Ambiente {
   reverb: EspecReverb;         // o que o app.js de hoje chama ENVS (len, tau, diff, wet, dry, dark, flutter, echoes), mais rt60 por banda (seção 2.9)
   tunel?: Tunel;
   fundo: EspecFundo;           // vento, trânsito, ventilação (o que hoje é setAmbience)
+  /** (extensão) as medidas do lugar: com elas e o ouvinte 'livre', o ambiente depende de onde se está (src/scene/lugar.ts) */
+  lugar?: LugarAcustico;
+}
+
+/**
+ * (Extensão de 23/11/2026, CENA.md 2.10 e 3.2: a acústica do lugar depende de onde o ouvinte está.) As medidas do lugar
+ * em volta da via, nas coordenadas dela: `s` ao longo da via (a abscissa da Cena), `m` a distância ao eixo dela medida
+ * para o lado do ouvinte de antes (m = −y na reta; na volta, para fora do oval) e `z` para cima a partir do chão da via.
+ * Sem este campo (e sempre com o ouvinte fixo ou no gimbal, a API das ferramentas) o ambiente vale para o cenário
+ * inteiro, como antes. Um lugar por ambiente: o túnel, a estação, o corte ou a ponte.
+ */
+export interface LugarAcustico {
+  /** o tubo do túnel de s0 a s1 (as bocas), entre as paredes mLonge e mPerto, do chão ao teto `altura`; `nicho`: o fundo
+   *  dos nichos de refúgio além da parede do lado do ouvinte (quem está num nicho está dentro do túnel) */
+  tunel?: { s0: number; s1: number; mLonge: number; mPerto: number; altura: number; nicho?: number };
+  /** a cobertura da estação de s0 a s1, sobre m de `mLonge` (a beira do telhado do lado de lá) a `mFundo` (a parede do
+   *  fundo, fechada até o teto), na altura `teto`; do lado de lá, o muro de `muro` m de altura em `mMuro`, aberto dele
+   *  até o teto; as pontas (s0 e s1) abertas */
+  estacao?: { s0: number; s1: number; mLonge: number; mFundo: number; teto: number; mMuro: number; muro: number };
+  /** o corte (trincheira ao longo da via inteira): o fundo até `m0` dos dois lados, os taludes até `m1`, o alto a `alto` */
+  corte?: { m0: number; m1: number; alto: number };
+  /** a ponte (viaduto ao longo da via): o tabuleiro de m0 a m1 com o topo em z = 0 e a laje de `espessura`; embaixo, o
+   *  vale em `vale` (z < 0) até `fundo` m da via, as encostas subindo até 0 em `borda` */
+  ponte?: { m0: number; m1: number; espessura: number; vale: number; fundo: number; borda: number };
+  /** som de fundo fora do lugar (padrão: o do céu aberto) */
+  fundoFora?: EspecFundo;
 }
 
 export interface Trajetoria {

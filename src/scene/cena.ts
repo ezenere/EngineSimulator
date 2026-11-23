@@ -6,6 +6,11 @@
 // Campo próximo (não passa pelo anel): onda de nariz/cauda, onda de compressão do túnel, vento induzido
 // e do pistão, ronco estrutural da ponte, som de fundo. A pressão inteira vai para a telemetria; ao
 // alto-falante só o resíduo acima de 20 Hz.
+//
+// O lugar (extensão de 23/11/2026, src/scene/lugar.ts): com `Ambiente.lugar` e o ouvinte livre, o ambiente depende de
+// onde o ouvinte está (dentro do túnel, na boca, fora; sob a cobertura; no corte ou no alto; no tabuleiro ou no vale):
+// o campo reverberante, a ocultação do direto, o som de fundo, a onda e o vento do túnel, o ronco e o chão da ponte. O
+// fixo e o gimbal (a API das ferramentas) não leem o lugar.
 import type { Ambiente, Trajetoria, Ouvinte, OuvinteLivre, Cena, TelemetriaCena, Vec3, FonteSonora, LocalOuvinte } from './tipos';
 import type { Portador } from '../carriers/tipos';
 import { BLOCO_CONTROLE, PA_FS, P_REF, RAMPA, C_SOM } from './constantes';
@@ -18,6 +23,7 @@ import { ondaNariz, OndaTunel, RuidoVento, ventoInduzido, ventoPistao } from './
 import { FundoAmbiente } from './fundo';
 import { Estrondo } from './estrondo';
 import { RNG } from '../acoustics/rng';
+import { LugarCena, TIPO_PONTE, TIPO_TUNEL, Z_REF_ENVIO, AC_C, AC_D, AC_DENTRO } from './lugar';
 
 /** pesos do cofre por tipo de fonte (3.3; os mesmos do `bay` do Ronco) */
 const PESO_COFRE: Partial<Record<FonteSonora['tipo'], number>> = { admissao: 1.0, mecanica: 0.7, compressor: 0.8 };
@@ -57,6 +63,10 @@ export const SALTO_DESCE = 0.02, SALTO_SEGURA = 0.06, SALTO_SOBE = 0.05;
 export const DIST_LIVRE = 300;
 /** m de folga para o ouvido livre entrar ou sair de um segmento (o local 'auto' não fica alternando na parede) */
 const HISTERESE_DENTRO = 0.05;
+/** m: folga para o ouvido livre trocar o chão refletor da ponte (o tabuleiro ou o vale), sem ficar alternando na borda */
+const HISTERESE_VALE = 0.3;
+/** m: o ronco da ponte vale inteiro até esta distância da laje (quem está no tabuleiro) e cai como de uma linha depois */
+const PONTE_PERTO = 2, PONTE_D0 = 3;
 // estado do ouvido livre em Float64Array (lv): posição e velocidade atuais, rumo (rad), alvo (posição e velocidade da
 // mensagem, rumo), instante da mensagem
 const LV_P = 0, LV_V = 3, LV_RUMO = 6, LV_AP = 7, LV_AV = 10, LV_ARUMO = 13, LV_T = 14;
@@ -131,6 +141,17 @@ export class CenaPassagem implements Cena {
   private saltoPronto = false;
   private saltoOuv: Ouvinte | null = null;
   private nDentro = 0;
+  /**
+   * (extensão, src/scene/lugar.ts) o lugar: com `Ambiente.lugar` e o ouvinte livre, o ambiente depende de onde ele está
+   * (o campo reverberante, a ocultação do direto, o som de fundo, a onda e o vento do túnel, o ronco e o chão da ponte)
+   */
+  lg = new LugarCena();
+  /** o lugar vale neste bloco (ouvinte livre e lugar com medidas) */
+  lugarAtivo = false;
+  /** ponte: o ouvinte está embaixo (o chão refletor é o vale), a troca esperando o solo calar, e o chão do vale */
+  modoVale = false; private trocaVale = false; zChaoLivre = 0;
+  /** o acoplamento do ouvinte ao campo reverberante do lugar e a distância dele à abertura (telemetria e testes) */
+  acoplamentoOuvinte = 1; distAbertura = 0;
   constructor(op: OpcoesCena = {}) {
     if (op.ur) this.ur = op.ur;
     this.semSombra = !!op.semSombra;
@@ -161,6 +182,7 @@ export class CenaPassagem implements Cena {
     this.pos = [...ouv.pos] as [number, number, number]; this.posAlvo = [...ouv.pos] as [number, number, number];
     this.gim = { ...ouv.gimbal }; this.gimAlvo = { ...ouv.gimbal };
     this.via.configurar(traj);
+    this.modoVale = false; this.trocaVale = false; this.zChaoLivre = 0;
     this.aplicarAmbiente(amb, true);
     this.definirAlvos(true);
     this.portador = null;
@@ -263,8 +285,10 @@ export class CenaPassagem implements Cena {
       G.vx = v * p.tx + L[LV_V] * p.tx + L[LV_V + 1] * p.nx; G.vy = v * p.ty + L[LV_V] * p.ty + L[LV_V + 1] * p.ny; G.vz = z > 0.2 ? L[LV_V + 2] : 0;
       ang += Math.atan2(p.ty, p.tx);
     } else {
-      G.x = L[LV_P]; G.y = L[LV_P + 1]; G.z = Math.max(0.2, L[LV_P + 2]);
-      G.vx = L[LV_V]; G.vy = L[LV_V + 1]; G.vz = L[LV_P + 2] > 0.2 ? L[LV_V + 2] : 0;
+      // (o chão é o da via; embaixo da ponte, o do vale)
+      const piso = this.zChaoLivre + 0.2;
+      G.x = L[LV_P]; G.y = L[LV_P + 1]; G.z = Math.max(piso, L[LV_P + 2]);
+      G.vx = L[LV_V]; G.vy = L[LV_V + 1]; G.vz = L[LV_P + 2] > piso ? L[LV_V + 2] : 0;
     }
     const c = Math.cos(ang), sn = Math.sin(ang);
     G.fx = c; G.fy = sn; G.lx = -sn; G.ly = c;
@@ -358,6 +382,7 @@ export class CenaPassagem implements Cena {
       // tipo, comprimento, raio e sentido mudam a via inteira: reinicia o histórico (o corpo "reaparece")
       if (t.tipo !== this.traj.tipo || t.comprimento !== this.traj.comprimento || t.raioCurva !== this.traj.raioCurva || t.sentido !== this.traj.sentido) {
         this.via.configurar(t);
+        this.lg.configurar(this.amb.lugar, this.via);
         if (this.portador) this.hist.reiniciar(this.amostra / this.fs, this.portador.cinematica.s, this.portador.cinematica.v);
       }
       this.lateralAlvo = t.lateral; this.altitudeAlvo = t.altitude;
@@ -377,17 +402,23 @@ export class CenaPassagem implements Cena {
 
   private aplicarAmbiente(amb: Ambiente, agora: boolean) {
     this.amb = amb;
-    const s = SOLOS[amb.solo.tipo];
-    this.soloGAlvo = s.ganho;
-    if (agora) this.soloG = s.ganho;
+    this.lg.configurar(amb.lugar, this.via);
+    if (this.lg.tipo !== TIPO_PONTE) { this.modoVale = false; this.trocaVale = false; this.zChaoLivre = 0; if (this.prop) this.prop.zSolo = 0; }
+    const s = SOLOS[this.soloTipo()];
+    this.soloGAlvo = this.trocaVale ? 0 : s.ganho;
+    if (agora) this.soloG = this.soloGAlvo;
     if (this.prop) {
       this.prop.definirSolo(this.soloG, s.fc);
-      this.prop.soloLargura = amb.id === 'ponte' ? 3.7 : Infinity;   // tabuleiro até 3 m do trilho (+ meia bitola)
+      this.prop.soloLargura = this.larguraSolo();
       this.prop.expEnvio = expoenteEnvio(amb);
     }
     this.fundo.definir(amb.fundo);
     if (!amb.tunel) this.tunel.zerar();
   }
+  /** o solo refletor: o do ambiente; embaixo da ponte, o vale (grama) */
+  private soloTipo(): Ambiente['solo']['tipo'] { return this.modoVale ? 'grama' : this.amb.solo.tipo; }
+  /** tabuleiro até 3 m do trilho (+ meia bitola) na ponte; embaixo dela o vale reflete em toda parte */
+  private larguraSolo() { return this.amb.id === 'ponte' && !this.modoVale ? 3.7 : Infinity; }
 
   /** prepara os anéis para o portador (aloca; acontece quando o portador muda) */
   preparar(portador: Portador) {
@@ -401,8 +432,8 @@ export class CenaPassagem implements Cena {
     this.hist.reiniciar(this.amostra / this.fs, c.s, c.v);
     this.prop.preparar(this.fontesP, portador.corpo, this.via, this.hist, dm, portador.tipo === 'aviao');
     this.prop.alt = this.altitude;
-    this.prop.definirSolo(this.soloG, SOLOS[this.amb.solo.tipo].fc);
-    this.prop.soloLargura = this.amb.id === 'ponte' ? 3.7 : Infinity;
+    this.prop.definirSolo(this.soloG, SOLOS[this.soloTipo()].fc);
+    this.prop.soloLargura = this.larguraSolo();
     this.prop.expEnvio = expoenteEnvio(this.amb);
     this.xTruques = this.fontesP.filter((f) => f.tipo === 'rolamento').map((f) => f.pos[0]);
     this.tele.fontes = this.prop.fontes.map((es) => ({ id: es.f.id, posEmitida: [0, 0, 0] as Vec3, r: 0, thetaEmissao: 0, ganhoDb: -120, atrasoMs: 0 }));
@@ -545,7 +576,9 @@ export class CenaPassagem implements Cena {
     while (ini < n) {
       const N = Math.min(BLOCO_CONTROLE, n - ini);
       this.rampas();
-      if (this.soloG !== P.soloGanho) P.definirSolo(this.soloG, SOLOS[this.amb.solo.tipo].fc);
+      // (ponte: o chão refletor troca entre o tabuleiro e o vale com o solo calado; ver lugarDoOuvinte)
+      if (this.trocaVale && this.soloG === 0) this.trocarChao();
+      if (this.soloG !== P.soloGanho) P.definirSolo(this.soloG, SOLOS[this.soloTipo()].fc);
       // pose do corpo no fim do trecho (extrapolada do estado do portador no fim do bloco)
       const tj = (T + ini + N) / fs, dtj = tFim - tj;
       const sj = c.s - c.v * dtj + 0.5 * c.a * dtj * dtj, vj = c.v - c.a * dtj;
@@ -559,6 +592,12 @@ export class CenaPassagem implements Cena {
         }
       }
       this.geometria(sj, vj);
+      // (extensão) o lugar do ouvinte livre neste bloco: o acoplamento dele, o chão da ponte
+      this.lugarAtivo = livre && this.lg.ativo;
+      P.lugar = this.lugarAtivo ? this.lg : null;
+      P.zRefEnvio = livre ? Z_REF_ENVIO : NaN;
+      if (this.lugarAtivo) this.lugarDoOuvinte();
+      else if (this.modoVale && !this.trocaVale) { this.trocaVale = true; this.soloGAlvo = 0; this.definirAlvos(false); }
       // M ≥ 0,9 numa reta: o resolvedor fechado (2.1) e o estrondo no cone, como no flyby legado
       P.supersonico = this.via.tipo === 'reta' && Math.abs(vj) >= 0.9 * P.c;
       P.trecho(ini, N, tj, this.geo);
@@ -589,6 +628,13 @@ export class CenaPassagem implements Cena {
         const uo = ventoInduzido(vj, d) * w;
         let up = 0;
         const tun = this.amb.tunel;
+        // (extensão) fora do túnel a onda e o vento do pistão são os da boca, caindo com a distância a ela
+        const lgT = livreMundo && this.lugarAtivo && this.lg.tipo === TIPO_TUNEL;
+        let gBoca = 1;
+        if (lgT && tun) {
+          this.tunel.dist = Math.max(0, Math.min(tun.comprimento, sOk - tun.xEntrada));
+          if (this.lg.ouv[3 + AC_DENTRO] !== 1) { const a = Math.sqrt(this.lg.areaBoca / (2 * Math.PI)); gBoca = a / (a + this.lg.ouv[3 + AC_D]); }
+        }
         if (tun) {
           // abscissa do nariz reduzida à via: na reta, o corpo que reaparece do outro lado entra de novo no
           // túnel (um salto para trás maior que meia via zera a onda da passagem anterior)
@@ -599,7 +645,7 @@ export class CenaPassagem implements Cena {
             this.tunel.entrar(tc, vj, portador.corpo.areaFrontal, tun.area, portador.corpo.nariz || 10, livreMundo ? Math.max(0, sOk - tun.xEntrada) : sO - tun.xEntrada, tun.comprimento);
           }
           this.narizAnt = nariz;
-          pTun = this.tunel.pressao(tj);
+          pTun = this.tunel.pressao(tj) * gBoca;
           p += pTun;
           if (this.tunel.tEntrada >= 0) {
             const ua = ventoPistao(vj, this.tunel.beta);
@@ -607,6 +653,7 @@ export class CenaPassagem implements Cena {
             if (xiN < 0) up = tj >= tch ? this.tunel.uFrente : 0;
             else if (xiN <= L) up = ua;
             else up = ua * Math.exp(-(xiN - L) / (Math.max(vj, 0.1) * 3));
+            up *= gBoca * gBoca;
           }
         }
         u = Math.sqrt(uo * uo + up * up);
@@ -615,6 +662,11 @@ export class CenaPassagem implements Cena {
           let s = 0;
           for (const x of this.xTruques) { const xi = (sj + x - sOk) / 15; s += 1 / (1 + xi * xi); }
           this.ponteGAlvo = this.kPonte * s * Math.pow(Math.max(0, vj) / (300 / 3.6), 1.5);
+          // (extensão) longe da laje (embaixo da ponte, no vale) o ronco cai como o de uma linha
+          if (livreMundo && this.lugarAtivo && this.lg.tipo === TIPO_PONTE) {
+            const d = this.lg.distLaje(this.lg.ouv[1], this.lg.ouv[2]) - PONTE_PERTO;
+            if (d > 0) this.ponteGAlvo /= Math.sqrt(1 + d / PONTE_D0);
+          }
         } else this.ponteGAlvo = 0;
       }
       // resíduo > 20 Hz da pressão no alto-falante (mono, os dois ouvidos); ponte: ronco em 31–125 Hz
@@ -640,8 +692,9 @@ export class CenaPassagem implements Cena {
       ini += N;
     }
     P.avancar(n);
-    // vento e fundo
+    // vento e fundo (com o lugar: o do lugar pesando o acoplamento do ouvinte, o de fora o resto)
     this.vento.somar(bL, bR, n);
+    if (this.lugarAtivo) this.fundo.misturar(this.amb.fundo, this.lg.fundoFora, this.lg.ouv[3 + AC_C] ** 2);
     this.fundo.somar(bL, bR, n);
     // barramentos do local
     const a0L = P.accL[0], a0R = P.accR[0], a1L = P.accL[1], a1R = P.accR[1], cs = this.cabS, cf = this.cofreS;
@@ -694,6 +747,37 @@ export class CenaPassagem implements Cena {
     this.eA = eA; this.eZ = eZ;
     this.amostra += n;
     this.tele.ventoMs = this.ventoU;
+  }
+
+  /**
+   * (extensão) onde o ouvinte livre está no lugar, neste bloco: (s, m, z) e o acoplamento dele ao campo reverberante
+   * (lg.ouv, que o propagador lê); na ponte, se o chão refletor é o tabuleiro ou o vale (a troca espera o solo calar
+   * em 20 ms, troca o plano e sobe de novo: o caminho da imagem salta, e um salto no anel com o solo soando estalaria).
+   */
+  private lugarDoOuvinte() {
+    const G = this.geo, lg = this.lg, o = lg.ouv;
+    // (no mundo, a altura sem o piso: quem chega embaixo da ponte ainda tem o chão do tabuleiro, e o piso o seguraria nele)
+    lg.projetar(G.x, G.y, o, 0); o[2] = this.lvRef === 'mundo' ? this.lv[LV_P + 2] : G.z;
+    lg.q[6] = o[0]; lg.q[7] = o[1]; lg.q[8] = o[2];
+    lg.acoplar(o, 3);
+    this.acoplamentoOuvinte = o[3 + AC_C]; this.distAbertura = o[3 + AC_D];
+    if (lg.tipo === TIPO_PONTE) {
+      const p = lg.ponte, m = o[1], z = o[2], h = this.modoVale ? -HISTERESE_VALE : HISTERESE_VALE;
+      // embaixo: fora da largura do tabuleiro ou abaixo do topo dele
+      const vale = m < p[0] - h || m > p[1] + h || z < -h;
+      if (vale !== this.modoVale && !this.trocaVale) { this.trocaVale = true; this.soloGAlvo = 0; this.definirAlvos(false); }
+      if (this.modoVale && !this.trocaVale) { this.zChaoLivre = lg.vale(m); this.prop.zSolo = this.zChaoLivre; }
+    }
+  }
+  /** o solo calou: troca o chão refletor da ponte (tabuleiro ↔ vale) e sobe o solo novo */
+  private trocarChao() {
+    this.trocaVale = false;
+    this.modoVale = !this.modoVale;
+    this.zChaoLivre = this.modoVale ? this.lg.vale(this.lg.ouv[1]) : 0;
+    this.prop.zSolo = this.zChaoLivre;
+    this.prop.soloLargura = this.larguraSolo();
+    this.soloGAlvo = SOLOS[this.soloTipo()].ganho;
+    this.definirAlvos(false);
   }
 
   private reduzir(x: number) {

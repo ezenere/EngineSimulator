@@ -9,7 +9,7 @@
 // pior componente mediana). A CPU e a alocação no laço saíram para `npm run cpu:cena` (tools/cena/cpu.ts; A8, T-CEN-05).
 //
 //   npx tsx tools/cena/valida.ts [grupo…] [--j 8] [--semente N] [--atualizar[=nome exato]] [--json arquivo]
-//   grupos: propagador sombra vento ambientes ouvinte trem niveis portadores legado motores niveis-motores (padrão: todos,
+//   grupos: propagador sombra vento ambientes ouvinte trem niveis portadores legado motores niveis-motores lugar (padrão: todos,
 //           em paralelo, um processo por grupo)
 import fs from 'node:fs';
 import os from 'node:os';
@@ -35,6 +35,7 @@ const GRUPOS: Record<string, () => Promise<Grupo>> = {
   legado: async () => (await import('./legado')).compararLegado,
   motores: async () => (await import('./motores')).medirMotores,
   'niveis-motores': async () => (await import('./motores')).medirNiveisMotores,
+  lugar: async () => (await import('./lugar')).medirLugar,
 };
 /** grupos com ruído sorteado: rodam com 3 sementes (a sombra usa tons; o ambiente, a resposta ao impulso de semente fixa
  *  da página; o legado é o DSP antigo, determinístico) */

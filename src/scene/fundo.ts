@@ -28,6 +28,18 @@ export class FundoAmbiente {
     this.nM = 1 / rmsCadeia(fs, this.mur[0]);
   }
   definir(f: EspecFundo) { this.gV = pa(f.vento); this.gVe = pa(f.ventilacao); this.gM = pa(f.murmurio); }
+  /**
+   * (extensão, src/scene/lugar.ts) o fundo de dentro do lugar com o peso c² (o acoplamento do ouvinte ao lugar: a
+   * ventilação do túnel e o murmúrio da estação saem pela abertura como o campo reverberante) e o de fora com o resto,
+   * somados em potência. Dentro (c² = 1) é o `definir` de sempre.
+   */
+  misturar(dentro: EspecFundo, fora: EspecFundo, c2: number) {
+    if (c2 >= 1) { this.definir(dentro); return; }
+    const f = 1 - c2;
+    let a = pa(dentro.vento), b = pa(fora.vento); this.gV = Math.sqrt(a * a * c2 + b * b * f);
+    a = pa(dentro.ventilacao); b = pa(fora.ventilacao); this.gVe = Math.sqrt(a * a * c2 + b * b * f);
+    a = pa(dentro.murmurio); b = pa(fora.murmurio); this.gM = Math.sqrt(a * a * c2 + b * b * f);
+  }
   /** soma n amostras (Pa) em L e R (filtros em bloco: nada é alocado) */
   somar(L: Float64Array, R: Float64Array, n: number) {
     if (!this.gV && !this.gVe && !this.gM) return;

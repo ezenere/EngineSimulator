@@ -24,7 +24,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { CenaPassagem } from '../../src/scene/cena';
-import { ambientePassagem } from '../../src/scene/ambientes';
+import { ambientePassagem, secaoTunel } from '../../src/scene/ambientes';
 import { PortadorTeste } from '../../src/carriers/teste';
 import { C_SOM } from '../../src/scene/constantes';
 import { Bq } from '../../src/scene/filtros';
@@ -65,11 +65,13 @@ interface Passeio {
   /** modo da Cena (sem mensagens: o ouvinte fica onde configurou) */
   fixo?: Ouvinte;
   fonteV?: number; sFonte0?: number;
+  /** (o lugar) ambiente com `lugar` e a sombra ligada (a ocultação pelo lugar anda com a sombra do corpo) */
+  amb?: Ambiente;
 }
 
 /** toca o passeio e devolve L e R */
 function tocar(p: Passeio) {
-  const cena = new CenaPassagem({ semSombra: true });
+  const cena = new CenaPassagem({ semSombra: !p.amb });
   const port = fonte(p.fonteV ?? 0);
   (port.cinematica as { s: number }).s = p.sFonte0 ?? 0;
   // (o relógio da página anda adiantado 12,345 s do do áudio: a Cena só pode usar a diferença entre os dois)
@@ -81,9 +83,9 @@ function tocar(p: Passeio) {
   };
   const traj0: Trajetoria = { ...TRAJ };
   if (p.antigo) traj0.lateral = -p.traj(0).pos[1] - 0.15;   // (a lateral do fixo é medida da face do corpo de 0,3 m)
-  cena.configurar(ambiente(), traj0, p.fixo ?? ouvDe(0, 0), FS);
+  cena.configurar(p.amb ?? ambiente(), traj0, p.fixo ?? ouvDe(0, 0), FS);
   const n = Math.round(p.dur * FS);
-  const L = new Float32Array(n), R = new Float32Array(n);
+  const L = new Float32Array(n), R = new Float32Array(n), sL = new Float32Array(n);
   const bl = new Float32Array(B), br = new Float32Array(B), el = new Float32Array(B), er = new Float32Array(B);
   const canais = [new Float32Array(B)];
   const rng = new RNG(0x0b5e);
@@ -104,9 +106,9 @@ function tocar(p: Passeio) {
     port.processar(canais, B, 1 / FS);
     cena.processar(port, canais, bl, br, el, er, B);
     const m = Math.min(B, n - i);
-    L.set(bl.subarray(0, m), i); R.set(br.subarray(0, m), i);
+    L.set(bl.subarray(0, m), i); R.set(br.subarray(0, m), i); sL.set(el.subarray(0, m), i);
   }
-  return { L, R, cena };
+  return { L, R, sL, cena };
 }
 
 // ------------------------------------------------------------------ medidas
@@ -287,6 +289,99 @@ for (const [nome, v, X] of VELOCIDADES) {
   for (let i = 0; i < a.L.length; i++) { dif = Math.max(dif, Math.abs(a.L[i] - b.L[i]), Math.abs(a.R[i] - b.R[i])); pico = Math.max(pico, Math.abs(a.L[i])); }
   const db = 20 * Math.log10(dif / pico + 1e-30);
   conferir('livre no ponto do fixo, de frente para a via = fixo', db < -120, dif === 0 ? 'idêntico amostra a amostra' : `diferença máxima ${db.toFixed(1)} dB do pico`);
+}
+
+// ------------------------------------------------------------------ o lugar (src/scene/lugar.ts): sair do túnel
+// O túnel da página (via dupla, 64 m², boca em −500), a fonte tonal parada 150 m dentro, na via. O ouvinte sai pela boca
+// a pé pela passarela (o ouvido a 2,35 m; lá fora, no chão, a 1,6: o degrau de 0,75 m chega como a página manda), correndo,
+// voando a 10 m/s e a 45 m/s (a 4 m de altura). Confere no direto e no envio: degrau, resíduo acima de 5 kHz e zíper
+// na travessia da boca; e o envio (o campo reverberante que a boca irradia) caindo sem subir depois da boca, a cada
+// 0,1 s. E mais: sair pela boca e virar para o lado, rente à testa (a borda da boca entra na frente do direto), e voar do
+// tabuleiro da ponte para o vale (o chão refletor troca com o solo calado).
+{
+  const sec = secaoTunel(64), TA = -500;
+  const ambT = (): Ambiente => {
+    const a = ambientePassagem('tunel');
+    a.fundo = { vento: 0, ventilacao: 0, murmurio: 0 };
+    a.lugar = { tunel: { s0: TA, s1: TA + 2000, mLonge: -sec.paredeOposta, mPerto: -sec.paredeOuvinte, altura: sec.altura, nicho: 1.1 }, fundoFora: a.fundo };
+    return a;
+  };
+  const M = 4.68, SF = TA + 150;
+  /**
+   * percurso por pernas como a página anda: a velocidade comandada muda de perna para perna e a do observador a segue com
+   * 0,12 s de constante de tempo (nunca num degrau); integrado a cada 1 ms. Pernas: [duração (s), vx, vy, vz]
+   */
+  const percurso = (p0: Vec3, pernas: [number, number, number, number][], rumo: number) => {
+    const dt = 0.001, k = 1 - Math.exp(-dt / 0.12), P: number[][] = [], V: number[][] = [];
+    const p = [...p0], v = [0, 0, 0];
+    for (const [d, ...cmd] of pernas) for (let t = 0; t < d; t += dt) { P.push([...p]); V.push([...v]); for (let i = 0; i < 3; i++) { v[i] += k * (cmd[i] - v[i]); p[i] += v[i] * dt; } }
+    return (t: number) => { const i = Math.min(P.length - 1, Math.max(0, Math.round(t / dt))); return { pos: P[i] as unknown as Vec3, vel: V[i] as unknown as Vec3, rumo }; };
+  };
+  const SAIDAS: [string, number, number, number, number][] = [['a pé', 1.5, 10, 20, 0], ['correndo', 6, 30, 90, 0], ['voando', 10, 40, 160, 4], ['voando com Shift', 45, 60, 200, 4]];
+  for (const [nome, v, dentro, fora, zv] of SAIDAS) {
+    const x0 = TA + dentro, tau = 0.12;
+    // sai do repouso com a aceleração da página; a pé, o ouvido 2,35 m sobre a via dentro (a passarela) e 1,6 fora
+    const traj = (t: number) => {
+      const e = Math.exp(-t / tau), x = x0 - v * (t - tau * (1 - e));
+      return { pos: [x, -M, zv || (x >= TA ? 2.35 : 1.6)] as Vec3, vel: [-v * (1 - e), 0, 0] as Vec3, rumo: 180 };
+    };
+    const dur = (dentro + fora) / v + 0.5;
+    const r = tocar({ traj, dur, amb: ambT(), sFonte0: SF });
+    salvar(`tunel-saida-${nome.replace(/ /g, '-')}`, r.L, r.sL);
+    const tBoca = dentro / v + tau;
+    for (const [qual, x] of [['direto', r.L], ['envio', r.sL]] as const) {
+      const A = amplitude(x), ini = FS, fim = x.length - 2 * FS / F0;
+      const dg = degrau(x, A, ini, fim, F0), ra = residuoAgudo(x, A, ini, fim);
+      const bl = bandasLaterais(x, Math.max(1, tBoca - 0.25));
+      conferir(`túnel: saindo ${nome} (${v} m/s) · ${qual}: degrau, resíduo > 5 kHz, zíper na boca`, dg.pior <= 1.02 && ra.db <= -70 && bl.db <= -60,
+        `degrau ${dg.pior.toFixed(4)}, resíduo ${ra.db.toFixed(1)} dB, bandas laterais ${bl.db.toFixed(1)} dB (em ${bl.f.toFixed(0)} Hz)`);
+    }
+    // o envio depois da boca, em janelas de 0,1 s: nunca sobe mais que 0,05 dB de uma para a seguinte
+    const jan = Math.round(0.1 * FS), nivel = (i0: number) => { let e = 0; for (let i = i0; i < i0 + jan; i++) e += r.sL[i] * r.sL[i]; return 10 * Math.log10(e / jan + 1e-30); };
+    let pior = -Infinity, ant = NaN, i0 = Math.round((tBoca + 0.1) * FS);
+    const nDentro = nivel(Math.round((tBoca - 0.6) * FS));
+    for (; i0 + jan < r.sL.length - FS / 4; i0 += jan) { const l = nivel(i0); if (ant === ant) pior = Math.max(pior, l - ant); ant = l; }
+    conferir(`túnel: saindo ${nome} · o campo reverberante cai com a distância da boca`, pior <= 0.05,
+      `maior subida entre janelas de 0,1 s depois da boca ${pior.toFixed(3)} dB; ${fora} m fora, ${(ant - nDentro).toFixed(1)} dB do de dentro`);
+  }
+  // sair e virar rente à testa do emboque: a borda da boca entra na frente da fonte (zona iluminada → sombra)
+  {
+    // 6 m/s para fora da boca por 1,3 s e depois para o lado (rente à testa) por 5 s
+    const traj = percurso([TA + 5, -M, 1.6], [[1.3, -6, 0, 0], [5.7, 0, -6, 0]], 225);
+    const r = tocar({ traj, dur: 7, amb: ambT(), sFonte0: SF });
+    salvar('tunel-contorna-boca', r.L, r.sL);
+    const A = amplitude(r.L), dg = degrau(r.L, A, FS, r.L.length - 100, F0), ra = residuoAgudo(r.L, A, FS, r.L.length - 100);
+    const nv = (t: number) => { let e = 0; const i0 = Math.round(t * FS); for (let i = i0; i < i0 + FS / 5; i++) e += r.L[i] * r.L[i]; return 10 * Math.log10(e); };
+    conferir('túnel: sair e virar rente à testa (a borda da boca na frente do direto)', dg.pior <= 1.02 && ra.db <= -70 && nv(6.6) - nv(1.2) < -10,
+      `degrau ${dg.pior.toFixed(4)} (em ${dg.t.toFixed(2)} s), resíduo ${ra.db.toFixed(1)} dB (em ${ra.t.toFixed(2)} s); o direto 30 m ao lado da boca ${(nv(6.6) - nv(1.2)).toFixed(1)} dB do de dentro`);
+  }
+  // ponte: voar do passeio para fora do tabuleiro e descer ao vale (o chão refletor troca do tabuleiro para o vale)
+  {
+    const amb = ambientePassagem('ponte');
+    amb.fundo = { vento: 0, ventilacao: 0, murmurio: 0 };
+    amb.lugar = { ponte: { m0: -3.7, m1: 8.5, espessura: 1.6, vale: -28, fundo: 170, borda: 330 }, fundoFora: amb.fundo };
+    // do passeio (6,68 m da via, ouvido a 1,8 m) para fora do tabuleiro a 8 m/s por 1,25 s, desce a 8 m/s por 3,5 s
+    // (voando: 28 m) e para
+    const traj = percurso([0, -6.68, 1.8], [[1.25, 0, -8, 0], [3.5, 0, 0, -8], [1.25, 0, 0, 0]], 90);
+    const r = tocar({ traj, dur: 6, amb, sFonte0: -30 });
+    salvar('ponte-ao-vale', r.L, r.sL);
+    const A = amplitude(r.L), dg = degrau(r.L, A, FS, r.L.length - 100, F0), ra = residuoAgudo(r.L, A, FS, r.L.length - 100);
+    const vale = r.cena.modoVale, z = r.cena.geo.z;
+    conferir('ponte: voar do tabuleiro para o vale (o chão refletor troca com o solo calado)', dg.pior <= 1.02 && ra.db <= -70 && vale && z < -25,
+      `degrau ${dg.pior.toFixed(4)} (em ${dg.t.toFixed(2)} s), resíduo ${ra.db.toFixed(1)} dB (em ${ra.t.toFixed(2)} s); no fim o ouvido a ${z.toFixed(1)} m, chão ${vale ? 'do vale' : 'do tabuleiro'}`);
+  }
+  // voar descendo (Q, 8 m/s) com o solo refletindo (concreto), sem lugar: a imagem do ouvido no solo anda com −v_z (até
+  // 23/11/2026 a derivada do caminho dela usava +v_z e o reflexo zipava: resíduo de −36 dB no começo da descida)
+  {
+    const amb = ambientePassagem('ceu');
+    amb.solo = { tipo: 'concreto' }; amb.fundo = { vento: 0, ventilacao: 0, murmurio: 0 };
+    const traj = percurso([0, -16.68, 30], [[1.25, 0, 0, 0], [3.5, 0, 0, -8], [1.25, 0, 0, 0]], 90);
+    const r = tocar({ traj, dur: 6, amb, sFonte0: -30 });
+    salvar('descida-com-solo', r.L, r.sL);
+    const A = amplitude(r.L), dg = degrau(r.L, A, FS, r.L.length - 100, F0), ra = residuoAgudo(r.L, A, FS, r.L.length - 100);
+    conferir('voar descendo a 8 m/s com o solo refletindo (a imagem do ouvido anda com −v_z)', dg.pior <= 1.02 && ra.db <= -70,
+      `degrau ${dg.pior.toFixed(4)} (em ${dg.t.toFixed(2)} s), resíduo ${ra.db.toFixed(1)} dB (em ${ra.t.toFixed(2)} s)`);
+  }
 }
 
 const falhas = resultados.filter((r) => !r.ok).length;
