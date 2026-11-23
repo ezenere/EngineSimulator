@@ -100,7 +100,9 @@ Carros (Tesla Model 3, Nissan Leaf, BYD Dolphin, Fórmula E), trens e metrôs (o
 
 Aqui o motor vai dentro de um veículo que passa pelo ouvinte: um trem-bala de 10 vagões num túnel, um metrô freando na estação, um carro na rua, uma locomotiva a diesel ou a vapor, um avião de hélice, um jato, um caça acima da velocidade do som, um helicóptero, um drone. Você escolhe o que passa, a velocidade, o lugar (céu aberto, corte, estação, viaduto, túnel) e de onde ouve: parado ao lado da via ou preso ao veículo, girando em volta dele numa cena 3D (arraste a cabeça). O "modo de testes" libera todos os parâmetros: comprimento da via, altitude, distância, número de vagões, umidade e temperatura do ar.
 
-**Teclas:** `Espaço` dispara ou para a passagem · `R` liga e desliga a repetição · `G` alterna entre o ouvinte parado e preso ao veículo · `C` troca a câmera (clique antes na cena 3D).
+Você é o observador: a câmera é o seu ouvido. Você nasce em pé num lugar de onde uma pessoa veria a passagem (calçada, plataforma, passarela do túnel, passeio da ponte), olha em volta, anda, e o som vem de onde você está, virado para onde você olha.
+
+**Teclas:** clique na cena para olhar com o mouse (`Esc` solta) · `W` `A` `S` `D` ou setas andam · `Shift` corre · `V` voa ou volta a pé (`E` e `Q` sobem e descem) · `B` embarca no veículo e desembarca · `1` a `9` pontos de vista · `Espaço` dispara ou para a passagem · `R` liga e desliga a repetição · `H` mostra a ajuda.
 
 ## Dicas
 

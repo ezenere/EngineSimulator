@@ -32,7 +32,7 @@ const SO = iSo >= 0 ? args[iSo + 1].split(',') : null;
 const COMPLETO = [
   ['typecheck'],
   ['paridade:acoustics'], ['paridade:ronco'], ['paridade:turbina'],
-  ['teste:cena'], ['teste:passagem'], ['teste:diesel'], ['teste:radial'], ['teste:rotativo'], ['teste:eletrico'], ['teste:vapor'],
+  ['teste:cena'], ['teste:ouvinte'], ['teste:passagem'], ['teste:diesel'], ['teste:radial'], ['teste:rotativo'], ['teste:eletrico'], ['teste:vapor'],
   ['lenta:ronco'], ['lenta:diesel'], ['lenta:radial'], ['lenta:rotativo'], ['lenta:eletrico'], ['lenta:vapor'],
   ['troca:ronco'], ['troca:diesel'], ['troca:radial'], ['troca:rotativo'], ['geometria:radial'],
   ['build'],

@@ -1,50 +1,50 @@
-// Cena 3D da Passagem (CENA.md 3.4), three.js, só na thread principal. Carregada sob demanda
-// (import dinâmico na página): o áudio nunca espera por ela, e se o WebGL faltar a página segue sem 3D.
+// Cena 3D da Passagem, three.js, só na thread principal. Carregada sob demanda (import dinâmico na página): o áudio
+// nunca espera por ela, e se o WebGL faltar a página segue sem 3D (o observador anda e ouve do mesmo jeito).
 //
-// Mundo em metros, z para cima (o mesmo da Cena: a via passa ao longo de x, o ouvinte fixo fica do lado
-// −y). Elementos: chão com grade de 10 e 100 m e a cor/textura do solo; via (trilhos e dormentes a
-// 0,6 m; no ar, linha tracejada); túnel, estação, corte ou ponte; o corpo por segmento, com o vão entre
-// eles, nariz e cauda afilados, truques e pantógrafos (ou rotor); esferas das fontes coloridas por tipo e
-// escaladas pelo ganho; o fantasma do corpo na posição de emissão; a cabeça do ouvinte com o nariz para
-// o alvo, os arcos do gimbal e a linha até o alvo com a distância; o ponto mais próximo da via.
+// Um lugar visto por uma pessoa: a câmera é o olho do observador (observador.ts; o ouvinte da Cena é o ouvido dele),
+// em primeira pessoa, sem órbita. Tudo opaco: céu em degradê com o sol, luz do céu, neblina de distância; o chão na cor
+// ou na textura do solo; a via (lastro, dormentes e trilhos; a estrada com as faixas); o túnel, a estação, o corte e a
+// ponte com as medidas de lugar.ts (as mesmas em que o observador pisa); o corpo por segmento, com o vão entre eles,
+// nariz e cauda afilados, truques, pantógrafo, rotor e hélice com as pás girando.
+// A vista técnica (tecla T, desligada por padrão) acrescenta os marcadores das fontes e a linha da trajetória no ar.
 //
-// Modelos: o trem-bala e o helicóptero são geometria parametrizada com as dimensões do portador (não há
-// modelo aberto de vagão de trem-bala bom; PLANO.md, Recursos 3D). Texturas de solo CC0 da Poly Haven em
-// public/3d/ (LICENSES.md), carregadas sem bloquear: se não chegarem, fica a cor lisa.
-//
-// Arrasto (raycast): cabeça (fixo: x e lateral no chão, Shift = altura; gimbal: azimute e distância,
-// Shift = elevação, com passo de 5° e 0,5 m), anel do azimute, arco da elevação, linha da distância,
-// corpo ao longo da via (posição s), alça da lateral da via e alça da altitude. Clique numa fonte: vira
-// o alvo do gimbal e mostra a ficha. Tudo vai ao worklet pelo `atualizar()` da Cena (rampa de 20 ms).
+// Mundo em metros, z para cima (o mesmo da Cena: a via passa ao longo de x, o ponto de chegada fica do lado −y).
+// Modelos: geometria parametrizada com as dimensões do portador (PLANO.md, Recursos 3D). Texturas de solo CC0 da Poly
+// Haven em public/3d/ (LICENSES.md), carregadas sem bloquear: se não chegarem, fica a cor lisa.
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { ControlePassagem } from './controle';
-import type { FonteSonora } from '../../scene/tipos';
 import { COR_TIPO } from './cena3d-cores';
-import { nomeFonte } from './mostradores';
 import { PontoVia } from '../../scene/trajetoria';
+import type { Lugar } from './lugar';
+import { PLATAFORMA, ESTACAO, PONTE, CORTE, LIMITE_LATERAL, TUNEL, SEGUNDA_VIA } from './lugar';
 import { secaoTunel } from '../../scene/ambientes';
 
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
 
-const COR_SOLO: Record<string, number> = { asfalto: 0x3a3d42, concreto: 0x85837d, brita: 0x8f8069, grama: 0x47603d, agua: 0x2a5068, nenhum: 0x1a1f26 };
-// céu de fim de tarde: escuro no alto (combina com a página), claro no horizonte, para o corpo e a via se recortarem
-const CEU_ZENITE = 0x0f1828, CEU_HORIZONTE = 0x56667e;
-/** nome curto de cada portador, para o rótulo do corpo na cena */
-/** (I8) portadores a vapor com silhueta própria: a locomotiva a vapor, o trator e o barco */
+const COR_SOLO: Record<string, number> = { asfalto: 0x3c3f44, concreto: 0x9a978f, brita: 0x8a7d68, grama: 0x5b7a3e, agua: 0x2f5f78, nenhum: 0x5b7a3e };
+// céu de dia: azul no alto, claro e um pouco quente no horizonte; a neblina tem a cor do horizonte
+const CEU_ZENITE = 0x3f73b8, CEU_HORIZONTE = 0xc9d8e4;
+/** m: os dormentes são desenhados até esta distância de você, ao longo da via */
+const DORMENTES_RAIO = 150;
+const GRAMA = 0x5b7a3e, TERRA = 0x7d6a4c, CONCRETO = 0x9c9a94, CONCRETO_ESCURO = 0x6e6d68;
+/** portadores a vapor com silhueta própria: a locomotiva a vapor, o trator e o barco */
 const silhuetaVapor = (c: ControlePassagem) => (c.portador === 'locomotiva' && c.motor === 'vapor') || c.portador === 'trator' || c.portador === 'barco';
 /** altura até onde a caixa do 1º segmento é desenhada nessas máquinas: o estrado da locomotiva, o chassi do trator, o casco */
 const alturaEstrado = (c: ControlePassagem, s: { zPiso: number; altura: number }) => c.portador === 'barco' ? Math.min(s.altura, 2.2) : c.portador === 'trator' ? s.zPiso + 0.7 : s.zPiso + 1.0;
 
-const NOME_CORPO: Record<string, string> = { trem: 'trem', rotor: 'helicóptero', carro: 'carro', helice: 'avião', gerador: 'gerador', locomotiva: 'locomotiva', aviao: 'avião', trator: 'trator', barco: 'barco', drone: 'drone' };
-export type ModoCamera = 'ouvinte' | 'corpo' | 'livre';
-export const NOME_CAMERA: Record<ModoCamera, string> = { ouvinte: 'orbital no ouvinte', corpo: 'segue o corpo', livre: 'livre' };
-
-type Arrasto =
-  | { tipo: 'cabeca'; alt: boolean } | { tipo: 'az' } | { tipo: 'el' } | { tipo: 'r' }
-  | { tipo: 'corpo'; xGrab: number } | { tipo: 'lateral' } | { tipo: 'altitude' };
-
-interface Fonte3D { f: FonteSonora; m: THREE.Mesh; idx: number }
+/**
+ * Material difuso (Lambert) com sombreamento plano: o "low poly" não pede brilho, e o Lambert custa bem menos que o PBR
+ * no WebGL em software e nos celulares (o quadro pesa no olho, não no som).
+ */
+const fosco = (cor: number, extra: THREE.MeshLambertMaterialParameters = {}) => new THREE.MeshLambertMaterial({ color: cor, flatShading: true, ...extra });
+/** as mesmas peças repetidas ao longo da via num InstancedMesh (uma chamada de desenho): luminárias, colunas, pilares */
+function repetir(geo: THREE.BufferGeometry, mat: THREE.Material, pontos: { pos: readonly number[]; rumo: number }[]) {
+  const im = new THREE.InstancedMesh(geo, mat, Math.max(1, pontos.length));
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p3 = new THREE.Vector3(), um = new THREE.Vector3(1, 1, 1);
+  pontos.forEach((pt, i) => { e.set(0, 0, pt.rumo); q.setFromEuler(e); p3.set(pt.pos[0], pt.pos[1], pt.pos[2]); im.setMatrixAt(i, m.compose(p3, q, um)); });
+  im.count = pontos.length;
+  return im;
+}
 
 export class Cena3D {
   c: ControlePassagem;
@@ -52,108 +52,54 @@ export class Cena3D {
   renderer: THREE.WebGLRenderer;
   scene = new THREE.Scene();
   camera: THREE.PerspectiveCamera;
-  controls: OrbitControls;
-  modo: ModoCamera = 'ouvinte';
   private estatico = new THREE.Group();
   private corpoG = new THREE.Group();
-  private fantasmaG = new THREE.Group();
-  private fontesG = new THREE.Group();
-  private ouvinteG = new THREE.Group();
-  private gimbalG = new THREE.Group();
+  private tecnicoG = new THREE.Group();
   private segs: { m: THREE.Object3D; xc: number }[] = [];
-  private segsF: { m: THREE.Object3D; xc: number }[] = [];
-  private fontes3d: Fonte3D[] = [];
-  private cabeca: THREE.Mesh; private narizCab: THREE.Mesh;
-  private anelAz: THREE.Mesh; private arcoEl: THREE.Mesh; private linhaR: THREE.Line; private pegaR: THREE.Mesh;
-  private rotuloR: THREE.Sprite; private textoR = '';
-  private rotuloVoce: THREE.Sprite; private rotuloCorpo: THREE.Sprite; private textoCorpo = '';
-  private rotuloFonte: THREE.Sprite; private textoFonte = '';
-  private ceu: THREE.Mesh; private sombra: THREE.Mesh; private prumo: THREE.Line;
-  private chaveQuadro = '';
-  private alcaLateral: THREE.Mesh; private alcaAltitude: THREE.Mesh; private marcaProximo: THREE.Mesh;
-  private rotores: THREE.Object3D[] = [];
+  private fontes3d: { id: string; pos: readonly number[]; m: THREE.Mesh; idx: number }[] = [];
+  private ceu: THREE.Mesh; private sol: THREE.DirectionalLight; private discoSol: THREE.Mesh;
+  private rotores: { o: THREE.Object3D; eixo: 'x' | 'y' | 'z'; k: number }[] = [];
   private chaveEstatico = ''; private chaveCorpo = '';
+  private dormentes: { im: THREE.InstancedMesh; mv: number; s0: number; s1: number }[] = [];
+  private dormentesEm = NaN;
   private texturas: Record<string, THREE.Texture | null> = {};
-  private ray = new THREE.Raycaster();
-  private arrasto: Arrasto | null = null;
   private pv = new PontoVia();
   private ultimo = 0;
-  private alvoAnt = new THREE.Vector3(); private temAlvoAnt = false;
+  private olho = { pos: [0, 0, 0] as [number, number, number], rumo: 0, arfagem: 0 };
   /** desenhou ao menos um quadro (o teste do navegador confere) */
   quadros = 0;
-  aoMudarCamera: (() => void) | null = null;
   vivo = true;
 
   constructor(canvas: HTMLCanvasElement, c: ControlePassagem) {
     this.c = c; this.canvas = canvas;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    // (antisserrilhado só em tela de densidade baixa: na de densidade alta ele custa caro e quase não se vê)
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: (window.devicePixelRatio || 1) < 1.5, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
-    // céu: cúpula com degradê do horizonte ao zênite, que anda com a câmera; a neblina tem a cor do horizonte
     this.scene.background = new THREE.Color(CEU_HORIZONTE);
-    this.scene.fog = new THREE.Fog(CEU_HORIZONTE, 700, 7000);
+    this.scene.fog = new THREE.Fog(CEU_HORIZONTE, 250, 5500);
     {
-      const g = new THREE.SphereGeometry(9000, 32, 20), p = g.attributes.position as THREE.BufferAttribute;
+      // cúpula do céu com degradê do horizonte ao zênite, que anda com a câmera (sem neblina)
+      const R = 9000, g = new THREE.SphereGeometry(R, 32, 20), p = g.attributes.position as THREE.BufferAttribute;
       const cores = new Float32Array(p.count * 3), a = new THREE.Color(CEU_HORIZONTE), b = new THREE.Color(CEU_ZENITE), k = new THREE.Color();
       for (let i = 0; i < p.count; i++) {
         // (a esfera do three.js tem o eixo em y; a cúpula é girada para o z do mundo)
-        const h = Math.max(0, p.getY(i) / 9000);
-        k.copy(a).lerp(b, Math.pow(h, 0.45)); cores[3 * i] = k.r; cores[3 * i + 1] = k.g; cores[3 * i + 2] = k.b;
+        const h = Math.max(0, p.getY(i) / R);
+        k.copy(a).lerp(b, Math.pow(h, 0.55)); cores[3 * i] = k.r; cores[3 * i + 1] = k.g; cores[3 * i + 2] = k.b;
       }
       g.setAttribute('color', new THREE.BufferAttribute(cores, 3));
       this.ceu = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
       this.ceu.rotation.x = Math.PI / 2; this.ceu.renderOrder = -10;
       this.scene.add(this.ceu);
     }
-    this.camera = new THREE.PerspectiveCamera(50, 1, 0.05, 20000);
+    this.camera = new THREE.PerspectiveCamera(60, 1, 0.05, 12000);
     this.camera.up.set(0, 0, 1);
-    this.camera.position.set(-14, -28, 9);
-    this.controls = new OrbitControls(this.camera, canvas);
-    this.controls.enableDamping = true; this.controls.dampingFactor = 0.12;
-    this.controls.maxDistance = 4000; this.controls.minDistance = 0.5;
-    // luz do céu e um sol baixo do lado do ouvinte (a face do corpo que ele vê fica iluminada)
-    this.scene.add(new THREE.HemisphereLight(0xcfdcf2, 0x4a4338, 1.25));
-    const sol = new THREE.DirectionalLight(0xfff0dc, 1.9); sol.position.set(-350, -600, 520); this.scene.add(sol);
-    this.scene.add(this.estatico, this.corpoG, this.fantasmaG, this.fontesG, this.ouvinteG, this.gimbalG);
-
-    // ouvinte: cabeça (0,25 m) e nariz (cone) para o alvo
-    this.cabeca = new THREE.Mesh(new THREE.SphereGeometry(0.25, 24, 16), new THREE.MeshStandardMaterial({ color: 0xdca54c, roughness: 0.5 }));
-    this.narizCab = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.22, 12), new THREE.MeshStandardMaterial({ color: 0xdca54c }));
-    this.narizCab.geometry.rotateZ(-Math.PI / 2); this.narizCab.geometry.translate(0.3, 0, 0);
-    this.cabeca.add(this.narizCab);
-    this.cabeca.userData.pega = 'cabeca';
-    this.ouvinteG.add(this.cabeca);
-    // gimbal: anel de azimute, arco de elevação, linha até o alvo com a distância
-    const matG = new THREE.MeshBasicMaterial({ color: 0xdca54c, transparent: true, opacity: 0.75, depthWrite: false });
-    this.anelAz = new THREE.Mesh(new THREE.TorusGeometry(1, 0.012, 6, 96), matG); this.anelAz.userData.pega = 'az';
-    this.arcoEl = new THREE.Mesh(new THREE.TorusGeometry(1, 0.012, 6, 64, (109 * Math.PI) / 180), new THREE.MeshBasicMaterial({ color: 0x7398e6, transparent: true, opacity: 0.85, depthWrite: false }));
-    this.arcoEl.userData.pega = 'el';
-    this.linhaR = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(1, 0, 0)]), new THREE.LineDashedMaterial({ color: 0xe9e4d8, dashSize: 0.3, gapSize: 0.2 }));
-    this.pegaR = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1, 8), new THREE.MeshBasicMaterial({ visible: false }));
-    this.pegaR.userData.pega = 'r';
-    this.rotuloR = rotulo('');
-    this.gimbalG.add(this.anelAz, this.arcoEl, this.linhaR, this.pegaR, this.rotuloR);
-    // rótulos: o ouvinte, o corpo (quando fica pequeno na tela) e a fonte escolhida
-    this.rotuloVoce = rotulo('você'); this.rotuloCorpo = rotulo(''); this.rotuloFonte = rotulo('');
-    this.rotuloCorpo.visible = false; this.rotuloFonte.visible = false;
-    this.scene.add(this.rotuloVoce, this.rotuloCorpo, this.rotuloFonte);
-    // corpo no ar: a sombra no chão e o prumo até ele, para se ver por onde ele passa mesmo fora do quadro
-    this.sombra = new THREE.Mesh(new THREE.CircleGeometry(1, 40), new THREE.MeshBasicMaterial({ color: 0x05070a, transparent: true, opacity: 0.42, depthWrite: false }));
-    this.prumo = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, 1)]), new THREE.LineDashedMaterial({ color: 0xa8c4ff, dashSize: 3, gapSize: 3, transparent: true, opacity: 0.6 }));
-    this.sombra.visible = false; this.prumo.visible = false;
-    this.scene.add(this.sombra, this.prumo);
-    // alças: lateral da via (no chão, entre a via e o ouvinte), altitude (acima do corpo), ponto mais próximo
-    this.alcaLateral = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.9, 4), new THREE.MeshStandardMaterial({ color: 0x48c26a, emissive: 0x123018 }));
-    this.alcaLateral.geometry.rotateX(Math.PI / 2); this.alcaLateral.userData.pega = 'lateral';
-    this.alcaAltitude = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1, 12), new THREE.MeshStandardMaterial({ color: 0x8fb3ff, emissive: 0x101c33 }));
-    this.alcaAltitude.geometry.rotateX(Math.PI / 2); this.alcaAltitude.userData.pega = 'altitude';
-    this.marcaProximo = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.15, 32), new THREE.MeshBasicMaterial({ color: 0xdca54c, side: THREE.DoubleSide, transparent: true, opacity: 0.8 }));
-    this.scene.add(this.alcaLateral, this.alcaAltitude, this.marcaProximo);
-
-    canvas.addEventListener('pointerdown', this.aoApertar);
-    canvas.addEventListener('pointermove', this.aoMover);
-    canvas.addEventListener('pointerup', this.aoSoltar);
-    canvas.addEventListener('pointercancel', this.aoSoltar);
-    canvas.addEventListener('keydown', this.aoTecla);
+    // luz do céu e o sol de meio da tarde, por trás e à direita de quem está no ponto de chegada olhando a via
+    this.scene.add(new THREE.HemisphereLight(0xdfe9f5, 0x8a8170, 1.3));
+    this.sol = new THREE.DirectionalLight(0xfff1dc, 2.1); this.sol.position.set(380, -560, 520); this.scene.add(this.sol, this.sol.target);
+    this.discoSol = new THREE.Mesh(new THREE.CircleGeometry(160, 32), new THREE.MeshBasicMaterial({ color: 0xfff6e0, fog: false, depthWrite: false }));
+    this.discoSol.renderOrder = -9;
+    this.scene.add(this.discoSol);
+    this.scene.add(this.estatico, this.corpoG, this.tecnicoG);
     this.carregarTexturas();
   }
 
@@ -161,117 +107,185 @@ export class Cena3D {
   private carregarTexturas() {
     const base = import.meta.env.BASE_URL || './';
     const ld = new THREE.TextureLoader();
-    for (const [k, arq] of [['brita', 'brita_1k.jpg'], ['concreto', 'concreto_1k.jpg']] as const) {
+    // (só a brita do lastro usa textura; o concreto ficou na cor lisa, e a textura dele, em public/3d/, não é mais carregada)
+    for (const [k, arq] of [['brita', 'brita_1k.jpg']] as const) {
       this.texturas[k] = null;
       ld.load(`${base}3d/texturas/${arq}`, (t) => {
         t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = Math.min(8, this.renderer.capabilities.getMaxAnisotropy());
-        this.texturas[k] = t; this.chaveEstatico = '';    // remonta o chão com a textura
+        this.texturas[k] = t; this.chaveEstatico = '';    // remonta com a textura
       }, undefined, () => { /* sem textura: fica a cor lisa */ });
     }
   }
+  private texturizado(k: 'brita' | 'concreto', cor: number, repeticao: number) {
+    // (o concreto fica na cor lisa: a textura dele, multiplicada pela luz do céu, puxava para o marrom de terra; a brita
+    // do lastro fica com a textura, que é o que faz a via parecer via)
+    if (k === 'concreto') return fosco(cor, { flatShading: false });
+    const t = this.texturas[k], m = fosco(t ? 0xd8d4cc : cor, { flatShading: false });
+    if (t) { const tt = t.clone(); tt.needsUpdate = true; tt.repeat.set(repeticao, repeticao); m.map = tt; m.color.set(cor).lerp(new THREE.Color(0xffffff), 0.45); }
+    return m;
+  }
 
-  // ------------------------------------------------------------------ cenário (muda com ambiente/via)
+  // ------------------------------------------------------------------ cenário (muda com ambiente, via, solo)
   private montarEstatico() {
-    const c = this.c, amb = c.ambienteCena(), t = c.traj;
-    const chave = JSON.stringify([amb.id, amb.solo.tipo, amb.tunel, t.tipo, t.comprimento, t.raioCurva, t.sentido, t.altitude > 0, c.portador, !!this.texturas.brita, !!this.texturas.concreto]);
+    const c = this.c, amb = c.ambienteCena(), t = c.traj, lg = c.lugar();
+    const chave = JSON.stringify([amb.id, amb.solo.tipo, amb.tunel, t.tipo, t.comprimento, t.raioCurva, t.sentido, t.altitude > 2, c.portador, c.motor, c.corpo.segmentos[0]?.largura, !!this.texturas.brita, !!this.texturas.concreto]);
     if (chave === this.chaveEstatico) return;
     this.chaveEstatico = chave;
     descartar(this.estatico);
+    this.dormentes = []; this.dormentesEm = NaN;
     const G = this.estatico, via = c.via, Lv = via.comp;
     const reta = t.tipo === 'reta';
+    const s0 = reta ? -Lv / 2 : 0, s1 = reta ? Lv / 2 : Lv, passo = reta ? 40 : 4;
     const solo = amb.solo.tipo;
-    // chão (a ponte não tem: o tabuleiro fica no alto e o vale lá embaixo)
     const ponte = amb.id === 'ponte';
-    const ext = reta ? Lv + 800 : 2 * (via.ls / 2 + via.R) + 800, larg = reta ? 1600 : 2 * via.R + 800;
-    const cy = reta ? 0 : 0;
+    const ferro = (c.portador === 'trem' || c.portador === 'locomotiva') && t.altitude <= 2;
+    const estrada = (c.portador === 'carro' || c.portador === 'trator') && t.altitude <= 2;
+    // chão: o vale embaixo da ponte; grama em volta da via e da estrada; a cor do solo no resto (água, concreto do pátio)
     {
-      const tex = solo === 'brita' ? this.texturas.brita : solo === 'concreto' || solo === 'asfalto' ? this.texturas.concreto : null;
-      // (com a textura a cor é um cinza médio: em branco o chão estourava com a luz do céu e do sol)
-      const mat = new THREE.MeshStandardMaterial({ color: ponte ? 0x22303a : tex ? 0xd6d2ca : COR_SOLO[solo] ?? 0x555555, roughness: 0.95 });
-      if (tex && !ponte) { const tt = tex.clone(); tt.needsUpdate = true; tt.repeat.set(ext / 6, larg / 6); mat.map = tt; if (solo === 'asfalto') mat.color.set(0x70737a); }
-      const chao = new THREE.Mesh(new THREE.PlaneGeometry(ext, larg), mat);
-      chao.position.set(0, cy, ponte ? -28 : -0.01);
+      const ext = reta ? Lv + 2 * LIMITE_LATERAL + 1200 : 2 * (via.ls / 2 + via.R) + 2400, larg = reta ? 2 * LIMITE_LATERAL + 2400 : 2 * via.R + 2400;
+      const cor = ponte ? 0x6f7a4a : ferro || estrada || solo === 'grama' || solo === 'nenhum' ? GRAMA : solo === 'agua' ? COR_SOLO.grama : COR_SOLO[solo] ?? GRAMA;
+      const chao = new THREE.Mesh(new THREE.PlaneGeometry(ext, larg), fosco(cor, { flatShading: false }));
+      chao.position.set(0, reta ? 0 : 0, ponte ? PONTE.vale : -0.02);
       G.add(chao);
-      // grades de 10 m e de 100 m: dão a escala do lugar
-      const g1 = new THREE.GridHelper(1000, 100, 0x1c2128, 0x1c2128); g1.rotateX(Math.PI / 2); g1.position.z = ponte ? -27.98 : 0.005;
-      const g2 = new THREE.GridHelper(4000, 40, 0x14181e, 0x14181e); g2.rotateX(Math.PI / 2); g2.position.z = ponte ? -27.97 : 0.01;
-      (g1.material as THREE.Material).transparent = true; (g1.material as THREE.Material).opacity = 0.22;
-      (g2.material as THREE.Material).transparent = true; (g2.material as THREE.Material).opacity = 0.4;
-      G.add(g1, g2);
+      if (ponte) G.add(faixa(lg, s0, s1, passo, -40, 25, PONTE.vale + 0.05, PONTE.vale + 0.05, fosco(0x3c6a86)));   // o rio no fundo do vale
+      if (solo === 'agua') G.add(faixa(lg, s0, s1, passo, -400, 12, 0.0, 0.0, fosco(COR_SOLO.agua)));
+      if (solo === 'concreto' && !ponte && amb.id !== 'estacao' && amb.id !== 'tunel') G.add(faixa(lg, -25, 25, 5, -12, 25, 0.0, 0.0, this.texturizado('concreto', CONCRETO, 6)));
     }
-    const s0 = reta ? -Lv / 2 : 0, s1 = reta ? Lv / 2 : Lv;
-    const aereo = c.portador === 'rotor' || t.altitude > 0;
-    if (c.portador === 'trem' && !aereo) {
-      // via: dois trilhos (bitola 1,435 m) e dormentes a 0,6 m (só perto do ouvinte, ±600 m)
-      const passo = reta ? 20 : 4;
-      for (const yo of [-0.7175, 0.7175]) G.add(linhaVia(c, s0, s1, passo, yo, 0.17, 0x9aa1aa));
-      const sa = Math.max(s0, -600), sb = Math.min(s1, 600), n = Math.floor((sb - sa) / 0.6);
-      const dorm = new THREE.InstancedMesh(new THREE.BoxGeometry(0.25, 2.6, 0.16), new THREE.MeshStandardMaterial({ color: 0x6b6258, roughness: 1 }), n);
-      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p3 = new THREE.Vector3(), um = new THREE.Vector3(1, 1, 1);
-      for (let i = 0; i < n; i++) {
-        const p = via.ponto(sa + i * 0.6, this.pv);
-        e.set(0, 0, Math.atan2(p.ty, p.tx)); q.setFromEuler(e); p3.set(p.x, p.y, 0.08);
-        dorm.setMatrixAt(i, m.compose(p3, q, um));
+    // via férrea: lastro, dormentes, trilhos (e a outra via onde o lugar é de via dupla: túnel e ponte)
+    if (ferro) {
+      const vias = ponte && lg.segundaViaNaPonte ? [0, SEGUNDA_VIA] : [0];
+      for (const mv of vias) {
+        G.add(prisma(lg, s0, s1, passo, [[mv - 2.4, 0], [mv - 1.6, 0.3], [mv + 1.6, 0.3], [mv + 2.4, 0]], solo === 'brita' || ferro ? this.texturizado('brita', COR_SOLO.brita, 1) : fosco(COR_SOLO.brita), false));
+        for (const yo of [-0.7175, 0.7175]) G.add(prisma(lg, s0, s1, passo, [[mv + yo - 0.035, 0.46], [mv + yo + 0.035, 0.46], [mv + yo + 0.035, 0.31], [mv + yo - 0.035, 0.31]], fosco(0x9a9fa6), false));
+        // dormentes a 0,6 m só perto de você (DORMENTES_RAIO para cada lado; mais longe eles somem no lastro): o trecho
+        // anda junto quando você se afasta (recentrarDormentes)
+        const dorm = new THREE.InstancedMesh(new THREE.BoxGeometry(0.25, 2.6, 0.16), fosco(0x6b5f52), Math.ceil((2 * DORMENTES_RAIO) / 0.6) + 1);
+        this.dormentes.push({ im: dorm, mv, s0, s1 });
+        G.add(dorm);
       }
-      G.add(dorm);
-      // lastro (faixa de brita sob a via)
-      G.add(faixa(c, s0, s1, reta ? 50 : 4, -2.2, 2.2, 0.02, 0.02, 0x7d705e, 1));
-    } else if (aereo) {
-      // trajetória no ar: linha tracejada na altitude e a projeção no chão
-      const l = linhaVia(c, s0, s1, reta ? 20 : 4, 0, t.altitude, 0x8fb3ff, true);
-      G.add(l, linhaVia(c, s0, s1, reta ? 20 : 4, 0, 0.03, 0x3d4b63));
     }
-    // ambientes
+    // estrada: duas faixas de 3,5 m, acostamento, faixa amarela no meio e brancas nas bordas
+    if (estrada) {
+      G.add(faixa(lg, s0, s1, passo, -5.6, 3.6, 0.02, 0.02, fosco(COR_SOLO.asfalto, { flatShading: false })));
+      G.add(faixa(lg, s0, s1, passo, -5.35, -5.2, 0.035, 0.035, fosco(0xe8e6df)), faixa(lg, s0, s1, passo, 1.6, 1.75, 0.035, 0.035, fosco(0xe8e6df)));
+      for (let s = Math.max(s0, -600); s < Math.min(s1, 600); s += 12) G.add(faixa(lg, s, s + 4, 4, -1.85, -1.7, 0.035, 0.035, fosco(0xe0b53a)));
+      G.add(faixa(lg, s0, s1, passo, 3.6, 7.2, 0.025, 0.025, fosco(0x8a857a)));   // calçada de terra batida
+    }
+    // ambientes, com as medidas em que o observador pisa (lugar.ts)
     if (amb.tunel) {
-      // tubo da seção do túnel (secaoTunel, a mesma da Cena: via dupla, o trem na via do lado oposto ao ouvinte),
-      // semitransparente, da boca até a outra boca
-      const sec = secaoTunel(amb.tunel.area), y0 = sec.paredeOuvinte, y1 = sec.paredeOposta, h = sec.altura;
+      const sec = secaoTunel(amb.tunel.area), mP = -sec.paredeOuvinte, mL = -sec.paredeOposta, h = sec.altura;
       const ta = amb.tunel.xEntrada, tb = ta + amb.tunel.comprimento, p = reta ? 25 : 5;
-      const mat = 0x7f8794;
-      G.add(faixa(c, ta, tb, p, y0, y0, 0, h, mat, 0.28), faixa(c, ta, tb, p, y1, y1, 0, h, mat, 0.28), faixa(c, ta, tb, p, y0, y1, h, h, mat, 0.18));
-      for (const sx of [ta, tb]) { const b = faixa(c, sx, sx + 3, 3, y0 - 2, y1 + 2, h, h + 1.5, 0x59616e, 0.9); G.add(b); }
+      const parede = this.texturizado('concreto', 0xb8b3a9, 3);
+      parede.emissive.set(0x2c2a26);   // (a luz das luminárias, sem custo de luz de verdade)
+      parede.side = THREE.DoubleSide;
+      // a parede do outro lado e o teto até o alto da parede do lado do observador; essa, por trechos, com os nichos de
+      // refúgio no meio (TUNEL.nicho, os de lugar.ts)
+      const pas = TUNEL.passarela, ni = TUNEL.nicho, topoNicho = pas + ni.altura, bo = lg.tun!.borda;
+      G.add(prisma(lg, ta, tb, p, [[mL, 0], [mL, h], [mL + 0.6, h + 0.5], [mP - 0.6, h + 0.5], [mP, h], [mP, topoNicho]], parede, false, true));
+      const nichos = lg.nichos(), trechos: [number, number][] = [];
+      let ini = ta;
+      for (const c of nichos) { trechos.push([ini, c - ni.largura / 2]); ini = c + ni.largura / 2; }
+      trechos.push([ini, tb]);
+      for (const [a, b] of trechos) if (b > a) G.add(prisma(lg, a, b, p, [[mP, topoNicho], [mP, 0]], parede, false, true));
+      // os nichos: fundo, laterais e teto (uma malha só), cada um com a luminária e, a cada 100 m, a porta de emergência
+      const nicho = new Malha(lg);
+      for (const c of nichos) {
+        const a = c - ni.largura / 2, b = c + ni.largura / 2, f = mP + ni.fundo;
+        nicho.quad([a, f, pas], [b, f, pas], [b, f, topoNicho], [a, f, topoNicho]);       // fundo
+        nicho.quad([a, mP, pas], [a, f, pas], [a, f, topoNicho], [a, mP, topoNicho]);      // laterais
+        nicho.quad([b, mP, pas], [b, f, pas], [b, f, topoNicho], [b, mP, topoNicho]);
+        nicho.quad([a, mP, topoNicho], [b, mP, topoNicho], [b, f, topoNicho], [a, f, topoNicho]);   // teto
+        nicho.quad([a, mP, pas], [b, mP, pas], [b, f, pas], [a, f, pas]);                  // piso
+      }
+      if (nichos.length) G.add(nicho.mesh(parede));
+      const porta = new Malha(lg);
+      for (const c of nichos) if (Math.round(c / ni.cada) % 2 === 0) { const f = mP + ni.fundo - 0.04; porta.quad([c - 0.5, f, pas], [c + 0.5, f, pas], [c + 0.5, f, pas + 2.05], [c - 0.5, f, pas + 2.05]); }
+      G.add(porta.mesh(fosco(0x2f7d4f)));
+      // a passarela de serviço do lado do observador (o refúgio de onde se vê o trem), com a borda pintada e o corrimão
+      // na parede (por trechos, entre os nichos)
+      G.add(prisma(lg, ta, tb, p, [[bo, 0], [bo, pas], [mP, pas], [mP, 0]], fosco(0x9c9a94), true));
+      G.add(faixa(lg, ta, tb, p, bo + 0.05, bo + 0.2, pas + 0.006, pas + 0.006, fosco(0xe2c23a)));
+      for (const [a, b] of trechos) if (b > a) G.add(prisma(lg, a, b, p, [[mP - 0.12, pas + TUNEL.corrimao], [mP - 0.05, pas + TUNEL.corrimao], [mP - 0.05, pas + TUNEL.corrimao - 0.06], [mP - 0.12, pas + TUNEL.corrimao - 0.06]], fosco(0xd9b04a), true));
+      // piso da via e as luminárias do teto (a cada 25 m, do lado das paredes) e uma em cada nicho
+      G.add(faixa(lg, ta, tb, p, mL, bo, 0.01, 0.01, fosco(0x77746e)));
+      const lum = fosco(0xfff4d6, { emissive: 0xfff0c8, emissiveIntensity: 1.2 }), pts: { pos: number[]; rumo: number }[] = [];
+      for (let s = ta + 10; s < tb; s += 25) for (const mm of [mL + 0.45, mP - 0.45]) pts.push({ pos: lg.mundo(s, mm, h - 0.4), rumo: lg.rumoVia(s) });
+      for (const c of nichos) pts.push({ pos: lg.mundo(c, mP + ni.fundo / 2, topoNicho - 0.1), rumo: lg.rumoVia(c) });
+      G.add(repetir(new THREE.BoxGeometry(1.2, 0.18, 0.08), lum, pts));
+      // bocas: a testa de concreto em volta da abertura
+      for (const sx of [ta, tb]) G.add(prisma(lg, sx - (sx === ta ? 1.5 : 0), sx + (sx === ta ? 0 : 1.5), 1.5, [[mL - 3, 0], [mL - 3, h + 3], [mP + 3, h + 3], [mP + 3, 0], [mP, 0], [mP, h + 0.5], [mL, h + 0.5], [mL, 0]], fosco(CONCRETO_ESCURO), true));
     } else if (amb.id === 'estacao') {
-      // plataforma do lado do ouvinte, cobertura a 7 m e parede do fundo
-      const lado = -(c.corpo.segmentos[0]?.largura ?? 3) / 2 - 0.35;
-      G.add(faixa(c, -160, 160, 10, lado - 8, lado, 0.25, 0.25, 0x9a9890, 1));
-      G.add(faixa(c, -160, 160, 10, lado - 10, 4, 7, 7, 0x59616e, 0.35));
-      G.add(faixa(c, -160, 160, 10, lado - 10, lado - 10, 0, 7, 0x434b57, 0.6));
-      for (let x = -150; x <= 150; x += 15) { const col = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 7), new THREE.MeshStandardMaterial({ color: 0x6b7280 })); const p = c.via.ponto(x, this.pv); col.position.set(p.x + (lado - 6) * p.nx, p.y + (lado - 6) * p.ny, 3.5); G.add(col); }
+      const bo = lg.bordaPlataforma, fu = bo + ESTACAO.largura + ESTACAO.fundo, a = ESTACAO.meio;
+      G.add(prisma(lg, -a, a, 10, [[bo, 0], [bo, PLATAFORMA], [fu, PLATAFORMA], [fu, 0]], this.texturizado('concreto', CONCRETO, 4), true));
+      G.add(faixa(lg, -a, a, 10, bo + 0.5, bo + 0.65, PLATAFORMA + 0.006, PLATAFORMA + 0.006, fosco(0xe2c23a)));   // faixa amarela
+      G.add(prisma(lg, -a, a, 10, [[fu, 0], [fu, ESTACAO.teto], [fu + 0.4, ESTACAO.teto], [fu + 0.4, 0]], fosco(0x9a8f80), true));   // parede do fundo
+      G.add(prisma(lg, -a - 4, a + 4, 10, [[-4.5, ESTACAO.teto], [-4.5, ESTACAO.teto + 0.35], [fu + 0.4, ESTACAO.teto + 0.35], [fu + 0.4, ESTACAO.teto]], fosco(0x858b92), true));   // cobertura
+      const cols: { pos: number[]; rumo: number }[] = [], bancos: { pos: number[]; rumo: number }[] = [];
+      for (let s = -a + 7.5; s <= a; s += 15) {
+        cols.push({ pos: lg.mundo(s, bo + 6, PLATAFORMA + (ESTACAO.teto - PLATAFORMA) / 2), rumo: lg.rumoVia(s) });
+        bancos.push({ pos: lg.mundo(s + 5, fu - 0.6, PLATAFORMA + 0.22), rumo: lg.rumoVia(s) });
+      }
+      G.add(repetir(new THREE.BoxGeometry(0.35, 0.35, ESTACAO.teto - PLATAFORMA), fosco(0x6d737a), cols), repetir(new THREE.BoxGeometry(1.8, 0.45, 0.45), fosco(0x7a5a3c), bancos));
     } else if (amb.id === 'corte') {
-      // trincheira: taludes a 45° a partir de 8 m do eixo
-      G.add(faixa(c, s0, s1, reta ? 50 : 5, -8, -20, 0, 12, 0x6f6450, 0.95), faixa(c, s0, s1, reta ? 50 : 5, 8, 20, 0, 12, 0x6f6450, 0.95));
-    } else if (amb.id === 'ponte') {
-      // tabuleiro de 3,7 m para cada lado do eixo (o que reflete) e pilares a cada 40 m
-      G.add(faixa(c, s0, s1, reta ? 50 : 5, -3.7, 3.7, -0.02, -0.02, 0x8d8b85, 1), faixa(c, s0, s1, reta ? 50 : 5, -3.7, 3.7, -1.6, -1.6, 0x59616e, 1));
-      for (let x = Math.ceil(Math.max(s0, -800) / 40) * 40; x <= Math.min(s1, 800); x += 40) { const pil = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 26.4), new THREE.MeshStandardMaterial({ color: 0x6b7280 })); const p = c.via.ponto(x, this.pv); pil.position.set(p.x, p.y, -14.8); G.add(pil); }
+      const talude = fosco(TERRA);
+      for (const sg of [-1, 1]) {
+        G.add(prisma(lg, s0, s1, reta ? 50 : 5, sg > 0 ? [[CORTE.m0, 0], [CORTE.m1, CORTE.alto], [CORTE.m1, 0]] : [[-CORTE.m0, 0], [-CORTE.m1, 0], [-CORTE.m1, CORTE.alto]], talude, false));
+        G.add(faixa(lg, s0, s1, reta ? 50 : 5, sg * CORTE.m1, sg * LIMITE_LATERAL * 1.5, CORTE.alto, CORTE.alto, fosco(GRAMA)));
+      }
+    } else if (ponte) {
+      const mat = this.texturizado('concreto', CONCRETO, 3);
+      G.add(prisma(lg, s0, s1, reta ? 50 : 5, [[PONTE.longe, 0], [PONTE.perto, 0], [PONTE.perto, -PONTE.espessura], [PONTE.longe, -PONTE.espessura]], mat, false));
+      // o passeio de pedestres (o "acostamento" da ponte), com meio-fio, do lado do observador
+      G.add(prisma(lg, s0, s1, reta ? 50 : 5, [[lg.passeio, 0], [lg.passeio, PONTE.meioFio], [PONTE.perto, PONTE.meioFio], [PONTE.perto, 0]], fosco(0xb0ada6), false));
+      const guarda = fosco(0x8d9095);
+      for (const [mA, mB, z0] of [[PONTE.longe, PONTE.longe + 0.25, 0], [PONTE.perto - 0.25, PONTE.perto, PONTE.meioFio]]) G.add(prisma(lg, s0, s1, reta ? 50 : 5, [[mA, z0], [mA, z0 + PONTE.guarda], [mB, z0 + PONTE.guarda], [mB, z0]], guarda, false));
+      const pils: { pos: number[]; rumo: number }[] = [];
+      for (let x = Math.ceil(Math.max(s0, -900) / 40) * 40; x <= Math.min(s1, 900); x += 40) pils.push({ pos: lg.mundo(x, (PONTE.perto + PONTE.longe) / 2, (PONTE.vale - PONTE.espessura) / 2), rumo: lg.rumoVia(x) });
+      G.add(repetir(new THREE.BoxGeometry(2.4, PONTE.perto - PONTE.longe - 2, -PONTE.vale - PONTE.espessura), fosco(CONCRETO_ESCURO), pils));
+    }
+  }
+
+  /** põe os dormentes em volta da abscissa s (de 100 em 100 m) */
+  private recentrarDormentes(s: number) {
+    const centro = Math.round(s / 100) * 100;
+    if (centro === this.dormentesEm || !this.dormentes.length) return;
+    this.dormentesEm = centro;
+    const lg = this.c.lugar(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), p3 = new THREE.Vector3(), um = new THREE.Vector3(1, 1, 1), w: [number, number, number] = [0, 0, 0];
+    for (const d of this.dormentes) {
+      const sa = Math.max(d.s0, centro - DORMENTES_RAIO), sb = Math.min(d.s1, centro + DORMENTES_RAIO);
+      const n = Math.max(0, Math.min(d.im.instanceMatrix.count, Math.floor((sb - sa) / 0.6)));
+      for (let i = 0; i < n; i++) {
+        const sx = sa + i * 0.6;
+        lg.mundo(sx, d.mv, 0.38, w);
+        e.set(0, 0, lg.rumoVia(sx)); q.setFromEuler(e); p3.set(w[0], w[1], w[2]);
+        d.im.setMatrixAt(i, m.compose(p3, q, um));
+      }
+      d.im.count = n; d.im.instanceMatrix.needsUpdate = true; d.im.computeBoundingSphere();
     }
   }
 
   // ------------------------------------------------------------------ corpo (muda com o portador)
   private montarCorpo() {
     const c = this.c, corpo = c.corpo;
-    const chave = JSON.stringify([c.portador, corpo.segmentos.length, corpo.comprimento, corpo.nariz, corpo.segmentos[0], c.fontes.length, c.trem.pantografos, c.trem.carenagem]);
+    const chave = JSON.stringify([c.portador, c.motor, corpo.segmentos.length, corpo.comprimento, corpo.nariz, corpo.segmentos[0], c.fontes.length, c.trem.pantografos, c.trem.carenagem, c.vKmh > 1100]);
     if (chave === this.chaveCorpo) return;
     this.chaveCorpo = chave;
-    descartar(this.corpoG); descartar(this.fantasmaG); descartar(this.fontesG);
-    this.segs = []; this.segsF = []; this.fontes3d = []; this.rotores = [];
-    const corM = new THREE.MeshStandardMaterial({ color: c.portador === 'rotor' ? 0xc9302c : 0xeef0f2, roughness: 0.35, metalness: 0.15 });
-    const fanM = new THREE.MeshBasicMaterial({ color: 0xa8c4ff, transparent: true, opacity: 0.13, depthWrite: false });
-    const faixaM = new THREE.MeshStandardMaterial({ color: 0x1f5fbf, roughness: 0.4 });
-    const janM = new THREE.MeshStandardMaterial({ color: 0x1b222b, roughness: 0.2, metalness: 0.5 });
-    const escM = new THREE.MeshStandardMaterial({ color: 0x2a2f36, roughness: 0.8 });
+    descartar(this.corpoG); descartar(this.tecnicoG);
+    this.segs = []; this.fontes3d = []; this.rotores = [];
+    const corM = fosco(c.portador === 'rotor' ? 0xc9302c : c.portador === 'carro' ? 0x2f5aa8 : 0xeef0f2, { flatShading: false });
+    const faixaM = fosco(0x1f5fbf);
+    const janM = fosco(0x1b222b);
+    const escM = fosco(0x2a2f36);
     let frente = corpo.comprimento / 2;
     const n = corpo.segmentos.length;
     corpo.segmentos.forEach((s, k) => {
       const xc = frente - s.comprimento / 2;
       const g = new THREE.Group();
       const nar = k === 0 ? Math.min(corpo.nariz, s.comprimento * 0.6) : 0, cau = k === n - 1 ? Math.min(corpo.cauda, s.comprimento * 0.6) : 0;
-      // (locomotiva a vapor, trator e barco: a caixa do corpo desenhada só até o estrado, o casco ou o chassi; a caldeira,
-      // a chaminé, a cabine e as rodas vêm da silhueta abaixo; I8)
+      // (locomotiva a vapor, trator e barco: a caixa do corpo só até o estrado, o casco ou o chassi; a caldeira, a
+      // chaminé, a cabine e as rodas vêm da silhueta abaixo)
       const baixa = k === 0 && silhuetaVapor(c) ? alturaEstrado(c, s) : s.altura;
-      const casca = new THREE.Mesh(geometriaSegmento(s.comprimento, s.largura, baixa, s.zPiso, nar, cau, c.portador === 'rotor'), corM);
-      casca.userData.pega = 'corpo'; casca.userData.xc = xc;
-      g.add(casca);
+      g.add(new THREE.Mesh(geometriaSegmento(s.comprimento, s.largura, baixa, s.zPiso, nar, cau, c.portador === 'rotor'), corM));
       if (c.portador === 'trem') {
         // faixa azul e janelas nas duas faces (fora do trecho afilado)
         const x0 = -s.comprimento / 2 + cau + 0.5, x1 = s.comprimento / 2 - nar - 0.5;
@@ -279,15 +293,16 @@ export class Cena3D {
           const fx = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.03, 0.18), faixaM); fx.position.set((x0 + x1) / 2, sg * (s.largura / 2 + 0.01), s.zPiso + 0.95); g.add(fx);
           const jn = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.03, 0.62), janM); jn.position.set((x0 + x1) / 2, sg * (s.largura / 2 + 0.01), s.zPiso + 1.75); g.add(jn);
         }
+      } else if (c.portador === 'carro' && k === 0) {
+        // vidros: a faixa escura da cabine
+        for (const sg of [-1, 1]) { const jn = new THREE.Mesh(new THREE.BoxGeometry(s.comprimento * 0.42, 0.03, (s.altura - s.zPiso) * 0.3), janM); jn.position.set(-s.comprimento * 0.05, sg * (s.largura / 2 + 0.01), s.zPiso + (s.altura - s.zPiso) * 0.78); g.add(jn); }
       }
       this.corpoG.add(g); this.segs.push({ m: g, xc });
-      const gf = new THREE.Mesh(casca.geometry, fanM); const gg = new THREE.Group(); gg.add(gf);
-      this.fantasmaG.add(gg); this.segsF.push({ m: gg, xc });
       frente -= s.comprimento + s.vao;
     });
-    // truques e pantógrafos (trem); rotor e cauda (helicóptero)
+    // truques e pantógrafos (trem)
     for (const f of c.fontes) {
-      if (f.tipo === 'rolamento') {
+      if (f.tipo === 'rolamento' && c.portador === 'trem') {
         const b = new THREE.Mesh(new THREE.BoxGeometry(3.0, 2.2, 0.55), escM); b.position.set(f.pos[0], 0, 0.36);
         this.anexar(b, f.pos[0]);
       } else if (f.tipo === 'pantografo') {
@@ -296,24 +311,30 @@ export class Cena3D {
         const braco = (x0: number, z0: number, x1: number, z1: number) => { const l = Math.hypot(x1 - x0, z1 - z0); const m = new THREE.Mesh(new THREE.BoxGeometry(l, 0.06, 0.06), escM); m.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2); m.rotation.y = -Math.atan2(z1 - z0, x1 - x0); pz.add(m); };
         braco(-0.9, alt + 0.15, 0.7, alt + 0.85); braco(0.7, alt + 0.85, -0.3, f.pos[2]);    // o "Z"
         const cab = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.9, 0.06), escM); cab.position.set(-0.3, 0, f.pos[2]); pz.add(cab);
-        if (c.trem.carenagem) { const car = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.2, 0.35), new THREE.MeshStandardMaterial({ color: 0xc8ccd2 })); car.position.set(0, 0, alt + 0.17); pz.add(car); }
+        if (c.trem.carenagem) { const car = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.2, 0.35), fosco(0xc8ccd2)); car.position.set(0, 0, alt + 0.17); pz.add(car); }
         pz.position.x = f.pos[0];
         this.anexar(pz, f.pos[0]);
       }
     }
+    // pás opacas: n pás de comprimento r a partir do cubo, giradas no eixo dado
+    const pas = (nPas: number, r: number, larg: number, eixo: 'x' | 'y' | 'z') => {
+      const g = new THREE.Group(), geo = new THREE.BoxGeometry(r, larg, 0.04); geo.translate(r / 2, 0, 0);
+      for (let b = 0; b < nPas; b++) { const p = new THREE.Mesh(geo, escM); p.rotation.z = (b * 2 * Math.PI) / nPas; g.add(p); }
+      const cubo = new THREE.Mesh(new THREE.CylinderGeometry(Math.max(0.06, r * 0.06), Math.max(0.06, r * 0.06), 0.2, 12), escM); cubo.rotation.x = Math.PI / 2; g.add(cubo);
+      const h = new THREE.Group(); h.add(g);
+      if (eixo === 'x') h.rotation.y = Math.PI / 2; else if (eixo === 'y') h.rotation.x = Math.PI / 2;
+      return { h, g };
+    };
     const rc = c.rotorCfg;
     if (rc) {
-      const disco = (r: number) => new THREE.Mesh(new THREE.CircleGeometry(r, 48), new THREE.MeshBasicMaterial({ color: 0xbfd3ff, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
-      const pa = (r: number, l: number) => new THREE.Mesh(new THREE.BoxGeometry(l, r, 0.03), escM);
-      const prin = new THREE.Group(); prin.add(disco(rc.R)); for (let b = 0; b < rc.B; b++) { const p = pa(0.27, rc.R * 2); p.rotation.z = (b * Math.PI) / rc.B; prin.add(p); }
-      prin.position.set(rc.posRotor[0], rc.posRotor[1], rc.posRotor[2]);
-      const cauda = new THREE.Group(); const dc = disco(rc.Rc); dc.rotation.x = Math.PI / 2; cauda.add(dc); const pc = pa(0.1, rc.Rc * 2); pc.rotation.x = Math.PI / 2; cauda.add(pc);
-      cauda.position.set(rc.posCauda[0], rc.posCauda[1] + 0.3, rc.posCauda[2]);
+      const prin = pas(rc.B, rc.R, 0.27, 'z'); prin.h.position.set(rc.posRotor[0], rc.posRotor[1], rc.posRotor[2]);
+      const cauda = pas(2, rc.Rc, 0.1, 'y'); cauda.h.position.set(rc.posCauda[0], rc.posCauda[1] + 0.3, rc.posCauda[2]);
       const lanca = new THREE.Mesh(new THREE.BoxGeometry(Math.abs(rc.posCauda[0]) - 2, 0.3, 0.35), corM); lanca.position.set((rc.posCauda[0] - 2) / 2, 0, rc.posCauda[2] - 0.6);
       const mastro = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.9, 8), escM); mastro.rotation.x = Math.PI / 2; mastro.position.set(rc.posRotor[0], 0, rc.posRotor[2] - 0.45);
       const esqui = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.9, 0.06), escM); esqui.position.set(0, 0, 0.05);
-      for (const o of [prin, cauda, lanca, mastro, esqui]) this.anexar(o, 0);
-      this.rotores = [prin, cauda];
+      for (const o of [prin.h, cauda.h, lanca, mastro, esqui]) this.anexar(o, 0);
+      // (rodam a 8% e 5% da rotação real: estroboscópico, para as pás se verem)
+      this.rotores.push({ o: prin.g, eixo: 'z', k: 0.08 }, { o: cauda.g, eixo: 'z', k: 0.05 });
     }
     // silhueta: asas e empenagem nos aviões, hélice no nariz dos de hélice, rodas nos carros (medidas aproximadas,
     // tiradas do comprimento; a fuselagem e a carroceria são as do portador)
@@ -326,9 +347,14 @@ export class Cena3D {
       const deriva = new THREE.Mesh(new THREE.BoxGeometry(corda * 0.75, Math.max(0.05, s0.largura * 0.06), L * 0.16), corM); deriva.position.set(-L / 2 + corda * 0.5, 0, s0.altura + L * 0.06);
       for (const o of [asa, estab, deriva]) this.anexar(o, 0);
       if (!jato) {
-        const disco = new THREE.Mesh(new THREE.CircleGeometry(Math.max(0.9, H * 0.85), 40), new THREE.MeshBasicMaterial({ color: 0xbfd3ff, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false }));
-        disco.rotation.y = Math.PI / 2; disco.position.set(L / 2 + 0.05, 0, s0.zPiso + H * 0.5);
-        this.anexar(disco, L / 2);
+        // hélices: as fontes `pa` do portador (uma no nariz, ou uma por motor no turboélice)
+        const helices = c.fontes.filter((f) => f.tipo === 'pa');
+        for (const f of helices.length ? helices : [{ pos: [L / 2 + 0.05, 0, s0.zPiso + H * 0.5] }]) {
+          const r = helices.length > 1 ? 1.95 : Math.max(0.9, H * 0.85);
+          const p = pas(helices.length > 1 ? 6 : 3, r, 0.18, 'x'); p.h.position.set(Math.max(f.pos[0], helices.length > 1 ? f.pos[0] : L / 2 + 0.05), f.pos[1], f.pos[2]);
+          this.anexar(p.h, L / 2);
+          this.rotores.push({ o: p.g, eixo: 'z', k: 0.03 });
+        }
       }
     } else if (s0 && c.portador === 'carro') {
       const L = corpo.comprimento, r = Math.min(0.55, Math.max(0.3, s0.altura * 0.24));
@@ -336,11 +362,13 @@ export class Cena3D {
         const roda = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.24, 20), escM); roda.position.set(sx * L, sy * (s0.largura / 2 - 0.06), r);
         this.anexar(roda, sx * L);
       }
+    } else if (s0 && c.portador === 'drone') {
+      for (const f of c.fontes.filter((x) => x.tipo === 'pa')) { const p = pas(2, 0.12, 0.025, 'z'); p.h.position.set(f.pos[0], f.pos[1], f.pos[2] + 0.02); this.anexar(p.h, 0); this.rotores.push({ o: p.g, eixo: 'z', k: 0.02 }); }
     } else if (s0 && silhuetaVapor(c)) {
-      // (I8) as máquinas a vapor com as medidas do 1º segmento: caldeira deitada, chaminé, cabine ou casa de convés, rodas
+      // as máquinas a vapor com as medidas do 1º segmento: caldeira deitada, chaminé, cabine ou casa de convés, rodas
       // (motrizes na locomotiva, de ferro no trator) ou as rodas de pás do barco
       const L = s0.comprimento, W = s0.largura, H = s0.altura, x0 = corpo.comprimento / 2 - L / 2, zE = alturaEstrado(c, s0);
-      const pretoM = new THREE.MeshStandardMaterial({ color: 0x2b2e33, roughness: 0.6, metalness: 0.3 });
+      const pretoM = fosco(0x2b2e33, { flatShading: false });
       const cil = (r: number, comp: number, eixo: 'x' | 'y' | 'z', m: THREE.Material) => { const g = new THREE.Mesh(new THREE.CylinderGeometry(r, r, comp, 24), m); if (eixo === 'x') g.rotation.z = Math.PI / 2; else if (eixo === 'z') g.rotation.x = Math.PI / 2; return g; };
       const por = (o: THREE.Object3D, x: number, y: number, z: number) => { o.position.set(x, y, z); this.anexar(o, x); };
       if (c.portador === 'locomotiva') {
@@ -366,14 +394,20 @@ export class Cena3D {
         for (const sy of [-1, 1]) { const d = cil(rp, 0.9, 'y', escM); por(d, x0, sy * (W / 2 + 0.5), rp * 0.6); }
       }
     }
-    // fontes: esferas de 0,2 m por tipo (o raio segue o ganho)
-    const geo = new THREE.SphereGeometry(1, 16, 12);
-    c.fontes.forEach((f) => {
-      if (f.tipo === 'pressao') return;
-      const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: COR_TIPO[f.tipo], emissive: COR_TIPO[f.tipo], emissiveIntensity: 0.35, roughness: 0.4 }));
-      m.scale.setScalar(0.2); m.userData.pega = 'fonte'; m.userData.id = f.id;
-      this.fontesG.add(m); this.fontes3d.push({ f, m, idx: -1 });
-    });
+    // vista técnica: marcadores das fontes (opacos), cor por tipo, raio pelo ganho
+    const geo = new THREE.SphereGeometry(1, 14, 10);
+    for (const f of c.fontes) {
+      if (f.tipo === 'pressao') continue;
+      const m = new THREE.Mesh(geo, fosco(COR_TIPO[f.tipo], { emissive: COR_TIPO[f.tipo], emissiveIntensity: 0.35, flatShading: false }));
+      m.scale.setScalar(0.2);
+      this.tecnicoG.add(m); this.fontes3d.push({ id: f.id, pos: f.pos, m, idx: -1 });
+    }
+    // e a trajetória (no ar, a linha na altitude)
+    const lg = c.lugar(), pts: THREE.Vector3[] = [], Lv = c.via.comp, reta = c.traj.tipo === 'reta';
+    for (let s = reta ? -Lv / 2 : 0; s <= (reta ? Lv / 2 : Lv); s += reta ? 20 : 4) { const w = lg.mundo(s, 0, c.traj.altitude + (corpo.segmentos[0]?.altura ?? 2) / 2); pts.push(new THREE.Vector3(w[0], w[1], w[2])); }
+    const linha = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: 0x2f5aa8, dashSize: 6, gapSize: 4 }));
+    linha.computeLineDistances();
+    this.tecnicoG.add(linha);
   }
   /** peça presa ao segmento que contém x (referencial do corpo) */
   private anexar(o: THREE.Object3D, x: number) {
@@ -384,328 +418,83 @@ export class Cena3D {
   }
 
   // ------------------------------------------------------------------ quadro
+  /**
+   * Resolução adaptativa: com o quadro pesado (WebGL em software, aparelho fraco) a densidade de pixels desce até 0,5 e
+   * sobe de novo quando sobra tempo. O passo do observador e o som não dependem dela; o que ela poupa é o olho travando.
+   */
+  private densidadeMax = Math.min(2, window.devicePixelRatio || 1);
+  private intervaloMs = 16;
+  /** `ms`: o intervalo entre dois quadros (o custo de desenhar aparece nele, inclusive o que roda fora da chamada) */
+  private ajustarDensidade(ms: number) {
+    if (!(ms > 0) || ms > 1500) return;   // (a aba voltou do segundo plano: não conta)
+    this.intervaloMs += (ms - this.intervaloMs) * 0.15;
+    const d = this.renderer.getPixelRatio();
+    let nova = d;
+    if (this.intervaloMs > 45 && d > 0.5) nova = Math.max(0.5, d * 0.8);
+    else if (this.intervaloMs < 20 && d < this.densidadeMax) nova = Math.min(this.densidadeMax, d * 1.1);
+    if (Math.abs(nova - d) > 0.01) { this.renderer.setPixelRatio(nova); this.intervaloMs = Math.min(this.intervaloMs, 30); }
+  }
   redimensionar() {
     const r = this.canvas.getBoundingClientRect(), w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
     const cv = this.renderer.domElement;
     if (cv.width !== Math.round(w * this.renderer.getPixelRatio()) || cv.height !== Math.round(h * this.renderer.getPixelRatio())) {
-      this.renderer.setSize(w, h, false); this.camera.aspect = w / h; this.camera.updateProjectionMatrix();
+      this.renderer.setSize(w, h, false); this.camera.aspect = w / h;
+      // (tela em pé, celular: o campo de visão vertical abre para o horizontal não ficar estreito demais)
+      this.camera.fov = w / h < 0.9 ? 72 : 60;
+      this.camera.updateProjectionMatrix();
     }
   }
 
   quadro(agora: number) {
     if (!this.vivo) return;
-    if (agora - this.ultimo < 30 && !this.arrasto) return;   // ~30 fps
+    if (agora - this.ultimo < 12) return;
+    const dt = Math.min(0.1, (agora - this.ultimo) / 1000);
+    if (this.ultimo > 0) this.ajustarDensidade(agora - this.ultimo);
     this.ultimo = agora;
     this.redimensionar();
     this.montarEstatico();
     this.montarCorpo();
-    const c = this.c, { s, v } = c.estimativa(agora), tele = c.tele;
-    // corpo e fantasma
-    const posAt = (seg: { m: THREE.Object3D; xc: number }, sx: number) => {
-      const p = c.via.ponto(sx + seg.xc, this.pv);
-      seg.m.position.set(p.x, p.y, c.traj.altitude); seg.m.rotation.set(0, 0, Math.atan2(p.ty, p.tx));
-    };
-    for (const sg of this.segs) posAt(sg, s);
-    // fantasma: o corpo onde estava quando saiu o som que se ouve agora (atraso da fonte alvo, ou da mais próxima)
-    const tf = tele?.cena.fontes;
-    let atraso = 0;
-    if (tf && tf.length) {
-      const alvo = c.ouv.gimbal.alvo, ficha = c.fonteFicha ?? alvo;
-      let i = tf.findIndex((x) => x.id === ficha);
-      if (i < 0) { i = 0; for (let k = 1; k < tf.length; k++) if (tf[k].r < tf[i].r) i = k; }
-      atraso = tf[i].atrasoMs / 1000;
+    const c = this.c, { s } = c.estimativa(agora), tele = c.tele;
+    this.recentrarDormentes(c.sOuvinte());
+    // corpo
+    for (const sg of this.segs) {
+      const p = c.via.ponto(s + sg.xc, this.pv);
+      sg.m.position.set(p.x, p.y, c.traj.altitude); sg.m.rotation.set(0, 0, Math.atan2(p.ty, p.tx));
     }
-    const sF = s - v * atraso;
-    this.fantasmaG.visible = Math.abs(v) * atraso > 0.3;
-    for (const sg of this.segsF) posAt(sg, sF);
-    // rotores girando na rotação real
-    if (this.rotores.length && tele) {
-      const nr = Number(tele.portador.Nr) || 408, dt = 0.03;
-      this.rotores[0].rotation.z += (nr / 60) * 2 * Math.PI * dt * 0.08;   // estroboscópico: 8% da rotação real, para ver as pás
-      this.rotores[1].rotation.y += (nr / 60) * 2 * Math.PI * dt * 0.05;
+    // rotores e hélices girando (estroboscópico: uma fração da rotação real)
+    if (this.rotores.length) {
+      const rpm = Number(tele?.portador.Nr) || Number(tele?.portador.nHelice) || Number(tele?.portador.rpmHelice) || 400;
+      for (const r of this.rotores) r.o.rotation.z += (rpm / 60) * 2 * Math.PI * dt * r.k;
     }
-    // fontes: posição no corpo e raio pelo ganho instantâneo (r = 0,15 + 0,25·clamp((g + 40)/40))
-    if (tf && this.fontes3d.length && this.fontes3d[0].idx < 0) for (const f3 of this.fontes3d) f3.idx = tf.findIndex((x) => x.id === f3.f.id);
-    const w = new THREE.Vector3(), tmp: [number, number, number] = [0, 0, 0];
-    for (const f3 of this.fontes3d) {
-      c.corpoNoMundo(s, f3.f.pos, tmp); f3.m.position.set(tmp[0], tmp[1], tmp[2]);
-      const g = tf && f3.idx >= 0 && tf[f3.idx] ? tf[f3.idx].ganhoDb : -40;
-      let r = 0.15 + 0.25 * Math.min(1, Math.max(0, (g + 40) / 40));
-      if (f3.f.id === c.fonteFicha) r *= 1.6;
-      f3.m.scale.setScalar(r);
+    // vista técnica
+    this.tecnicoG.visible = c.vistaTecnica;
+    if (c.vistaTecnica) {
+      const tf = tele?.cena.fontes, tmp: [number, number, number] = [0, 0, 0];
+      if (tf && this.fontes3d.length && this.fontes3d[0].idx < 0) for (const f3 of this.fontes3d) f3.idx = tf.findIndex((x) => x.id === f3.id);
+      for (const f3 of this.fontes3d) {
+        c.corpoNoMundo(s, f3.pos, tmp); f3.m.position.set(tmp[0], tmp[1], tmp[2]);
+        const g = tf && f3.idx >= 0 && tf[f3.idx] ? tf[f3.idx].ganhoDb : -40;
+        f3.m.scale.setScalar(0.15 + 0.25 * Math.min(1, Math.max(0, (g + 40) / 40)));
+      }
     }
-    // ouvinte
-    const o = c.ouvinteNoMundo(s);
-    this.cabeca.position.set(o[0], o[1], o[2]);
-    const gimbal = c.ouv.modo === 'gimbal';
-    const alvoW = gimbal ? c.corpoNoMundo(s, c.alvoCorpo()) : [o[0], o[1] + 10, o[2]];
-    this.cabeca.rotation.set(0, 0, Math.atan2(alvoW[1] - o[1], alvoW[0] - o[0]));
-    // gimbal: anel no plano horizontal do alvo, arco de elevação no azimute, linha com a distância
-    this.gimbalG.visible = gimbal;
-    if (gimbal) {
-      const gg = c.ouv.gimbal, rumo = this.rumo(s), el = (gg.el * Math.PI) / 180, az = (gg.az * Math.PI) / 180;
-      const rh = Math.max(0.05, gg.r * Math.cos(el));
-      this.anelAz.position.set(alvoW[0], alvoW[1], alvoW[2]); this.anelAz.scale.set(rh, rh, 1); this.anelAz.rotation.set(0, 0, 0);
-      this.arcoEl.position.set(alvoW[0], alvoW[1], alvoW[2]); this.arcoEl.scale.set(gg.r, gg.r, gg.r);
-      // toro no plano xy, de 0 a 109° → gira para o plano vertical do azimute e começa em −20°
-      this.arcoEl.rotation.set(0, 0, 0); this.arcoEl.rotateZ(rumo + az); this.arcoEl.rotateX(Math.PI / 2); this.arcoEl.rotateZ((-20 * Math.PI) / 180);
-      const pos = this.linhaR.geometry.attributes.position as THREE.BufferAttribute;
-      pos.setXYZ(0, alvoW[0], alvoW[1], alvoW[2]); pos.setXYZ(1, o[0], o[1], o[2]); pos.needsUpdate = true;
-      this.linhaR.computeLineDistances(); this.linhaR.geometry.computeBoundingSphere();
-      const a = new THREE.Vector3(alvoW[0], alvoW[1], alvoW[2]), b = new THREE.Vector3(o[0], o[1], o[2]);
-      this.pegaR.position.copy(a).add(b).multiplyScalar(0.5); this.pegaR.scale.set(1, a.distanceTo(b), 1);
-      this.pegaR.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), w.copy(b).sub(a).normalize());
-      const txt = `${gg.r.toFixed(1).replace('.', ',')} m`;
-      if (txt !== this.textoR) { this.textoR = txt; trocarRotulo(this.rotuloR, txt); }
-      this.rotuloR.position.copy(this.pegaR.position).add(new THREE.Vector3(0, 0, 0.4));
-      const esc = Math.max(0.6, this.camera.position.distanceTo(this.rotuloR.position) * 0.04);
-      this.rotuloR.scale.set(esc * 2.4, esc * 0.6, 1);
-    }
-    // alças: lateral (no chão, entre a via e o ouvinte fixo), altitude (acima do centro do corpo)
-    const largura = c.corpo.segmentos[0]?.largura ?? 2;
-    const fixo = c.ouv.modo === 'fixo';
-    this.alcaLateral.visible = fixo; this.marcaProximo.visible = fixo;
-    if (fixo) {
-      const yv = c.via.yOuvinte, yl = yv - largura / 2 - c.traj.lateral / 2;
-      this.alcaLateral.position.set(o[0], yl, 0.45);
-      const pp = c.via.ponto(c.sOuvinte(), this.pv);
-      this.marcaProximo.position.set(pp.x, pp.y, c.traj.altitude + 0.05);
-    }
-    const cc = c.corpoNoMundo(s, [0, 0, (c.corpo.segmentos[0]?.altura ?? 2) + 2.5], tmp);
-    this.alcaAltitude.position.set(cc[0], cc[1], cc[2]);
-    // corpo no ar: sombra no chão e prumo até ele
-    const noAr = c.traj.altitude > 2 && c.ambienteCena().id !== 'ponte';
-    this.sombra.visible = noAr; this.prumo.visible = noAr;
-    if (noAr) {
-      const rs = Math.max(1.2, c.corpo.comprimento * 0.3);
-      this.sombra.position.set(cc[0], cc[1], 0.06); this.sombra.scale.setScalar(rs);
-      const pp = this.prumo.geometry.attributes.position as THREE.BufferAttribute;
-      pp.setXYZ(0, cc[0], cc[1], 0.06); pp.setXYZ(1, cc[0], cc[1], c.traj.altitude); pp.needsUpdate = true;
-      this.prumo.computeLineDistances(); this.prumo.geometry.computeBoundingSphere();
-    }
-    // câmera
-    this.enquadrar(s);
-    this.seguirCamera(gimbal ? null : o, s);
-    this.controls.update();
-    // marcas com tamanho mínimo na tela: longe, a cabeça do ouvinte, as alças e a sombra não somem
-    const mPorPx = (p: THREE.Vector3) => (2 * this.camera.position.distanceTo(p) * Math.tan((this.camera.fov * Math.PI) / 360)) / Math.max(1, this.canvas.clientHeight);
-    this.cabeca.scale.setScalar(Math.max(1, (mPorPx(this.cabeca.position) * 7) / 0.25));
-    this.alcaLateral.scale.setScalar(Math.max(1, (mPorPx(this.alcaLateral.position) * 9) / 0.45));
-    this.alcaAltitude.scale.setScalar(Math.max(1, (mPorPx(this.alcaAltitude.position) * 9) / 0.5));
-    this.marcaProximo.scale.setScalar(Math.max(1, (mPorPx(this.marcaProximo.position) * 9) / 1.15));
-    if (noAr) this.sombra.scale.setScalar(Math.max(this.sombra.scale.x, mPorPx(this.sombra.position) * 6));
-    // rótulos (sprites de tamanho fixo na tela)
-    const porRotulo = (sp: THREE.Sprite, p: THREE.Vector3, acima: number) => {
-      const u = mPorPx(p);
-      sp.position.set(p.x, p.y, p.z + acima + u * 16); sp.scale.set(u * 96, u * 24, 1);
-    };
-    porRotulo(this.rotuloVoce, this.cabeca.position, 0.25 * this.cabeca.scale.x);
-    // (colado numa fonte, o nome dela é que importa: os dois rótulos ficariam um por cima do outro)
-    this.rotuloVoce.visible = !(gimbal && c.fonteFicha && c.ouv.gimbal.r < 4);
-    const centro = w.set(cc[0], cc[1], cc[2] - 2.5);
-    const compPx = c.corpo.comprimento / mPorPx(centro);
-    this.rotuloCorpo.visible = compPx < 140;
-    if (this.rotuloCorpo.visible) {
-      const txt = `${NOME_CORPO[c.portador] ?? c.portador}${c.traj.altitude > 2 ? ` · ${Math.round(c.traj.altitude)} m` : ''}`;
-      if (txt !== this.textoCorpo) { this.textoCorpo = txt; trocarRotulo(this.rotuloCorpo, txt); }
-      porRotulo(this.rotuloCorpo, centro, 2.5);
-    }
-    const f3 = c.fonteFicha ? this.fontes3d.find((x) => x.f.id === c.fonteFicha) : null;
-    this.rotuloFonte.visible = !!f3;
-    if (f3) {
-      if (f3.f.id !== this.textoFonte) { this.textoFonte = f3.f.id; trocarRotulo(this.rotuloFonte, nomeFonte(c, f3.f.id)); }
-      porRotulo(this.rotuloFonte, f3.m.position, f3.m.scale.x);
-    }
-    this.ceu.position.copy(this.camera.position);
-    this.renderer.render(this.scene, this.camera);
+    // câmera: o olho do observador
+    const o = c.olhoNoMundo(s, this.olho), cam = this.camera;
+    cam.position.set(o.pos[0], o.pos[1], o.pos[2]);
+    const ca = Math.cos(o.arfagem);
+    cam.lookAt(o.pos[0] + ca * Math.cos(o.rumo), o.pos[1] + ca * Math.sin(o.rumo), o.pos[2] + Math.sin(o.arfagem));
+    // neblina: voando alto, ela recua (o chão lá embaixo continua visível)
+    const f = this.scene.fog as THREE.Fog, alto = Math.max(0, o.pos[2] - 30);
+    f.near = 250 + alto * 2; f.far = 5500 + alto * 6;
+    this.ceu.position.copy(cam.position);
+    const ds = this.sol.position.clone().normalize();
+    this.discoSol.position.copy(cam.position).addScaledVector(ds, 8500); this.discoSol.lookAt(cam.position);
+    this.sol.target.position.copy(cam.position); this.sol.position.copy(cam.position).addScaledVector(ds, 800);
+    this.renderer.render(this.scene, cam);
     this.quadros++;
   }
 
-  /** alvo da câmera "no ouvinte": a cabeça; com o corpo no ar e o ouvinte parado, o meio entre a cabeça e o ponto da
-   *  trajetória mais perto dele, para os dois caberem no quadro */
-  private alvoOuvinte(alvo: THREE.Vector3) {
-    const c = this.c;
-    alvo.copy(this.cabeca.position);
-    if (c.ouv.modo === 'fixo' && c.traj.altitude > 5) {
-      const p = c.via.ponto(c.sOuvinte(), this.pv);
-      alvo.set((alvo.x + p.x) / 2, (alvo.y + p.y) / 2, (alvo.z + c.traj.altitude) / 2);
-    }
-    return alvo;
-  }
-  /** põe a câmera "no ouvinte" no enquadramento padrão quando o portador, a altitude ou o modo do ouvinte mudam */
-  private enquadrar(s: number) {
-    const c = this.c;
-    const chave = `${c.portador}|${c.ouv.modo}|${Math.round(c.traj.altitude / 20)}|${Math.round(c.traj.lateral / 20)}`;
-    if (chave === this.chaveQuadro) return;
-    const primeira = this.chaveQuadro === '';
-    this.chaveQuadro = chave;
-    if (this.modo !== 'ouvinte' || (!primeira && this.arrasto)) return;
-    void s;
-    this.posicionarNoOuvinte();
-  }
-  private posicionarNoOuvinte() {
-    const c = this.c, h = this.cabeca.position, alvo = this.alvoOuvinte(new THREE.Vector3());
-    if (c.ouv.modo === 'fixo' && c.traj.altitude > 5) {
-      // de longe e de baixo, olhando para cima: o chão, o ouvinte e o corpo lá no alto
-      const D = 1.7 * Math.hypot(c.traj.altitude, c.traj.lateral) + 25;
-      this.camera.position.set(alvo.x - 0.4 * D, alvo.y - D, Math.max(1.5, 0.1 * D));
-      (this.scene.fog as THREE.Fog).far = Math.max(7000, 5 * D);
-    } else {
-      this.camera.position.set(h.x - 14, h.y - 22, h.z + 8);
-      (this.scene.fog as THREE.Fog).far = 7000;
-    }
-    this.controls.target.copy(alvo);
-    this.temAlvoAnt = false;
-  }
-
-  private rumo(s: number) { const p = this.c.via.ponto(s, this.pv); return Math.atan2(p.ty, p.tx); }
-
-  /** (a) orbital no ouvinte: o alvo dos controles anda com a cabeça; (b) segue o corpo; (c) livre */
-  private seguirCamera(_fixo: unknown, s: number) {
-    const c = this.c;
-    if (this.modo === 'livre') { this.temAlvoAnt = false; return; }
-    const alvo = new THREE.Vector3();
-    if (this.modo === 'ouvinte') this.alvoOuvinte(alvo);
-    else { const p = c.corpoNoMundo(s, [0, 0, 2]); alvo.set(p[0], p[1], p[2]); }
-    if (this.temAlvoAnt) {
-      const d = alvo.clone().sub(this.alvoAnt);
-      // presa ao ouvinte ou ao corpo, a câmera anda junto, saltos incluídos (o ouvinte que passa a andar no
-      // gimbal, o corpo que reaparece do outro lado da reta); no modo livre ela fica onde está
-      this.camera.position.add(d);
-    }
-    this.controls.target.copy(alvo);
-    this.alvoAnt.copy(alvo); this.temAlvoAnt = true;
-  }
-
-  alternarCamera() {
-    const ordem: ModoCamera[] = ['ouvinte', 'corpo', 'livre'];
-    this.definirCamera(ordem[(ordem.indexOf(this.modo) + 1) % 3]);
-  }
-  definirCamera(m: ModoCamera) {
-    this.modo = m; this.temAlvoAnt = false;
-    this.controls.enablePan = m === 'livre';
-    // (segue o corpo: a distância acompanha o tamanho dele, para um carro de 4 m não ficar um ponto)
-    if (m === 'corpo') { const p = this.c.corpoNoMundo(this.c.estimativa().s, [0, 0, 2]), d = Math.min(60, Math.max(9, this.c.corpo.comprimento * 1.1)); this.camera.position.set(p[0] - 0.65 * d, p[1] - 0.75 * d, p[2] + 0.3 * d); }
-    if (m === 'ouvinte') this.posicionarNoOuvinte();
-    this.aoMudarCamera?.();
-  }
-
-  // ------------------------------------------------------------------ arrasto
-  private ndc(e: PointerEvent) {
-    const r = this.canvas.getBoundingClientRect();
-    return new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-  }
-  private aoApertar = (e: PointerEvent) => {
-    if (e.button !== 0) return;
-    this.ray.setFromCamera(this.ndc(e), this.camera);
-    const alvos: THREE.Object3D[] = [this.cabeca, this.fontesG];
-    if (this.gimbalG.visible) alvos.push(this.anelAz, this.arcoEl, this.pegaR);
-    if (this.alcaLateral.visible) alvos.push(this.alcaLateral);
-    alvos.push(this.alcaAltitude, this.corpoG);
-    const hit = this.ray.intersectObjects(alvos, true)[0];
-    if (!hit) return;
-    let ob: THREE.Object3D | null = hit.object;
-    while (ob && !ob.userData.pega) ob = ob.parent;
-    if (!ob) return;
-    const pega = ob.userData.pega as string;
-    if (pega === 'fonte') {
-      const id = ob.userData.id as string;
-      this.c.escolherFonte(id);
-      this.c.setOuvinte({}, { alvo: id });
-      return;
-    }
-    if (pega === 'cabeca') this.arrasto = { tipo: 'cabeca', alt: e.shiftKey };
-    else if (pega === 'az' || pega === 'el' || pega === 'r' || pega === 'lateral' || pega === 'altitude') this.arrasto = { tipo: pega } as Arrasto;
-    else if (pega === 'corpo') {
-      const { s } = this.c.estimativa();
-      this.arrasto = { tipo: 'corpo', xGrab: this.abscissaPerto(hit.point, s) - s };
-    } else return;
-    this.controls.enabled = false;
-    this.canvas.setPointerCapture(e.pointerId);
-    this.canvas.style.cursor = 'grabbing';
-  };
-  private aoSoltar = (e: PointerEvent) => {
-    if (!this.arrasto) return;
-    this.arrasto = null;
-    this.controls.enabled = true;
-    try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* já solto */ }
-    this.canvas.style.cursor = '';
-    this.c.avisar('painel');
-  };
-  /** ponto do raio no plano horizontal z = h */
-  private noPlanoZ(h: number) { const p = new THREE.Vector3(); return this.ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), -h), p) ? p : null; }
-  /** ponto do raio no plano vertical que passa por q e encara a câmera */
-  private noPlanoVertical(q: THREE.Vector3) {
-    const n = this.camera.position.clone().sub(q); n.z = 0; if (n.lengthSq() < 1e-6) n.set(1, 0, 0); n.normalize();
-    const p = new THREE.Vector3(); return this.ray.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(n, q), p) ? p : null;
-  }
-  /** abscissa da via mais perto de um ponto do mundo, procurando perto de s */
-  private abscissaPerto(p: THREE.Vector3, s: number) {
-    const via = this.c.via;
-    if (via.tipo === 'reta') return via.sentido * p.x;
-    let melhor = s, dm = Infinity;
-    for (let d = -300; d <= 300; d += 2) { const q = via.ponto(s + d, this.pv); const e = (q.x - p.x) ** 2 + (q.y - p.y) ** 2; if (e < dm) { dm = e; melhor = s + d; } }
-    for (let d = -2; d <= 2; d += 0.1) { const q = via.ponto(melhor + d, this.pv); const e = (q.x - p.x) ** 2 + (q.y - p.y) ** 2; if (e < dm) { dm = e; melhor += d; } }
-    return melhor;
-  }
-  private aoMover = (e: PointerEvent) => {
-    const a = this.arrasto;
-    if (!a) return;
-    this.ray.setFromCamera(this.ndc(e), this.camera);
-    const c = this.c, { s } = c.estimativa(), largura = c.corpo.segmentos[0]?.largura ?? 2;
-    const snapA = (x: number) => Math.round(x / 5) * 5, snapR = (x: number) => Math.max(0.3, Math.round(x * 2) / 2);
-    const rumo = this.rumo(s);
-    const alvoW = () => { const t = c.corpoNoMundo(s, c.alvoCorpo()); return new THREE.Vector3(t[0], t[1], t[2]); };
-    if (a.tipo === 'cabeca' && c.ouv.modo === 'fixo') {
-      const h = this.cabeca.position;
-      if (a.alt || e.shiftKey) { const p = this.noPlanoVertical(h); if (p) c.setOuvinte({ pos: [c.ouv.pos[0], 0, Math.min(50, Math.max(0.2, Math.round(p.z * 10) / 10))] }); }
-      else {
-        const p = this.noPlanoZ(h.z); if (!p) return;
-        const lateral = Math.max(0.5, Math.round((c.via.yOuvinte - p.y - largura / 2) * 2) / 2);
-        c.setOuvinte({ pos: [Math.round(p.x * 2) / 2, 0, c.ouv.pos[2]] });
-        c.setTraj({ lateral: Math.min(3000, lateral) });
-      }
-    } else if (a.tipo === 'cabeca' || a.tipo === 'az' || a.tipo === 'r') {
-      const q = alvoW(), g = c.ouv.gimbal;
-      if (a.tipo === 'cabeca' && (a.alt || e.shiftKey)) { this.elevacao(q, rumo); return; }
-      const p = this.noPlanoZ(a.tipo === 'az' ? q.z : this.cabeca.position.z); if (!p) return;
-      const dx = p.x - q.x, dy = p.y - q.y;
-      const azw = Math.atan2(dy, dx) - rumo, rh = Math.hypot(dx, dy);
-      const patch: Partial<typeof g> = {};
-      if (a.tipo !== 'r') patch.az = snapA((azw * 180) / Math.PI);
-      if (a.tipo !== 'az') {
-        if (a.tipo === 'r') { const dir = this.cabeca.position.clone().sub(q).normalize(); const pp = this.noPlanoVertical(q) ?? p; patch.r = snapR(Math.max(0.3, pp.clone().sub(q).dot(dir))); }
-        else patch.r = snapR(rh / Math.max(0.05, Math.cos((g.el * Math.PI) / 180)));
-      }
-      c.setOuvinte({}, patch);
-    } else if (a.tipo === 'el') this.elevacao(alvoW(), rumo);
-    else if (a.tipo === 'corpo') {
-      const p = this.noPlanoZ(c.traj.altitude + 1.5); if (!p) return;
-      c.moverCorpo(this.abscissaPerto(p, s + a.xGrab) - a.xGrab);
-    } else if (a.tipo === 'lateral') {
-      const p = this.noPlanoZ(0.45); if (!p) return;
-      c.setTraj({ lateral: Math.min(3000, Math.max(0.5, Math.round((c.via.yOuvinte - p.y - largura / 2) * 2 * 2) / 2)) });
-    } else if (a.tipo === 'altitude') {
-      const p = this.noPlanoVertical(this.alcaAltitude.position); if (!p) return;
-      const alt = Math.max(0, Math.min(3000, Math.round((p.z - (c.corpo.segmentos[0]?.altura ?? 2) - 2.5) * 2) / 2));
-      c.setTraj({ altitude: alt });
-    }
-  };
-  private elevacao(q: THREE.Vector3, _rumo: number) {
-    const p = this.noPlanoVertical(q); if (!p) return;
-    const dh = Math.hypot(p.x - q.x, p.y - q.y), el = (Math.atan2(p.z - q.z, dh) * 180) / Math.PI;
-    this.c.setOuvinte({}, { el: Math.max(-20, Math.min(89, Math.round(el / 5) * 5)) });
-  }
-  private aoTecla = (e: KeyboardEvent) => { if (e.code === 'KeyC') this.alternarCamera(); };
-
   descartar() {
     this.vivo = false;
-    this.canvas.removeEventListener('pointerdown', this.aoApertar);
-    this.canvas.removeEventListener('pointermove', this.aoMover);
-    this.canvas.removeEventListener('pointerup', this.aoSoltar);
-    this.canvas.removeEventListener('pointercancel', this.aoSoltar);
-    this.canvas.removeEventListener('keydown', this.aoTecla);
-    this.controls.dispose();
     descartar(this.scene);
     this.renderer.dispose();
   }
@@ -719,7 +508,7 @@ export class Cena3D {
  * a 25% da altura (o nariz de bico de pato de um Shinkansen) e a ponta fechada num ponto.
  */
 export function geometriaSegmento(comp: number, larg: number, alt: number, zPiso: number, nariz: number, cauda: number, heli = false) {
-  const K = 28, secoes: { x: number; w: number; zb: number; zt: number }[] = [];
+  const K = 20, secoes: { x: number; w: number; zb: number; zt: number }[] = [];
   const H = alt - zPiso, zb0 = heli ? 0.5 : zPiso;
   const perfil = (t: number) => (heli ? { w: larg * (1 - 0.55 * t * t), zb: zb0 + 0.9 * t * t, zt: zb0 + (alt - zb0) * (1 - 0.55 * Math.pow(t, 1.5)) } : { w: larg * (1 - 0.45 * t * t), zb: zb0 + 0.25 * t * t, zt: zb0 + H * (1 - 0.75 * Math.pow(t, 1.3)) });
   const M = 14;
@@ -740,7 +529,8 @@ export function geometriaSegmento(comp: number, larg: number, alt: number, zPiso
   secoes.forEach(anel);
   for (let i = 0; i < secoes.length - 1; i++) for (let j = 0; j < K; j++) {
     const a = i * K + j, b = i * K + ((j + 1) % K), cc = (i + 1) * K + j, d = (i + 1) * K + ((j + 1) % K);
-    idx.push(a, cc, b, b, cc, d);
+    // (a face olha para fora: o ângulo j cresce no sentido anti-horário visto de +x, e x cresce de uma seção para a outra)
+    idx.push(a, b, cc, b, d, cc);
   }
   // tampas (fan a partir do centro da seção)
   const tampa = (i: number, frente: boolean) => {
@@ -756,64 +546,73 @@ export function geometriaSegmento(comp: number, larg: number, alt: number, zPiso
   return g;
 }
 
-/** faixa ao longo da via entre as abscissas s0 e s1: de (deslocamento y0, altura z0) a (y1, z1) */
-function faixa(c: ControlePassagem, s0: number, s1: number, passo: number, y0: number, y1: number, z0: number, z1: number, cor: number, opac: number) {
-  const pv = new PontoVia(), pos: number[] = [], idx: number[] = [];
+/** malha montada por quadriláteros dados em coordenadas da via ([s, m, z] nos quatro cantos), num só desenho */
+class Malha {
+  private pos: number[] = []; private w: [number, number, number] = [0, 0, 0];
+  constructor(private lg: Lugar) {}
+  quad(...c: [number, number, number][]) {
+    const p = c.map(([s, m, z]) => [...this.lg.mundo(s, m, z, this.w)]);
+    for (const i of [0, 1, 2, 0, 2, 3]) this.pos.push(p[i][0], p[i][1], p[i][2]);
+  }
+  mesh(mat: THREE.Material) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos.length ? this.pos : [0, 0, 0, 0, 0, 0, 0, 0, 0], 3)); g.computeVertexNormals();
+    if (mat instanceof THREE.MeshLambertMaterial) mat.side = THREE.DoubleSide;
+    return new THREE.Mesh(g, mat);
+  }
+}
+
+/** faixa ao longo da via entre as abscissas s0 e s1: de (m0, altura z0) a (m1, z1), opaca */
+function faixa(lg: Lugar, s0: number, s1: number, passo: number, m0: number, m1: number, z0: number, z1: number, mat: THREE.Material) {
+  const pos: number[] = [], idx: number[] = [], w: [number, number, number] = [0, 0, 0];
   const n = Math.max(1, Math.ceil((s1 - s0) / passo));
   for (let i = 0; i <= n; i++) {
-    const p = c.via.ponto(s0 + ((s1 - s0) * i) / n, pv);
-    pos.push(p.x + y0 * p.nx, p.y + y0 * p.ny, z0, p.x + y1 * p.nx, p.y + y1 * p.ny, z1);
+    const s = s0 + ((s1 - s0) * i) / n;
+    lg.mundo(s, m0, z0, w); pos.push(w[0], w[1], w[2]);
+    lg.mundo(s, m1, z1, w); pos.push(w[0], w[1], w[2]);
     if (i < n) { const a = 2 * i; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
-  const m = new THREE.MeshStandardMaterial({ color: cor, side: THREE.DoubleSide, roughness: 0.9, transparent: opac < 1, opacity: opac, depthWrite: opac >= 1 });
-  return new THREE.Mesh(g, m);
+  // (a faixa é vista dos dois lados: a ordem dos vértices depende do sentido da via)
+  if (mat instanceof THREE.MeshLambertMaterial) mat.side = THREE.DoubleSide;
+  return new THREE.Mesh(g, mat);
 }
 
-/** linha ao longo da via com deslocamento lateral e altura (tracejada no ar) */
-function linhaVia(c: ControlePassagem, s0: number, s1: number, passo: number, y: number, z: number, cor: number, tracejada = false) {
-  const pv = new PontoVia(), pts: THREE.Vector3[] = [];
-  const n = Math.max(1, Math.ceil((s1 - s0) / passo));
-  for (let i = 0; i <= n; i++) { const p = c.via.ponto(s0 + ((s1 - s0) * i) / n, pv); pts.push(new THREE.Vector3(p.x + y * p.nx, p.y + y * p.ny, z)); }
-  const g = new THREE.BufferGeometry().setFromPoints(pts);
-  const l = new THREE.Line(g, tracejada ? new THREE.LineDashedMaterial({ color: cor, dashSize: 6, gapSize: 4 }) : new THREE.LineBasicMaterial({ color: cor }));
-  if (tracejada) l.computeLineDistances();
-  return l;
-}
-
-/** rótulo de texto (sprite com canvas) */
-function rotulo(texto: string) {
-  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
-  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true }));
-  s.renderOrder = 10;
-  trocarRotulo(s, texto);
-  return s;
-}
-function trocarRotulo(s: THREE.Sprite, texto: string) {
-  const t = (s.material as THREE.SpriteMaterial).map as THREE.CanvasTexture, cv = t.image as HTMLCanvasElement, g = cv.getContext('2d')!;
-  g.clearRect(0, 0, cv.width, cv.height);
-  if (!texto) { t.needsUpdate = true; return; }
-  // (o fundo acompanha a largura do texto: uma tarja de ponta a ponta tapava a cena em volta)
-  g.font = '500 30px "IBM Plex Mono", ui-monospace, monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  const lw = Math.min(cv.width - 4, g.measureText(texto).width + 26);
-  g.fillStyle = 'rgba(13,16,21,0.8)';
-  g.beginPath();
-  if (g.roundRect) g.roundRect((cv.width - lw) / 2, 9, lw, 46, 10); else g.rect((cv.width - lw) / 2, 9, lw, 46);
-  g.fill();
-  g.fillStyle = '#e9e4d8';
-  g.fillText(texto, cv.width / 2, 33, cv.width - 12);
-  t.needsUpdate = true;
+/**
+ * Prisma ao longo da via: a seção [m, z] (polígono, no sentido anti-horário visto de quem anda para s crescente)
+ * extrudada de s0 a s1; `tampas` fecha as pontas; `aberta` não liga o último vértice ao primeiro (o túnel).
+ */
+function prisma(lg: Lugar, s0: number, s1: number, passo: number, secao: readonly (readonly [number, number])[], mat: THREE.Material, tampas: boolean, aberta = false) {
+  const pos: number[] = [], idx: number[] = [], w: [number, number, number] = [0, 0, 0];
+  const n = Math.max(1, Math.ceil((s1 - s0) / passo)), K = secao.length;
+  for (let i = 0; i <= n; i++) {
+    const s = s0 + ((s1 - s0) * i) / n;
+    for (const [m, z] of secao) { lg.mundo(s, m, z, w); pos.push(w[0], w[1], w[2]); }
+  }
+  for (let i = 0; i < n; i++) for (let j = 0; j < (aberta ? K - 1 : K); j++) {
+    const a = i * K + j, b = i * K + ((j + 1) % K), c = (i + 1) * K + j, d = (i + 1) * K + ((j + 1) % K);
+    idx.push(a, b, c, b, d, c);
+  }
+  if (tampas) for (const i of [0, n]) for (let j = 1; j < K - 1; j++) idx.push(i * K, i * K + j, i * K + j + 1);
+  // (geometria não indexada por face, para o sombreamento plano do "low poly")
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+  const ng = g.toNonIndexed(); ng.computeVertexNormals(); g.dispose();
+  if (mat instanceof THREE.MeshLambertMaterial) mat.side = THREE.DoubleSide;
+  return new THREE.Mesh(ng, mat);
 }
 
 /** libera geometrias e materiais de um grupo e o esvazia */
 function descartar(g: THREE.Object3D) {
+  // (as texturas dos materiais são cópias, uma por material: vão junto; e as instâncias têm buffers próprios)
+  const solta = (x: THREE.Material) => { (x as { map?: THREE.Texture | null }).map?.dispose(); x.dispose(); };
   g.traverse((o) => {
     const m = o as THREE.Mesh;
     if (m.geometry) m.geometry.dispose();
+    if (o instanceof THREE.InstancedMesh) o.dispose();
     const mat = (m as { material?: THREE.Material | THREE.Material[] }).material;
-    if (Array.isArray(mat)) mat.forEach((x) => x.dispose()); else mat?.dispose();
+    if (Array.isArray(mat)) mat.forEach(solta); else if (mat) solta(mat);
   });
   if (g instanceof THREE.Scene) return;
   while (g.children.length) g.remove(g.children[0]);

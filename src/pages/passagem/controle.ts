@@ -4,16 +4,24 @@
 //
 //   painel   → o painel inteiro (troca de portador, preset, "voltar ao padrão")
 //   presets  → a barra de presets e de portadores
-//   ouvinte  → sliders do gimbal, da posição e do local (o arrasto na cena 3D muda estes valores)
+//   ouvinte  → a seção "Você" e a trajetória (modo do observador, pontos de vista, local)
 //   estado   → botão de disparar/parar e o rótulo
 //
+// O ouvinte é o observador em primeira pessoa (observador.ts): a câmera da cena 3D é o olho dele e o ouvinte da Cena é
+// o ouvido (modo 'livre' da Cena), com a cabeça para onde ele olha. As teclas (andar, voar, embarcar, pontos de vista)
+// são tratadas aqui; o mouse e o toque, em entrada.ts, sobre o canvas. As ferramentas (teste:passagem) podem pedir o
+// ouvinte fixo de antes (`ouvinteFixo`), ao lado da via na lateral do preset.
+//
 // Mensagens para o worklet (src/scene/dsp-cena.ts): 'portador' (monta, com as calibrações feitas aqui
-// na thread principal), 'cena' (ambiente, trajetória e ouvinte; o worklet faz rampas de 20 ms),
-// 'comando' (velocidade fixa, coletivo), 'params' (master, posição do corpo) e 'ar' (umidade, temperatura).
-// Mudanças contínuas (arrasto, sliders) são juntadas e mandadas no máximo uma vez por quadro (`enviarPendentes`).
+// na thread principal), 'cena' (ambiente, trajetória e ouvinte; o worklet faz rampas de 20 ms e segue o ouvinte
+// livre entre as amostras), 'comando' (velocidade fixa, coletivo), 'params' (master, posição do corpo) e 'ar'
+// (umidade, temperatura). O ouvinte que anda vai no máximo a cada INTERVALO_OUVINTE ms; sliders, no máximo um por quadro.
 import { useSyncExternalStore } from 'react';
 import type { CadeiaDeAudio } from '../../ui';
 import type { Ambiente, Ouvinte, Trajetoria, FonteSonora, TelemetriaCena, LocalOuvinte, Solo, Vec3 } from '../../scene/tipos';
+import { Observador, OUVIDO_ABAIXO, type Destino, type ModoObservador } from './observador';
+import { Lugar } from './lugar';
+import { pontoDeChegada, pontosDeVista, assento, type PontoDeVista } from './pontos';
 import type { Corpo, Portador, TelemetriaPortador, FamiliaMotor } from '../../carriers/tipos';
 import { ambientePassagem } from '../../scene/ambientes';
 import { Via, PontoVia } from '../../scene/trajetoria';
@@ -41,7 +49,6 @@ import {
   type IdAmbientePagina, type IdPortadorPagina, type PresetPassagem, type TremPagina,
 } from './presets';
 
-export const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
 export const fmt = (x: number, d = 0) => (Number.isFinite(x) ? x.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—');
 
 export type Topico = 'painel' | 'presets' | 'ouvinte' | 'estado';
@@ -65,10 +72,17 @@ export const PADROES: Record<IdPortadorPagina, PadroesPortador> = {
   drone: { traj: { tipo: 'reta', comprimento: 1000, raioCurva: 2000, lateral: 0, altitude: 10, sentido: 1 }, vKmh: 20, ambiente: 'ceu', x0: 60 },
 };
 export const AR_PADRAO = { ur: 60, temperatura: 20 };
+/** o ouvinte fixo de antes (as ferramentas: `ouvinteFixo`), e de onde saem binaural e alvo do ouvinte livre */
 export const OUVINTE_PADRAO: Ouvinte = { modo: 'fixo', pos: [0, 0, 1.6], gimbal: { az: 90, el: 0, r: 8, alvo: 'corpo' }, local: 'auto', binaural: true };
+/** ms: intervalo mínimo entre duas amostras do ouvinte que anda (a Cena segue entre elas) */
+export const INTERVALO_OUVINTE = 33;
 
-/** Atalhos do gimbal (CENA.md 3.2), resolvidos para as fontes do portador atual. */
-export interface Atalho { id: string; nome: string; titulo: string; ok: boolean; motivo?: string; aplicar?: () => Partial<Ouvinte> & { gimbal: Ouvinte['gimbal'] } }
+/** teclas do observador (o mapa da ajuda na tela) */
+export const TECLAS: readonly (readonly [string, string])[] = [
+  ['W A S D / setas', 'andar'], ['Shift', 'correr (voar mais rápido)'], ['mouse', 'olhar (clique na cena; Esc solta)'],
+  ['V', 'voar ou voltar a pé'], ['E / Q', 'subir / descer (voando)'], ['B', 'embarcar / desembarcar'],
+  ['1–9', 'pontos de vista'], ['Espaço', 'disparar a passagem'], ['R', 'repetir'], ['T', 'vista técnica'], ['H', 'esta ajuda'],
+];
 
 /** Telemetria guardada da última mensagem, com o instante de chegada. */
 export interface Tele { cena: TelemetriaCena; portador: TelemetriaPortador; pressao: { max: number; min: number; nariz: number; tunel: number }; lado: number; t: number }
@@ -115,8 +129,21 @@ export class ControlePassagem {
   ouv: Ouvinte = clonarOuvinte(OUVINTE_PADRAO);
   master = 0.8;
   presetId: string | null = 'trembala-tunel';
-  /** fonte destacada (clique na cena ou alvo do gimbal) */
+  /** fonte destacada (a do Doppler nas leituras; null = a mais próxima) */
   fonteFicha: string | null = null;
+  /** o observador em primeira pessoa: a câmera da cena 3D e o ouvinte da Cena */
+  obs = new Observador();
+  /**
+   * (ferramentas) manda à Cena o ouvinte fixo de antes, parado ao lado da via na lateral do preset e de frente para ela,
+   * em vez do observador: `npm run teste:passagem` mede os presets com ele, e os números continuam os mesmos
+   */
+  ouvinteFixo = false;
+  /** relógio da página (s): o instante de cada amostra do observador, para a Cena descontar a demora da mensagem */
+  relogio = () => performance.now() / 1000;
+  /** vista técnica (cena 3D): marcadores das fontes e a linha da trajetória; desligada por padrão */
+  vistaTecnica = false;
+  /** ajuda das teclas na tela: o instante (ms) em que foi pedida (some sozinha) */
+  ajudaDesde = 0;
 
   // derivados (sonda do portador na thread principal: geometria, fontes e calibrações)
   corpo!: Corpo;
@@ -147,6 +174,7 @@ export class ControlePassagem {
   constructor() {
     this.via.configurar(this.traj);
     this.sondar();
+    this.irParaChegada();
   }
 
   // ---------------------------------------------------------- tópicos
@@ -247,6 +275,8 @@ export class ControlePassagem {
     this.sondar();
     if (this.calibrando) { this.avisar('estado'); return; }
     if (this.ajustarPendente) { this.ajustarAoMotor(); this.ajustarPendente = false; }
+    // (o ponto de chegada foi calculado com o corpo de antes: refeito com o novo, se o observador não saiu dele)
+    if (this.chegadaPendente) this.irParaChegada(true);
     this.mandarPortador();
     this.mandarComando();
     this.avisar('presets', 'painel', 'ouvinte', 'estado');
@@ -374,6 +404,7 @@ export class ControlePassagem {
     this.presetId = null;
     this.sondar();
     this.ajustarSePronto();
+    this.irParaChegada();
     this.mandarPortador();
     this.mandarCena(true);
     this.mandarComando();
@@ -394,11 +425,13 @@ export class ControlePassagem {
   setAmbiente(id: IdAmbientePagina) {
     this.ambiente = id;
     this.presetId = null;
+    // (o lugar mudou: paredes, plataforma e tabuleiro são outros; o observador volta ao ponto de chegada)
+    this.irParaChegada();
     this.mandarCena(true);
-    this.avisar('presets', 'painel');
+    this.avisar('presets', 'painel', 'ouvinte');
   }
   setSolo(s: Solo['tipo'] | null) { this.solo = s; this.presetId = null; this.mandarCena(true); this.avisar('painel', 'presets'); }
-  setTunel(patch: Partial<ControlePassagem['tunel']>) { Object.assign(this.tunel, patch); this.mandarCena(false); }
+  setTunel(patch: Partial<ControlePassagem['tunel']>) { Object.assign(this.tunel, patch); if (this.obs.modo !== 'embarcado') this.irParaChegada(); this.mandarCena(false); }
   setRt(k: number) { this.rtFator = k; this.mandarCena(true); }
 
   // ---------------------------------------------------- trajetória
@@ -408,8 +441,10 @@ export class ControlePassagem {
     this.via.configurar(this.traj);
     this.presetId = null;
     this.pendCena = true;
-    if (estrutural || lado0 !== this.traj.sentido) { this.mandarCena(false); this.avisar('painel', 'presets'); }
-    else this.avisar('ouvinte', 'presets');   // sliders e placa acompanham o arrasto
+    // a via mudou de forma ou a lateral do ponto de chegada mudou: o observador vai para o ponto de chegada novo
+    if (estrutural || patch.lateral != null) this.irParaChegada();
+    if (estrutural || lado0 !== this.traj.sentido) { this.mandarCena(false); this.avisar('painel', 'presets', 'ouvinte'); }
+    else this.avisar('ouvinte', 'presets');   // sliders e placa acompanham
   }
   setV(kmh: number) { this.vKmh = kmh; this.presetId = null; if (this.andando) this.mandarComando(); this.avisar('presets'); }
   setColetivo(c: number) { this.coletivo = c; this.mandarComando(); }
@@ -417,52 +452,144 @@ export class ControlePassagem {
   setMaster(m: number) { this.master = m; this.audio?.send({ type: 'params', master: m }); }
 
   // ------------------------------------------------------- ouvinte
-  setOuvinte(patch: Partial<Ouvinte>, gim?: Partial<Ouvinte['gimbal']>) {
-    this.ouv = { ...this.ouv, ...patch, pos: [...(patch.pos ?? this.ouv.pos)] as unknown as Vec3, gimbal: { ...this.ouv.gimbal, ...(gim || {}) } };
-    const g = this.ouv.gimbal;
-    g.az = ((((g.az + 180) % 360) + 360) % 360) - 180; g.el = clamp(g.el, -20, 89); g.r = clamp(g.r, 0.3, 300);
+  /** binaural e o fixo das ferramentas (o ouvinte livre leva a cabeça do observador) */
+  setOuvinte(patch: Partial<Ouvinte>) {
+    this.ouv = { ...this.ouv, ...patch, pos: [...(patch.pos ?? this.ouv.pos)] as unknown as Vec3, gimbal: { ...this.ouv.gimbal, ...(patch.gimbal || {}) } };
     this.pendCena = true;
     this.avisar('ouvinte');
   }
-  setLocal(l: Ouvinte['local']) { this.setOuvinte({ local: l }); this.enviarPendentes(); this.avisar('painel'); }
-  setModo(m: Ouvinte['modo']) { this.setOuvinte({ modo: m }); this.enviarPendentes(); this.avisar('painel'); }
+  /** filtro do local no ponto em que o observador está ('auto': cabine dentro do corpo, senão fora) */
+  setLocal(l: Ouvinte['local']) { this.obs.local = l; this.ouv.local = l; this.obs.mudou = true; this.pendOuv = true; this.enviarPendentes(); this.avisar('ouvinte'); }
   escolherFonte(id: string | null) { this.fonteFicha = id; this.avisar('ouvinte'); }
 
-  atalhos(): Atalho[] {
-    const tem = (id: string) => this.fontes.some((f) => f.id === id);
-    const primeira = (tipo: FonteSonora['tipo']) => this.fontes.find((f) => f.tipo === tipo)?.id;
-    const L = this.corpo.comprimento;
-    const frente = tem('nariz') ? 'nariz' : 'corpo', tras = tem('cauda') ? 'cauda' : 'corpo';
-    const escape = this.fontes.find((f) => f.tipo === 'escape')?.id;
-    const dentro = this.fontes.find((f) => f.dentro)?.id;
-    const panto = primeira('pantografo') ?? (tem('rotor.principal') ? 'rotor.principal' : undefined);
-    const semMotor = 'O portador não tem motor com escape: espera os adaptadores de motor';
-    const g = (alvo: string, az: number, el: number, r: number, local: Ouvinte['local'] = 'fora') => () => ({ modo: 'gimbal' as const, local, gimbal: { alvo, az, el, r } });
-    return [
-      { id: 'escape', nome: 'Escape', titulo: '180°, −10°, 1,5 m da ponteira', ok: !!escape, motivo: semMotor, aplicar: escape ? g(escape, 180, -10, 1.5) : undefined },
-      { id: 'ponteira', nome: 'Ponteira', titulo: 'a 0,3 m da ponteira; as outras fontes −20 dB', ok: !!escape, motivo: semMotor, aplicar: escape ? g(escape, 180, 0, 0.3, 'ponteira') : undefined },
-      { id: 'frente', nome: 'Frente', titulo: '0°, 0°, 3 m à frente do nariz', ok: true, aplicar: g(frente, 0, 0, 3) },
-      { id: 'lateral', nome: 'Lateral', titulo: '90°, 0°, 5 m do centro do corpo', ok: true, aplicar: g('corpo', 90, 0, 5) },
-      { id: 'atras', nome: 'Câmera atrás', titulo: '180°, 5°, 4 m atrás', ok: true, aplicar: g(tras, 180, 5, 4) },
-      { id: 'cabine', nome: 'Cabine', titulo: 'dentro do primeiro segmento: lei da massa e ressonância do habitáculo', ok: true,
-        aplicar: g('corpo', 0, 0, Math.max(0.3, L / 2 - Math.min(8, L / 4)), 'auto') },
-      { id: 'cofre', nome: 'Cofre', titulo: 'no compartimento do motor', ok: !!dentro, motivo: 'Nenhuma fonte dentro de compartimento (as do motor)', aplicar: dentro ? g(dentro, 90, 0, 0.5, 'cofre') : undefined },
-      { id: 'topo', nome: panto?.startsWith('rotor') ? 'Sobre o rotor' : 'Sobre o pantógrafo', titulo: '0°, 89°, 1 m acima', ok: !!panto, motivo: 'Sem pantógrafo nem rotor',
-        aplicar: panto ? g(panto, 0, 89, 1) : undefined },
-    ].map((a) => ({ ...a, titulo: a.ok ? a.titulo : a.motivo! }));
+  /** o ouvinte que vai para a Cena: o ouvido do observador (modo 'livre') ou, nas ferramentas, o fixo de antes */
+  ouvinte(): Ouvinte {
+    if (this.ouvinteFixo) return this.ouv;
+    const o = this.obs, D = 180 / Math.PI;
+    return {
+      modo: 'livre', pos: this.ouv.pos, gimbal: { ...this.ouv.gimbal, alvo: o.alvo }, local: o.local, binaural: this.ouv.binaural,
+      livre: {
+        ref: o.modo === 'embarcado' ? 'corpo' : 'mundo', pos: [o.pos[0], o.pos[1], o.pos[2] - OUVIDO_ABAIXO],
+        vel: [o.velReal[0], o.velReal[1], o.velReal[2]], rumo: o.rumo * D, salto: o.salto, t: this.relogio(),
+      },
+    };
   }
-  aplicarAtalho(a: Atalho) {
-    if (!a.ok || !a.aplicar) return;
-    const p = a.aplicar();
-    this.setOuvinte(p, p.gimbal);
-    this.fonteFicha = p.gimbal.alvo === 'corpo' ? null : p.gimbal.alvo;
+
+  // ---------------------------------------------------- observador
+  private lugarCache: { chave: string; l: Lugar } | null = null;
+  /** o lugar onde o observador anda (paredes, plataforma, tabuleiro), refeito quando ambiente, via ou corpo mudam */
+  lugar(): Lugar {
+    const amb = this.ambienteCena(), w = this.corpo.segmentos[0]?.largura ?? 2, mChegada = this.traj.lateral + w / 2;
+    const chave = JSON.stringify([amb.id, amb.tunel, this.traj.tipo, this.traj.comprimento, this.traj.raioCurva, this.traj.sentido, w, mChegada]);
+    if (this.lugarCache?.chave !== chave) this.lugarCache = { chave, l: new Lugar({ ambiente: amb.id, via: this.via, tunel: amb.tunel, larguraCorpo: w, mChegada }) };
+    return this.lugarCache.l;
+  }
+  /** o ponto de chegada do preset (ou do portador), recalculado agora */
+  pontoDeChegada(): Destino { return pontoDeChegada(this); }
+  private chegadaPendente = false; private chegadaSalto = -1;
+  /**
+   * põe o observador no ponto de chegada (a pé, olhando o veículo chegar). `seNaoSaiu`: só se ele ainda está no ponto em
+   * que a última chegada o pôs (a calibração do motor terminou e o corpo mudou de medida)
+   */
+  irParaChegada(seNaoSaiu = false) {
+    if (seNaoSaiu && this.obs.salto !== this.chegadaSalto) { this.chegadaPendente = false; return; }
+    this.obs.ir(pontoDeChegada(this)); this.obs.volta = null;
+    this.chegadaSalto = this.obs.salto; this.chegadaPendente = this.calibrando;
+    this.pendOuv = true;
+    this.avisar('ouvinte');
+  }
+  /** os pontos de vista do painel e das teclas 1–9 (os que existem neste portador e neste lugar) */
+  pontosDeVista(): PontoDeVista[] { return pontosDeVista(this).filter((p) => p.ok); }
+  irPara(p: PontoDeVista) {
+    if (!p.ok || !p.ir) return;
+    const d = p.ir();
+    if (d.modo === 'embarcado' && this.obs.modo === 'embarcado') { const v = this.obs.volta; this.obs.ir(d); this.obs.volta = v; }
+    else this.obs.ir(d);
+    if (p.id === 'chegada') this.chegadaSalto = this.obs.salto;
+    this.pendOuv = true;
     this.enviarPendentes();
-    this.avisar('painel');
+    this.avisar('ouvinte');
+  }
+  /** a pé ↔ voo (embarcado: desembarca para voar) */
+  alternarVoo() {
+    const o = this.obs;
+    if (o.modo === 'embarcado') { this.desembarcar(); }
+    o.modo = o.modo === 'voo' ? 'pe' : 'voo';
+    if (o.modo === 'voo') o.pos[2] += 0.3;   // sai do chão
+    o.mudou = true; this.pendOuv = true;
+    this.avisar('ouvinte');
+  }
+  setModoObservador(m: ModoObservador) {
+    if (m === this.obs.modo) return;
+    if (m === 'embarcado') { this.embarcar(); return; }
+    if (this.obs.modo === 'embarcado') this.desembarcar();
+    if (this.obs.modo !== m) this.alternarVoo();
+  }
+  /** embarca no assento (ou junto do motor); de novo, desembarca */
+  embarcar() {
+    if (this.obs.modo === 'embarcado') { this.desembarcar(); return; }
+    this.obs.ir(assento(this));
+    this.pendOuv = true; this.enviarPendentes();
+    this.avisar('ouvinte');
+  }
+  desembarcar() {
+    this.obs.desembarcar(pontoDeChegada(this));
+    this.pendOuv = true; this.enviarPendentes();
+    this.avisar('ouvinte');
+  }
+
+  /** teclas e toque somados na entrada do observador */
+  private teclas = new Set<string>();
+  toque = { frente: 0, lado: 0, sobe: 0 };
+  atualizarEntrada() {
+    const t = this.teclas, e = this.obs.entrada, k = (...c: string[]) => c.some((x) => t.has(x));
+    const cl = (x: number) => Math.max(-1, Math.min(1, x));
+    e.frente = cl((k('KeyW', 'ArrowUp') ? 1 : 0) - (k('KeyS', 'ArrowDown') ? 1 : 0) + this.toque.frente);
+    e.lado = cl((k('KeyD', 'ArrowRight') ? 1 : 0) - (k('KeyA', 'ArrowLeft') ? 1 : 0) + this.toque.lado);
+    e.sobe = cl((k('KeyE', 'PageUp') ? 1 : 0) - (k('KeyQ', 'PageDown') ? 1 : 0) + this.toque.sobe);
+    e.correr = k('ShiftLeft', 'ShiftRight');
+  }
+  /** avança o observador (o quadro da página) e marca o ouvinte para mandar se ele andou ou olhou */
+  passoObservador(dt: number) {
+    const o = this.obs;
+    o.passo(dt, o.modo === 'embarcado' ? null : this.lugar());
+    if (o.mudou) { o.mudou = false; this.pendOuv = true; }
+  }
+  /** olho no mundo e para onde olha (rumo no mundo, arfagem), com o corpo em s: a câmera da cena 3D */
+  olhoNoMundo(s: number, out = { pos: [0, 0, 0] as [number, number, number], rumo: 0, arfagem: 0 }) {
+    const o = this.obs;
+    if (o.modo === 'embarcado') {
+      this.corpoNoMundo(s, o.pos, out.pos);
+      const p = this.via.ponto(s + o.pos[0], this.pv);
+      out.rumo = Math.atan2(p.ty, p.tx) + o.rumo;
+    } else { out.pos[0] = o.pos[0]; out.pos[1] = o.pos[1]; out.pos[2] = o.pos[2]; out.rumo = o.rumo; }
+    out.arfagem = o.arfagem;
+    return out;
+  }
+  /** distância (m) do olho do observador ao corpo (à caixa do segmento mais perto), com o corpo em s; 0 dentro */
+  distanciaAoCorpo(s: number) {
+    const o = this.obs, k = this.corpo, alt = this.traj.altitude;
+    let melhor = Infinity, frente = k.comprimento / 2;
+    const w = this.olhoNoMundo(s).pos;
+    for (const sg of k.segmentos) {
+      const xc = frente - sg.comprimento / 2;
+      let bx: number, by: number, bz: number;
+      if (o.modo === 'embarcado') { bx = o.pos[0] - xc; by = o.pos[1]; bz = o.pos[2]; }
+      else { const q = this.via.ponto(s + xc, this.pv), dx = w[0] - q.x, dy = w[1] - q.y; bx = dx * q.tx + dy * q.ty; by = dx * q.nx + dy * q.ny; bz = w[2] - alt; }
+      const ex = Math.max(0, Math.abs(bx) - sg.comprimento / 2), ey = Math.max(0, Math.abs(by) - sg.largura / 2), ez = Math.max(0, sg.zPiso - bz, bz - sg.altura);
+      melhor = Math.min(melhor, Math.hypot(ex, ey, ez));
+      frente -= sg.comprimento + sg.vao;
+    }
+    return melhor;
   }
 
   // ----------------------------------------------------- passagem
-  /** abscissa da via no ponto do ouvinte fixo */
-  sOuvinte() { return this.via.abscissaDe(this.ouv.pos[0]); }
+  /** abscissa da via no ponto do ouvinte: o do observador (embarcado, o do último ponto fora), ou o do fixo */
+  sOuvinte() {
+    if (this.ouvinteFixo) return this.via.abscissaDe(this.ouv.pos[0]);
+    const o = this.obs, p = o.modo === 'embarcado' ? (o.volta?.pos ?? pontoDeChegada(this).pos) : o.pos;
+    return this.lugar().projetar(p[0], p[1]).s;
+  }
   /** quanto o nariz já passou do ouvinte (m), na via reduzida */
   xiNariz(s: number) {
     const L = this.corpo.comprimento, Lv = this.via.comp;
@@ -487,11 +614,20 @@ export class ControlePassagem {
     this.avisar('estado');
   }
   setRepetir(r: boolean) { this.repetir = r; this.avisar('estado', 'painel'); }
-  /** arrasto do corpo ao longo da via (parado): muda s */
+  /** põe o corpo em s, ao longo da via (parado) */
   moverCorpo(s: number) {
     this.sMandado = s; this.tMandado = performance.now();
     this.audio?.send({ type: 'params', posicao: s });
   }
+  /** onde o nariz está em relação ao observador (m; negativo: ainda antes dele) */
+  narizParado() { return Math.round(this.xiNariz(this.estimativa().s)); }
+  /** o veículo parado com o nariz a `xi` m do observador (o slider do painel: era o arrasto do corpo na cena) */
+  pararCorpoEm(xi: number) {
+    if (this.andando) return;
+    this.moverCorpo(this.sOuvinte() + xi - this.corpo.comprimento / 2);
+  }
+  /** campo "onde estou" do painel (o quadro escreve nele) */
+  leituraOnde: HTMLElement | null = null;
   private mandarComando() {
     // (Elétrico) partida: andando, a velocidade é a do motor (o Taurus arrancando); parado, presa em 0
     this.audio?.send({ type: 'comando', ...this.comandoMotor(), velocidadeFixa: this.andando ? (this.partida ? null : this.vKmh / 3.6) : 0 });
@@ -546,21 +682,35 @@ export class ControlePassagem {
   }
 
   private pendCena = false;
+  /** o ouvinte mudou (o observador andou, olhou, saltou) desde a última amostra mandada */
+  private pendOuv = false;
+  private tOuv = -Infinity; private saltoEnviado = -1;
   private ambEnviado = '';
   /** manda ambiente, trajetória e ouvinte; com `ir`, gera a resposta ao impulso de novo */
   mandarCena(ir = false) {
     this.pendCena = false;
     const a = this.audio; if (!a) return;
     const amb = this.ambienteCena();
-    a.send({ type: 'cena', amb, traj: this.traj, ouv: this.ouv });
+    this.pendOuv = false; this.tOuv = performance.now(); this.saltoEnviado = this.obs.salto;
+    a.send({ type: 'cena', amb, traj: this.traj, ouv: this.ouvinte() });
     const chave = JSON.stringify([amb.id, amb.solo, amb.reverb.rt60]);
     if (ir || chave !== this.ambEnviado) { a.aplicarRespostaPorBanda(amb); this.ambEnviado = chave; }
   }
-  /** chamado a cada quadro: manda o que o arrasto e os sliders mudaram (no máximo uma mensagem por quadro) */
-  enviarPendentes() {
-    if (!this.pendCena || !this.audio) return;
-    this.pendCena = false;
-    this.audio.send({ type: 'cena', traj: this.traj, ouv: this.ouv });
+  /**
+   * chamado a cada quadro: manda o que os sliders mudaram (trajetória e ouvinte) e a amostra do observador, no máximo a
+   * cada INTERVALO_OUVINTE ms enquanto ele anda (um salto vai na hora)
+   */
+  enviarPendentes(agora = performance.now()) {
+    const a = this.audio; if (!a) return;
+    if (this.pendCena) {
+      this.pendCena = false; this.pendOuv = false; this.tOuv = agora; this.saltoEnviado = this.obs.salto;
+      a.send({ type: 'cena', traj: this.traj, ouv: this.ouvinte() });
+      return;
+    }
+    if (this.pendOuv && (this.saltoEnviado !== this.obs.salto || agora - this.tOuv >= INTERVALO_OUVINTE)) {
+      this.pendOuv = false; this.tOuv = agora; this.saltoEnviado = this.obs.salto;
+      a.send({ type: 'cena', ouv: this.ouvinte() });
+    }
   }
 
   // ------------------------------------------------------ presets
@@ -587,6 +737,7 @@ export class ControlePassagem {
     this.presetId = p.id;
     this.ajustarPendente = false;   // (o preset traz os valores dele)
     this.sondar();
+    this.irParaChegada();
     this.mandarPortador();
     this.mandarCena(true);
     this.mandarComando();
@@ -607,6 +758,7 @@ export class ControlePassagem {
     this.presetId = this.portador === 'trem' ? 'trembala-tunel' : null;
     this.ajustarPendente = false;
     this.sondar();
+    this.irParaChegada();
     this.audio?.send({ type: 'ar', ...this.ar });
     this.mandarPortador();
     this.mandarCena(true);
@@ -617,57 +769,61 @@ export class ControlePassagem {
   presetsVisiveis() { return PRESETS_PASSAGEM.map((p) => ({ ...p, situacao: situacaoPortador(p.portador) })); }
 
   // ---------------------------------------------------- geometria
-  /** ponto do alvo do gimbal no referencial do corpo */
-  alvoCorpo(): [number, number, number] {
-    const a = this.ouv.gimbal.alvo;
-    if (a !== 'corpo') { const f = this.fontes.find((x) => x.id === a); if (f) return [f.pos[0], f.pos[1], f.pos[2]]; }
-    return [0, 0, (this.corpo.segmentos[0]?.altura ?? 2) / 2];
-  }
-  /** ouvinte no gimbal, no referencial do corpo (a mesma conta de CenaPassagem.posGimbalCorpo) */
-  gimbalCorpo(): [number, number, number] {
-    const g = this.ouv.gimbal, D = Math.PI / 180, [ax, ay, az] = this.alvoCorpo();
-    const el = clamp(g.el, -20, 89) * D, a = g.az * D, r = clamp(g.r, 0.3, 300);
-    return [ax + r * Math.cos(el) * Math.cos(a), ay + r * Math.cos(el) * Math.sin(a), az + r * Math.sin(el)];
-  }
   /** ponto do corpo (referencial do corpo) no mundo, com o corpo em s */
   corpoNoMundo(s: number, b: readonly number[], out: [number, number, number] = [0, 0, 0]) {
     const p = this.via.ponto(s + b[0], this.pv);
     out[0] = p.x + b[1] * p.nx; out[1] = p.y + b[1] * p.ny; out[2] = this.traj.altitude + b[2];
     return out;
   }
-  /** posição do ouvido no mundo com o corpo em s */
-  ouvinteNoMundo(s: number): [number, number, number] {
-    const largura = this.corpo.segmentos[0]?.largura ?? 2;
-    if (this.ouv.modo === 'fixo') return [this.ouv.pos[0], this.via.yOuvinte - (this.traj.lateral + largura / 2), Math.max(0.2, this.ouv.pos[2])];
-    const w = this.corpoNoMundo(s, this.gimbalCorpo());
-    w[2] = Math.max(0.2, w[2]);
-    return w;
-  }
-  /** local resolvido (o 'auto' do CENA 3.3: cabine se o ponto do gimbal cai dentro de um segmento) */
+  /**
+   * local resolvido (o 'auto' do CENA 3.3, como a Cena faz com o ouvinte livre: cabine se o ouvido cai dentro de um
+   * segmento, senão fora), com o corpo onde está agora
+   */
   localEfetivo(): LocalOuvinte {
-    const o = this.ouv;
+    if (this.ouvinteFixo) return this.ouv.local === 'auto' ? 'fora' : this.ouv.local;
+    const o = this.obs;
     if (o.local !== 'auto') return o.local;
-    if (o.modo !== 'gimbal') return 'fora';
-    const b = this.gimbalCorpo();
-    let frente = this.corpo.comprimento / 2;
-    for (const s of this.corpo.segmentos) {
-      if (b[0] <= frente && b[0] >= frente - s.comprimento && Math.abs(b[1]) < s.largura / 2 && b[2] > s.zPiso && b[2] < s.altura) return 'cabine';
-      frente -= s.comprimento + s.vao;
+    const s = this.estimativa().s, k = this.corpo, alt = this.traj.altitude, ouvido = this.olhoNoMundo(s).pos;
+    ouvido[2] -= OUVIDO_ABAIXO;
+    let frente = k.comprimento / 2;
+    for (const sg of k.segmentos) {
+      const xc = frente - sg.comprimento / 2;
+      let bx: number, by: number, bz: number;
+      if (o.modo === 'embarcado') { bx = o.pos[0] - xc; by = o.pos[1]; bz = o.pos[2] - OUVIDO_ABAIXO; }
+      else { const q = this.via.ponto(s + xc, this.pv), dx = ouvido[0] - q.x, dy = ouvido[1] - q.y; bx = dx * q.tx + dy * q.ty; by = dx * q.nx + dy * q.ny; bz = ouvido[2] - alt; }
+      if (Math.abs(bx) < sg.comprimento / 2 && Math.abs(by) < sg.largura / 2 && bz > sg.zPiso && bz < sg.altura) return 'cabine';
+      frente -= sg.comprimento + sg.vao;
     }
     return 'fora';
   }
 
   // ---------------------------------------------------- teclado
+  /** teclas que andam (ficam apertadas) */
+  private static ANDA = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight', 'KeyE', 'KeyQ', 'PageUp', 'PageDown']);
   keydown = (e: KeyboardEvent) => {
     const alvo = e.target as HTMLElement | null;
-    if (alvo && (alvo.tagName === 'INPUT' && (alvo as HTMLInputElement).type !== 'range' || alvo.tagName === 'SELECT' || alvo.tagName === 'TEXTAREA')) return;
+    // (num campo, num seletor ou num slider as teclas são dele: as setas mexem no slider, não no observador)
+    if (alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'SELECT' || alvo.tagName === 'TEXTAREA')) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (ControlePassagem.ANDA.has(e.code)) {
+      if (e.code.startsWith('Arrow') || e.code.startsWith('Page')) e.preventDefault();
+      this.teclas.add(e.code); this.atualizarEntrada();
+      return;
+    }
     if (e.repeat) return;
     // num botão em foco o Espaço já é o clique dele
     if (e.code === 'Space' && alvo?.tagName === 'BUTTON') return;
     if (e.code === 'Space') { e.preventDefault(); if (this.andando) this.parar(); else this.disparar(); }
     else if (e.code === 'KeyR') this.setRepetir(!this.repetir);
-    else if (e.code === 'KeyG') this.setModo(this.ouv.modo === 'fixo' ? 'gimbal' : 'fixo');
+    else if (e.code === 'KeyV') this.alternarVoo();
+    else if (e.code === 'KeyB') this.embarcar();
+    else if (e.code === 'KeyH') { this.ajudaDesde = performance.now(); this.avisar('ouvinte'); }
+    else if (e.code === 'KeyT') { this.vistaTecnica = !this.vistaTecnica; this.avisar('ouvinte'); }
+    else if (/^Digit[1-9]$/.test(e.code)) { const p = this.pontosDeVista()[+e.code.slice(5) - 1]; if (p) this.irPara(p); }
   };
+  keyup = (e: KeyboardEvent) => { if (this.teclas.delete(e.code)) this.atualizarEntrada(); };
+  /** a janela perdeu o foco: nenhuma tecla fica presa */
+  soltarTeclas = () => { if (this.teclas.size) { this.teclas.clear(); this.atualizarEntrada(); } };
 }
 
 /** solo padrão por portador (null = o do ambiente): asfalto na rua, grama sob o que voa, brita na via, concreto na bancada */
