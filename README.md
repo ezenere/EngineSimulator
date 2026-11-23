@@ -82,9 +82,9 @@ O motor Wankel não tem pistão nem válvula: um rotor triangular gira dentro de
 
 ## Vapor (locomotivas e outras máquinas)
 
-Locomotivas, uma máquina de moinho Corliss, um trator a vapor, o carro Stanley e um vapor de rodas de pás. Não há partida: a caldeira já começa quente e com pressão. Você abre o regulador, escolhe o corte no reverser e a máquina sai andando com o trem atrás; cada "chuff" é o vapor de um cilindro saindo pela chaminé, então eles aceleram com a roda e mudam com o corte. Parada, a locomotiva continua viva: bomba de ar, injetor, válvula de segurança quando a pressão passa do ajuste, sino e apito. No trilho molhado, abrir demais faz as rodas patinarem (a areia resolve). Os cenários (arrancada, cruzeiro, subida da Lickey, passagem) programam os comandos sozinhos.
+Locomotivas, uma máquina de moinho Corliss, um trator a vapor, o carro Stanley e um vapor de rodas de pás. Não há partida: a caldeira já começa quente e com pressão, e a linha no alto do palco diz "Pronta para partir: abra o regulador". Você arrasta a alavanca do regulador (ou segura W) e a máquina sai andando com o trem atrás; o corte da reversão fica por conta da página (longo na saída, curto em marcha), a não ser que você desligue o corte automático e pegue a alavanca (A e D). O sentido é Frente, Ponto morto ou Ré; o freio (Espaço) e o apito (H) soam enquanto você segura; cada "chuff" é o vapor de um cilindro saindo pela chaminé, então eles aceleram com a roda e mudam com o corte. Parada, a locomotiva continua viva: bomba de ar, injetor, válvula de segurança quando a pressão passa do ajuste, sino e apito. No trilho molhado, abrir demais faz as rodas patinarem (a areia resolve). As demonstrações (arrancada, cruzeiro, subida forte, toque de apito, passagem) dirigem sozinhas por alguns segundos e devolvem a máquina quando acabam ou quando você mexe no regulador, no sentido, no freio ou no apito.
 
-![Locomotiva K4s saindo com o apito aberto](docs/ui/vapor.png)
+![Locomotiva K4s em marcha, com a alavanca do regulador, o sentido, o corte automático, o apito e o freio no palco](docs/vapor/palco-1440-em-marcha.png)
 
 **Teclas:** `W` e `S` regulador · `X` fecha o regulador · `A` e `D` reverser · `H` apito (segure) · `B` sino · `E` areia (segure) · `T` torneiras dos cilindros · `Espaço` freio · `I` injetor.
 

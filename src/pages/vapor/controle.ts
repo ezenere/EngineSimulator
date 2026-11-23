@@ -2,6 +2,17 @@
 // o React lê um retrato (`estado`) com useSyncExternalStore e só renderiza de novo quando ele muda; a telemetria do
 // worklet fica em `tele` e é desenhada no requestAnimationFrame (mostradores.ts).
 //
+// Condução (maquinista.ts): ao ligar o som a máquina está em pressão, parada, regulador fechado, sentido Frente e corte
+// automático (a página faz com a reversão o que o maquinista faria). O dono dirige pelo regulador (a alavanca do palco,
+// W/S), pelo sentido (Frente, Ponto morto, Ré), pelo freio de segurar (Espaço) e pelo apito de segurar (H). Quem quiser
+// a reversão à mão desliga o automático ou pega a alavanca (A/D, ou o controle do painel).
+//
+// Demonstrações (os roteiros que eram os "cenários"): programam os comandos no tempo e DEVOLVEM a máquina ao dono no fim
+// ou quando ele mexe num controle de condução (regulador, sentido, reversão, corte automático, freio, apito): soltam a
+// velocidade fixa, calam o apito, devolvem a reversão ao automático (ou à posição do dono) e restauram o que mudaram
+// fora da condução (fogo, freio aplicado, sino, torneiras, auxiliares, rampa, ouvinte junto à via). O regulador fica
+// onde a demonstração o deixou: a máquina segue andando, agora com o dono.
+//
 // Áudio: a cadeia da Passagem (PERFIL_PASSAGEM, escala absoluta, reverberação da Cena por banda) com o processador
 // `vapor` (src/worklet/processador-vapor.ts → CenaDSP). Mensagens ao worklet:
 //   { type: 'portador', tipo, config, motor: { familia: 'vapor', cfg }, comando }   troca de preset ou de composição
@@ -19,32 +30,43 @@ import { configLocoVapor } from '../../carriers/locomotiva-vapor';
 import { configTrator } from '../../carriers/trator';
 import { configBarco } from '../../carriers/barco';
 import { configCarroDireto } from '../../carriers/carro-direto';
+import { CorteAutomatico, CORTE_MAX, CORTE_MIN, type Sentido } from './maquinista';
 
 export const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
 export const fmt = (x: number, d = 0) => (Number.isFinite(x) ? x.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—');
 /** reverser (−1..1) do corte desejado (fração do curso, 15–85%) */
-export const revDeCorte = (c: number, sentido = 1) => sentido * clamp((c - 0.15) / 0.7, 0, 1);
+export const revDeCorte = (c: number, sentido = 1) => sentido * clamp((c - CORTE_MIN) / (CORTE_MAX - CORTE_MIN), 0, 1);
+/** corte (fração do curso) de uma posição da reversão */
+export const corteDeRev = (r: number) => CORTE_MIN + (CORTE_MAX - CORTE_MIN) * Math.min(1, Math.abs(r));
 
 export type IdAmbienteVapor = 'ceu' | 'corte' | 'estacao' | 'tunel' | 'ponte';
 export const AMBIENTES_VAPOR: { id: IdAmbienteVapor; nome: string }[] = [
   { id: 'ceu', nome: 'Céu aberto' }, { id: 'corte', nome: 'Corte' }, { id: 'estacao', nome: 'Estação' }, { id: 'tunel', nome: 'Túnel' }, { id: 'ponte', nome: 'Ponte' },
 ];
 export type IdCenario = 'parada' | 'arrancada' | 'cruzeiro60' | 'cruzeiro100' | 'drifting' | 'lickey' | 'apito' | 'passagem';
-export const CENARIOS: { id: IdCenario; nome: string; titulo: string }[] = [
-  { id: 'parada', nome: 'Parada', titulo: 'pressão e auxiliares, 60 s: bomba de ar, injetor, segurança, sino e apito' },
-  { id: 'arrancada', nome: 'Arrancada', titulo: 'reversão a 80%, regulador de 20% a 60% em 5 s, torneiras no automático (patina no trilho molhado)' },
-  { id: 'cruzeiro60', nome: 'Cruzeiro a 60', titulo: 'velocidade fixa a 60 km/h, corte 25%' },
-  { id: 'cruzeiro100', nome: 'Cruzeiro a 100', titulo: 'velocidade fixa a 100 km/h, corte 20%' },
-  { id: 'drifting', nome: 'Regulador fechado', titulo: 'regulador fechado a 60 km/h: rolamento, bielas e o bufo dos cilindros' },
-  { id: 'lickey', nome: 'Subida forte', titulo: 'a rampa de Lickey: 2,65% com 10 vagões, corte 55%, regulador cheio' },
-  { id: 'apito', nome: 'Toque de apito', titulo: 'longo, longo, curto, longo (passagem de nível)' },
-  { id: 'passagem', nome: 'Passagem', titulo: 'a composição passando a 40 km/h pelo ouvinte parado junto à via' },
+/** as demonstrações: `nome` no botão, `titulo` na dica, `estado` na linha de estado enquanto rodam */
+export const CENARIOS: { id: IdCenario; nome: string; titulo: string; estado: string }[] = [
+  { id: 'parada', nome: 'Parada', titulo: 'pressão e auxiliares, 60 s: bomba de ar, injetor, segurança, sino e apito', estado: 'parada em pressão (bomba de ar, injetor, segurança, sino e apito)' },
+  { id: 'arrancada', nome: 'Arrancada', titulo: 'reversão a 80%, regulador de 20% a 60% em 5 s, torneiras no automático (patina no trilho molhado), 40 s', estado: 'arrancada com a reversão à mão (80 %, 60 %, 45 %)' },
+  { id: 'cruzeiro60', nome: 'Cruzeiro a 60', titulo: 'velocidade fixa a 60 km/h, corte 25%, 30 s', estado: 'cruzeiro a 60 km/h (velocidade fixa)' },
+  { id: 'cruzeiro100', nome: 'Cruzeiro a 100', titulo: 'velocidade fixa a 100 km/h, corte 20%, 30 s', estado: 'cruzeiro a 100 km/h (velocidade fixa)' },
+  { id: 'drifting', nome: 'Regulador fechado', titulo: 'regulador fechado a 60 km/h: rolamento, bielas e o bufo dos cilindros, 30 s', estado: 'regulador fechado a 60 km/h (velocidade fixa)' },
+  { id: 'lickey', nome: 'Subida forte', titulo: 'a rampa de Lickey: 2,65% com 10 vagões, corte 55%, regulador cheio, 60 s', estado: 'subida forte (rampa de 2,65 %, 10 vagões)' },
+  { id: 'apito', nome: 'Toque de apito', titulo: 'longo, longo, curto, longo (passagem de nível)', estado: 'toque de apito (longo, longo, curto, longo)' },
+  { id: 'passagem', nome: 'Passagem', titulo: 'a composição passando a 40 km/h pelo ouvinte parado junto à via', estado: 'passagem a 40 km/h pelo ouvinte parado junto à via (velocidade fixa)' },
 ];
 
 /** comando da máquina (o que vai ao motor pelo portador) */
 export type ComandoPagina = {
-  regulador: number; reverser: number; apitoAbertura: number; sino: boolean; areia: boolean;
-  torneiras: boolean | 'auto'; freio: number; fogo: number; fogoAuto: boolean;
+  /** regulador pedido pelo dono (a alavanca), 0..1 */
+  regulador: number;
+  /** reversão à mão (−1..1): vale com o corte automático desligado */
+  reverser: number;
+  apitoAbertura: number; sino: boolean; areia: boolean;
+  torneiras: boolean | 'auto';
+  /** freio aplicado que fica (painel); o de segurar é `freando` */
+  freio: number;
+  fogo: number; fogoAuto: boolean;
   injetor: boolean | 'auto'; bombaAr: boolean | 'auto'; soprador: boolean | 'auto'; simplificacao: boolean;
   trilho: 'seco' | 'molhado'; mixAr: number; mixMec: number;
 };
@@ -71,9 +93,14 @@ export type EstadoVapor = {
   vagoes: number; massaVagao: number; rampa: number;   // rampa em %
   marcha: number; carga: number;
   ambiente: IdAmbienteVapor; distancia: number; master: number;
+  /** sentido de marcha (vale com o corte automático) */
+  sentido: Sentido;
+  /** corte automático: a página move a reversão pela velocidade (maquinista.ts) */
+  corteAuto: boolean;
+  /** demonstração em curso */
   cenario: IdCenario | null;
   calibrando: boolean; erro: string | null;
-  /** teclas seguradas (para os botões acompanharem) */
+  /** o que está seguro agora (tecla, botão ou demonstração), para os botões acompanharem */
   apitando: boolean; freando: boolean;
 };
 
@@ -84,9 +111,18 @@ export const CMD_PADRAO: ComandoPagina = {
 
 /** portador do preset (o primeiro dos de uso real) */
 export const portadorDe = (P: PresetVapor): Exclude<PortadorVapor, 'nenhum'> => (P.portadores.find((p) => p !== 'nenhum') ?? 'locomotiva') as Exclude<PortadorVapor, 'nenhum'>;
+/** o portador tem freio (o trator para no atrito da estrada; o barco, na água ou dando ré) */
+export const temFreio = (t: PortadorVapor) => t === 'locomotiva' || t === 'carro';
+/** o portador passa ao motor o sino, a areia e as torneiras */
+export const temSino = (P: PresetVapor) => portadorDe(P) === 'locomotiva' && !!P.sino;
+export const temAreia = (P: PresetVapor) => portadorDe(P) === 'locomotiva';
+export const temTorneiras = (P: PresetVapor) => portadorDe(P) === 'locomotiva' || portadorDe(P) === 'trator';
 
 /** Telemetria guardada (a da mensagem 'telemetria' do worklet) */
 export interface Tele { cena: any; portador: any; motor: TelemetriaVapor | null; t: number }
+
+/** o que a demonstração mudou fora da condução e volta como estava no fim */
+type Retrato = Pick<ComandoPagina, 'fogo' | 'fogoAuto' | 'freio' | 'sino' | 'torneiras' | 'injetor' | 'bombaAr' | 'soprador'> & { rampa: number };
 
 export class ControleVapor {
   estado: EstadoVapor;
@@ -98,22 +134,41 @@ export class ControleVapor {
   private ouvintes = new Set<() => void>();
   /** comando pendente (juntado e mandado no máximo uma vez por quadro) */
   private pend = false;
-  /** velocidade fixa (m/s) dos cenários de cruzeiro; null = o motor integra a velocidade */
+  /** velocidade fixa (m/s) das demonstrações de cruzeiro; null = o motor integra a velocidade */
   vFixa: number | null = null;
-  /** ouvinte fixo junto à via (cenário passagem) em vez de acompanhar a máquina */
+  /** ouvinte fixo junto à via (demonstração passagem) em vez de acompanhar a máquina */
   fixo = false;
   /** teclas de rampa seguradas: W/S regulador, A/D reverser */
   teclas = { w: false, s: false, a: false, d: false };
-  /** linha do tempo do cenário: [instante (ms de performance.now), ação] */
+  /** a lei do corte automático (refeita a cada preset) */
+  auto: CorteAutomatico;
+  /** a reversão que foi ao motor por último (o automático só manda quando ela muda) */
+  private revEnviada = NaN;
+  /** quem segura o apito: o dono (tecla ou botão) e a demonstração */
+  private apitoDono = false; private apitoDemo = false;
+  /** reversão imposta pela demonstração (null: a do dono, automática ou à mão) */
+  private revDemo: number | null = null;
+  /** freio de estacionamento automático: parada na rampa com o regulador fechado */
+  freioAuto = 0;
+  private tAbriu = 0;
+  /** linha do tempo da demonstração: [instante (ms de performance.now), ação], o fim e o retrato a devolver */
   private agenda: [number, () => void][] = [];
+  fimDemo = 0;
+  private retrato: Retrato | null = null;
+  private relogio: ReturnType<typeof setInterval> | undefined;
   private tUlt = 0;
+  /** a máquina já andou desde o último preset (a linha de estado diz "Parada" em vez de "Pronta para partir") */
+  jaAndou = false;
+  /** desde quando está parada com o regulador aberto (ms; 0 = não está) */
+  paradaAberta = 0;
 
   constructor() {
     const P = PRESETS_VAPOR[0];
     this.estado = {
       presetId: P.id, familia: P.familia, cmd: { ...CMD_PADRAO }, escape: escapeDoPreset(P), vagoes: 8, massaVagao: P.vagao?.massa ?? 40, rampa: 0, marcha: 1, carga: 0.5,
-      ambiente: 'ceu', distancia: 10, master: 0.8, cenario: null, calibrando: false, erro: null, apitando: false, freando: false,
+      ambiente: 'ceu', distancia: 10, master: 0.8, sentido: 1, corteAuto: true, cenario: null, calibrando: false, erro: null, apitando: false, freando: false,
     };
+    this.auto = new CorteAutomatico(P);
   }
 
   // ---------------------------------------------------------------- store
@@ -139,6 +194,8 @@ export class ControleVapor {
   }
   /** botão "ligar o som" (gesto do usuário) */
   async ligar() { const a = await this.initAudio(); await a.retomar(); }
+  /** um controle de condução mexido antes de ligar o som liga o som (o gesto do usuário vale para o AudioContext) */
+  private acender() { if (!this.audio) void this.ligar().catch((err) => console.error('Vapor: áudio não iniciou', err)); }
 
   /** cfg do motor (sonda de nível, cara: guardada por preset e taxa) */
   private cfgMotor(fs: number): ConfigVapor {
@@ -156,8 +213,9 @@ export class ControleVapor {
     if (t === 'carro') return { ...configCarroDireto(P), rampa: e.rampa / 100 };
     return { rpmNominal: P.rpmGovernado ?? 75, potenciaNominal: P.potenciaGerador ?? 500, eta: 0.95, J_alt: 50, semFontes: true, posMotor: [0, 0, 0], corpo: { comprimento: 12, largura: 6, altura: 6, massaSuperficial: 30 } };
   }
-  /** monta o portador com o motor no worklet (aloca lá; a sonda roda aqui antes) */
-  async mandarPortador() {
+  /** monta o portador com o motor no worklet (aloca lá; a sonda roda aqui antes). `parar`: a máquina nova começa parada
+   *  (troca de preset, som ligado); senão segue na velocidade de agora (vagões, escape, a marcha do trator) */
+  async mandarPortador(parar = false) {
     const a = this.audio; if (!a) return;
     const fs = a.ctx.sampleRate;
     const chave = `${this.estado.presetId}|${fs}`;
@@ -167,27 +225,63 @@ export class ControleVapor {
       await new Promise((r) => setTimeout(r, 30));
     }
     let cfg: ConfigVapor;
-    try { cfg = this.cfgMotor(fs); } catch (e: any) { this.mudar({ calibrando: false, erro: String(e?.message || e) }); return; }
+    try { cfg = this.cfgMotor(fs); } catch (e: any) { this.ignorarAte = 0; this.mudar({ calibrando: false, erro: String(e?.message || e) }); return; }
     // (os campos do escape que o painel muda entram no preset depois da sonda: os ganhos são os da ficha)
     const P = cfg.preset, x = this.estado.escape;
     cfg = { ...cfg, preset: { ...P, escape: { ...P.escape, vColetor: x.vColetor, tCauda: x.tCauda, nivelCauda: x.nivelCauda, tiragem: x.tiragem }, cilindros: { ...P.cilindros, desajuste: x.desajuste } } };
-    a.send({ type: 'portador', tipo: this.portador, config: this.configPortador(), motor: { familia: 'vapor', cfg }, comando: this.comando() });
-    // o CenaDSP herda a velocidade do portador anterior como velocidade fixa: o vapor parado anda solto
-    a.send({ type: 'comando', ...this.comando(), velocidadeFixa: this.vFixa });
+    const c = this.comando();
+    a.send({ type: 'portador', tipo: this.portador, config: this.configPortador(), motor: { familia: 'vapor', cfg }, comando: c });
+    // O CenaDSP monta o portador novo com a velocidade do anterior imposta (`velocidadeFixa`); se um bloco de áudio rodar
+    // antes da próxima mensagem, o motor sai nessa velocidade, senão parado: dependia da sorte (um preset trocado com o
+    // trem andando nascia andando ou não). A página impõe a velocidade que quer: ao trocar de máquina, 0, e a segura
+    // parada até o regulador abrir (soltar por tempo não basta: montar a máquina no worklet leva às vezes mais de 100 ms,
+    // e a ordem de soltar chegava junto com a de parar, depois de um bloco já rodado na velocidade da anterior); ao
+    // remontar a mesma (vagões, escape, marcha), a de agora, solta 500 ms depois
+    const v = parar ? 0 : (this.tele?.portador?.v as number) ?? 0;
+    a.send({ type: 'comando', ...c, velocidadeFixa: this.vFixa ?? v });
+    if (this.vFixa == null) {
+      if (parar && this.portador !== 'gerador') { this.presaParada = true; this.soltarVEm = 0; }
+      else this.soltarVEm = performance.now() + 500;
+    }
+    if (parar) this.ignorarAte = performance.now() + 150;
+    this.revEnviada = c.cutoff as number;
     this.mudar({ calibrando: false, erro: null });
   }
 
+  // ---------------------------------------------------------------- comando
+  /** o regulador que vai ao motor: em ponto morto (com o automático) a reversão no meio ainda admite vapor (corte de
+   *  15 %), então a página manda o regulador fechado; a alavanca fica onde o dono a deixou (maquinista.ts) */
+  reguladorEfetivo() { const e = this.estado; return e.corteAuto && e.sentido === 0 && this.revDemo == null ? 0 : e.cmd.regulador; }
+  /** a reversão que vai ao motor: a da demonstração, a do automático ou a do dono */
+  reversaoEfetiva() { const e = this.estado; return this.revDemo ?? (e.corteAuto ? this.auto.reversao(e.sentido) : e.cmd.reverser); }
   /** o comando completo da máquina e do portador */
   comando(): Partial<ComandoVapor> & Record<string, unknown> {
-    const c = this.estado.cmd, e = this.estado;
+    const c = this.estado.cmd, e = this.estado, reg = this.reguladorEfetivo();
     return {
-      pedal: c.regulador, regulador: c.regulador, cutoff: c.reverser, apito: e.apitando ? c.apitoAbertura : 0, sino: c.sino, areia: c.areia,
+      pedal: reg, regulador: reg, cutoff: this.reversaoEfetiva(), apito: e.apitando ? c.apitoAbertura : 0, sino: c.sino, areia: c.areia,
       torneiras: c.torneiras, fogo: c.fogoAuto ? 'auto' : c.fogo, injetor: c.injetor, bombaAr: c.bombaAr, soprador: c.soprador,
-      freio: e.freando ? 1 : c.freio, simplificacao: c.simplificacao, trilho: c.trilho, mixAr: c.mixAr, mixMec: c.mixMec,
+      freio: e.freando ? 1 : Math.max(c.freio, this.freioAuto), simplificacao: c.simplificacao, trilho: c.trilho, mixAr: c.mixAr, mixMec: c.mixMec,
       rampa: e.rampa / 100, marcha: this.portador === 'trator' ? e.marcha : undefined, cargaFracao: this.portador === 'gerador' ? e.carga : undefined,
     };
   }
-  private mandarComando(agora = false) { if (agora) { this.pend = false; this.audio?.send({ type: 'comando', ...this.comando() }); } else this.pend = true; }
+  private mandarComando(agora = false) { if (agora) this.enviarPendente(true); else this.pend = true; }
+  /** quando soltar a velocidade imposta ao remontar o portador (mandarPortador) */
+  private soltarVEm = 0;
+  /** a máquina nova está segura parada (velocidade imposta 0) até o regulador abrir */
+  presaParada = false;
+  /** até quando a telemetria que chega ainda é a da máquina anterior (ms) */
+  private ignorarAte = 0;
+  private enviarPendente(forcar = false) {
+    const a = this.audio;
+    if (a && this.soltarVEm && performance.now() >= this.soltarVEm) { this.soltarVEm = 0; if (this.vFixa == null) a.send({ type: 'comando', velocidadeFixa: null }); }
+    // (o regulador abriu: a máquina segura parada sai; a ordem de soltar vai antes do comando com o regulador)
+    if (a && this.presaParada && this.reguladorEfetivo() > 0.02) { this.presaParada = false; if (this.vFixa == null) a.send({ type: 'comando', velocidadeFixa: null }); }
+    if (!(this.pend || forcar) || !this.audio) return;
+    this.pend = false;
+    const c = this.comando();
+    this.revEnviada = c.cutoff as number;
+    this.audio.send({ type: 'comando', ...c });
+  }
 
   // ---------------------------------------------------------------- cena
   ambienteCena(): Ambiente {
@@ -211,6 +305,65 @@ export class ControleVapor {
     a.aplicarRespostaPorBanda(amb);
   }
 
+  // ---------------------------------------------------------------- condução (o dono; cada uma devolve a máquina se uma demonstração estiver rodando)
+  /** o regulador (a alavanca do palco, W/S, o controle do painel) */
+  moverRegulador(v: number, agora = false) {
+    this.assumir(); this.acender();
+    const r = clamp(v, 0, 1);
+    if (r !== this.estado.cmd.regulador) this.setCmd({ regulador: r }, agora);
+  }
+  fecharRegulador() { this.moverRegulador(0, true); }
+  /** sentido de marcha (com o corte automático); escolher um sentido com o automático desligado o liga de novo */
+  escolherSentido(s: Sentido) {
+    this.assumir(); this.acender();
+    this.mudar({ sentido: s, corteAuto: true });
+    this.auto.zerar();
+    this.mandarComando(true);
+  }
+  /** liga ou desliga o corte automático; desligado, a reversão à mão começa onde o automático estava */
+  setCorteAuto(on: boolean) {
+    this.assumir(); this.acender();
+    if (on === this.estado.corteAuto) return;
+    if (on) { const r = this.estado.cmd.reverser; this.mudar({ corteAuto: true, sentido: Math.abs(r) < 0.02 ? 0 : r > 0 ? 1 : -1 }); this.auto.zerar(); }
+    else this.mudar({ corteAuto: false, cmd: { ...this.estado.cmd, reverser: this.auto.reversao(this.estado.sentido) } });
+    this.mandarComando(true);
+  }
+  /** a reversão à mão (A/D, o controle do palco e o do painel): pegar a alavanca desliga o automático */
+  moverReversao(v: number, agora = false) {
+    this.assumir(); this.acender();
+    const r = clamp(v, -1, 1);
+    this.mudar({ corteAuto: false, cmd: { ...this.estado.cmd, reverser: r } });
+    this.mandarComando(agora);
+  }
+  /** freio de segurar (Espaço, botão do palco) */
+  frear(on: boolean) {
+    if (on) { this.assumir(); this.acender(); }
+    if (on === this.estado.freando) return;
+    this.mudar({ freando: on }); this.mandarComando(true);
+  }
+  /** freio aplicado que fica (painel) */
+  setFreioFixo(v: number) { this.assumir(); this.setCmd({ freio: clamp(v, 0, 1) }); }
+  /** apito de segurar (H, botão do palco): soa enquanto seguro */
+  apitar(on: boolean) {
+    if (on) { this.assumir(); this.acender(); }
+    if (on === this.apitoDono) return;
+    this.apitoDono = on; this.aplicarApito();
+  }
+  private aplicarApito() {
+    const a = this.apitoDono || this.apitoDemo;
+    if (a !== this.estado.apitando) { this.mudar({ apitando: a }); this.mandarComando(true); }
+  }
+  /** solta tudo o que estava seguro (a janela perdeu o foco, a aba sumiu) */
+  soltarTudo() {
+    this.teclas.w = this.teclas.s = this.teclas.a = this.teclas.d = false;
+    this.apitar(false); this.frear(false); this.areia(false);
+  }
+  areia(on: boolean) { if (on) this.acender(); if (on === this.estado.cmd.areia) return; this.setCmd({ areia: on }, true); }
+  alternarSino() { this.acender(); this.setCmd({ sino: !this.estado.cmd.sino }, true); }
+  /** torneiras de purga: automático → abertas → fechadas → automático */
+  alternarTorneiras() { this.acender(); const t = this.estado.cmd.torneiras; this.setCmd({ torneiras: t === 'auto' ? true : t === true ? false : 'auto' }, true); }
+  alternarInjetor() { const t = this.estado.cmd.injetor; this.setCmd({ injetor: t === true ? false : true }, true); }
+
   // ---------------------------------------------------------------- ações do painel
   setFamilia(f: FamiliaVapor) {
     if (f === this.estado.familia) return;
@@ -222,8 +375,15 @@ export class ControleVapor {
     const P = presetVapor(id); if (!P) return;
     this.pararCenario();
     this.vFixa = null; this.fixo = false;
-    this.mudar({ presetId: id, familia: P.familia, massaVagao: P.vagao?.massa ?? 40, escape: escapeDoPreset(P), cmd: { ...CMD_PADRAO, reverser: P.familia === 'estacionaria' ? revDeCorte(0.3) : CMD_PADRAO.reverser } });
-    if (this.audio) { this.mandarCena(); void this.mandarPortador(); }
+    this.auto = new CorteAutomatico(P); this.auto.marcha = this.estado.marcha;
+    this.jaAndou = false; this.paradaAberta = 0; this.freioAuto = 0; this.tele = null; this.presaParada = false;
+    // (a telemetria da máquina anterior fica de fora até a nova estar montada: mandarPortador)
+    if (this.audio) this.ignorarAte = Infinity;
+    this.mudar({
+      presetId: id, familia: P.familia, massaVagao: P.vagao?.massa ?? 40, escape: escapeDoPreset(P), sentido: 1, corteAuto: true,
+      cmd: { ...CMD_PADRAO, reverser: P.familia === 'estacionaria' ? revDeCorte(0.3) : CMD_PADRAO.reverser },
+    });
+    if (this.audio) { this.mandarCena(); void this.mandarPortador(true); }
   }
   setCmd(p: Partial<ComandoPagina>, agora = false) { this.mudar({ cmd: { ...this.estado.cmd, ...p } }); this.mandarComando(agora); }
   setVagoes(n: number) { this.mudar({ vagoes: n }); this.remontar(); }
@@ -233,88 +393,148 @@ export class ControleVapor {
   private remontarT: ReturnType<typeof setTimeout> | undefined;
   private remontar() { clearTimeout(this.remontarT); this.remontarT = setTimeout(() => void this.mandarPortador(), 150); }
   setRampa(pct: number) { this.mudar({ rampa: pct }); this.mandarComando(); }
-  setMarcha(m: number) { this.mudar({ marcha: m }); this.mandarComando(true); }
-  setCarga(f: number) { this.mudar({ carga: f }); this.mandarComando(true); }
+  /** marcha do trator (é condução: devolve a máquina). Ao sair do N o motor é montado de novo: o VaporDSP liga o
+   *  governador de esferas quando o trator fica sem carga e não o desliga quando ela volta (src/engines/vapor/dsp.ts,
+   *  `acoplar`), e o regulador do dono deixaria de valer; montar de novo é engatar com a manivela parada */
+  setMarcha(m: number) {
+    this.assumir(); this.acender();
+    const de = this.estado.marcha;
+    if (m === de) return;
+    this.mudar({ marcha: m }); this.auto.marcha = m;
+    if (de === 0 && m > 0 && this.audio) void this.mandarPortador();
+    else this.mandarComando(true);
+  }
+  setCarga(f: number) { this.acender(); this.mudar({ carga: f }); this.mandarComando(true); }
   setAmbiente(a: IdAmbienteVapor) { this.mudar({ ambiente: a }); this.mandarCena(); }
   setDistancia(d: number) { this.mudar({ distancia: d }); this.pendCena = true; }
   setMaster(m: number) { this.mudar({ master: m }); this.audio?.send({ type: 'params', master: m }); }
   private pendCena = false;
 
-  // apito e freio seguráveis (tecla ou botão)
-  apitar(on: boolean) { if (on === this.estado.apitando) return; this.mudar({ apitando: on }); this.mandarComando(true); }
-  frear(on: boolean) { if (on === this.estado.freando) return; this.mudar({ freando: on }); this.mandarComando(true); }
-  areia(on: boolean) { if (on === this.estado.cmd.areia) return; this.setCmd({ areia: on }, true); }
-  alternarSino() { this.setCmd({ sino: !this.estado.cmd.sino }, true); }
-  alternarTorneiras() { const t = this.estado.cmd.torneiras; this.setCmd({ torneiras: t === true ? false : true }, true); }
-  alternarInjetor() { const t = this.estado.cmd.injetor; this.setCmd({ injetor: t === true ? false : true }, true); }
-  fecharRegulador() { this.setCmd({ regulador: 0 }, true); }
-
-  /** a cada quadro: rampas das teclas seguradas, agenda do cenário, envio do que ficou pendente */
+  // ---------------------------------------------------------------- a cada quadro
+  /** rampas das teclas seguradas, corte automático, freio de estacionamento, agenda da demonstração, envio do pendente */
   quadro(agora: number) {
     const dt = this.tUlt ? Math.min(0.1, (agora - this.tUlt) / 1000) : 0;
     this.tUlt = agora;
     const t = this.teclas, c = this.estado.cmd;
-    if (t.w || t.s) this.setCmd({ regulador: clamp(c.regulador + (t.w ? 1 : -1) * dt, 0, 1) });
-    if (t.a || t.d) this.setCmd({ reverser: clamp(c.reverser + (t.d ? 1 : -1) * 0.8 * dt, -1, 1) });
-    while (this.agenda.length && this.agenda[0][0] <= agora) this.agenda.shift()![1]();
-    if (this.estado.cenario && !this.agenda.length) this.mudar({ cenario: null });
-    if (this.pend && this.audio) { this.pend = false; this.audio.send({ type: 'comando', ...this.comando() }); }
+    if (t.w !== t.s) this.moverRegulador(c.regulador + (t.w ? 1 : -1) * dt);
+    if (t.a !== t.d) this.moverReversao((this.estado.corteAuto ? this.auto.reversao(this.estado.sentido) : c.reverser) + (t.d ? 1 : -1) * 0.8 * dt);
+    this.conduzir(dt, agora);
+    this.agendar(agora);
+    this.enviarPendente();
     if (this.pendCena && this.audio) { this.pendCena = false; this.audio.send({ type: 'cena', traj: this.trajetoria(), ouv: this.ouvinte() }); }
   }
+  /** o corte automático e o freio de estacionamento, pela telemetria */
+  private conduzir(dt: number, agora: number) {
+    const m = this.tele?.motor, p = this.tele?.portador, e = this.estado;
+    if (!m || !p || this.portador === 'gerador') return;
+    const v = p.v as number, reg = this.reguladorEfetivo();
+    // (com a velocidade imposta pela demonstração a lei não mede aceleração de verdade: recomeça quando ela solta)
+    if (this.vFixa == null) this.auto.passo(dt, { voltasRoda: m.voltasPorS as number, v, sentido: e.sentido, regulador: reg, rampa: e.rampa, freando: e.freando || e.cmd.freio > 0.05, patinando: m.patinando });
+    // (presa parada, a telemetria com velocidade ainda é a da máquina anterior)
+    if (Math.abs(v) > 1 / 3.6 && !this.presaParada) this.jaAndou = true;
+    const parada = Math.abs(v) < 0.5 / 3.6;
+    this.paradaAberta = parada && reg > 0.02 && !e.freando ? this.paradaAberta || agora : 0;
+    // freio de estacionamento: parada na rampa com o regulador fechado, a página segura a máquina no freio; solta 1 s
+    // depois que o regulador abre (o vapor leva esse tempo para encher a caixa de válvulas)
+    if (reg <= 0.02) this.tAbriu = 0; else if (!this.tAbriu) this.tAbriu = agora;
+    const segura = temFreio(this.portador) && Math.abs(e.rampa) > 0.1 && this.vFixa == null && !e.cenario && (parada || this.freioAuto > 0) && (reg <= 0.02 || agora - this.tAbriu < 1000);
+    const fa = segura ? 0.5 : 0;
+    if (fa !== this.freioAuto) { this.freioAuto = fa; this.pend = true; }
+    const r = this.reversaoEfetiva();
+    if (!(Math.abs(r - this.revEnviada) < 0.004)) this.pend = true;
+  }
 
-  // ---------------------------------------------------------------- cenários
-  pararCenario() { this.agenda = []; if (this.estado.cenario) this.mudar({ cenario: null }); }
+  // ---------------------------------------------------------------- demonstrações
+  /** processa a agenda (do quadro e, com a aba escondida, de um relógio de 250 ms: o requestAnimationFrame para) */
+  private agendar(agora: number) {
+    while (this.agenda.length && this.agenda[0][0] <= agora) this.agenda.shift()![1]();
+    if (this.estado.cenario && agora >= this.fimDemo) this.terminarDemo();
+  }
+  /** o dono mexeu num controle de condução: a demonstração acaba e devolve a máquina */
+  assumir() { if (this.estado.cenario) this.terminarDemo(); }
+  /** para a demonstração (o botão dela de novo, outro preset) */
+  pararCenario() { if (this.estado.cenario) this.terminarDemo(); }
+  /** devolve a máquina: solta a velocidade fixa, cala o apito da demonstração, devolve a reversão e o que foi mudado */
+  private terminarDemo() {
+    this.agenda = []; clearInterval(this.relogio); this.relogio = undefined;
+    const a = this.audio;
+    if (this.vFixa != null) { this.vFixa = null; a?.send({ type: 'comando', velocidadeFixa: null }); }
+    this.apitoDemo = false; this.revDemo = null; this.auto.zerar();
+    if (this.fixo) { this.fixo = false; this.mandarCena(); }
+    const r = this.retrato;
+    this.retrato = null;
+    if (r) {
+      const { rampa, ...cmd } = r;
+      this.mudar({ cmd: { ...this.estado.cmd, ...cmd }, rampa });
+    }
+    this.mudar({ cenario: null });
+    this.aplicarApito();
+    this.mandarComando(true);
+  }
+  /** ações das demonstrações (não contam como o dono mexendo) */
+  private demoCmd(p: Partial<ComandoPagina>) { this.mudar({ cmd: { ...this.estado.cmd, ...p } }); this.mandarComando(true); }
+  private demoApito(on: boolean) { this.apitoDemo = on; this.aplicarApito(); }
+  private demoCorte(c: number) { this.revDemo = revDeCorte(c, this.estado.sentido === -1 ? -1 : 1); this.mandarComando(true); }
+
   async cenario(id: IdCenario) {
     await this.ligar();
     this.pararCenario();
+    const c0 = this.estado.cmd;
+    this.retrato = { fogo: c0.fogo, fogoAuto: c0.fogoAuto, freio: c0.freio, sino: c0.sino, torneiras: c0.torneiras, injetor: c0.injetor, bombaAr: c0.bombaAr, soprador: c0.soprador, rampa: this.estado.rampa };
     const t0 = performance.now(), em = (s: number, f: () => void) => this.agenda.push([t0 + s * 1000, f]);
     const P = this.P, a = this.audio!;
-    const livre = () => { this.vFixa = null; a.send({ type: 'comando', velocidadeFixa: null }); };
-    const fixar = (kmh: number) => { this.vFixa = kmh / 3.6; a.send({ type: 'comando', velocidadeFixa: this.vFixa }); };
-    if (this.fixo && id !== 'passagem') { this.fixo = false; this.mandarCena(); }
-    this.mudar({ cenario: id });
+    const livre = () => { this.vFixa = null; this.presaParada = false; a.send({ type: 'comando', velocidadeFixa: null }); };
+    const fixar = (kmh: number) => { this.vFixa = kmh / 3.6; this.presaParada = false; a.send({ type: 'comando', velocidadeFixa: this.vFixa }); };
+    // (um sentido escolhido: a demonstração anda para a frente se o dono deixou em ponto morto)
+    if (this.estado.sentido === 0) this.mudar({ sentido: 1 });
+    let dur = 30;
     if (id === 'parada') {
-      this.setCmd({ regulador: 0, freio: 0.5, torneiras: 'auto', fogoAuto: false, fogo: 1, injetor: 'auto', bombaAr: 'auto', soprador: 'auto', sino: false }, true);
+      this.demoCmd({ regulador: 0, freio: 0.5, torneiras: 'auto', fogoAuto: false, fogo: 1, injetor: 'auto', bombaAr: 'auto', soprador: 'auto', sino: false });
       fixar(0); em(0.5, livre);
-      em(8, () => this.setCmd({ sino: true }, true)); em(16, () => this.setCmd({ sino: false }, true));
-      em(25, () => this.apitar(true)); em(27, () => this.apitar(false));
-      em(60, () => this.setCmd({ fogoAuto: true }, true));
+      em(8, () => this.demoCmd({ sino: true })); em(16, () => this.demoCmd({ sino: false }));
+      em(25, () => this.demoApito(true)); em(27, () => this.demoApito(false));
+      dur = 60;
     } else if (id === 'arrancada') {
       fixar(0); em(0.3, livre);
-      this.setCmd({ regulador: 0, reverser: revDeCorte(0.8), torneiras: 'auto', freio: 0, areia: false }, true);
-      for (let k = 0; k <= 10; k++) em(1 + k * 0.5, () => this.setCmd({ regulador: 0.2 + 0.04 * k }, true));
-      em(15, () => this.setCmd({ reverser: revDeCorte(0.6) }, true));
-      em(25, () => this.setCmd({ reverser: revDeCorte(0.45) }, true));
-      em(40, () => {});
+      this.demoCmd({ regulador: 0, torneiras: 'auto', freio: 0, areia: false }); this.demoCorte(0.8);
+      for (let k = 0; k <= 10; k++) em(1 + k * 0.5, () => this.demoCmd({ regulador: 0.2 + 0.04 * k }));
+      em(15, () => this.demoCorte(0.6));
+      em(25, () => this.demoCorte(0.45));
+      dur = 40;
     } else if (id === 'cruzeiro60' || id === 'cruzeiro100') {
       const v = id === 'cruzeiro60' ? 60 : 100;
       fixar(Math.min(v, P.vMax));
-      this.setCmd({ regulador: 0.9, reverser: revDeCorte(v === 60 ? 0.25 : 0.2), torneiras: false, freio: 0 }, true);
-      em(30, () => {});
+      this.demoCmd({ regulador: 0.9, torneiras: false, freio: 0 }); this.demoCorte(v === 60 ? 0.25 : 0.2);
     } else if (id === 'drifting') {
       fixar(Math.min(60, P.vMax));
-      this.setCmd({ regulador: 0, reverser: revDeCorte(0.4), torneiras: false, freio: 0 }, true);
-      em(30, () => {});
+      this.demoCmd({ regulador: 0, torneiras: false, freio: 0 }); this.demoCorte(0.4);
     } else if (id === 'lickey') {
       if (this.portador === 'locomotiva' && this.estado.vagoes !== 10) { this.mudar({ vagoes: 10 }); await this.mandarPortador(); }
       this.mudar({ rampa: 2.65 });
       fixar(0); em(0.3, livre);
-      this.setCmd({ regulador: 1, reverser: revDeCorte(0.55), torneiras: 'auto', freio: 0, areia: false }, true);
-      em(60, () => {});
+      this.demoCmd({ regulador: 1, torneiras: 'auto', freio: 0, areia: false }); this.demoCorte(0.55);
+      dur = 60;
     } else if (id === 'apito') {
       let t = 0.2;
-      for (const d of [1.6, 1.6, 0.5, 2.6]) { em(t, () => this.apitar(true)); em(t + d, () => this.apitar(false)); t += d + 0.45; }
-      em(t + 0.5, () => {});
+      for (const d of [1.6, 1.6, 0.5, 2.6]) { em(t, () => this.demoApito(true)); em(t + d, () => this.demoApito(false)); t += d + 0.45; }
+      dur = t + 0.5;
     } else if (id === 'passagem') {
       // a composição parte 120 m antes do ouvinte parado e passa a 40 km/h
       this.fixo = true; this.mandarCena();
       const L = this.comprimentoComposicao();
       a.send({ type: 'params', posicao: -120 - L / 2 });
       fixar(Math.min(40, P.vMax));
-      this.setCmd({ regulador: 1, reverser: revDeCorte(0.4), torneiras: false, freio: 0 }, true);
-      em((L + 260) / (Math.min(40, P.vMax) / 3.6), () => { this.fixo = false; this.mandarCena(); });
+      this.demoCmd({ regulador: 1, torneiras: false, freio: 0 }); this.demoCorte(0.4);
+      dur = (L + 260) / (Math.min(40, P.vMax) / 3.6);
     }
+    this.fimDemo = t0 + dur * 1000;
+    this.mudar({ cenario: id });
+    // (a agenda anda também com a aba escondida, quando o requestAnimationFrame para: o apito não fica preso)
+    clearInterval(this.relogio);
+    this.relogio = setInterval(() => { this.agendar(performance.now()); this.enviarPendente(); }, 250);
   }
+  /** segundos que faltam da demonstração */
+  restanteDemo() { return this.estado.cenario ? Math.max(0, (this.fimDemo - performance.now()) / 1000) : 0; }
   /** comprimento aproximado da composição (m), para a passagem */
   comprimentoComposicao() {
     const P = this.P, g = P.geometria;
@@ -327,6 +547,8 @@ export class ControleVapor {
   // ---------------------------------------------------------------- telemetria
   onTelemetria = (m: any) => {
     if (!m || m.type !== 'telemetria') return;
+    // (a telemetria do portador antigo ainda chega por uns quadros depois de trocar de máquina: fica de fora)
+    if (performance.now() < this.ignorarAte) return;
     this.tele = { cena: m.cena, portador: m.portador, motor: m.portador?.motor ?? null, t: performance.now() };
   };
 }

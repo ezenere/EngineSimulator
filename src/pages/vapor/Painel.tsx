@@ -1,10 +1,11 @@
-// Painel de controles do Vapor (VAPOR.md 6): máquina (regulador, reverser, apito, sino, areia, freio, torneiras),
-// caldeira e auxiliares (fogo, injetor, bomba de ar, soprador, simplificação), composição e via (vagões, massa, rampa,
-// trilho; marcha do trator; carga da estacionária), escape (os campos da ficha: coletor, cauda do chuff, tiragem,
-// desajuste das válvulas), ouvinte e ambiente, mixagem. Só re-renderiza quando o estado muda.
-import { useSyncExternalStore, type PointerEvent } from 'react';
+// Painel de controles do Vapor (VAPOR.md 6): o ajuste fino da máquina (regulador e reversão em números, abertura do
+// apito, freio aplicado que fica, torneiras, simplificação; a condução de verdade está no palco, Conducao.tsx), escuta
+// e ambiente, caldeira e auxiliares (fogo, injetor, bomba de ar, soprador), composição e via (vagões, massa, rampa,
+// trilho), escape (os campos da ficha: coletor, cauda do chuff, tiragem, desajuste das válvulas). A marcha do trator e
+// a carga da estacionária estão no palco, com a condução. Só re-renderiza quando o estado muda.
+import { useSyncExternalStore } from 'react';
 import { ChipGroup, Field, Section, Slider } from '../../ui';
-import { AMBIENTES_VAPOR, fmt, temChamine, temPares, type ControleVapor, type EstadoVapor } from './controle';
+import { AMBIENTES_VAPOR, corteDeRev, fmt, temChamine, temFreio, temPares, temTorneiras, type ControleVapor, type EstadoVapor } from './controle';
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 type P = { k: ControleVapor; e: EstadoVapor };
@@ -13,47 +14,37 @@ const OP_AUTO = (lig: string, desl: string) => [{ valor: 'auto' as Auto, rotulo:
 
 export function Painel({ k }: { k: ControleVapor }) {
   const e = useSyncExternalStore(k.assinar, k.obter);
+  const t = k.portador;
   return (
     <>
-      {/* o comando da máquina primeiro (aqui ele não está no palco); depois a escuta, como nas outras páginas */}
-      <Maquina k={k} e={e} />
+      {/* o ajuste fino da condução (a condução mesmo está no palco); depois a escuta, como nas outras páginas */}
+      {t !== 'gerador' && <Maquina k={k} e={e} />}
       <Escuta k={k} e={e} />
       <Caldeira k={k} e={e} />
-      <Composicao k={k} e={e} />
+      {t !== 'gerador' && t !== 'barco' && <Composicao k={k} e={e} />}
       {temChamine(k.P) && <Escape k={k} e={e} />}
     </>
   );
 }
 
-/** botão segurável (mouse e toque): aperta ao descer, solta ao subir ou sair */
-function Seguravel({ id, rotulo, ativo, aoMudar }: { id: string; rotulo: string; ativo: boolean; aoMudar: (on: boolean) => void }) {
-  const solta = () => aoMudar(false);
-  return (
-    <button type="button" id={id} className="key wide" aria-pressed={ativo}
-      onPointerDown={(ev: PointerEvent<HTMLButtonElement>) => { ev.currentTarget.setPointerCapture(ev.pointerId); aoMudar(true); }}
-      onPointerUp={solta} onPointerCancel={solta} onLostPointerCapture={solta}>{rotulo}</button>
-  );
-}
-
 function Maquina({ k, e }: P) {
   const c = e.cmd, P = k.P;
-  const corte = 0.15 + 0.7 * Math.abs(c.reverser);
   return (
-    <Section titulo="Máquina">
-      <Slider id="regulador" rotulo="Regulador" min={0} max={1} passo={0.01} valor={c.regulador} formatar={pct} aoMudar={(v) => k.setCmd({ regulador: v })} />
-      <Slider id="reverser" rotulo="Reversão e corte (15 a 85%)" min={-1} max={1} passo={0.01} valor={c.reverser}
-        formatar={(v) => (Math.abs(v) < 0.005 ? 'meio (0)' : `${v > 0 ? 'frente' : 'ré'} · corte ${Math.round(corte * 100)}%`)} aoMudar={(v) => k.setCmd({ reverser: v })} />
-      <div className="acoes">
-        <Seguravel id="botaoApito" rotulo="H · apito" ativo={e.apitando} aoMudar={(on) => { void k.ligar(); k.apitar(on); }} />
-        <button type="button" id="botaoSino" className="key wide" aria-pressed={c.sino} disabled={!P.sino} onClick={() => k.alternarSino()} title={P.sino ? '' : 'Esta máquina não tem sino'}>B · sino</button>
-        <Seguravel id="botaoAreia" rotulo="E · areia" ativo={c.areia} aoMudar={(on) => k.areia(on)} />
-        <Seguravel id="botaoFreio" rotulo="Espaço · freio" ativo={e.freando} aoMudar={(on) => k.frear(on)} />
-      </div>
+    <Section titulo="Máquina: ajuste fino">
+      <Slider id="regulador" rotulo="Regulador (a alavanca do palco)" min={0} max={1} passo={0.01} valor={c.regulador} formatar={pct} aoMudar={(v) => k.moverRegulador(v)} />
+      {/* (com o corte automático a reversão anda sozinha: o controle mostra "automático" e, mexido, passa a reversão para a mão) */}
+      <Slider id="reverser" rotulo={e.corteAuto ? 'Reversão (mexer aqui desliga o corte automático)' : 'Reversão à mão e corte (15 a 85%)'} min={-1} max={1} passo={0.01}
+        valor={e.corteAuto ? Math.round(k.reversaoEfetiva() * 100) / 100 : c.reverser}
+        formatar={(v) => (e.corteAuto ? 'automático' : Math.abs(v) < 0.005 ? 'meio (0)' : `${v > 0 ? 'frente' : 'ré'} · corte ${Math.round(corteDeRev(v) * 100)}%`)} aoMudar={(v) => k.moverReversao(v)} />
       <Slider id="apitoAbertura" rotulo="Abertura do apito (abaixo de 15%: só chia)" min={0.05} max={1} passo={0.01} valor={c.apitoAbertura} formatar={pct} aoMudar={(v) => k.setCmd({ apitoAbertura: v })} />
-      <Slider id="freio" rotulo="Freio aplicado (fica onde você deixa)" min={0} max={1} passo={0.01} valor={c.freio} formatar={pct} aoMudar={(v) => k.setCmd({ freio: v })} />
-      <Field rotulo="Torneiras de purga dos cilindros">
-        <ChipGroup id="torneiras" opcoes={OP_AUTO('Abertas', 'Fechadas')} atual={c.torneiras} aoEscolher={(v) => k.setCmd({ torneiras: v }, true)} />
-      </Field>
+      {temFreio(k.portador) && (
+        <Slider id="freio" rotulo="Freio aplicado (fica onde você deixa)" min={0} max={1} passo={0.01} valor={c.freio} formatar={pct} aoMudar={(v) => k.setFreioFixo(v)} />
+      )}
+      {temTorneiras(P) && (
+        <Field rotulo="Torneiras de purga dos cilindros">
+          <ChipGroup id="torneiras" opcoes={OP_AUTO('Abertas', 'Fechadas')} atual={c.torneiras} aoEscolher={(v) => k.setCmd({ torneiras: v }, true)} />
+        </Field>
+      )}
       {P.compound && (
         <Field rotulo="Válvula de simplificação (compound)">
           <ChipGroup id="simplificacao" opcoes={[{ valor: false, rotulo: 'Compound' }, { valor: true, rotulo: 'Simples (partida)' }]} atual={c.simplificacao} aoEscolher={(v) => k.setCmd({ simplificacao: v }, true)} />
@@ -82,7 +73,7 @@ function Caldeira({ k, e }: P) {
 function Composicao({ k, e }: P) {
   const t = k.portador;
   return (
-    <Section titulo={t === 'locomotiva' ? 'Composição e via' : t === 'gerador' ? 'Carga' : t === 'trator' ? 'Marcha e estrada' : 'Via'}>
+    <Section titulo={t === 'locomotiva' ? 'Composição e via' : t === 'trator' ? 'Estrada' : 'Via'}>
       {t === 'locomotiva' && <>
         <Slider id="vagoes" rotulo="Vagões" min={0} max={20} passo={1} valor={e.vagoes} formatar={(v) => String(v)} aoSoltar={(v) => k.setVagoes(v)} />
         <Slider id="massaVagao" rotulo="Massa por vagão" min={10} max={100} passo={1} valor={e.massaVagao} formatar={(v) => `${v} t`} aoSoltar={(v) => k.setMassaVagao(v)} />
@@ -90,17 +81,7 @@ function Composicao({ k, e }: P) {
           <ChipGroup id="trilho" opcoes={[{ valor: 'seco' as const, rotulo: 'Seco', titulo: 'Atrito 0,22' }, { valor: 'molhado' as const, rotulo: 'Molhado', titulo: 'Atrito 0,12: abrir demais faz as rodas patinarem (a areia resolve)' }]} atual={e.cmd.trilho} aoEscolher={(v) => k.setCmd({ trilho: v }, true)} />
         </Field>
       </>}
-      {t === 'trator' && (
-        <Field rotulo="Marcha">
-          <ChipGroup id="marcha" classe="num" opcoes={[0, 1, 2].map((m) => ({ valor: m, rotulo: m === 0 ? 'N' : String(m), titulo: m === 0 ? 'embreagem solta: a manivela em lenta no governador' : '' }))} atual={e.marcha} aoEscolher={(v) => k.setMarcha(v)} />
-        </Field>
-      )}
-      {t === 'gerador' && (
-        <Field rotulo="Carga do eixo de transmissão">
-          <ChipGroup id="carga" classe="num" opcoes={[0, 0.25, 0.5, 0.75, 1].map((f) => ({ valor: f, rotulo: pct(f) }))} atual={e.carga} aoEscolher={(v) => k.setCarga(v)} />
-        </Field>
-      )}
-      {t !== 'gerador' && t !== 'barco' && <Slider id="rampa" rotulo="Rampa" min={-3} max={3} passo={0.05} valor={e.rampa} formatar={(v) => `${fmt(v, 2)}%`} aoMudar={(v) => k.setRampa(v)} />}
+      <Slider id="rampa" rotulo="Rampa (parada na rampa com o regulador fechado, a página segura no freio)" min={-3} max={3} passo={0.05} valor={e.rampa} formatar={(v) => `${fmt(v, 2)}%`} aoMudar={(v) => k.setRampa(v)} />
     </Section>
   );
 }

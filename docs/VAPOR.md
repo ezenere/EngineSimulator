@@ -177,7 +177,7 @@ Comportamento dinâmico (decisão 5): a válvula do apito (`apito` 0..1, tecla s
 
 **Sino** (`sino`): sino de bronze de 0,3–0,4 m, balançado por ar ou à mão: **2,0–2,3 batidas/s** (medido Big Boy: 2,24/s; UP 844 ~1 batida/s com sino a ar mais lento), batidas alternadas (lado a lado, ±2 dB). Parciais medidos (Big Boy, 606 Hz fundamental): 1 : 2,16 : 3,53 : 5,2 : 7,05, amplitudes 0 / −2 / −5 / −4 / −8 dB, decaimentos T60 4 s / 2,5 / 1,5 / 1 / 0,7. Preset escolhe `f_sino` (500–750 Hz). Síntese modal (5 osciladores amortecidos excitados por um impulso filtrado), `L_W` 113 dB(A).
 
-### 1.9 Regimes (o que a página chama de cenários)
+### 1.9 Regimes (o que a página chama de demonstrações)
 
 | Regime | Comando | O que soa |
 |---|---|---|
@@ -525,17 +525,21 @@ Página nova (`src/pages/vapor/main.tsx`, entrada em `vite.config.mts`, link no 
 
 **Famílias (chips):** Locomotivas · Estacionárias · Trator · Carro · Barco. Presets da família em chips.
 
-**Controles (paridade: todos têm tecla e estado no painel):**
+**Condução no palco (refeita em 23/11/2026; o que se fez e por quê está no TECNICO.md, Vapor → Página e condução).** O dono usa o que está na tela, no padrão: os controles de condução são a primeira coisa do palco, com uma linha de estado grande que diz em que pé a máquina está e o que fazer ("Pronta para partir: abra o regulador", "Em marcha · 32 km/h", "Patinando: feche um pouco o regulador", "Freando", "Demonstração: cruzeiro a 60 km/h · toque no regulador para assumir"). Ao ligar o som a máquina está em pressão, parada, regulador fechado, sentido Frente e **corte automático** (a página faz com a reversão o que o maquinista faz: sai com o corte longo, ~78 %, e encurta pela rotação da manivela; alonga de novo em rampa, perdendo velocidade com o regulador aberto e, nas locomotivas, alivia patinando). O dono que quer a reversão à mão desliga o automático (ou pega a alavanca: A/D, o controle do painel). Em ponto morto a página manda o regulador fechado ao motor (a reversão no meio ainda admite 15 %).
+
+**Controles (paridade: todos têm tecla e estado na tela ou no painel):**
 
 | Controle | Tipo | Tecla | Vai para |
 |---|---|---|---|
-| Regulador | slider 0–100% | W/S sobe/desce em 1 s; X fecha | `regulador` |
-| Reverser (corte) | slider −100…+100% com marca de 0 e rótulo "corte 15–85%" | A/D | `cutoff` |
-| Apito | **botão segurável** (mouse/toque) e tecla **H segurável**; slider opcional de abertura (quilling) | H | `apito` 0/1 ou valor |
-| Sino | toggle | B | `sino` |
-| Areia | segurável | E | `areia` |
-| Torneiras dos cilindros | toggle + "auto" | T | `torneiras` |
-| Freio | slider 0–100% | espaço | `freio` (portador e motor) |
+| Regulador | **alavanca no palco** (arrasta com o mouse ou o dedo; fica onde foi deixada) + botão Fechar; slider no painel (ajuste fino) | W/S (↑/↓) sobem e descem em 1 s, seguradas; X fecha; PageUp/PageDown, Home/End com o foco na alavanca | `regulador` (0 em ponto morto) |
+| Sentido | Frente · Ponto morto · Ré, no palco (vale com o corte automático) | — | sinal de `cutoff` |
+| Corte automático | chave no palco, ligada por padrão, com o corte de agora | — | `cutoff` pela lei da página |
+| Reverser (corte) à mão | slider −100…+100% no palco (com o automático desligado) e no painel; mexer desliga o automático | A/D (←/→) | `cutoff` |
+| Apito | **botão de segurar** no palco (mouse/toque: cala ao soltar, ao sair de cima, ao escorregar o dedo, ao perder o foco) e tecla **H segurável**; slider de abertura no painel (quilling) | H | `apito` 0/1 ou valor |
+| Sino | botão no palco (liga e desliga) | B | `sino` |
+| Areia | botão de segurar no palco | E | `areia` |
+| Torneiras dos cilindros | botão no palco (automático → abertas → fechadas) + chips no painel | T | `torneiras` |
+| Freio | **botão de segurar** no palco (locomotiva e Stanley; o trator para no atrito da estrada e o barco dando ré); "freio aplicado" que fica, no painel; parada na rampa com o regulador fechado a página segura no freio (50 %) e solta 1 s depois de abrir o regulador | espaço | `freio` (portador e motor) |
 | Fogo | slider 0–100% + "foguista automático" | — | `fogo` |
 | Injetor | botão + "auto" | I | `injetor` |
 | Bomba de ar | botão forçar + "auto" | — | `bombaAr` |
@@ -544,11 +548,11 @@ Página nova (`src/pages/vapor/main.tsx`, entrada em `vite.config.mts`, link no 
 | Vagões | número 0–20 (locomotiva), massa por vagão | — | portador |
 | Rampa | slider −3…+3% | — | portador |
 | Trilho | chips seco / molhado | — | `μ` |
-| Marcha (trator) / carga (estacionária: 0/25/50/75/100%) | chips | — | portador |
+| Marcha (trator) / carga (estacionária: 0/25/50/75/100%) | chips no palco (a estacionária não tem alavanca: o governador manda) | — | portador |
 | Ambiente, trajetória, ouvinte (gimbal), velocidade fixa | os da Passagem | — | Cena |
 | Ar (jato, chiado), Mecânica, Master | sliders de mistura (como o Ronco) | — | ganhos das famílias de ruído |
 
-**Cenários** (botões que programam os comandos no tempo, como `idle/rev/wot` no Ronco; os mesmos do `tools/vapor-render.ts`): `parada` (pressão e auxiliares, 60 s), `arrancada` (1.9, 40 s, com patinagem se trilho molhado), `cruzeiro` (velocidade fixa a 60 e 100 km/h), `drifting`, `lickey` (subida 2,65% com 10 vagões), `apito` (toque longo-longo-curto-longo), `passagem` (a Passagem universal com a composição).
+**Demonstrações** (eram os "cenários": roteiros que programam os comandos no tempo, como `idle/rev/wot` no Ronco; ficam embaixo do palco, num lugar secundário, com o aviso de que são roteiros): `parada` (pressão e auxiliares, 60 s), `arrancada` (1.9, 40 s, com patinagem se trilho molhado), `cruzeiro` (velocidade fixa a 60 e 100 km/h, 30 s), `drifting` (regulador fechado a 60 km/h, 30 s), `lickey` (subida 2,65% com 10 vagões, 60 s), `apito` (toque longo-longo-curto-longo), `passagem` (a composição passando pelo ouvinte parado junto à via). Cada uma **devolve a máquina ao dono** quando acaba ou quando ele mexe num controle de condução (regulador, sentido, reversão, corte automático, freio, apito): solta a velocidade fixa, cala o apito, devolve a reversão ao automático (ou à posição do dono) e restaura o que mudou fora da condução (fogo, freio aplicado, sino, torneiras, auxiliares, rampa, ouvinte junto à via); o regulador fica onde a demonstração o deixou, e a máquina segue andando livre. Os vagões que a `lickey` pôs (10) ficam. A agenda anda também com a aba escondida (um relógio de 250 ms além do `requestAnimationFrame`).
 
 **Mostradores** (telemetria por `requestAnimationFrame`):
 - **Manômetro** (mostrador redondo): `pCaldeira` em bar e psi, zona vermelha em `p_nom + 0,3`, ponteiro secundário `pChest`.

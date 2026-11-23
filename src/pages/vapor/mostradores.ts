@@ -5,8 +5,11 @@
 //   - fita de escapes: uma luz por escape da volta (4 nos 2 cilindros, 6 no A4 e no Shay, 4 + 4 em duas fileiras na
 //     articulada, cada fileira pela fase do seu motor), acesa na batida;
 //   - leituras em texto (velocidade, roda, corte, chuffs/s, release, esforço × adesão, estados, apito, nível no ouvido).
+//   - a linha de estado da condução (maquinista.ts → linhaDeEstado) e o corte que o automático escolheu.
 import type { ControleVapor } from './controle';
-import { fmt } from './controle';
+import { CENARIOS, corteDeRev, fmt, temAreia, temFreio } from './controle';
+import { linhaDeEstado } from './maquinista';
+import type { RefsConducao } from './Conducao';
 
 const TAU = Math.PI * 2;
 const cor = (v: string) => getComputedStyle(document.documentElement).getPropertyValue(v).trim() || '#ccc';
@@ -151,4 +154,26 @@ export function escreverLeituras(c: ControleVapor, L: Leituras, pico: number) {
   }
   set('nivel', ce ? `${fmt(ce.splDbA, 1)} dB(A)` : '—');
   set('pico', Number.isFinite(pico) ? `pico ${fmt(pico, 1)} dB` : '—');
+}
+
+/** a linha de estado e o corte do automático (só escreve no DOM quando muda) */
+export function escreverConducao(c: ControleVapor, R: RefsConducao, ligado: boolean, erro: string | null) {
+  const m = c.tele?.motor, p = c.tele?.portador, e = c.estado, P = c.P;
+  const v = p ? (p.v as number) * 3.6 : 0;
+  const demo = e.cenario ? { estado: CENARIOS.find((x) => x.id === e.cenario)?.estado ?? '', restante: c.restanteDemo() } : null;
+  // (o corte pedido, o mesmo do lado da chave do automático; as leituras mostram o do motor, 1,5 s atrás)
+  const corte = corteDeRev(c.reversaoEfetiva());
+  const linha = linhaDeEstado({
+    ligado: ligado && !!p, calibrando: e.calibrando, erro, demo, portador: c.portador, v, vMax: P.vMax,
+    regulador: e.cmd.regulador, reguladorEfetivo: c.reguladorEfetivo(), sentido: e.sentido, corteAuto: e.corteAuto, corte, reversao: e.cmd.reverser,
+    patinando: !!m?.patinando, freando: e.freando || Math.max(e.cmd.freio, c.freioAuto) > 0.05, temFreio: temFreio(c.portador), temAreia: temAreia(P),
+    presaHa: c.paradaAberta ? (performance.now() - c.paradaAberta) / 1000 : 0, jaAndou: c.jaAndou, rampa: e.rampa, marcha: e.marcha,
+    rpm: p ? Math.abs(p.rpmEixo as number) : 0, carga: e.carga, pCaldeira: m ? m.pCaldeira : P.pNominal, pNominal: P.pNominal,
+  });
+  const put = (el: HTMLElement | undefined, t: string) => { if (el && el.textContent !== t) el.textContent = t; };
+  put(R.titulo, linha.titulo);
+  put(R.detalhe, linha.detalhe);
+  if (R.caixa && R.caixa.dataset.tom !== linha.tom) R.caixa.dataset.tom = linha.tom;
+  // o corte que o automático manda agora, ao lado da chave (a telemetria segue com o 1,5 s da reversão do motor)
+  put(R.corte, e.corteAuto ? `${e.sentido === 0 ? 'meio' : e.sentido > 0 ? 'frente' : 'ré'} · corte ${Math.round(corteDeRev(c.reversaoEfetiva()) * 100)} %` : 'desligado');
 }
