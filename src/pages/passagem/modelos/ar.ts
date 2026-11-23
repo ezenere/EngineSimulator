@@ -6,15 +6,52 @@
 import * as THREE from 'three';
 import { Pecas, COR, type Modelo } from './kit';
 import type { FonteSonora, Vec3 } from '../../../scene/tipos';
+import type { ParamsHelice, ParamsJato } from './tipos';
 
-export type TipoHelice = 'leve-alta' | 'leve-baixa' | 'treinador' | 'corsair' | 'p47' | 'transporte-alta' | 'transporte-baixa' | 'vant';
-export interface ParamsHelice { tipo: TipoHelice; L: number; env: number; cor: number; cor2: number; pas: number; rH: number; trem: boolean; tEm?: boolean }
+export type { ParamsHelice, ParamsJato };
 
 /** hélice de n pás com o eixo no x do corpo, registrada para girar */
 function helice(p: Pecas, n: number, r: number, x: number, y: number, z: number, giros: Modelo['giros'], cor: number = COR.preto, k = 0.03, empurra = false) {
   const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = empurra ? -Math.PI / 2 : Math.PI / 2; p.add(g);
   const pas = p.pas(n, r, Math.max(0.12, r * 0.14), cor, Math.max(0.1, r * 0.12), g);
   giros.push({ o: pas, k, fonte: 'helice' });
+}
+
+/** a cabine aberta no modelo (o interior, interior.ts): o trecho [x0, x1] da fuselagem fica de fora */
+export interface CabineAberta { x0: number; x1: number; /** o topo do nariz à frente da cabine (achatado na vertical: o olho vê por cima dele) */ topoFrente?: number }
+
+/** raio do perfil [x, r] em x (interpolado) */
+function raioEm(pts: readonly (readonly [number, number])[], x: number) {
+  for (let i = 0; i < pts.length - 1; i++) { const [a, ra] = pts[i], [b, rb] = pts[i + 1]; if (x >= a && x <= b) return ra + ((rb - ra) * (x - a)) / Math.max(1e-6, b - a); }
+  return x < pts[0][0] ? pts[0][1] : pts[pts.length - 1][1];
+}
+/**
+ * Fuselagem (sólido de revolução); com a cabine aberta, as duas partes de fora dela, cada uma fechada por uma tampa
+ * (a de trás é a antepara atrás do banco, a da frente a parede de fogo atrás do painel)
+ */
+function fuselagem(p: Pecas, pts: readonly (readonly [number, number])[], cor: number, lados: number, z: number, cab?: CabineAberta, escalaZ = 1, corTampa: number = COR.grafite) {
+  if (!cab) return p.torno(pts, cor, lados, 0, z, undefined, escalaZ);
+  const r0 = raioEm(pts, cab.x0), r1 = raioEm(pts, cab.x1);
+  const tras = [...pts.filter(([x]) => x < cab.x0 - 1e-3), [cab.x0, r0] as const], frente = [[cab.x1, r1] as const, ...pts.filter(([x]) => x > cab.x1 + 1e-3)];
+  if (tras.length >= 2) { p.torno(tras, cor, lados, 0, z, undefined, escalaZ); p.cil(r0, 0.03, 'x', cab.x0, 0, z, corTampa, lados).scale.z = escalaZ; }
+  const ezF = cab.topoFrente != null ? Math.min(escalaZ, Math.max(0.15, (cab.topoFrente - z) / Math.max(...frente.map(([, r]) => r)))) : escalaZ;
+  // (o nariz achatado, visto de cima pela cabine: a tampa dele é da cor da fuselagem)
+  if (frente.length >= 2) { p.torno(frente, cor, lados, 0, z, undefined, ezF); p.cil(r1, 0.03, 'x', cab.x1, 0, z, cab.topoFrente != null ? cor : corTampa, lados).scale.z = ezF; }
+  return null;
+}
+/** faixa longa (caixa ao longo de x), cortada fora da cabine aberta */
+function faixaX(p: Pecas, l: number, w: number, h: number, x: number, y: number, z: number, cor: number, cab?: CabineAberta) {
+  const a = x - l / 2, b = x + l / 2;
+  if (!cab || b < cab.x0 || a > cab.x1) { p.caixa(l, w, h, x, y, z, cor); return; }
+  if (cab.x0 - a > 0.05) p.caixa(cab.x0 - a, w, h, (a + cab.x0) / 2, y, z, cor);
+  if (b - cab.x1 > 0.05) p.caixa(b - cab.x1, w, h, (b + cab.x1) / 2, y, z, cor);
+}
+
+/** barra fina de a até b (os montantes da asa alta) */
+function barraAsa(p: Pecas, a: readonly number[], b: readonly number[], cor: number) {
+  const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), l = d.length();
+  const o = p.caixa(l, 0.06, 0.04, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2, cor);
+  o.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), d.normalize());
 }
 
 /** asa (ou empenagem) reta de envergadura e, corda c, enflechamento s (m de recuo na ponta), centrada em x na altura z */
@@ -24,7 +61,7 @@ function asa(p: Pecas, e: number, c: number, x: number, z: number, cor: number, 
 }
 
 /** avião de hélice ancorado nas hélices (as fontes `pa` do portador) */
-export function aviaoHelice(par: ParamsHelice, helices: readonly FonteSonora[], giros: Modelo['giros'], rodas: Modelo['rodas']) {
+export function aviaoHelice(par: ParamsHelice, helices: readonly FonteSonora[], giros: Modelo['giros'], rodas: Modelo['rodas'], cab?: CabineAberta) {
   const p = new Pecas(), { L, env, cor, cor2 } = par;
   const transporte = par.tipo === 'transporte-alta' || par.tipo === 'transporte-baixa';
   const h0: Vec3 = helices[0]?.pos ?? [3.3, 0, 1.5];
@@ -41,8 +78,8 @@ export function aviaoHelice(par: ParamsHelice, helices: readonly FonteSonora[], 
     // turboélice de transporte (ATR, Q400, C-130, DC-3): fuselagem do tamanho do tipo, naceles nas hélices
     const zP = h0[2], alta = par.tipo === 'transporte-alta', rf = Math.max(1.0, L * 0.05), zf = alta ? zP - rf * 0.75 : zP + rf * 0.4;
     const xn = Math.max(...helices.map((h) => h.pos[0]), h0[0]) + L * 0.33;   // nariz à frente das hélices
-    p.torno([[xn - L, 0.25], [xn - L + 0.18 * L, rf * 0.85], [xn - L * 0.75, rf], [xn - 2.5, rf], [xn - 0.8, rf * 0.7], [xn, 0.15]], cor, 14, 0, zf);
-    p.caixa(1.2, rf * 1.3, 0.5, xn - 1.4, 0, zf + rf * 0.55, COR.vidro).rotation.y = 0.25;   // cabine de comando
+    fuselagem(p, [[xn - L, 0.25], [xn - L + 0.18 * L, rf * 0.85], [xn - L * 0.75, rf], [xn - 2.5, rf], [xn - 0.8, rf * 0.7], [xn, 0.15]], cor, 14, zf, cab);
+    if (!cab) p.caixa(1.2, rf * 1.3, 0.5, xn - 1.4, 0, zf + rf * 0.55, COR.vidro).rotation.y = 0.25;   // cabine de comando
     const xa = (helices.length ? helices[0].pos[0] : h0[0]) - 1.6;
     asa(p, env, L * 0.09, xa, alta ? zf + rf * 0.95 : zf - rf * 0.6, cor2, 0.4, 0.55, 0.3);
     for (const h of helices.length ? helices : [{ pos: h0 } as FonteSonora]) {
@@ -54,20 +91,20 @@ export function aviaoHelice(par: ParamsHelice, helices: readonly FonteSonora[], 
     const xt = xn - L + 1.3, zt = par.tEm ? zf + rf + L * 0.17 : zf + rf * 0.6;
     p.perfil([[xt + 2.5, zf + rf * 0.7], [xt + 0.8, zf + rf + L * 0.18], [xt - 0.4, zf + rf + L * 0.18], [xt - 0.6, zf + rf * 0.7]], 0.25, cor);
     asa(p, env * 0.32, 2.2, xt + 0.2, zt, cor, 0.5, 0.6, 0.15);
-    p.caixa(L * 0.75, 0.04, 0.4, xn - L * 0.45, rf + 0.004, zf + rf * 0.25, cor2);   // janelas (faixa) da cabine de passageiros: um lado
-    p.caixa(L * 0.75, 0.04, 0.4, xn - L * 0.45, -rf - 0.004, zf + rf * 0.25, cor2);
+    for (const sg of [-1, 1]) faixaX(p, L * 0.75, 0.04, 0.4, xn - L * 0.45, sg * (rf + 0.004), zf + rf * 0.25, cor2, cab);   // janelas (faixa) da cabine de passageiros
     return p;
   }
   // monomotor: a hélice no nariz, a fuselagem para trás dela
   const [xh, , zh] = h0, rf = par.tipo === 'p47' ? 0.78 : par.tipo === 'corsair' || par.tipo === 'treinador' ? 0.66 : 0.6;
   const radial = par.tipo === 'treinador' || par.tipo === 'corsair' || par.tipo === 'p47';
-  p.torno([[xh - L, 0.08], [xh - L + 0.4 * L, rf * 0.75], [xh - 0.55 * L, rf], [xh - 0.15 * L, rf], [xh - 0.25, radial ? rf * 1.05 : rf * 0.6], [xh - 0.05, radial ? rf * 0.7 : 0.2]], cor, 12, 0, zh);
+  fuselagem(p, [[xh - L, 0.08], [xh - L + 0.4 * L, rf * 0.75], [xh - 0.55 * L, rf], [xh - 0.15 * L, rf], [xh - 0.25, radial ? rf * 1.05 : rf * 0.6], [xh - 0.05, radial ? rf * 0.7 : 0.2]], cor, 12, zh, cab);
   if (radial) p.cil(rf * 1.08, 0.9, 'x', xh - 0.6, 0, zh, cor2, 14);    // capô do motor radial
   const xa = xh - L * 0.3, cA = L * (par.tipo === 'corsair' ? 0.2 : 0.17);
   if (par.tipo === 'leve-alta') {
     asa(p, env, cA, xa - 0.3, zh + rf + 0.1, cor, 0, 0.95, 0.12);
-    for (const s of [-1, 1]) { const m = p.caixa(0.06, 1.9, 0.06, xa - 0.2, s * 1.0, zh + 0.1, COR.cinza); m.rotation.x = -s * 0.55; }
-    p.caixa(1.3, rf * 1.6, 0.5, xh - 1.7, 0, zh + rf * 0.6, COR.vidro);
+    // os montantes: do pé da fuselagem à asa, a um quarto da envergadura
+    for (const s of [-1, 1]) barraAsa(p, [xa - 0.2, s * rf * 0.8, zh - rf * 0.6], [xa - 0.2, s * env * 0.22, zh + rf + 0.05], COR.cinza);
+    if (!cab) p.caixa(1.3, rf * 1.6, 0.5, xh - 1.7, 0, zh + rf * 0.6, COR.vidro);
   } else if (par.tipo === 'corsair') {
     // asa de gaivota invertida: o trecho de dentro desce, o de fora sobe
     for (const s of [-1, 1]) {
@@ -76,17 +113,17 @@ export function aviaoHelice(par: ParamsHelice, helices: readonly FonteSonora[], 
       const g2 = new THREE.Group(); g2.position.set(xa, s * 1.95, zh - rf * 0.85); g2.rotation.x = -s * 0.14; p.add(g2);
       p.placa([[cA / 2, 0], [cA / 2 - 0.3, s * (env / 2 - 2.0)], [-cA / 2 + 0.6, s * (env / 2 - 2.0)], [-cA / 2, 0]], 0.18, 0, cor, g2);
     }
-    p.torno([[xh - 0.45 * L, 0.05], [xh - 0.4 * L, 0.4], [xh - 0.3 * L, 0.42], [xh - 0.22 * L, 0.05]], COR.vidro, 10, 0, zh + rf * 0.75);
+    if (!cab) p.torno([[xh - 0.45 * L, 0.05], [xh - 0.4 * L, 0.4], [xh - 0.3 * L, 0.42], [xh - 0.22 * L, 0.05]], COR.vidro, 10, 0, zh + rf * 0.75);
   } else {
     asa(p, env, cA, xa, zh - rf * 0.55, par.tipo === 'p47' ? cor : cor, 0.2, par.tipo === 'p47' ? 0.75 : 0.55, 0.16);
     const lc = par.tipo === 'treinador' ? 2.2 : 1.4;
-    p.torno([[xa - lc / 2, 0.05], [xa - lc / 2 + 0.3, 0.42], [xa + lc / 2 - 0.3, 0.44], [xa + lc / 2, 0.05]], COR.vidro, 10, 0, zh + rf * 0.75);
+    if (!cab) p.torno([[xa - lc / 2, 0.05], [xa - lc / 2 + 0.3, 0.42], [xa + lc / 2 - 0.3, 0.44], [xa + lc / 2, 0.05]], COR.vidro, 10, 0, zh + rf * 0.75);
   }
   // cauda: estabilizador e deriva
   const xt = xh - L + 0.7;
   asa(p, env * 0.34, 1.2, xt + 0.2, zh + 0.1, cor, 0.2, 0.6, 0.1);
   p.perfil([[xt + 1.3, zh + rf * 0.5], [xt + 0.2, zh + rf + 1.1], [xt - 0.4, zh + rf + 1.1], [xt - 0.65, zh + rf * 0.2]], 0.12, cor);
-  p.caixa(L * 0.6, rf * 2 + 0.04, 0.16, xh - L * 0.5, 0, zh - 0.05, cor2);   // faixa (atravessa a fuselagem: aparece dos dois lados)
+  faixaX(p, L * 0.6, rf * 2 + 0.04, 0.16, xh - L * 0.5, 0, zh - 0.05, cor2, cab);   // faixa (atravessa a fuselagem: aparece dos dois lados)
   if (par.trem) {
     for (const s of [-1, 1]) { p.roda(0.24, 0.12, xa - 0.4, s * 1.1, zh - rf - 0.75, rodas); p.caixa(0.08, 0.08, 0.7, xa - 0.4, s * 0.9, zh - rf - 0.35, COR.cinza).rotation.x = s * 0.3; }
     p.roda(0.2, 0.1, xh - 0.8, 0, zh - rf - 0.78, rodas);
@@ -95,21 +132,19 @@ export function aviaoHelice(par: ParamsHelice, helices: readonly FonteSonora[], 
   return p;
 }
 
-export interface ParamsJato { tipo: 'linha' | 'linha-cauda' | 'caca' | 'concorde'; L: number; env: number; motores: number; derivas: 1 | 2; cor: number; cor2: number }
-
 /** jato de linha, caça ou Concorde, ancorado nas fontes de admissão (naceles) do portador */
-export function jato(par: ParamsJato, fontes: readonly FonteSonora[], zc: number) {
+export function jato(par: ParamsJato, fontes: readonly FonteSonora[], zc: number, cab?: CabineAberta) {
   const p = new Pecas(), { L, env, cor, cor2 } = par;
   const adm = fontes.filter((f) => f.id.startsWith('admissao'));
   if (par.tipo === 'caca' || par.tipo === 'concorde') {
     const rf = par.tipo === 'concorde' ? 1.45 : 0.62;
-    p.torno([[-L / 2, rf * 0.75], [-L / 2 + 0.2 * L, rf], [L * 0.1, rf], [L * 0.38, rf * 0.55], [L / 2, 0.03]], cor, 12, 0, zc);
+    fuselagem(p, [[-L / 2, rf * 0.75], [-L / 2 + 0.2 * L, rf], [L * 0.1, rf], [L * 0.38, rf * 0.55], [L / 2, 0.03]], cor, 12, zc, cab);
     p.cil(rf * 0.62, 1.2, 'x', -L / 2 - 0.3, 0, zc, COR.grafite, 12, undefined, rf * 0.7);   // bocal
     if (par.tipo === 'concorde') {
       p.placa([[L * 0.25, 0], [-L * 0.42, env / 2], [-L * 0.48, env / 2], [-L * 0.44, 0], [-L * 0.48, -env / 2], [-L * 0.42, -env / 2]], 0.25, zc - rf * 0.6, cor);
       for (const s of [-1, 1]) p.caixa(9, 2.2, 1.2, -L * 0.3, s * 3.2, zc - rf - 0.4, COR.claro);
       p.perfil([[-L * 0.3, zc + rf * 0.6], [-L * 0.44, zc + rf + 7.5], [-L * 0.5, zc + rf + 7.5], [-L * 0.5, zc + rf * 0.6]], 0.3, cor);
-      p.caixa(3, 1.4, 0.4, L * 0.38, 0, zc + rf * 0.5, COR.vidro);
+      if (!cab || L * 0.38 > cab.x1 + 1.5) p.caixa(3, 1.4, 0.4, L * 0.38, 0, zc + rf * 0.5, COR.vidro);
     } else {
       p.placa([[L * 0.15, 0], [-L * 0.2, env / 2], [-L * 0.3, env / 2], [-L * 0.3, 0], [-L * 0.3, -env / 2], [-L * 0.2, -env / 2]], 0.15, zc - 0.1, cor);
       asa(p, env * 0.6, 2.0, -L / 2 + 1.6, zc, cor, 0.9, 0.4, 0.1);
@@ -117,16 +152,16 @@ export function jato(par: ParamsJato, fontes: readonly FonteSonora[], zc: number
         const g = new THREE.Group(); g.position.set(0, k * 1.1, 0); g.rotation.x = k * 0.3; p.add(g);
         p.perfil([[-L / 2 + 3.2, zc + rf * 0.6], [-L / 2 + 1.0, zc + rf + 2.9], [-L / 2 + 0.1, zc + rf + 2.9], [-L / 2 + 0.2, zc + rf * 0.6]], 0.12, cor, 0, g);
       }
-      p.torno([[L * 0.12, 0.05], [L * 0.17, 0.42], [L * 0.27, 0.42], [L * 0.33, 0.05]], COR.vidro, 10, 0, zc + rf * 0.7);   // bolha da cabine
+      if (!cab) p.torno([[L * 0.12, 0.05], [L * 0.17, 0.42], [L * 0.27, 0.42], [L * 0.33, 0.05]], COR.vidro, 10, 0, zc + rf * 0.7);   // bolha da cabine
       p.caixa(3.0, 1.0, 0.8, L * 0.05, 0, zc - rf * 0.8, COR.grafite);   // entrada de ar ventral
     }
     return p;
   }
   // jato de linha: fuselagem do corpo, asa baixa enflechada, naceles, deriva e estabilizadores enflechados
   const rf = Math.min(3.2, Math.max(1.8, L * 0.05));
-  p.torno([[-L / 2, 0.3], [-L / 2 + 0.16 * L, rf * 0.85], [-L * 0.3, rf], [L * 0.38, rf], [L * 0.47, rf * 0.6], [L / 2, 0.1]], cor, 16, 0, zc);
+  fuselagem(p, [[-L / 2, 0.3], [-L / 2 + 0.16 * L, rf * 0.85], [-L * 0.3, rf], [L * 0.38, rf], [L * 0.47, rf * 0.6], [L / 2, 0.1]], cor, 16, zc, cab, 1, 0xd8d5cd);
   p.caixa(1.4, rf * 1.1, 0.5, L * 0.45, 0, zc + rf * 0.45, COR.vidro).rotation.y = 0.3;
-  for (const s of [-1, 1]) p.caixa(L * 0.72, 0.04, 0.32, -L * 0.02, s * (rf + 0.002), zc + rf * 0.32, COR.vidro);   // janelas
+  for (const s of [-1, 1]) faixaX(p, L * 0.72, 0.04, 0.32, -L * 0.02, s * (rf + 0.002), zc + rf * 0.32, COR.vidro, cab);   // janelas
   asa(p, env, L * 0.2, -L * 0.04, zc - rf * 0.55, COR.claro, L * 0.18, 0.3, 0.35);
   const ys = adm.length ? [...new Set(adm.map((a) => Math.abs(a.pos[1])))] : [env * 0.16];
   const xEng = (adm[0]?.pos[0] ?? L * 0.05) - 2.0;

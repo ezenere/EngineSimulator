@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import type { Lugar } from '../lugar';
 import { fosco, pintura, faixa, prisma, repetir, type Inst } from './geo';
+import { leveCirculo, leveLinha } from './leves';
 
 export const BITOLA = 0.7175;
 /** o trecho de dormentes desenhado perto de você (o InstancedMesh anda junto: recentrar em cena3d.ts) */
@@ -25,14 +26,24 @@ export function linhaFerrea(G: THREE.Group, lg: Lugar, s0: number, s1: number, p
 /**
  * Fios ao longo da via (catenária, telégrafo, rede elétrica, arame de cerca) como linhas de um pixel: um fio de 2 cm
  * desenhado como sólido some em pontilhado a 20 m; a linha fica contínua a qualquer distância. Todos num desenho só.
+ * `flecha`: o quanto o fio cai no meio do vão entre dois postes (a cada `vao` m, alinhados em s = k·vao), em parábola,
+ * até 700 m de quem chega (mais longe, reto): o fio que cai entre os postes é o que faz um fio parecer fio, e não uma
+ * régua riscada no céu.
  */
-export function fios(G: THREE.Group, lg: Lugar, s0: number, s1: number, l: readonly { m: number; z: number }[], cor = 0x3a3d42) {
+export function fios(G: THREE.Group, lg: Lugar, s0: number, s1: number, l: readonly { m: number; z: number; flecha?: number; vao?: number }[], cor = 0x3a3d42) {
   const reta = lg.mundo(0, 0, 0)[1] === 0 && lg.mundo(100, 0, 0)[1] === 0, passo = reta ? 250 : 5;
   const pos: number[] = [], a: [number, number, number] = [0, 0, 0], b: [number, number, number] = [0, 0, 0];
-  const n = Math.max(1, Math.ceil((s1 - s0) / passo));
-  for (const f of l) for (let i = 0; i < n; i++) {
-    lg.mundo(s0 + ((s1 - s0) * i) / n, f.m, f.z, a); lg.mundo(s0 + ((s1 - s0) * (i + 1)) / n, f.m, f.z, b);
-    pos.push(a[0], a[1], a[2], b[0], b[1], b[2]);
+  const seg = (sa: number, sb: number, m: number, za: number, zb: number) => { lg.mundo(sa, m, za, a); lg.mundo(sb, m, zb, b); pos.push(a[0], a[1], a[2], b[0], b[1], b[2]); };
+  for (const f of l) {
+    // os vãos perto (com a flecha), o resto reto
+    const vao = f.vao ?? 50, perto = f.flecha ? [Math.max(s0, Math.ceil(-700 / vao) * vao), Math.min(s1, Math.floor(700 / vao) * vao)] : [0, 0];
+    const retos: [number, number][] = f.flecha && perto[1] > perto[0] ? [[s0, perto[0]], [perto[1], s1]] : [[s0, s1]];
+    for (const [ra, rb] of retos) { const n = Math.max(1, Math.ceil((rb - ra) / passo)); if (rb > ra) for (let i = 0; i < n; i++) seg(ra + ((rb - ra) * i) / n, ra + ((rb - ra) * (i + 1)) / n, f.m, f.z, f.z); }
+    if (!f.flecha || perto[1] <= perto[0]) continue;
+    for (let sv = perto[0]; sv < perto[1]; sv += vao) for (let k = 0; k < 8; k++) {
+      const t0 = k / 8, t1 = (k + 1) / 8, zq = (t: number) => f.z - f.flecha! * 4 * t * (1 - t);
+      seg(sv + vao * t0, sv + vao * t1, f.m, zq(t0), zq(t1));
+    }
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   G.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: cor })));
@@ -44,7 +55,8 @@ export function fios(G: THREE.Group, lg: Lugar, s0: number, s1: number, l: reado
  */
 export function catenaria(G: THREE.Group, lg: Lugar, s0: number, s1: number, vias: readonly number[], zFio: number, mPoste: number, vao = 60, pular: (s: number) => boolean = () => false, postes = true) {
   const aco = fosco(0x7d838a), fio = fosco(0x4a4f55);
-  fios(G, lg, s0, s1, vias.flatMap((m) => [{ m, z: zFio }, { m, z: zFio + 1.1 }]), 0x34373b);
+  // (o fio de contato fica reto, preso pelos pendurais; o mensageiro, em cima, cai entre os postes)
+  fios(G, lg, s0, s1, vias.flatMap((m) => [{ m, z: zFio }, { m, z: zFio + 1.1, flecha: 0.7, vao }]), 0x3d4146);
   if (!postes) return;
   const mMin = Math.min(...vias, mPoste), mMax = Math.max(...vias, mPoste), larg = mMax - mMin + 0.6;
   const ps: Inst[] = [], bracos: Inst[] = [], pendurais: Inst[] = [];
@@ -53,13 +65,17 @@ export function catenaria(G: THREE.Group, lg: Lugar, s0: number, s1: number, via
     if (pular(s)) continue;
     const r = lg.rumoVia(s);
     ps.push({ pos: lg.mundo(s, mPoste, (zFio + 1.6) / 2, w).slice(), rumo: r, esc: [1, 1, zFio + 1.6] });
+    leveCirculo(s, mPoste, 0.2, zFio + 1.6);
     bracos.push({ pos: lg.mundo(s, (mMin + mMax) / 2, zFio + 1.4, w).slice(), rumo: r, esc: [1, larg, 1] });
     for (const mv of vias) pendurais.push({ pos: lg.mundo(s, mv, zFio + 0.7, w).slice(), rumo: r, esc: [1, 1, 1.4] });
   }
   G.add(repetir(new THREE.BoxGeometry(0.32, 0.32, 1), aco, ps), repetir(new THREE.BoxGeometry(0.12, 1, 0.16), aco, bracos), repetir(new THREE.BoxGeometry(0.05, 0.05, 1), fio, pendurais));
 }
 
-/** linha de telégrafo ao lado da ferrovia (vapor): postes de madeira com a cruzeta e quatro fios */
+/**
+ * linha de telégrafo ao lado da ferrovia (vapor): postes de madeira com a cruzeta e dois fios nos isoladores das pontas,
+ * caindo entre os postes, num cinza mais claro que o da catenária (o fio de cobre fino, de longe, quase some no céu)
+ */
 export function telegrafo(G: THREE.Group, lg: Lugar, s0: number, s1: number, m: number, pular: (s: number) => boolean = () => false) {
   const madeira = fosco(0x6a5038);
   const ps: Inst[] = [], cz: Inst[] = [], w: [number, number, number] = [0, 0, 0];
@@ -67,13 +83,22 @@ export function telegrafo(G: THREE.Group, lg: Lugar, s0: number, s1: number, m: 
     if (pular(s)) continue;
     const r = lg.rumoVia(s);
     ps.push({ pos: lg.mundo(s, m, 3.6, w).slice(), rumo: r }); cz.push({ pos: lg.mundo(s, m, 6.7, w).slice(), rumo: r });
+    leveCirculo(s, m, 0.14, 7.2);
   }
   G.add(repetir(new THREE.CylinderGeometry(0.11, 0.13, 7.2, 6).rotateX(Math.PI / 2), madeira, ps), repetir(new THREE.BoxGeometry(0.12, 1.7, 0.12), madeira, cz));
-  fios(G, lg, s0, s1, [-0.7, -0.25, 0.25, 0.7].map((d) => ({ m: m + d, z: 6.8 })));
+  const iso: Inst[] = [];
+  for (let s = Math.ceil(s0 / 50) * 50; s <= s1; s += 50) if (!pular(s)) for (const d of [-0.7, 0.7]) iso.push({ pos: lg.mundo(s, m + d, 6.82, w).slice(), rumo: lg.rumoVia(s) });
+  G.add(repetir(new THREE.CylinderGeometry(0.04, 0.05, 0.14, 6).rotateX(Math.PI / 2), fosco(0x5b8a6a), iso));
+  fios(G, lg, s0, s1, [-0.7, 0.7].map((d) => ({ m: m + d, z: 6.88, flecha: 0.55, vao: 50 })), 0x6f757b);
 }
 
-/** cerca de postes com fios (ou tela, `tela`) de s0 a s1 em m, altura h */
-export function cerca(G: THREE.Group, lg: Lugar, s0: number, s1: number, m: number, h = 1.3, passo = 3, cor = 0x8a7a62, nFios = 3, tela = false) {
+/**
+ * cerca de postes com fios (ou tela, `tela`) de s0 a s1 em m, altura h; `vao`: a porteira (de s a s), por onde se passa
+ * para o lado da via; `z0`: a altura do chão em que ela está (o alto do corte)
+ */
+export function cerca(G: THREE.Group, lg: Lugar, s0: number, s1: number, m: number, h = 1.3, passo = 3, cor = 0x8a7a62, nFios = 3, tela = false, vao?: [number, number], z0 = 0) {
+  if (z0 >= 0) leveLinha(s0, s1, m, h, z0, vao);
+  if (vao) { cerca(G, lg, s0, vao[0], m, h, passo, cor, nFios, tela, undefined, -1); cerca(G, lg, vao[1], s1, m, h, passo, cor, nFios, tela, undefined, -1); return; }
   const mat = fosco(cor), ps: Inst[] = [], w: [number, number, number] = [0, 0, 0];
   for (let s = s0; s <= s1; s += passo) ps.push({ pos: lg.mundo(s, m, h / 2, w).slice(), rumo: lg.rumoVia(s) });
   G.add(repetir(new THREE.BoxGeometry(tela ? 0.06 : 0.1, tela ? 0.06 : 0.1, h), mat, ps));
@@ -83,7 +108,9 @@ export function cerca(G: THREE.Group, lg: Lugar, s0: number, s1: number, m: numb
 }
 
 /** guarda-corpo de estrada (lâmina de aço em postes) */
-export function defensa(G: THREE.Group, lg: Lugar, s0: number, s1: number, m: number, lado: 1 | -1) {
+export function defensa(G: THREE.Group, lg: Lugar, s0: number, s1: number, m: number, lado: 1 | -1, vao?: [number, number]) {
+  leveLinha(s0, s1, m, 0.85, 0, vao);
+  if (vao) { defensa(G, lg, s0, vao[0], m, lado); defensa(G, lg, vao[1], s1, m, lado); return; }
   const aco = fosco(0xa9adb2), ps: Inst[] = [], w: [number, number, number] = [0, 0, 0];
   for (let s = s0; s <= s1; s += 4) ps.push({ pos: lg.mundo(s, m + lado * 0.15, 0.4, w).slice(), rumo: lg.rumoVia(s) });
   G.add(repetir(new THREE.BoxGeometry(0.12, 0.12, 0.8), fosco(0x6b6e73), ps));
@@ -98,6 +125,7 @@ export function postesDeLuz(G: THREE.Group, lg: Lugar, l: readonly { s: number; 
   for (const p of l) {
     const r = lg.rumoVia(p.s);
     hs.push({ pos: lg.mundo(p.s, p.m, alt / 2, w).slice(), rumo: r });
+    leveCirculo(p.s, p.m, 0.14, alt);
     bs.push({ pos: lg.mundo(p.s, p.m - p.lado * 0.9, alt - 0.1, w).slice(), rumo: r });
     ls.push({ pos: lg.mundo(p.s, p.m - p.lado * 1.7, alt - 0.25, w).slice(), rumo: r });
   }
@@ -111,9 +139,10 @@ export function redeEletrica(G: THREE.Group, lg: Lugar, s0: number, s1: number, 
     if (pular(s)) continue;
     const r = lg.rumoVia(s);
     ps.push({ pos: lg.mundo(s, m, 4.75, w).slice(), rumo: r }); cz.push({ pos: lg.mundo(s, m, 8.9, w).slice(), rumo: r });
+    leveCirculo(s, m, 0.18, 9.5);
   }
   G.add(repetir(new THREE.CylinderGeometry(0.1, 0.16, 9.5, 6).rotateX(Math.PI / 2), conc, ps), repetir(new THREE.BoxGeometry(0.1, 1.9, 0.12), conc, cz));
-  fios(G, lg, s0, s1, [-0.8, 0, 0.8].map((d) => ({ m: m + d, z: 9.0 })), 0x2f3236);
+  fios(G, lg, s0, s1, [-0.8, 0, 0.8].map((d) => ({ m: m + d, z: 9.0, flecha: 0.5, vao })), 0x3a3e43);
 }
 
 /** asfalto entre m0 e m1, com a pintura: linha central dupla amarela em mc e bordas brancas (opcionais) */

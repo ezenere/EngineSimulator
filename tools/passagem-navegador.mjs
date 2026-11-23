@@ -9,14 +9,17 @@
 // Um script antes da página grava toda mensagem mandada pela porta do AudioWorklet.
 //
 // Roteiro: carga (presets, portadores pela tabela de compatibilidade, seções do painel com "Você" em primeiro, cena 3D
-// desenhando e toda opaca, ajuda das teclas que some sozinha); o ponto de chegada do trem-bala no túnel e a passagem dele
+// desenhando e toda opaca, ajuda das teclas que some sozinha); o túnel por dentro (a luz da boca ao longe, as placas);
+// o ponto de chegada do trem-bala no túnel e a passagem dele
 // (onda de compressão ~2 kPa antes do trem, onda de nariz no ouvinte livre, nível em dB(A) no ouvido real); andar (W,
 // Shift), a parede do túnel, olhar arrastando o mouse, voar (V, E), embarcar e desembarcar (botão e B), cada ponto de
 // vista do painel, as teclas 1–9, H e T, o painel recolhido; a troca de ambiente (estação: o observador em cima da
 // plataforma), o slider do ponto de chegada e o de vagões; o helicóptero; todos os presets carregando com o observador
 // no ponto de chegada; o carro na rua (Camaro do Ronco), o RX-7 e a locomotiva EMD em N8; voltar ao padrão; o celular a
-// 400 px (o círculo de andar e arrastar para olhar, no Chromium); console sem erros. Sempre com MUDO=1 quando houver
-// alguém ouvindo outra coisa nas caixas.
+// 400 px (o círculo de andar e arrastar para olhar, no Chromium); console sem erros. Etapa 3: o interior embarcado (a
+// cabine opaca no lugar da casca), os lugares dos aviões e das estações, o que segura o passo a pé (troncos, postes,
+// carros parados, cercas com a porteira, água; voando, nada) e, de todo ponto de chegada, o caminho a pé até a via.
+// Sempre com MUDO=1 quando houver alguém ouvindo outra coisa nas caixas.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -175,6 +178,9 @@ const texto = (id) => ev(`document.getElementById(${JSON.stringify(id)})?.textCo
 const tecla = (code, tipo = 'keydown') => ev(`(() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); window.dispatchEvent(new KeyboardEvent('${tipo}', { code: '${code}', key: '${code.replace(/^Key|^Digit/, '').toLowerCase()}', bubbles: true })); return true; })()`);
 const segurar = async (codes, ms) => { for (const c of codes) await tecla(c); await espera(ms); for (const c of codes) await tecla(c, 'keyup'); };
 const P = 'window.__passagem.c';
+// (andar de (s0, m0) para (s1, m1) em 60 passos curtos, cada um a partir de onde o anterior parou, como o observador
+// anda, com o Lugar da página, a pé ou voando; devolve onde parou, em s e m)
+const ANDA = `const anda = (s0, m0, s1, m1, voo) => { const lg = window.__passagem.c.lugar(), q0 = lg.mundo(s0, m0, 0), ds = (s1 - s0) / 60, dm = (m1 - m0) / 60; let p = lg.mundo(s0, m0, lg.chao(q0[0], q0[1]) + (voo ? 3 : 1.65)); for (let i = 1; i <= 60; i++) { const a = lg.projetar(p[0], p[1]), q = lg.mundo(a.s + ds, a.m + dm, p[2]); lg.limitar(p, q, voo, 1.65); p = q; } return lg.projetar(p[0], p[1]); };`;
 // telemetria guardada pela página (vale também na reserva, em que nada passa pela porta)
 const tele = () => ev(`(() => { const t = ${P}.tele; return t && { s: t.portador.s, v: t.portador.v, p: t.cena.pressaoPa, pmax: t.pressao.max, pmin: t.pressao.min, tunel: t.pressao.tunel, spl: t.cena.splDbA, vento: t.cena.ventoMs, n: t.cena.fontes.length, lado: t.lado, ouvinte: t.cena.ouvinte }; })()`);
 const obs = () => ev(`(() => { const o = ${P}.obs; return { modo: o.modo, pos: o.pos.map((x) => +x.toFixed(3)), rumo: +o.rumo.toFixed(4), arf: +o.arfagem.toFixed(4), salto: o.salto, local: o.local, nome: o.nome, v: +Math.hypot(o.vel[0], o.vel[1]).toFixed(3), vz: +o.vel[2].toFixed(3) }; })()`);
@@ -215,6 +221,9 @@ confere(Array.isArray(transp) && transp.length === 0, 'cena padrão toda opaca',
 // (etapa 2: o túnel no morro, o trem-bala com o modelo e a sombra do sol; lá dentro, o morro e o resto de fora somem)
 const tun3d = await lerAte(() => ev(`(() => { const k = window.__passagem.cena.current, c = window.__passagem.c; return k && { cen: k.mundo?.cenario, fora: k.mundo?.morro ? k.mundo.morro.visible : null, sol: k.sol.intensity, sombra: k.renderer.shadowMap.enabled, segs: k.segs.length, corpo: c.corpo.segmentos.length, rodas: k.rodas.length }; })()`), (r) => r?.cen === 'tunel' && r.segs === r.corpo, 8000);
 confere(tun3d?.cen === 'tunel' && tun3d.fora === false && tun3d.sol === 0 && tun3d.sombra && tun3d.segs === tun3d.corpo && tun3d.rodas > 0, 'túnel no morro: dentro do tubo o sol se apaga e o de fora some; o trem com um grupo por vagão e as rodas em instâncias', tun3d);
+// (etapa 3: lá dentro, a luz das bocas aparece ao longe, e as placas e os nichos estão desenhados)
+const tunDentro = await ev(`(() => { const k = window.__passagem.cena.current, c = ${P}; let placas = 0; k.mundo.grupo.traverse((o) => { if (o.material?.map && o.material.type === 'MeshBasicMaterial') placas++; }); return { boca: k.mundo.boca?.visible, placas, nichos: c.lugar().nichos().length }; })()`);
+confere(tunDentro.boca === true && tunDentro.placas >= 1 && tunDentro.nichos >= 10, 'túnel por dentro: a luz de fora nas bocas, o atlas das placas, os nichos', tunDentro);
 const ajudaSome = await lerAte(() => ev(`document.getElementById('ajuda').hidden`), (h) => h === true, 14000);
 confere(ajudaSome === true, 'a ajuda some sozinha');
 
@@ -420,6 +429,7 @@ confere((await ev(`${P}.traj.altitude`)) === 150, 'padrão do helicóptero: alti
 // ---- cada preset carrega e põe o observador no ponto de chegada dele, a pé, na distância da lateral do preset
 const presetsInfo = await ev(`${P}.presetsVisiveis().map((p) => ({ id: p.id, lateral: p.lateral, portador: p.portador }))`);
 let ruins = [];
+const semVia = [], lugares = {};
 for (const p of presetsInfo) {
   await clicar(`.preset[data-id="${p.id}"]`);
   await ate(`!${P}.calibrando && ${P}.presetId === ${JSON.stringify(p.id)}`, 40000);
@@ -427,8 +437,56 @@ for (const p of presetsInfo) {
     (r) => r.modo === 'pe' && Math.abs(r.m - p.lateral) < 0.02, 6000);
   const ok = r.modo === 'pe' && Math.abs(r.m - p.lateral) < 0.02 && Math.abs(r.z - 1.65) < 0.02 && r.portador === p.portador && (reserva || r.msg === p.portador || (p.portador === 'trem' && r.msg === 'trem'));
   if (!ok) ruins.push({ id: p.id, ...r });
+  // (etapa 3) o lugar desenhado, com os obstáculos leves entregues; daqui, a pé, até a via (nada no caminho segura)
+  const v = await lerAte(() => ev(`(() => { const c = ${P}, k = window.__passagem.cena.current, lg = c.lugar(); if (k?.mundo?.cenario !== c.cenario() || !lg.nLeves) return null; ${ANDA} const w = c.corpo.segmentos[0]?.largura ?? 2, m0 = c.traj.lateral + w / 2; return { cen: c.cenario(), arf: +c.obs.arfagem.toFixed(3), sol: k.sol.intensity, n: lg.nLeves, m: +anda(0, m0, 0, 0.3, false).m.toFixed(2) }; })()`), (x) => !!x, 10000);
+  lugares[p.id] = v;
+  if (!v || Math.abs(v.m - 0.3) > 0.6) semVia.push({ id: p.id, ...v });
 }
 confere(!ruins.length, `os ${presetsInfo.length} presets carregam, com o observador a pé no ponto de chegada (a lateral do preset, olho a 1,65 m do chão)`, ruins.length ? ruins : `${presetsInfo.length} ok`);
+confere(!semVia.length, 'de todo ponto de chegada dá para ir a pé até a via (nem cerca, nem tronco, nem carro parado no caminho)', semVia.length ? semVia : `${presetsInfo.length} ok`);
+// os aviões nascem em lugares diferentes (a beira da pista, a cabeceira, o pátio, a cerca, o campo), o que passa alto com
+// o chão e o horizonte no quadro; as estações: a de superfície, a do metrô (embaixo da terra, sem sol) e a antiga
+const avioes = ['corsair-rasante', 'yak52-passagem', 'p47-passagem', 'shadow-passagem', 'cessna-passagem', 'aviao-rasante', 'jato-1500', 'caca-supersonico'];
+const cenAvioes = avioes.map((id) => lugares[id]?.cen);
+confere(new Set(cenAvioes).size >= 5 && !cenAvioes.includes('aerodromo') && lugares['jato-1500']?.arf <= 0.3, 'os oito aviões em cinco lugares (o jato a 1 500 m com o horizonte no quadro)', Object.fromEntries(avioes.map((id) => [id, lugares[id] && `${lugares[id].cen} ${lugares[id].arf}`])));
+confere(lugares['metro-estacao']?.cen === 'estacao-metro' && lugares['metro-estacao'].sol === 0 && lugares['maria-estacao']?.cen === 'estacao-antiga' && lugares['convencional-estacao']?.cen === 'estacao' && lugares['taurus-doremi']?.cen === 'estacao', 'as estações: o metrô embaixo da terra, a da Maria Fumaça antiga do interior, a de superfície', { metro: lugares['metro-estacao'], maria: lugares['maria-estacao']?.cen, convencional: lugares['convencional-estacao']?.cen });
+// o interior: embarcado (B), a cabine opaca no lugar da casca do segmento; desembarcado (B), a casca volta
+const interiores = [];
+for (const id of ['carro-rua', 'corsair-rasante', 'locomotiva-patio', 'pacific-100', 'jato-1500', 'convencional-estacao']) {
+  await clicar(`.preset[data-id="${id}"]`);
+  await ate(`!${P}.calibrando && ${P}.presetId === ${JSON.stringify(id)}`, 40000);
+  await tecla('KeyB');
+  const ler = `(() => { const k = window.__passagem.cena.current, c = ${P}, it = k?.interior; return { modo: c.obs.modo, dentro: k?.dentroDoVeiculo, interior: !!it && it.grupo.visible, casca: it ? k.segs[it.seg].casca.visible : null, local: document.getElementById('localEfetivo')?.textContent ?? '', x: +c.obs.pos[0].toFixed(2), opacos: (() => { let n = 0; it?.grupo.traverse((o) => { const m = o.material; if (m && (m.transparent || m.opacity < 1)) n++; }); return n === 0; })() }; })()`;
+  const r = await lerAte(() => ev(ler), (x) => x.modo === 'embarcado' && x.dentro === true, 8000);
+  await tecla('KeyB');
+  const d = await lerAte(() => ev(ler), (x) => x.modo === 'pe' && x.dentro === false, 6000);
+  interiores.push({ id, dentro: r.dentro, interior: r.interior, casca: r.casca, opacos: r.opacos, local: r.local, x: r.x, depois: { modo: d.modo, casca: d.casca } });
+}
+confere(interiores.every((r) => r.dentro && r.interior && r.casca === false && r.opacos && r.depois.modo === 'pe' && r.depois.casca === true && (r.id === 'pacific-100' || /cabine/.test(r.local))), 'embarcado: a cabine opaca no lugar da casca (carro, avião de hélice, locomotivas diesel e a vapor, janela do jato, trem); desembarcado, a casca volta', interiores);
+confere(interiores.find((r) => r.id === 'corsair-rasante')?.x < 3.0, 'no avião de hélice o assento é a cabine do modelo, atrás da hélice', interiores.find((r) => r.id === 'corsair-rasante')?.x);
+// o que segura o passo a pé: o tronco da árvore e o carro parado na rua, a cerca do público em Hunaudières (que tem a
+// porteira em frente ao ponto de chegada), o lago do parque; voando, nada segura
+await clicar('.preset[data-id="carro-rua"]');
+await ate(`!${P}.calibrando && ${P}.presetId === 'carro-rua'`, 40000);
+const obsRua = await lerAte(() => ev(`(() => { const c = ${P}, k = window.__passagem.cena.current, lg = c.lugar(); if (k?.mundo?.cenario !== 'rua' || !lg.nLeves) return null; ${ANDA}
+  const tr = [...lg.leves.circulos.values()].flat().find((o) => o.r > 0.2 && o.r < 0.6 && o.m > 3 && o.m < 7 && Math.abs(o.s) > 10 && Math.abs(o.s) < 200 && o.z0 < 0.5);
+  const ca = [...lg.leves.caixas.values()].flat().find((o) => o.h < 2 && Math.abs(o.m0 + o.m1) / 2 < 8);
+  const mc = (ca.m0 + ca.m1) / 2;
+  return { n: lg.nLeves, tronco: { s: +tr.s.toFixed(2), r: +tr.r.toFixed(2), aPe: +anda(tr.s - 2, tr.m, tr.s + 2, tr.m, false).s.toFixed(2), voando: +anda(tr.s - 2, tr.m, tr.s + 2, tr.m, true).s.toFixed(2) },
+    carro: { s0: +ca.s0.toFixed(2), aPe: +anda(ca.s0 - 2, mc, ca.s1 + 2, mc, false).s.toFixed(2), voando: +anda(ca.s0 - 2, mc, ca.s1 + 2, mc, true).s.toFixed(2), s1: +ca.s1.toFixed(2) } }; })()`), (x) => !!x, 10000);
+confere(obsRua && obsRua.tronco.aPe < obsRua.tronco.s - obsRua.tronco.r && obsRua.tronco.voando > obsRua.tronco.s + 1.9 && obsRua.carro.aPe < obsRua.carro.s0 && obsRua.carro.voando > obsRua.carro.s1 + 1.9, 'na rua, o tronco da árvore e o carro parado seguram o passo a pé; voando, passa-se por cima', obsRua);
+await clicar('.preset[data-id="787b-hunaudieres"]');
+await ate(`!${P}.calibrando && ${P}.presetId === '787b-hunaudieres'`, 40000);
+const obsCerca = await lerAte(() => ev(`(() => { const c = ${P}, k = window.__passagem.cena.current, lg = c.lugar(); if (k?.mundo?.cenario !== 'reta-arvores' || !lg.nLeves) return null; ${ANDA}
+  const f = lg.leves.linhas.find((o) => o.vao && o.m > 8); if (!f) return { semVao: true };
+  return { m: +f.m.toFixed(2), fechada: +anda(30, f.m + 2, 30, f.m - 2, false).m.toFixed(2), porteira: +anda(0, f.m + 2, 0, f.m - 2, false).m.toFixed(2), voando: +anda(30, f.m + 2, 30, f.m - 2, true).m.toFixed(2) }; })()`), (x) => !!x, 10000);
+confere(obsCerca && obsCerca.fechada > obsCerca.m && obsCerca.porteira < obsCerca.m - 1.5 && obsCerca.voando < obsCerca.m - 1.5, 'o alambrado do público segura; pela porteira em frente ao ponto de chegada passa-se para a pista; voando, por cima', obsCerca);
+await clicar('.preset[data-id="drone-pairando"]');
+await ate(`!${P}.calibrando && ${P}.presetId === 'drone-pairando'`, 40000);
+const obsLago = await lerAte(() => ev(`(() => { const c = ${P}, k = window.__passagem.cena.current, lg = c.lugar(); if (k?.mundo?.cenario !== 'parque' || !lg.nLeves) return null; ${ANDA}
+  const e = lg.leves.elipses[0]; if (!e) return { semLago: true };
+  return { borda: +(e.m + e.rm).toFixed(2), aPe: +anda(e.s, e.m + e.rm + 6, e.s, e.m, false).m.toFixed(2), voando: +anda(e.s, e.m + e.rm + 6, e.s, e.m, true).m.toFixed(2), centro: e.m }; })()`), (x) => !!x, 10000);
+confere(obsLago && obsLago.aPe > obsLago.borda && Math.abs(obsLago.voando - obsLago.centro) < 0.1, 'a água do lago do parque segura o passo a pé; voando, passa-se sobre ela', obsLago);
 // na ponte, o ponto de chegada é o passeio de pedestres (o "acostamento" dela, com meio-fio de 0,2 m), a 5 m da lateral
 await clicar('.preset[data-id="trembala-ponte"]');
 const pt = await lerAte(obs, (o) => Math.abs(o.pos[1] + 6.68) < 0.01 && Math.abs(o.pos[2] - 1.85) < 0.01, 4000);

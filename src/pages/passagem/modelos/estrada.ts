@@ -3,8 +3,9 @@
 // portador "carro" tem 4,6 m para todos: o modelo fica centrado nele). A silhueta de lado é um perfil extrudado; os
 // vidros são uma faixa escura opaca; faróis, lanternas, para-choques e rodas que giram.
 import { Pecas, COR, arco, type Modelo } from './kit';
+import type { TipoCarro } from './tipos';
 
-export type TipoCarro = 'sedan' | 'cupe' | 'esportivo' | 'hatch' | 'muscle' | 'picape' | 'caminhao' | 'onibus' | 'moto' | 'tanque' | 'formula' | 'prototipo' | 'antigo' | 'gp-antigo';
+export type { TipoCarro };
 
 /** perfil do vidro e do teto por tipo, em frações do comprimento: base do para-brisa, frente do teto, trás do teto, base do vidro de trás */
 const ESTUFA: Record<'sedan' | 'cupe' | 'esportivo' | 'hatch' | 'muscle', [number, number, number, number]> = {

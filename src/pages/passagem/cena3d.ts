@@ -16,16 +16,18 @@ import { PontoVia } from '../../scene/trajetoria';
 import { TUNEL } from './lugar';
 import { montarMundo, type Mundo } from './mundo';
 import { descartar } from './mundo/geo';
-import { montarModelo } from './modelos';
+import { montarModelo, farois } from './modelos';
 import type { Modelo } from './modelos/kit';
 import { fundir, fundirGeometria, materialFundido, soltarPecas } from './modelos/fundir';
+import type { Interior } from './modelos/interior';
 
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
 
 // céu de dia: azul no alto, claro e um pouco quente no horizonte; a neblina tem a cor do horizonte
 const CEU_ZENITE = 0x3f73b8, CEU_HORIZONTE = 0xc9d8e4;
-/** m: meia largura da caixa da sombra do sol (em volta de você) e o passo em que ela anda */
-const SOMBRA_MEIA = 90, SOMBRA_PASSO = 4;
+/** m: meia largura da caixa da sombra do sol (em volta de você) e o passo em que ela anda; dentro do veículo, a caixa
+ * fecha em volta da cabine (o teto e as colunas fazem sombra no painel com o detalhe de centímetros) */
+const SOMBRA_MEIA = 90, SOMBRA_PASSO = 4, SOMBRA_DENTRO = 14;
 /** sol de meio da tarde: por trás e à direita de quem está no ponto de chegada olhando a via */
 const DIR_SOL = new THREE.Vector3(380, -560, 520).normalize();
 
@@ -41,7 +43,15 @@ export class Cena3D {
   private estatico = new THREE.Group();
   private corpoG = new THREE.Group();
   private tecnicoG = new THREE.Group();
-  private segs: { m: THREE.Group; xc: number }[] = [];
+  private segs: { m: THREE.Group; xc: number; casca: THREE.Mesh }[] = [];
+  /** o interior do veículo (embarcado, no lugar da casca do segmento do assento) */
+  private interior: Interior | null = null;
+  /** você está dentro do veículo (o interior aparece) */
+  dentroDoVeiculo = false;
+  /** o módulo do interior (num pedaço próprio, carregado logo depois da cena: só aparece embarcado) */
+  private modInterior: typeof import('./modelos/interior') | null = null;
+  /** os faróis acesos, em pontos de tamanho fixo na tela */
+  private farois: THREE.Object3D[] = [];
   private rodas: Rodas[] = [];
   private giros: Modelo['giros'] = [];
   private animar: Modelo['animar'];
@@ -103,6 +113,17 @@ export class Cena3D {
     this.scene.add(this.discoSol);
     this.scene.add(this.estatico, this.corpoG, this.tecnicoG);
     this.carregarTexturas();
+    import('./modelos/interior').then((m) => { if (this.vivo) { this.modInterior = m; this.chaveCorpo = ''; } }, () => { /* sem interior: fica a casca */ });
+  }
+
+  /** meia largura da caixa da sombra do sol */
+  private sombraMeia = SOMBRA_MEIA;
+  private ajustarSombra(m: number) {
+    if (m === this.sombraMeia) return;
+    this.sombraMeia = m;
+    const sc = this.sol.shadow.camera;
+    sc.left = -m; sc.right = m; sc.top = m; sc.bottom = -m; sc.updateProjectionMatrix();
+    this.renderer.shadowMap.needsUpdate = true;
   }
 
   // ------------------------------------------------------------------ texturas (sob demanda)
@@ -155,7 +176,8 @@ export class Cena3D {
     if (chave === this.chaveCorpo) return;
     this.chaveCorpo = chave;
     descartar(this.corpoG); descartar(this.tecnicoG);
-    this.segs = []; this.fontes3d = []; this.rodas = []; this.giros = []; this.animar = undefined;
+    this.segs = []; this.fontes3d = []; this.rodas = []; this.giros = []; this.animar = undefined; this.interior = null; this.dentroDoVeiculo = false; this.farois = [];
+    this.ajustarSombra(SOMBRA_MEIA);
     const mod = montarModelo(c);
     this.giros = mod.giros; this.animar = mod.animar;
     // o que mexe fica de fora da fusão: as rodas (viram instâncias), as pás e as bielas (objetos próprios)
@@ -181,8 +203,8 @@ export class Cena3D {
         tp.itens.push({ seg: k, local, r: r.r });
       }
       // o resto do segmento numa malha só; as pás e as bielas continuam como objetos (as pás fundidas no grupo delas)
-      const seg = new THREE.Group();
-      seg.add(fundir(g, fora));
+      const seg = new THREE.Group(), casca = fundir(g, fora);
+      seg.add(casca);
       for (const gi of mod.giros) {
         let p: THREE.Object3D | null = gi.o; while (p && p !== g) p = p.parent;
         if (!p) continue;
@@ -196,8 +218,23 @@ export class Cena3D {
         if (p && mv.parent === g) seg.add(mv);   // (as bielas são filhas diretas do grupo do segmento)
       }
       soltarPecas(g);
-      this.corpoG.add(seg); this.segs.push({ m: seg, xc });
+      this.corpoG.add(seg); this.segs.push({ m: seg, xc, casca });
     });
+    // o interior, para quem embarca: no grupo do segmento do assento (no referencial do corpo: o segmento fica em xc)
+    this.interior = this.modInterior?.montarInterior(c) ?? null;
+    if (this.interior && this.segs[this.interior.seg]) {
+      const it = this.interior, sg = this.segs[it.seg];
+      it.grupo.position.x = -sg.xc; it.grupo.visible = false;
+      sg.m.add(it.grupo);
+    }
+    // os faróis: pontos de 3 a 4 pixels, opacos, que não somem de longe (o veículo é visto chegando)
+    const fr = farois(c), pr = this.renderer.getPixelRatio();
+    if (this.segs[0]) for (const [l, cor, tam] of [[fr.brancos, 0xfffbe6, 4], [fr.vermelhos, 0xff3a2a, 3]] as const) {
+      if (!l.length) continue;
+      const g = new THREE.BufferGeometry().setFromPoints(l.map((q) => new THREE.Vector3(q[0] - this.segs[0].xc, q[1], q[2])));
+      const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: cor, size: tam * pr, sizeAttenuation: false }));
+      pts.frustumCulled = false; this.segs[0].m.add(pts); this.farois.push(pts);
+    }
     for (const tp of tipos.values()) {
       const im = new THREE.InstancedMesh(tp.geo, materialFundido(), tp.itens.length);
       im.castShadow = true; im.receiveShadow = true; im.frustumCulled = false;
@@ -251,6 +288,8 @@ export class Cena3D {
   /** você está dentro do tubo do túnel (lá dentro o sol não chega: só a luz das luminárias e o que entra pelas bocas) */
   private dentroDoTunel(p: readonly number[]) {
     const lg = this.c.lugar(), t = lg.tun;
+    // (o metrô é todo embaixo da terra)
+    if (lg.est?.caixa) return true;
     if (!t) return false;
     const q = lg.projetar(p[0], p[1]);
     const L = this.c.via.comp, noTrecho = this.c.via.tipo === 'reta' ? q.s > t.ta && q.s < t.tb : (((q.s - t.ta) % L) + L) % L < t.tb - t.ta;
@@ -286,6 +325,16 @@ export class Cena3D {
       rd.im.instanceMatrix.needsUpdate = true;
     }
     this.animar?.(this.distancia);
+    // embarcado, dentro da cabine: o interior no lugar da casca do segmento (e das rodas de fora, se ele traz as dele)
+    const it = this.interior, ob = c.obs;
+    const b = it?.mostrar, p = ob.pos, dentroV = !!b && ob.modo === 'embarcado' && p[0] >= b.x0 && p[0] <= b.x1 && p[1] >= b.y0 && p[1] <= b.y1 && p[2] >= b.z0 && p[2] <= b.z1;
+    if (it && dentroV !== this.dentroDoVeiculo) {
+      this.dentroDoVeiculo = dentroV; it.grupo.visible = dentroV; this.segs[it.seg].casca.visible = !dentroV;
+      if (it.escondeRodas) for (const rd of this.rodas) rd.im.visible = !dentroV;
+      for (const f of this.farois) f.visible = !dentroV;
+      this.ajustarSombra(dentroV ? SOMBRA_DENTRO : SOMBRA_MEIA);
+    }
+    if (it && dentroV) for (const r of it.rodas) r.o.rotation.y = this.distancia / r.r;
     // rotores e hélices girando (estroboscópico: uma fração da rotação real)
     if (this.giros.length) {
       const pt = tele?.portador as Record<string, unknown> | undefined;
@@ -317,17 +366,21 @@ export class Cena3D {
     this.discoSol.position.copy(cam.position).addScaledVector(DIR_SOL, 8500); this.discoSol.lookAt(cam.position);
     // o sol e a caixa da sombra: centrados em você, andando de SOMBRA_PASSO em SOMBRA_PASSO m (a sombra não treme)
     const dentro = this.dentroDoTunel(o.pos);
-    this.sol.intensity = dentro ? 0 : 2.1; this.luzCeu.intensity = dentro ? 0.8 : 1.3;
+    this.sol.intensity = dentro ? 0 : 2.1; this.luzCeu.intensity = dentro ? 0.62 : 1.3;
     if (this.mundo?.morro) this.mundo.morro.visible = !dentro;
-    const cx = Math.round(o.pos[0] / SOMBRA_PASSO) * SOMBRA_PASSO, cy = Math.round(o.pos[1] / SOMBRA_PASSO) * SOMBRA_PASSO;
+    if (this.mundo?.boca) this.mundo.boca.visible = dentro;
+    // (dentro do veículo, a caixa da sombra acompanha a cabine sem degrau: ela anda com ele)
+    const passoS = this.dentroDoVeiculo ? 0.01 : SOMBRA_PASSO;
+    const cx = Math.round(o.pos[0] / passoS) * passoS, cy = Math.round(o.pos[1] / passoS) * passoS;
     if (cx !== this.centroSombra.x || cy !== this.centroSombra.y) {
       this.centroSombra.set(cx, cy);
-      this.sol.target.position.set(cx, cy, 0); this.sol.position.set(cx, cy, 0).addScaledVector(DIR_SOL, 700);
+      const zS = this.dentroDoVeiculo ? o.pos[2] : 0;
+      this.sol.target.position.set(cx, cy, zS); this.sol.position.set(cx, cy, zS).addScaledVector(DIR_SOL, 700);
       this.sol.target.updateMatrixWorld(); this.sol.updateMatrixWorld();
       this.renderer.shadowMap.needsUpdate = true;
     }
     // (o veículo perto de você e andando: a sombra dele anda, redesenha a cada quadro; parado, só quando ele muda de lugar)
-    if (!dentro && !(Math.abs(s - this.sSombra) <= 0.02) && c.distanciaAoCorpo(s) < SOMBRA_MEIA * 1.4) { this.renderer.shadowMap.needsUpdate = true; this.sSombra = s; }
+    if (!dentro && !(Math.abs(s - this.sSombra) <= 0.02) && c.distanciaAoCorpo(s) < this.sombraMeia * 1.4) { this.renderer.shadowMap.needsUpdate = true; this.sSombra = s; }
     this.renderer.render(this.scene, cam);
     this.quadros++;
   }
