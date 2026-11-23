@@ -3,19 +3,20 @@
 // de giro (igual ao Ronco), temperatura (mais o gás de escape e a fumaça de óleo), transmissão (no carro e na moto),
 // escapamento (tipo, pré-silencioso, reator, abafador, diâmetros, saídas), acessórios (válvula, 2-step no FD), estalos
 // (mais a pós-queima), admissão (turbo, sequencial, troca) e carga (hélice/rotor pela aviação; palhetas: pressão e carga).
-// Só re-renderiza quando o estado muda; as leituras da telemetria são escritas no DOM pelos mostradores.
+// Só re-renderiza quando o estado muda; as leituras da telemetria são escritas no DOM pelos mostradores. Os pedaços
+// comuns às páginas a pistão estão em src/pages/comum/Painel.tsx.
 import { useSyncExternalStore } from 'react';
-import { ChipGroup, Field, Section, Slider, AMBIENTES_RONCO, type OpcaoChip } from '../../ui';
+import { ChipGroup, Field, Section, Slider, dec as virgula, pct, type OpcaoChip } from '../../ui';
 import { volumeCamara } from '../../engines/rotativo/geometria';
 import { sobreposicao } from '../../engines/rotativo/config';
 import { HeliceAv, RotorAv, MagnetosEMistura } from '../comum/Aviacao';
+import { clamp } from '../comum/controle';
+import {
+  AguaDoMotor, Ambiente, br, Equalizacao, FAIXA_DO_CORTE, LIGADO, Microfone, Mixagem, Observador, RelacoesDasMarchas, SomDeFundo,
+  TemperaturasProntas, trocaDoCorte, VolumeDoMotor,
+} from '../comum/Painel';
 import type { ControleRotativo, EstadoRot } from './controle';
 
-const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
-const br = (v: number) => v.toLocaleString('pt-BR');
-const virgula = (v: number, c: number) => v.toFixed(c).replace('.', ',');
-const pct = (v: number) => `${Math.round(v * 100)}%`;
-const LIGADO: OpcaoChip<boolean>[] = [{ valor: true, rotulo: 'Ligado' }, { valor: false, rotulo: 'Desligado' }];
 type P = { k: ControleRotativo; e: EstadoRot };
 
 export function Painel({ k }: { k: ControleRotativo }) {
@@ -46,44 +47,21 @@ export function Painel({ k }: { k: ControleRotativo }) {
 function Escuta({ k, e }: P) {
   const { params, eq } = e;
   const carro = (e.spec.portadores || []).includes('carro'), aviacao = !!e.spec.aviation;
-  const mix = (id: string, rotulo: string, chave: 'exhaust' | 'intake' | 'mech' | 'air' | 'master', max = 2) => (
-    <Slider id={id} rotulo={rotulo} min={0} max={max} passo={0.01} valor={params[chave]} formatar={pct} aoMudar={(v) => k.setParams({ [chave]: v })} />
-  );
   return (
     <Section titulo="Escuta e ambiente">
       {/* os mesmos nomes do Ronco; a via só faz sentido no carro (o campo fica à vista se o observador já estiver nela) */}
-      {(carro || e.observer === 'road') && (
-        <Field rotulo="Observador">
-          <ChipGroup id="observer" opcoes={[{ valor: 'car', rotulo: 'Junto com o carro' }, { valor: 'road', rotulo: 'Parado na via' }]} atual={e.observer} aoEscolher={(v) => k.setObserver(v as 'car' | 'road')} />
-        </Field>
-      )}
+      {(carro || e.observer === 'road') && <Observador k={k} e={e} junto="Junto com o carro" />}
       {e.observer === 'car' ? (
-        <Field rotulo="Microfone">
-          <ChipGroup id="mic" opcoes={[
-            { valor: 'pipe', rotulo: 'Ao lado do escape' }, { valor: 'ext', rotulo: carro ? 'Câmera atrás' : aviacao ? 'De fora, a 5 m da hélice' : 'De fora, a alguns metros' },
-            { valor: 'int', rotulo: 'Cabine' }, { valor: 'bay', rotulo: carro ? 'Cofre' : aviacao ? 'Dentro da carenagem' : 'Junto ao motor' },
-          ]} atual={e.carMic} aoEscolher={(v) => k.setCarMic(v)} />
-        </Field>
+        <Microfone k={k} e={e} ext={carro ? 'Câmera atrás' : aviacao ? 'De fora, a 5 m da hélice' : 'De fora, a alguns metros'}
+          bay={carro ? 'Cofre' : aviacao ? 'Dentro da carenagem' : 'Junto ao motor'} />
       ) : (
         <Slider id="roadDist" rotulo="Distância até a via" min={2} max={60} passo={0.5} valor={params.roadDist} formatar={(v) => `${virgula(v, 1)} m`} aoMudar={(v) => k.setParams({ roadDist: v })} />
       )}
-      <Field rotulo="Ambiente">
-        <ChipGroup id="env" opcoes={Object.entries(AMBIENTES_RONCO).map(([kk, v]) => ({ valor: kk, rotulo: v.name }))} atual={params.env} aoEscolher={(v) => k.setEnvironment(v)} />
-      </Field>
-      <Field rotulo="Som de fundo do ambiente">
-        <ChipGroup id="ambSound" opcoes={LIGADO} atual={params.ambSound} aoEscolher={(v) => k.setParams({ ambSound: v }, true)} />
-      </Field>
-      <Field rotulo="Volume do motor">
-        <ChipGroup id="dynamics" opcoes={[{ valor: 'real', rotulo: 'Real' }, { valor: 'arcade', rotulo: 'Arcade' }]} atual={params.dynamics} aoEscolher={(v) => k.setParams({ dynamics: v as 'real' | 'arcade' }, true)} />
-      </Field>
-      {mix('mxEx', 'Escape', 'exhaust')}
-      {mix('mxIn', 'Admissão', 'intake')}
-      {mix('mxMech', 'Mecânica (vedações, engrenagem)', 'mech')}
-      {mix('mxAir', 'Ar (jato, chiado)', 'air')}
-      {mix('mxVol', 'Volume', 'master', 1.5)}
-      <Slider id="eqLo" rotulo="Grave (abaixo de 160 Hz)" min={-12} max={12} passo={0.5} valor={eq.lo} formatar={(v) => `${v > 0 ? '+' : ''}${br(v)} dB`} aoMudar={(v) => k.setEq({ lo: v })} />
-      <Slider id="eqMid" rotulo="Médio" min={-12} max={12} passo={0.5} valor={eq.mid} formatar={(v) => `${v > 0 ? '+' : ''}${br(v)} dB`} aoMudar={(v) => k.setEq({ mid: v })} />
-      <Slider id="eqHi" rotulo="Agudo (acima de 3,5 kHz)" min={-12} max={12} passo={0.5} valor={eq.hi} formatar={(v) => `${v > 0 ? '+' : ''}${br(v)} dB`} aoMudar={(v) => k.setEq({ hi: v })} />
+      <Ambiente k={k} params={params} />
+      <SomDeFundo k={k} params={params} />
+      <VolumeDoMotor k={k} params={params} />
+      <Mixagem k={k} params={params} mecanica="Mecânica (vedações, engrenagem)" />
+      <Equalizacao k={k} eq={eq} medio="Médio" />
     </Section>
   );
 }
@@ -187,14 +165,14 @@ const NOTA_CORTE: Record<string, string> = {
 };
 function CorteDeGiro({ k, e }: P) {
   const { spec } = e, lt = spec.limiter || 'fuel';
-  const range = ({ ign: [50, 800], fuel: [50, 800], partial: [40, 400], throttle: [250, 800] } as Record<string, number[]>)[lt];
+  const range = FAIXA_DO_CORTE[lt];
   const nt = { structural: false, render: false };
   return (
     <Section titulo="Corte de giro">
       <Field rotulo="Tipo de corte">
         <ChipGroup id="limiter" opcoes={[
           { valor: 'ign', rotulo: 'Ignição' }, { valor: 'fuel', rotulo: 'Combustível' }, { valor: 'partial', rotulo: 'Parcial' }, { valor: 'throttle', rotulo: 'Borboleta' }, { valor: 'none', rotulo: 'Sem corte' },
-        ]} atual={lt} aoEscolher={(v) => k.setSpec({ limiter: v, limiterBand: ({ ign: 70, fuel: 70, partial: 110, throttle: 300 } as Record<string, number>)[v] ?? spec.limiterBand, limiterHold: v === 'ign' || v === 'fuel' ? 0.07 : 0 }, { structural: false })} />
+        ]} atual={lt} aoEscolher={(v) => k.setSpec(trocaDoCorte(v, spec.limiterBand), { structural: false })} />
       </Field>
       {lt !== 'none' && range && (
         <Slider id="limiterBand" rotulo="Faixa do corte" min={range[0]} max={range[1]} passo={10} valor={clamp(spec.limiterBand || 70, range[0], range[1])} formatar={(v) => `${v} rpm`} aoMudar={(v) => k.setSpec({ limiterBand: v }, nt)} />
@@ -208,17 +186,14 @@ function CorteDeGiro({ k, e }: P) {
 }
 
 function Temperatura({ k, e }: P) {
-  const { agua, escape } = useSyncExternalStore(k.assinarLento, k.obterLento);
+  const { escape } = useSyncExternalStore(k.assinarLento, k.obterLento);
   return (
     <Section titulo="Temperatura do motor">
       <Field rotulo="Temperatura">
         <ChipGroup id="tempMode" opcoes={[{ valor: 'real', rotulo: 'Esquentando de verdade' }, { valor: 'fixed', rotulo: 'Fixa' }]} atual={e.tempMode} aoEscolher={(v) => k.setTempMode(v as 'real' | 'fixed')} />
       </Field>
-      <Slider id="coolant" rotulo="Água do motor (alojamentos)" min={-10} max={120} passo={1} valor={agua} formatar={(v) => `${v} °C`} aoMudar={(v) => k.setCoolant(v)} />
-      <div className="chips" role="group" aria-label="Temperaturas prontas">
-        <button type="button" className="chip" onClick={() => k.setCoolant(20)}>Partida a frio (20 °C)</button>
-        <button type="button" className="chip" onClick={() => k.setCoolant(90)}>Motor quente (90 °C)</button>
-      </div>
+      <AguaDoMotor k={k} rotulo="Água do motor (alojamentos)" />
+      <TemperaturasProntas k={k} />
       <Field rotulo="Som da ventoinha do radiador">
         <ChipGroup id="fanSound" opcoes={LIGADO} atual={e.params.fanSound} aoEscolher={(v) => k.setParams({ fanSound: v }, true)} />
       </Field>
@@ -233,7 +208,7 @@ function Temperatura({ k, e }: P) {
 
 function Transmissao({ k, e }: P) {
   const s = e.spec, nt = { structural: false, render: false };
-  const ratios = k.currentRatios(), fin = s.finalDrive || 4, rw = s.wheelR || 0.33;
+  const fin = s.finalDrive || 4, rw = s.wheelR || 0.33;
   const vmax = (r: number) => Math.round(((s.redline / 60) * 2 * Math.PI * rw * 3.6) / (r * fin));
   return (
     <Section titulo="Transmissão">
@@ -244,10 +219,7 @@ function Transmissao({ k, e }: P) {
         <ChipGroup id="trans" opcoes={[{ valor: 'manual', rotulo: 'Manual' }, { valor: 'auto', rotulo: 'Automático' }]} atual={s.transmission} aoEscolher={(v) => k.setSpec({ transmission: v }, { structural: false })} />
       </Field>
       <Slider id="shiftTime" rotulo="Tempo de troca" min={0.04} max={1} passo={0.01} valor={s.shiftTime || (s.transmission === 'auto' ? 0.36 : 0.26)} formatar={(v) => `${virgula(v, 2)} s`} aoMudar={(v) => k.setSpec({ shiftTime: v }, nt)} />
-      {ratios.map((r, i) => (
-        <Slider key={`ratio${i + 1}`} id={`ratio${i + 1}`} rotulo={`${i + 1}ª marcha`} min={0.4} max={5.5} passo={0.01} valor={r} formatar={(v) => `${virgula(v, 2)} : 1 · ${vmax(v)} km/h`}
-          aoMudar={(v) => { const next = k.currentRatios(); next[i] = v; k.setSpec({ ratios: next }, nt); }} />
-      ))}
+      <RelacoesDasMarchas k={k} max={5.5} vmax={vmax} />
       <Slider id="final" rotulo="Diferencial" min={1.5} max={8} passo={0.01} valor={fin} formatar={(v) => `${virgula(v, 2)} : 1`} aoMudar={(v) => k.setSpec({ finalDrive: v }, nt)} />
       <Slider id="mass" rotulo="Massa (com motorista)" min={150} max={2200} passo={10} valor={s.mass || 1300} formatar={(v) => `${v} kg`} aoMudar={(v) => k.setSpec({ mass: v }, nt)} />
       <Slider id="wheelR" rotulo="Raio da roda" min={0.25} max={0.45} passo={0.005} valor={rw} formatar={(v) => `${Math.round(v * 1000)} mm`} aoMudar={(v) => k.setSpec({ wheelR: v }, nt)} />

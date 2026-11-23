@@ -1,19 +1,19 @@
 // Painel de controles do Ronco (renderControls() de src/app.js): escuta e ambiente, motor,
 // características, corte de giro, temperatura, transmissão, escapamento, acessórios, estalos e
 // admissão. Cada controle chama uma ação do ControleRonco; o painel só re-renderiza quando o
-// estado (especificação, parâmetros) muda, nunca com a telemetria.
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { ChipGroup, Field, Section, Slider, AMBIENTES_RONCO, type OpcaoChip } from '../../ui';
+// estado (especificação, parâmetros) muda, nunca com a telemetria. Os pedaços comuns às páginas a pistão (escuta,
+// água do motor, relações das marchas, faixa do corte) estão em src/pages/comum/Painel.tsx.
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { ChipGroup, Field, Section, Slider, dec as virgula } from '../../ui';
 import { LAYOUTS, parseOrder, randomValidOrder } from '../../engines/ronco/geometria';
 import { defaultFinal } from '../../engines/ronco/dsp';
 import { DRIVE_MODES, familyFor, type ControleRonco, type EstadoRonco } from './controle';
 import { MagnetosEMistura, PartidaAv, HeliceAv, RotorAv } from '../comum/Aviacao';
-
-const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
-const br = (v: number) => v.toLocaleString('pt-BR');
-const virgula = (v: number, casas: number) => v.toFixed(casas).replace('.', ',');
-const pct = (v: number) => `${Math.round(v * 100)}%`;
-const LIGADO: OpcaoChip<boolean>[] = [{ valor: true, rotulo: 'Ligado' }, { valor: false, rotulo: 'Desligado' }];
+import { clamp } from '../comum/controle';
+import {
+  AguaDoMotor, Ambiente, br, Equalizacao, FAIXA_DO_CORTE, LIGADO, Microfone, Mixagem, NaVia, Observador, RelacoesDasMarchas, SomDeFundo,
+  TemperaturasProntas, trocaDoCorte, VolumeDoMotor,
+} from '../comum/Painel';
 
 type P = { k: ControleRonco; e: EstadoRonco };
 
@@ -42,58 +42,17 @@ export function Painel({ k }: { k: ControleRonco }) {
 // ---- Escuta e ambiente
 function Escuta({ k, e }: P) {
   const { params, eq } = e;
-  const mix = (id: string, rotulo: string, chave: 'exhaust' | 'intake' | 'mech' | 'air' | 'master', max = 2) => (
-    <Slider id={id} rotulo={rotulo} min={0} max={max} passo={0.01} valor={params[chave]} formatar={pct} aoMudar={(v) => k.setParams({ [chave]: v })} />
-  );
-  const tom = (id: string, rotulo: string, chave: 'lo' | 'mid' | 'hi') => (
-    <Slider id={id} rotulo={rotulo} min={-12} max={12} passo={0.5} valor={eq[chave]} formatar={(v) => `${v > 0 ? '+' : ''}${br(v)} dB`} aoMudar={(v) => k.setEq({ [chave]: v })} />
-  );
   return (
     <Section titulo="Escuta e ambiente">
-      <Field rotulo="Observador">
-        <ChipGroup id="observer" opcoes={[{ valor: 'car', rotulo: 'Junto com o carro' }, { valor: 'road', rotulo: 'Parado na via' }]} atual={e.observer} aoEscolher={(v) => k.setObserver(v as 'car' | 'road')} />
-      </Field>
-      {e.observer === 'car' ? (
-        <Field rotulo="Microfone">
-          <ChipGroup id="mic" opcoes={[
-            { valor: 'pipe', rotulo: 'Ao lado do escape' }, { valor: 'ext', rotulo: 'Câmera atrás' },
-            { valor: 'int', rotulo: 'Cabine' }, { valor: 'bay', rotulo: 'Cofre' },
-          ]} atual={e.carMic} aoEscolher={(v) => k.setCarMic(v)} />
-        </Field>
-      ) : (
-        <>
-          <Slider id="roadDist" rotulo="Distância até a via" min={2} max={40} passo={0.5} valor={params.roadDist} formatar={(v) => `${br(v)} m`} aoMudar={(v) => k.setParams({ roadDist: v })} />
-          <canvas id="passby" className="passby" aria-label="Posição do carro na via" />
-          <p className="note" id="passNote">Engate e acelere: o carro anda pela via e passa por você a cada volta.</p>
-        </>
-      )}
-      <Field rotulo="Ambiente">
-        <ChipGroup id="env" opcoes={Object.entries(AMBIENTES_RONCO).map(([kk, v]) => ({ valor: kk, rotulo: v.name }))} atual={params.env} aoEscolher={(v) => k.setEnvironment(v)} />
-      </Field>
-      <Field rotulo="Som de fundo do ambiente">
-        <ChipGroup id="ambSound" opcoes={[
-          { valor: true, rotulo: 'Ligado', titulo: 'Vento, trânsito ao longe, ventilação do túnel, arquibancada…' },
-          { valor: false, rotulo: 'Desligado', titulo: 'Só o carro (a acústica do lugar, ecos e reverberação, continua)' },
-        ]} atual={params.ambSound} aoEscolher={(v) => k.setParams({ ambSound: v }, true)} />
-      </Field>
-      <Field rotulo="Volume do motor">
-        <ChipGroup id="dynamics" opcoes={[
-          { valor: 'real', rotulo: 'Real', titulo: 'Nível de verdade: a marcha lenta fica uns 20 dB abaixo do giro alto em carga' },
-          { valor: 'arcade', rotulo: 'Arcade', titulo: 'Segura o som num nível médio em qualquer rotação: lenta e giro baixo sobem, o giro alto não muda' },
-        ]} atual={params.dynamics} aoEscolher={(v) => k.setParams({ dynamics: v as 'real' | 'arcade' }, true)} />
-      </Field>
-      {params.dynamics === 'arcade' && <p className="note">Arcade: a lenta e o giro baixo ganham volume até ficar perto do giro alto. Útil em alto-falante pequeno ou volume baixo.</p>}
-      {mix('mxEx', 'Escape', 'exhaust')}
-      {mix('mxIn', 'Admissão', 'intake')}
-      {mix('mxMech', 'Mecânica', 'mech')}
-      {mix('mxAir', 'Ar (jato, chiado)', 'air')}
-      {mix('mxVol', 'Volume', 'master', 1.5)}
-      <Field rotulo="Equalização">
-        <div className="chips" role="group" aria-label="Equalização"><button type="button" className="chip" onClick={() => k.setEq({ lo: 0, mid: 0, hi: 0 }, true)}>Zerar</button></div>
-      </Field>
-      {tom('eqLo', 'Grave (abaixo de 160 Hz)', 'lo')}
-      {tom('eqMid', 'Médio (900 Hz)', 'mid')}
-      {tom('eqHi', 'Agudo (acima de 3,5 kHz)', 'hi')}
+      <Observador k={k} e={e} junto="Junto com o carro" />
+      {e.observer === 'car' ? <Microfone k={k} e={e} ext="Câmera atrás" bay="Cofre" /> : <NaVia k={k} params={params} quem="carro" />}
+      <Ambiente k={k} params={params} />
+      <SomDeFundo k={k} params={params} dicas={['Vento, trânsito ao longe, ventilação do túnel, arquibancada…', 'Só o carro (a acústica do lugar, ecos e reverberação, continua)']} />
+      <VolumeDoMotor k={k} params={params}
+        dicas={['Nível de verdade: a marcha lenta fica uns 20 dB abaixo do giro alto em carga', 'Segura o som num nível médio em qualquer rotação: lenta e giro baixo sobem, o giro alto não muda']}
+        notaArcade="Arcade: a lenta e o giro baixo ganham volume até ficar perto do giro alto. Útil em alto-falante pequeno ou volume baixo." />
+      <Mixagem k={k} params={params} />
+      <Equalizacao k={k} eq={eq} medio="Médio (900 Hz)" zerar />
     </Section>
   );
 }
@@ -229,7 +188,7 @@ const NOTA_CORTE: Record<string, string> = {
 function CorteDeGiro({ k, e }: P) {
   const { spec } = e;
   const lt = spec.limiter || 'ign';
-  const range = { ign: [50, 800], fuel: [50, 800], partial: [40, 400], throttle: [250, 800] }[lt];
+  const range = FAIXA_DO_CORTE[lt];
   const help = { ign: 'quanto o giro cai antes de voltar', fuel: 'quanto o giro cai antes de voltar', partial: 'quão cedo começa a cortar', throttle: 'quão cedo começa a fechar' }[lt];
   const nt = { structural: false, render: false };
   return (
@@ -241,7 +200,7 @@ function CorteDeGiro({ k, e }: P) {
           { valor: 'partial', rotulo: 'Parcial', titulo: 'Corta só alguns cilindros em rodízio: o giro fica parado no limite, picotado (Porsche, Ferrari, F1)' },
           { valor: 'throttle', rotulo: 'Borboleta', titulo: 'A central fecha o acelerador: o giro só para de subir, liso (carro moderno de rua)' },
           { valor: 'none', rotulo: 'Sem corte', titulo: 'Motor antigo de distribuidor: passando do limite as válvulas flutuam e ele falha' },
-        ]} atual={lt} aoEscolher={(v) => k.setSpec({ limiter: v, limiterBand: { ign: 70, fuel: 70, partial: 110, throttle: 300 }[v] ?? spec.limiterBand, limiterHold: v === 'ign' || v === 'fuel' ? 0.07 : 0 }, { structural: false })} />
+        ]} atual={lt} aoEscolher={(v) => k.setSpec(trocaDoCorte(v, spec.limiterBand), { structural: false })} />
       </Field>
       {lt !== 'none' && range && (
         <Slider id="limiterBand" rotulo={`Faixa do corte (${help})`} min={range[0]} max={range[1]} passo={10} valor={clamp(spec.limiterBand || 70, range[0], range[1])}
@@ -268,10 +227,7 @@ function Temperatura({ k, e }: P) {
         ]} atual={e.tempMode} aoEscolher={(v) => k.setTempMode(v as 'real' | 'fixed')} />
       </Field>
       <AguaDoMotor k={k} />
-      <div className="chips" role="group" aria-label="Temperaturas prontas">
-        <button type="button" className="chip" onClick={() => k.setCoolant(20)}>Partida a frio (20 °C)</button>
-        <button type="button" className="chip" onClick={() => k.setCoolant(90)}>Motor quente (90 °C)</button>
-      </div>
+      <TemperaturasProntas k={k} />
       <Field rotulo="Som da ventoinha do radiador">
         <ChipGroup id="fanSound" opcoes={LIGADO} atual={params.fanSound} aoEscolher={(v) => k.setParams({ fanSound: v }, true)} />
       </Field>
@@ -290,20 +246,12 @@ function Temperatura({ k, e }: P) {
   );
 }
 
-// a água acompanha a telemetria (só re-renderiza este controle, e só quando o grau muda)
-function AguaDoMotor({ k }: { k: ControleRonco }) {
-  const { agua } = useSyncExternalStore(k.assinarLento, k.obterLento);
-  return <Slider id="coolant" rotulo="Água do motor" min={-10} max={120} passo={1} valor={agua} formatar={(v) => `${v} °C`} aoMudar={(v) => k.setCoolant(v)} />;
-}
-
 // ---- Transmissão
 const nomeDaTroca = (v: number) => (v < 0.08 ? 'corrida / quickshifter' : v < 0.17 ? 'dupla embreagem' : v < 0.32 ? 'esportivo' : v < 0.5 ? 'comum' : 'antigo, sem pressa');
 function Transmissao({ k, e }: P) {
   const { spec } = e;
   const nt = { structural: false, render: false };
   const st = spec.shiftTime || (spec.transmission === 'auto' ? 0.36 : 0.26);
-  // relações: número maior = marcha mais curta (mais força, menos velocidade)
-  const ratios = k.currentRatios();
   const fin = spec.finalDrive || defaultFinal(spec.redline);
   const rw = spec.wheelR || 0.33;
   const vmax = (r: number) => Math.round(((spec.redline / 60) * 2 * Math.PI * rw * 3.6) / (r * fin));
@@ -324,10 +272,7 @@ function Transmissao({ k, e }: P) {
           <ChipGroup id="driveMode" opcoes={DRIVE_MODES.map(([valor, rotulo, titulo]) => ({ valor, rotulo, titulo }))} atual={spec.driveMode || 'auto'} aoEscolher={(v) => k.setSpec({ driveMode: v }, { structural: false })} />
         </Field>
       )}
-      {ratios.map((r, i) => (
-        <Slider key={`ratio${i + 1}`} id={`ratio${i + 1}`} rotulo={`${i + 1}ª marcha`} min={0.4} max={5.5} passo={0.01} valor={r} formatar={(v) => `${virgula(v, 2)} : 1 · ${vmax(v)} km/h`}
-          aoMudar={(v) => { const next = k.currentRatios(); next[i] = v; k.setSpec({ ratios: next }, nt); }} />
-      ))}
+      <RelacoesDasMarchas k={k} max={5.5} vmax={vmax} />
       <Slider id="final" rotulo="Diferencial" min={1.5} max={12} passo={0.01} valor={fin} formatar={(v) => `${virgula(v, 2)} : 1`} aoMudar={(v) => k.setSpec({ finalDrive: v }, nt)} />
       <div className="chips" role="group" aria-label="Relações das marchas"><button type="button" className="chip" onClick={() => k.setSpec({ ratios: undefined, finalDrive: undefined }, { structural: false })}>Escalonamento padrão</button></div>
       <Slider id="mass" rotulo="Massa (com motorista)" min={150} max={2600} passo={10} valor={spec.mass || massDef} formatar={(v) => `${v} kg`} aoMudar={(v) => k.setSpec({ mass: v }, nt)} />

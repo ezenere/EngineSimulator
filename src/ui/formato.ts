@@ -6,6 +6,9 @@ export const dec = (v: number, casas = 1) => v.toFixed(casas).replace('.', ',');
 /** número inteiro ou com até `casas` decimais, com ponto de milhar: 12142 → "12.142" */
 export const num = (v: number, casas = 0) => v.toLocaleString('pt-BR', { maximumFractionDigits: casas, minimumFractionDigits: 0 });
 
+/** fração como porcentagem inteira: 0.8 → "80%" */
+export const pct = (v: number) => `${Math.round(v * 100)}%`;
+
 /** um ângulo em graus, sem zeros sobrando: 90 → "90°", 22.5 → "22,5°" */
 export const grau = (x: number) => `${String(Math.round(x * 10) / 10).replace('.', ',')}°`;
 

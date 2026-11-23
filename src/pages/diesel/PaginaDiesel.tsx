@@ -3,17 +3,16 @@
 // escape e carga do portador) e o painel de controles. Mesmo DOM e classes do Ronco, para o estilo (src/ui/estilo.css)
 // valer. O pedal só aparece onde ele manda: no veículo (combustível) e na bancada (rotação); no gerador e na locomotiva
 // o governador é isócrono e o comando é o degrau de carga ou o notch.
-import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react';
-import { AudioShell, Barra, BotaoIgnicao, FamilyNav, PresetNav, PERFIL_RONCO, useAudioShell, dec, resumoGraus, listaGraus } from '../../ui';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { AudioShell, Barra, BotaoIgnicao, PERFIL_RONCO, useAudioShell, dec, resumoGraus, listaGraus } from '../../ui';
 import { DieselDSP } from '../../engines/diesel/dsp';
 import { PRESETS } from '../../engines/diesel/presets';
 import urlDiesel from '../../worklet/processador-diesel.ts?worker&url';
 import { ControleDiesel, familyFor, type EstadoDiesel } from './controle';
+import { Balanco, DICA_BALANCO, NavDePresets, Pedal } from '../comum/Palco';
 import { Mostradores } from './mostradores';
 import { Painel } from './Painel';
 import { usarTeclado } from './teclado';
-
-const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
 
 export function PaginaDiesel() {
   const [k] = useState(() => new ControleDiesel());
@@ -40,25 +39,22 @@ function placa({ spec, motor }: EstadoDiesel) {
 function Interior({ k, e }: { k: ControleDiesel; e: EstadoDiesel }) {
   const { iniciar, estado, erro } = useAudioShell();
   k.iniciarAudio = iniciar;
-  const pedal = useRef<HTMLDivElement>(null);
-  const pedalFill = useRef<HTMLDivElement>(null);
   const [freio, setFreio] = useState(false);
 
   const carro = e.portador === 'carro';
   // o pedal manda combustível no veículo e a rotação na bancada; no gerador e na locomotiva ele não faz nada
   const comPedal = carro || e.portador === 'nenhum';
-  useEffect(() => { k.pedal = pedal.current; k.pedalFill = pedalFill.current; }, [k, comPedal]);
   useEffect(() => {
     // alça para os testes no navegador (tools/diesel-navegador.mjs)
     (window as any).__diesel = k;
-    const m = new Mostradores(k as any);
+    const m = new Mostradores(k);
     m.iniciar();
     return () => m.parar();
   }, [k]);
   usarTeclado(k, setFreio);
 
   const ligar = () => { k.toggleIgnition().catch((err) => console.error('Diesel: áudio não iniciou', err)); };
-  const padFrom = (ev: PointerEvent) => { const r = pedal.current!.getBoundingClientRect(); return clamp(1 - (ev.clientY - r.top) / r.height, 0, 1); };
+  // (soltar o pedal da tela também solta o acelerador do teclado)
   const solta = () => { k.input.pad = 0; k.input.key = 0; k.sendInput(); };
   const freia = (on: boolean) => { k.input.brake = on ? 1 : 0; k.sendInput(); setFreio(on); };
 
@@ -69,23 +65,12 @@ function Interior({ k, e }: { k: ControleDiesel; e: EstadoDiesel }) {
           estado={erro ? 'erro' : estado === 'carregando' ? 'ocupado' : undefined} />
       </Barra>
 
-      <nav className="presets" id="presets" aria-label="Motores prontos">
-        <FamilyNav familias={PRESETS.families} presets={PRESETS} atual={e.familia} aoEscolher={(id) => k.setFamilia(id)} />
-        <PresetNav presets={PRESETS} familia={e.familia} atual={e.presetId} aoEscolher={(p) => k.loadPreset(p)} />
-      </nav>
+      <NavDePresets k={k} e={e} presets={PRESETS} />
 
       <main className="cluster cluster-3">
         <section className="tach-wrap" aria-label="Conta-giros">
           <canvas id="tach" role="img" aria-label="Conta-giros: rotação, pressão do turbo, torque e temperatura do motor" />
-          {comPedal && (
-            <div className="pedal" id="pedal" ref={pedal} role="slider" tabIndex={0} aria-label={carro ? 'Acelerador' : 'Rotação da bancada'} aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}
-              onPointerDown={(ev) => { pedal.current!.setPointerCapture(ev.pointerId); k.input.pad = padFrom(ev); k.sendInput(); }}
-              onPointerMove={(ev) => { if (pedal.current!.hasPointerCapture(ev.pointerId)) { k.input.pad = padFrom(ev); k.sendInput(); } }}
-              onPointerUp={solta} onPointerCancel={solta}>
-              <div className="pedal-fill" id="pedalFill" ref={pedalFill} />
-              <span className="pedal-label">{carro ? 'Acelerador' : 'Rotação'}</span>
-            </div>
-          )}
+          {comPedal && <Pedal k={k} rotulo={carro ? 'Acelerador' : 'Rotação'} nome={carro ? 'Acelerador' : 'Rotação da bancada'} aoSoltar={solta} />}
         </section>
 
         <section className="firing" aria-label="Ciclo de ignição">
@@ -180,7 +165,8 @@ function Leitura({ e }: { e: EstadoDiesel }) {
   const engine = e.motor;
   const twoBanks = engine.banks === 2;
   const b = engine.balance;
-  const items: [string, number][] = [['Força 1ª', b.f1], ['Força 2ª', b.f2], ['Mom. 1ª', b.m1], ['Mom. 2ª', b.m2]];
+  const dica = DICA_BALANCO;
+  const items: [string, number, string][] = [['Força 1ª', b.f1, dica], ['Força 2ª', b.f2, dica], ['Mom. 1ª', b.m1, dica], ['Mom. 2ª', b.m2, dica]];
   return (
     <div className="readout">
       <div className="ro-row"><span className="k">Ordem</span><span className="v mono" id="roOrder">{e.spec.ordemReal || engine.order.join('-')}</span></div>
@@ -188,18 +174,7 @@ function Leitura({ e }: { e: EstadoDiesel }) {
       <div className="ro-row bankA" hidden={!twoBanks}><span className="k">Bancada A</span><span className="v mono" id="roBankA">{twoBanks ? resumoGraus(engine.perBank[0]) : ''}</span></div>
       <div className="ro-row bankB" hidden={!twoBanks}><span className="k">Bancada B</span><span className="v mono" id="roBankB">{twoBanks ? resumoGraus(engine.perBank[1]) : ''}</span></div>
       <div className="ro-row"><span className="k">Ignição</span><span className="v mono" id="roFreq">—</span></div>
-      <div className="balance" id="balance">
-        {items.map(([kk, v]) => {
-          const w = clamp(v / Math.max(2, engine.N * 0.5), 0, 1) * 100;
-          return (
-            <div key={kk} className="bal" title="Desbalanceamento das massas alternativas, em múltiplos de um cilindro. Zero = cancelamento perfeito.">
-              <span className="k">{kk}</span>
-              <div className="meter"><i className={v === 0 ? 'zero' : ''} style={{ width: `${w}%` }} /></div>
-              <span className="val">{v === 0 ? 'zero' : dec(v, 2)}</span>
-            </div>
-          );
-        })}
-      </div>
+      <Balanco itens={items} N={engine.N} />
     </div>
   );
 }

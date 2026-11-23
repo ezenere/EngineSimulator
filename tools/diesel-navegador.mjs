@@ -269,9 +269,8 @@ try {
   // painel: governador, temperatura, cilindrada (escala log)
   await clicar('.fam:nth-child(1)');
   await clicar('.preset[data-id=om617]');
-  // o OM 617 no DSP (4 tempos, depois da EMD de 2) e ligado: a configuração do preset sai 60 ms depois do clique e um
-  // controle mexido antes disso a substitui (some o "motor novo do zero" e o motor herda o giro da EMD e apaga)
-  await teleAte((x) => x.tempos === 4 && x.state === 'run' && x.rpm > 500, 25000);
+  // (sem esperar o OM 617 chegar ao DSP: a configuração do preset sai 60 ms depois do clique, e um controle mexido antes
+  // disso remarca o envio sem tirar dele o "motor novo do zero", `pushConfig` em src/pages/comum/controle.ts)
   await chip('#portador', 'Veículo');
   await teleAte((x) => x.portador === 'carro', 6000);
   confere(await esperaAte(() => ev(`!!document.getElementById('droop') && !!document.getElementById('manual')`), 4000), 'governador mecânico: droop e acelerador manual');

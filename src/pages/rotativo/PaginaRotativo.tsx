@@ -1,19 +1,17 @@
 // Página Rotativos (ROTATIVO.md 7): a casca do Ronco (barra, famílias e presets, conta-giros com o pedal, onda e
 // espectro) com o anel do ciclo de 1 080° e as 3 câmaras e, na terceira coluna do palco, o traço p–α com as leituras do
 // rotativo. Mesmo DOM e classes do Ronco, para o estilo (src/ui/estilo.css) valer.
-import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react';
-import { AudioShell, Barra, BotaoIgnicao, FamilyNav, PresetNav, PERFIL_RONCO, useAudioShell } from '../../ui';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { AudioShell, Barra, BotaoIgnicao, PERFIL_RONCO, useAudioShell, dec as virgula } from '../../ui';
 import { RotativosDSP } from '../../engines/rotativo/rotativos';
 import { PRESETS_ROTATIVO } from '../../engines/rotativo/presets';
 import { volumeCamara } from '../../engines/rotativo/geometria';
 import urlRot from '../../worklet/processador-rotativo.ts?worker&url';
 import { ControleRotativo, type EstadoRot } from './controle';
+import { NavDePresets, Pedal } from '../comum/Palco';
 import { MostradoresRot } from './mostradores';
 import { Painel } from './Painel';
 import { usarTeclado } from './teclado';
-
-const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
-const virgula = (v: number, c: number) => v.toFixed(c).replace('.', ',');
 
 export function PaginaRotativo() {
   const [k] = useState(() => new ControleRotativo());
@@ -41,10 +39,7 @@ function placa({ spec, motor }: EstadoRot) {
 function Interior({ k, e }: { k: ControleRotativo; e: EstadoRot }) {
   const { iniciar, estado, erro } = useAudioShell();
   k.iniciarAudio = iniciar;
-  const pedal = useRef<HTMLDivElement>(null);
-  const pedalFill = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    k.pedal = pedal.current; k.pedalFill = pedalFill.current;
     (window as any).__rotativo = k; // (alça para os testes no navegador, tools/rotativo-navegador.mjs)
     const m = new MostradoresRot(k);
     m.iniciar();
@@ -53,8 +48,6 @@ function Interior({ k, e }: { k: ControleRotativo; e: EstadoRot }) {
   usarTeclado(k);
 
   const ligar = () => { k.toggleIgnition().catch((err) => console.error('Rotativo: áudio não iniciou', err)); };
-  const padFrom = (ev: PointerEvent) => { const r = pedal.current!.getBoundingClientRect(); return clamp(1 - (ev.clientY - r.top) / r.height, 0, 1); };
-  const solta = () => { k.input.pad = 0; k.sendInput(); };
   const carro = (e.spec.portadores || []).includes('carro'), pal = e.spec.tipo === 'palhetas';
 
   return (
@@ -64,21 +57,12 @@ function Interior({ k, e }: { k: ControleRotativo; e: EstadoRot }) {
           estado={erro ? 'erro' : estado === 'carregando' ? 'ocupado' : undefined} />
       </Barra>
 
-      <nav className="presets" id="presets" aria-label="Motores prontos">
-        <FamilyNav familias={PRESETS_ROTATIVO.families} presets={PRESETS_ROTATIVO} atual={e.familia} aoEscolher={(id) => k.setFamilia(id)} />
-        <PresetNav presets={PRESETS_ROTATIVO} familia={e.familia} atual={e.presetId} aoEscolher={(p) => k.loadPreset(p)} />
-      </nav>
+      <NavDePresets k={k} e={e} presets={PRESETS_ROTATIVO} />
 
       <main className={pal ? 'cluster' : 'cluster cluster-3'}>
         <section className="tach-wrap" aria-label="Conta-giros">
           <canvas id="tach" role="img" aria-label="Conta-giros: rotação do eixo, pressão do turbo, torque e temperatura" />
-          <div className="pedal" id="pedal" ref={pedal} role="slider" tabIndex={0} aria-label={pal ? 'Gatilho' : 'Acelerador'} aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}
-            onPointerDown={(ev) => { pedal.current!.setPointerCapture(ev.pointerId); k.input.pad = padFrom(ev); k.sendInput(); }}
-            onPointerMove={(ev) => { if (pedal.current!.hasPointerCapture(ev.pointerId)) { k.input.pad = padFrom(ev); k.sendInput(); } }}
-            onPointerUp={solta} onPointerCancel={solta}>
-            <div className="pedal-fill" id="pedalFill" ref={pedalFill} />
-            <span className="pedal-label">{pal ? 'Gatilho' : 'Acelerador'}</span>
-          </div>
+          <Pedal k={k} rotulo={pal ? 'Gatilho' : 'Acelerador'} />
         </section>
 
         <section className="firing" aria-label={pal ? 'Rotor de palhetas' : 'Ciclo das câmaras'}>

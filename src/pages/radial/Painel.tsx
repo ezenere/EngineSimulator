@@ -1,15 +1,14 @@
 // Painel de controles do Radial (RADIAL.md 7.1): escuta e ambiente, motor (fileiras, cilindros, biela-mestra, ordem),
 // características (inércia, potência, redução, hélice), magnetos e mistura (no lugar do corte de giro), partida, hélice
 // ou rotor (portador), temperatura (cabeça dos cilindros), escapamento radial e superalimentador. Só re-renderiza quando
-// o estado muda; as leituras da telemetria são escritas no DOM pelo laço dos mostradores.
+// o estado muda; as leituras da telemetria são escritas no DOM pelo laço dos mostradores. Os pedaços comuns às páginas
+// a pistão estão em src/pages/comum/Painel.tsx.
 import { useSyncExternalStore } from 'react';
-import { ChipGroup, Field, Section, Slider, AMBIENTES_RONCO } from '../../ui';
+import { ChipGroup, Field, Section, Slider, dec as virgula } from '../../ui';
 import { MagnetosEMistura, PartidaAv, HeliceAv, RotorAv } from '../comum/Aviacao';
+import { AguaDoMotor, Ambiente, br, Equalizacao, Microfone, Mixagem, SomDeFundo, VolumeDoMotor } from '../comum/Painel';
 import type { ControleRadial, EstadoRadial } from './controle';
 
-const br = (v: number) => v.toLocaleString('pt-BR');
-const virgula = (v: number, c: number) => v.toFixed(c).replace('.', ',');
-const pct = (v: number) => `${Math.round(v * 100)}%`;
 type P = { k: ControleRadial; e: EstadoRadial };
 
 export function Painel({ k }: { k: ControleRadial }) {
@@ -36,33 +35,14 @@ export function Painel({ k }: { k: ControleRadial }) {
 function Escuta({ k, e }: P) {
   const { params, eq } = e;
   const terra = (e.spec.portadores || []).includes('carro'); // (tanque, carro e moto: sem hélice nem carenagem)
-  const mix = (id: string, rotulo: string, chave: 'exhaust' | 'intake' | 'mech' | 'air' | 'master', max = 2) => (
-    <Slider id={id} rotulo={rotulo} min={0} max={max} passo={0.01} valor={params[chave]} formatar={pct} aoMudar={(v) => k.setParams({ [chave]: v })} />
-  );
   return (
     <Section titulo="Escuta e ambiente">
-      <Field rotulo="Microfone">
-        <ChipGroup id="mic" opcoes={[
-          { valor: 'pipe', rotulo: 'Ao lado do escape' }, { valor: 'ext', rotulo: terra ? 'De fora, a 5 m' : 'De fora, a 5 m da hélice' },
-          { valor: 'int', rotulo: 'Cabine' }, { valor: 'bay', rotulo: terra ? 'Junto ao motor' : 'Dentro da carenagem' },
-        ]} atual={e.carMic} aoEscolher={(v) => k.setCarMic(v)} />
-      </Field>
-      <Field rotulo="Ambiente">
-        <ChipGroup id="env" opcoes={Object.entries(AMBIENTES_RONCO).map(([kk, v]) => ({ valor: kk, rotulo: v.name }))} atual={params.env} aoEscolher={(v) => k.setEnvironment(v)} />
-      </Field>
-      <Field rotulo="Som de fundo do ambiente">
-        <ChipGroup id="ambSound" opcoes={[{ valor: true, rotulo: 'Ligado' }, { valor: false, rotulo: 'Desligado' }]} atual={params.ambSound} aoEscolher={(v) => k.setParams({ ambSound: v }, true)} />
-      </Field>
-      <Field rotulo="Volume do motor">
-        <ChipGroup id="dynamics" opcoes={[{ valor: 'real', rotulo: 'Real' }, { valor: 'arcade', rotulo: 'Arcade' }]} atual={params.dynamics} aoEscolher={(v) => k.setParams({ dynamics: v as 'real' | 'arcade' }, true)} />
-      </Field>
-      {mix('mxEx', 'Escape', 'exhaust')}
-      {mix('mxIn', 'Admissão', 'intake')}
-      {mix('mxMech', 'Mecânica (cilindros expostos)', 'mech')}
-      {mix('mxAir', 'Ar (jato, chiado)', 'air')}
-      {mix('mxVol', 'Volume', 'master', 1.5)}
-      <Slider id="eqLo" rotulo="Grave (abaixo de 160 Hz)" min={-12} max={12} passo={0.5} valor={eq.lo} formatar={(v) => `${v > 0 ? '+' : ''}${br(v)} dB`} aoMudar={(v) => k.setEq({ lo: v })} />
-      <Slider id="eqHi" rotulo="Agudo (acima de 3,5 kHz)" min={-12} max={12} passo={0.5} valor={eq.hi} formatar={(v) => `${v > 0 ? '+' : ''}${br(v)} dB`} aoMudar={(v) => k.setEq({ hi: v })} />
+      <Microfone k={k} e={e} ext={terra ? 'De fora, a 5 m' : 'De fora, a 5 m da hélice'} bay={terra ? 'Junto ao motor' : 'Dentro da carenagem'} />
+      <Ambiente k={k} params={params} />
+      <SomDeFundo k={k} params={params} />
+      <VolumeDoMotor k={k} params={params} />
+      <Mixagem k={k} params={params} mecanica="Mecânica (cilindros expostos)" />
+      <Equalizacao k={k} eq={eq} />
     </Section>
   );
 }
@@ -117,18 +97,12 @@ function Temperatura({ k, e }: P) {
       <Field rotulo="Cabeça dos cilindros (CHT)">
         <ChipGroup id="tempMode" opcoes={[{ valor: 'real', rotulo: 'Real (começa fria)' }, { valor: 'fixed', rotulo: 'Fixa' }]} atual={e.tempMode} aoEscolher={(v) => k.setTempMode(v as 'real' | 'fixed')} />
       </Field>
-      {e.tempMode === 'fixed' && <TemperaturaFixa k={k} />}
+      {/* (a temperatura nasce da telemetria e a acompanha, como a "Água do motor" do Ronco; o motor aceita a fixa de
+          −20 a 130 °C, `m.temp` em src/engines/ronco/dsp.ts, e o controle vai até onde ela vale) */}
+      {e.tempMode === 'fixed' && <AguaDoMotor k={k} rotulo="Temperatura" max={130} />}
       <p className="note">Motor frio: os cilindros de baixo têm óleo (encharque) e falham nos primeiros segundos, com estouros no escape; a lenta fica mais alta até esquentar.</p>
     </Section>
   );
-}
-
-// a temperatura nasce da telemetria e a acompanha, como a "Água do motor" do Ronco (os mostradores do Ronco, que esta
-// página usa, escrevem `k.lento.agua` a partir de `tele.coolant`, menos enquanto o usuário mexe no controle). O motor
-// aceita a temperatura fixa de −20 a 130 °C (`m.temp` em src/engines/ronco/dsp.ts); o controle vai até onde ela vale.
-function TemperaturaFixa({ k }: { k: ControleRadial }) {
-  const { agua } = useSyncExternalStore(k.assinarLento, k.obterLento);
-  return <Slider id="coolant" rotulo="Temperatura" min={-10} max={130} passo={1} valor={agua} formatar={(v) => `${v} °C`} aoMudar={(v) => k.setCoolant(v)} />;
 }
 
 function Escapamento({ k, e }: P) {
