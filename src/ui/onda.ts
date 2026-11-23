@@ -5,9 +5,10 @@
 // que não encosta nos outros. As legendas têm fundo, para o traço não passar por cima das letras; sem áudio, o aviso fica
 // centrado. Lê o AnalyserNode da saída da cadeia de áudio (src/ui/audio).
 //
-// O Ronco (com o Diesel, o Radial e os Rotativos) e a Turbina ainda desenham cada um a sua cópia deste quadro
-// (src/pages/ronco/mostradores.ts, src/pages/turbina/desenho.ts), com o marcador próprio de cada família; esta é a peça
-// comum, usada pelo Vapor, para onde as outras vão quando as páginas a pistão forem unificadas.
+// As páginas a pistão (Ronco, Diesel, Radial e Rotativos) e a Turbina ainda desenham cada uma a sua cópia deste quadro
+// (src/pages/comum/mostradores.ts, src/pages/turbina/desenho.ts), com o marcador próprio de cada família; esta é a peça
+// comum, usada pelo Vapor, para onde as outras podem ir (o desenho delas difere em detalhes: traço, filas dos rótulos,
+// a marca de 10 kHz).
 
 export type MarcaEspectro = { f: number; rotulo: string; cor?: 'gold' | 'violet' | 'hot' | 'blue' };
 export type OpcoesOnda = {

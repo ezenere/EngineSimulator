@@ -2,17 +2,16 @@
 // leitura da ordem e do balanceamento, onda e espectro, câmbio) e o painel de controles.
 // Mesmo DOM e classes do index.html legado, para o estilo (src/ui/estilo.css) valer igual. Na família aviação o pedal dá
 // lugar à manete de potência da Turbina (src/ui/Manete.tsx), que fica onde foi deixada.
-import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from 'react';
-import { AudioShell, Barra, BotaoIgnicao, FamilyNav, Manete, PresetNav, PERFIL_RONCO, useAudioShell, dec, resumoGraus, listaGraus } from '../../ui';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { AudioShell, Barra, BotaoIgnicao, PERFIL_RONCO, useAudioShell, dec, resumoGraus, listaGraus } from '../../ui';
 import { EngineDSP } from '../../engines/ronco/dsp';
 import { PRESETS_PAGINA as PRESETS } from '../../engines/ronco/presets';
 import urlRonco from '../../worklet/processador-ronco.ts?worker&url';
-import { ControleRonco, familyFor, MARCAS_MANETE, POSICOES_MANETE, type EstadoRonco } from './controle';
-import { Mostradores } from './mostradores';
+import { ControleRonco, familyFor, type EstadoRonco } from './controle';
+import { Balanco, DICA_BALANCO, ManeteDePotencia, NavDePresets, Pedal, PosicoesDaManete } from '../comum/Palco';
+import { Mostradores } from '../comum/mostradores';
 import { Painel } from './Painel';
 import { usarTeclado } from './teclado';
-
-const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
 
 export function PaginaRonco() {
   const [k] = useState(() => new ControleRonco());
@@ -37,13 +36,10 @@ function placa({ spec }: EstadoRonco) {
 function Interior({ k, e }: { k: ControleRonco; e: EstadoRonco }) {
   const { iniciar, estado, erro } = useAudioShell();
   k.iniciarAudio = iniciar;
-  const pedal = useRef<HTMLDivElement>(null);
-  const pedalFill = useRef<HTMLDivElement>(null);
   const [freio, setFreio] = useState(false);
+  // (o pedal só existe nos carros)
   const aviao = !!e.spec.aviation;
 
-  // (o pedal só existe nos carros)
-  useEffect(() => { k.pedal = pedal.current; k.pedalFill = pedalFill.current; }, [k, aviao]);
   // laço dos mostradores (requestAnimationFrame) e teclado
   useEffect(() => {
     // alça para os testes no navegador (tools/ronco-navegador.mjs): telemetria, cadeia de áudio e estado
@@ -60,9 +56,6 @@ function Interior({ k, e }: { k: ControleRonco; e: EstadoRonco }) {
 
   const ligar = () => { k.toggleIgnition().catch((err) => console.error('Ronco: áudio não iniciou', err)); };
 
-  // pedal na tela: arrasta com o ponteiro
-  const padFrom = (ev: PointerEvent) => { const r = pedal.current!.getBoundingClientRect(); return clamp(1 - (ev.clientY - r.top) / r.height, 0, 1); };
-  const solta = () => { k.input.pad = 0; k.sendInput(); };
   const freia = (on: boolean) => { k.input.brake = on ? 1 : 0; k.sendInput(); setFreio(on); };
 
   return (
@@ -72,23 +65,12 @@ function Interior({ k, e }: { k: ControleRonco; e: EstadoRonco }) {
           estado={erro ? 'erro' : estado === 'carregando' ? 'ocupado' : undefined} />
       </Barra>
 
-      <nav className="presets" id="presets" aria-label="Motores prontos">
-        <FamilyNav familias={PRESETS.families} presets={PRESETS} atual={e.familia} aoEscolher={(id) => k.setFamilia(id)} />
-        <PresetNav presets={PRESETS} familia={e.familia} atual={e.presetId} aoEscolher={(p) => k.loadPreset(p)} />
-      </nav>
+      <NavDePresets k={k} e={e} presets={PRESETS} />
 
       <main className="cluster">
         <section className="tach-wrap" aria-label="Conta-giros">
           <canvas id="tach" role="img" aria-label="Conta-giros: rotação, velocidade, torque e temperatura do motor" />
-          {aviao ? <ManeteAv k={k} /> : (
-            <div className="pedal" id="pedal" ref={pedal} role="slider" tabIndex={0} aria-label="Acelerador" aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}
-              onPointerDown={(ev) => { pedal.current!.setPointerCapture(ev.pointerId); k.input.pad = padFrom(ev); k.sendInput(); }}
-              onPointerMove={(ev) => { if (pedal.current!.hasPointerCapture(ev.pointerId)) { k.input.pad = padFrom(ev); k.sendInput(); } }}
-              onPointerUp={solta} onPointerCancel={solta}>
-              <div className="pedal-fill" id="pedalFill" ref={pedalFill} />
-              <span className="pedal-label">Acelerador</span>
-            </div>
-          )}
+          {aviao ? <ManeteDePotencia k={k} /> : <Pedal k={k} rotulo="Acelerador" />}
         </section>
 
         <section className="firing" aria-label="Ciclo de ignição">
@@ -101,7 +83,7 @@ function Interior({ k, e }: { k: ControleRonco; e: EstadoRonco }) {
         </section>
 
         <section className="drive">
-          {aviao ? <PosicoesAv k={k} /> : (
+          {aviao ? <PosicoesDaManete k={k} /> : (
           <div className="gearbox">
             <button type="button" className="key" id="gDown" aria-label="Reduzir marcha" onClick={() => k.shift(-1)}>Q</button>
             <div className="gear-read"><span className="k">Marcha</span><span className="gear mono" id="gearRead">N</span></div>
@@ -125,30 +107,13 @@ function Interior({ k, e }: { k: ControleRonco; e: EstadoRonco }) {
   );
 }
 
-// manete de potência da família aviação (a da Turbina): só ela re-renderiza quando a posição muda
-function ManeteAv({ k }: { k: ControleRonco }) {
-  const v = useSyncExternalStore(k.assinarManete, k.obterManete);
-  return <Manete valor={v} marcas={MARCAS_MANETE} aoMudar={(x) => k.setManete(x)} obter={() => k.manete} passo={0.1} rotulo="Manete de potência" />;
-}
-
-// posições da manete (teclas 1–4)
-function PosicoesAv({ k }: { k: ControleRonco }) {
-  const v = useSyncExternalStore(k.assinarManete, k.obterManete);
-  return (
-    <div className="gearbox detentes" id="detents">
-      {POSICOES_MANETE.map(([x, , texto]) => (
-        <button key={texto} type="button" className={`key wide${Math.abs(x - v) < 0.01 ? ' at' : ''}`} data-manete={x} onClick={() => k.setManete(x)}>{texto}</button>
-      ))}
-    </div>
-  );
-}
-
 // ordem, intervalos (total e por bancada), frequência de ignição e balanceamento (renderReadout)
 function Leitura({ e }: { e: EstadoRonco }) {
   const engine = e.motor;
   const twoBanks = engine.banks === 2;
   const b = engine.balance;
-  const items: [string, number][] = [['Força 1ª', b.f1], ['Força 2ª', b.f2], ['Momento 1ª', b.m1], ['Momento 2ª', b.m2]];
+  const dica = DICA_BALANCO;
+  const items: [string, number, string][] = [['Força 1ª', b.f1, dica], ['Força 2ª', b.f2, dica], ['Momento 1ª', b.m1, dica], ['Momento 2ª', b.m2, dica]];
   return (
     <div className="readout">
       <div className="ro-row"><span className="k">Ordem</span><span className="v mono" id="roOrder">{engine.order.join('-')}</span></div>
@@ -157,18 +122,7 @@ function Leitura({ e }: { e: EstadoRonco }) {
       <div className="ro-row bankB" hidden={!twoBanks}><span className="k">Bancada B</span><span className="v mono" id="roBankB">{twoBanks ? resumoGraus(engine.perBank[1]) : ''}</span></div>
       {/* atualizado pelo laço dos mostradores */}
       <div className="ro-row"><span className="k">Ignição</span><span className="v mono" id="roFreq">—</span></div>
-      <div className="balance" id="balance">
-        {items.map(([kk, v]) => {
-          const w = clamp(v / Math.max(2, engine.N * 0.5), 0, 1) * 100;
-          return (
-            <div key={kk} className="bal" title="Desbalanceamento das massas alternativas, em múltiplos de um cilindro. Zero = cancelamento perfeito.">
-              <span className="k">{kk}</span>
-              <div className="meter"><i className={v === 0 ? 'zero' : ''} style={{ width: `${w}%` }} /></div>
-              <span className="val">{v === 0 ? 'zero' : dec(v, 2)}</span>
-            </div>
-          );
-        })}
-      </div>
+      <Balanco itens={items} N={engine.N} />
     </div>
   );
 }

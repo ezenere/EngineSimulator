@@ -1,18 +1,16 @@
 // Painel de controles do Diesel (DIESEL.md 7). Igual ao do Ronco em "Escuta e ambiente", "Temperatura do motor" e
 // "Transmissão" (mesmos nomes e ids); "Corte de giro" vira "Governador", "Estalos no escape" vira "Fumaça e frio",
 // e entram "Carga" (do portador), freio-motor, turbo diesel e soprador Roots. O painel só re-renderiza quando o
-// estado (especificação, parâmetros, carga) muda, nunca com a telemetria.
+// estado (especificação, parâmetros, carga) muda, nunca com a telemetria. Os pedaços comuns às páginas a pistão estão em
+// src/pages/comum/Painel.tsx.
 import { useSyncExternalStore } from 'react';
-import { ChipGroup, Field, Section, Slider, AMBIENTES_RONCO, type OpcaoChip } from '../../ui';
+import { ChipGroup, Field, Section, Slider, dec as virgula, pct } from '../../ui';
 import { LAYOUTS } from '../../engines/ronco/geometria';
 import { defaultFinal } from '../../engines/ronco/dsp';
 import { DRIVE_MODES, familyFor, type ControleDiesel, type EstadoDiesel } from './controle';
+import { clamp } from '../comum/controle';
+import { AguaDoMotor, Ambiente, br, Equalizacao, LIGADO, Microfone, Mixagem, NaVia, Observador, RelacoesDasMarchas, SomDeFundo, TemperaturasProntas, VolumeDoMotor } from '../comum/Painel';
 
-const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
-const br = (v: number) => v.toLocaleString('pt-BR');
-const virgula = (v: number, casas: number) => v.toFixed(casas).replace('.', ',');
-const pct = (v: number) => `${Math.round(v * 100)}%`;
-const LIGADO: OpcaoChip<boolean>[] = [{ valor: true, rotulo: 'Ligado' }, { valor: false, rotulo: 'Desligado' }];
 const nt = { structural: false, render: false };
 
 type P = { k: ControleDiesel; e: EstadoDiesel };
@@ -40,61 +38,19 @@ export function Painel({ k }: { k: ControleDiesel }) {
 function Escuta({ k, e }: P) {
   const { params, eq } = e;
   const veiculo = e.portador === 'carro';
-  const mix = (id: string, rotulo: string, chave: 'exhaust' | 'intake' | 'mech' | 'air' | 'master', max = 2) => (
-    <Slider id={id} rotulo={rotulo} min={0} max={max} passo={0.01} valor={params[chave]} formatar={pct} aoMudar={(v) => k.setParams({ [chave]: v })} />
-  );
-  const tom = (id: string, rotulo: string, chave: 'lo' | 'mid' | 'hi') => (
-    <Slider id={id} rotulo={rotulo} min={-12} max={12} passo={0.5} valor={eq[chave]} formatar={(v) => `${v > 0 ? '+' : ''}${br(v)} dB`} aoMudar={(v) => k.setEq({ [chave]: v })} />
-  );
   return (
     <Section titulo="Escuta e ambiente">
       {/* a via só faz sentido com o veículo; o campo fica à vista se o observador já estiver nela */}
-      {(veiculo || e.observer === 'road') && (
-        <Field rotulo="Observador">
-          <ChipGroup id="observer" opcoes={[{ valor: 'car', rotulo: 'Junto com o veículo' }, { valor: 'road', rotulo: 'Parado na via' }]} atual={e.observer} aoEscolher={(v) => k.setObserver(v as 'car' | 'road')} />
-        </Field>
-      )}
-      {e.observer === 'car' ? (
-        <Field rotulo="Microfone">
-          <ChipGroup id="mic" opcoes={[
-            { valor: 'pipe', rotulo: 'Ao lado do escape' }, { valor: 'ext', rotulo: veiculo ? 'Câmera atrás' : 'De fora, a alguns metros' },
-            { valor: 'int', rotulo: 'Cabine' }, { valor: 'bay', rotulo: veiculo ? 'Cofre' : 'Junto ao motor' },
-          ]} atual={e.carMic} aoEscolher={(v) => k.setCarMic(v)} />
-        </Field>
-      ) : (
-        <>
-          <Slider id="roadDist" rotulo="Distância até a via" min={2} max={40} passo={0.5} valor={params.roadDist} formatar={(v) => `${br(v)} m`} aoMudar={(v) => k.setParams({ roadDist: v })} />
-          <canvas id="passby" className="passby" aria-label="Posição do veículo na via" />
-          <p className="note" id="passNote">Engate e acelere: o veículo anda pela via e passa por você a cada volta.</p>
-        </>
-      )}
-      <Field rotulo="Ambiente">
-        <ChipGroup id="env" opcoes={Object.entries(AMBIENTES_RONCO).map(([kk, v]) => ({ valor: kk, rotulo: v.name }))} atual={params.env} aoEscolher={(v) => k.setEnvironment(v)} />
-      </Field>
-      <Field rotulo="Som de fundo do ambiente">
-        <ChipGroup id="ambSound" opcoes={[
-          { valor: true, rotulo: 'Ligado', titulo: 'Vento, trânsito ao longe, ventilação do túnel…' },
-          { valor: false, rotulo: 'Desligado', titulo: 'Só o motor (a acústica do lugar continua)' },
-        ]} atual={params.ambSound} aoEscolher={(v) => k.setParams({ ambSound: v }, true)} />
-      </Field>
-      <Field rotulo="Volume do motor">
-        <ChipGroup id="dynamics" opcoes={[
-          { valor: 'real', rotulo: 'Real', titulo: 'Nível de verdade: a lenta fica uns 20 dB abaixo da plena carga' },
-          { valor: 'arcade', rotulo: 'Arcade', titulo: 'Segura o som num nível médio em qualquer rotação' },
-        ]} atual={params.dynamics} aoEscolher={(v) => k.setParams({ dynamics: v as 'real' | 'arcade' }, true)} />
-      </Field>
-      {params.dynamics === 'arcade' && <p className="note">Arcade: a lenta e o giro baixo ganham volume até ficar perto da plena carga.</p>}
-      {mix('mxEx', 'Escape', 'exhaust')}
-      {mix('mxIn', 'Admissão', 'intake')}
-      {mix('mxMech', 'Mecânica', 'mech')}
-      {mix('mxAir', 'Ar (jato, chiado)', 'air')}
-      {mix('mxVol', 'Volume', 'master', 1.5)}
-      <Field rotulo="Equalização">
-        <div className="chips" role="group" aria-label="Equalização"><button type="button" className="chip" onClick={() => k.setEq({ lo: 0, mid: 0, hi: 0 }, true)}>Zerar</button></div>
-      </Field>
-      {tom('eqLo', 'Grave (abaixo de 160 Hz)', 'lo')}
-      {tom('eqMid', 'Médio (900 Hz)', 'mid')}
-      {tom('eqHi', 'Agudo (acima de 3,5 kHz)', 'hi')}
+      {(veiculo || e.observer === 'road') && <Observador k={k} e={e} junto="Junto com o veículo" />}
+      {e.observer === 'car'
+        ? <Microfone k={k} e={e} ext={veiculo ? 'Câmera atrás' : 'De fora, a alguns metros'} bay={veiculo ? 'Cofre' : 'Junto ao motor'} />
+        : <NaVia k={k} params={params} quem="veículo" />}
+      <Ambiente k={k} params={params} />
+      <SomDeFundo k={k} params={params} dicas={['Vento, trânsito ao longe, ventilação do túnel…', 'Só o motor (a acústica do lugar continua)']} />
+      <VolumeDoMotor k={k} params={params} dicas={['Nível de verdade: a lenta fica uns 20 dB abaixo da plena carga', 'Segura o som num nível médio em qualquer rotação']}
+        notaArcade="Arcade: a lenta e o giro baixo ganham volume até ficar perto da plena carga." />
+      <Mixagem k={k} params={params} />
+      <Equalizacao k={k} eq={eq} medio="Médio (900 Hz)" zerar />
     </Section>
   );
 }
@@ -253,6 +209,7 @@ function Governador({ k, e }: P) {
 }
 
 // ---- Temperatura do motor (igual ao Ronco, mais velas, fumaça e λ)
+const PRONTAS: [number, string][] = [[20, 'Partida a frio (20 °C)'], [-10, 'Inverno (−10 °C)'], [90, 'Motor quente (90 °C)']];
 function Temperatura({ k, e }: P) {
   const { params, spec } = e;
   return (
@@ -263,12 +220,8 @@ function Temperatura({ k, e }: P) {
           { valor: 'fixed', rotulo: 'Fixa', titulo: 'Fica parada no valor escolhido' },
         ]} atual={e.tempMode} aoEscolher={(v) => k.setTempMode(v as 'real' | 'fixed')} />
       </Field>
-      <AguaDoMotor k={k} />
-      <div className="chips" role="group" aria-label="Temperaturas prontas">
-        <button type="button" className="chip" onClick={() => k.setCoolant(20)}>Partida a frio (20 °C)</button>
-        <button type="button" className="chip" onClick={() => k.setCoolant(-10)}>Inverno (−10 °C)</button>
-        <button type="button" className="chip" onClick={() => k.setCoolant(90)}>Motor quente (90 °C)</button>
-      </div>
+      <AguaDoMotor k={k} min={-25} />
+      <TemperaturasProntas k={k} valores={PRONTAS} />
       <Field rotulo="Som da ventoinha do radiador">
         <ChipGroup id="fanSound" opcoes={LIGADO} atual={params.fanSound} aoEscolher={(v) => k.setParams({ fanSound: v }, true)} />
       </Field>
@@ -279,17 +232,12 @@ function Temperatura({ k, e }: P) {
     </Section>
   );
 }
-function AguaDoMotor({ k }: { k: ControleDiesel }) {
-  const { agua } = useSyncExternalStore(k.assinarLento, k.obterLento);
-  return <Slider id="coolant" rotulo="Água do motor" min={-25} max={120} passo={1} valor={agua} formatar={(v) => `${v} °C`} aoMudar={(v) => k.setCoolant(v)} />;
-}
 
 // ---- Transmissão (igual ao Ronco; só com o portador carro)
 const nomeDaTroca = (v: number) => (v < 0.08 ? 'corrida' : v < 0.17 ? 'dupla embreagem' : v < 0.32 ? 'esportivo' : v < 0.5 ? 'comum' : 'caminhão, sem pressa');
 function Transmissao({ k, e }: P) {
   const { spec } = e;
   const st = spec.shiftTime || (spec.transmission === 'auto' ? 0.36 : 0.26);
-  const ratios = k.currentRatios();
   const fin = spec.finalDrive || defaultFinal(spec.redline);
   const rw = spec.wheelR || 0.33;
   const vmax = (r: number) => Math.round(((spec.rpmMax / 60) * 2 * Math.PI * rw * 3.6) / (r * fin));
@@ -307,10 +255,7 @@ function Transmissao({ k, e }: P) {
           <ChipGroup id="driveMode" opcoes={DRIVE_MODES.map(([valor, rotulo, titulo]) => ({ valor, rotulo, titulo }))} atual={spec.driveMode || 'auto'} aoEscolher={(v) => k.setSpec({ driveMode: v }, { structural: false })} />
         </Field>
       )}
-      {ratios.map((r, i) => (
-        <Slider key={`ratio${i + 1}`} id={`ratio${i + 1}`} rotulo={`${i + 1}ª marcha`} min={0.4} max={16} passo={0.01} valor={r} formatar={(v) => `${virgula(v, 2)} : 1 · ${vmax(v)} km/h`}
-          aoMudar={(v) => { const next = k.currentRatios(); next[i] = v; k.setSpec({ ratios: next }, nt); }} />
-      ))}
+      <RelacoesDasMarchas k={k} max={16} vmax={vmax} />
       <Slider id="final" rotulo="Diferencial" min={1.5} max={12} passo={0.01} valor={fin} formatar={(v) => `${virgula(v, 2)} : 1`} aoMudar={(v) => k.setSpec({ finalDrive: v }, nt)} />
       <Slider id="mass" rotulo="Massa (com carga)" min={800} max={60000} passo={50} valor={spec.mass || 2000} formatar={(v) => `${br(v)} kg`} aoMudar={(v) => k.setSpec({ mass: v }, nt)} />
       <Slider id="wheelR" rotulo="Raio da roda" min={0.25} max={0.6} passo={0.005} valor={spec.wheelR || 0.33} formatar={(v) => `${Math.round(v * 1000)} mm`} aoMudar={(v) => k.setSpec({ wheelR: v }, nt)} />

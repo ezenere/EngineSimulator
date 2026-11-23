@@ -1,16 +1,29 @@
-// Mostradores do Ronco desenhados em canvas a cada quadro (drawTach, drawRing, drawScope e
-// drawPassby de src/app.js): conta-giros com arco, faixa vermelha, turbo, velocímetro, torque e
-// temperatura; ciclo de ignição de 720° em tempo real; onda e espectro; vista de cima da via.
-// Também atualiza direto no DOM o que muda a cada quadro (marcha, válvula, frequência de ignição,
-// nota da passagem, água e escape), para o React não re-renderizar com a telemetria.
-import type { ControleRonco } from './controle';
-import { escreverLeiturasAv } from '../comum/Aviacao';
-
-const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
+// Mostradores das páginas a pistão desenhados em canvas a cada quadro (drawTach, drawRing, drawScope e drawPassby de
+// src/app.js): conta-giros com arco, faixa vermelha, turbo, velocímetro, torque e temperatura; ciclo de ignição em
+// tempo real; onda e espectro; vista de cima da via. Também atualiza direto no DOM o que muda a cada quadro (marcha,
+// válvula, frequência de ignição, nota da passagem, água e escape), para o React não re-renderizar com a telemetria.
+// O Ronco e o Radial usam a classe como está; o Diesel a estende (escala da rotação governada, sobrevelocidade, ciclo
+// de 360° nos 2 tempos, traço p–θ e as leituras da combustão: src/pages/diesel/mostradores.ts); os Rotativos a
+// alimentam com uma fachada e desenham por cima o anel de 1 080° (src/pages/rotativo/mostradores.ts).
+import type { CadeiaDeAudio } from '../../ui';
+import { escreverLeiturasAv } from './Aviacao';
+import { clamp, type Lento } from './controle';
 
 type Cores = Record<string, string>;
 
-function fit(canvas: HTMLCanvasElement): [CanvasRenderingContext2D, number, number] {
+/** o que os mostradores leem do controle da página (o dos Rotativos é uma fachada) */
+export type FonteDosMostradores = {
+  tele: Record<string, any>;
+  audio: CadeiaDeAudio | null;
+  lento: Lento;
+  mudarLento(p: Partial<Lento>): void;
+  estado: { spec: Record<string, any>; motor: { N: number; banks: number; fire: number[]; bank: number[] }; params: { roadDist: number } };
+};
+
+/** escala do conta-giros: faixa vermelha, fundo de escala, passo das marcas e o divisor dos algarismos (× 1000 rpm) */
+export type EscalaDoContaGiros = { red: number; max: number; passo: number; divisor: number };
+
+export function fit(canvas: HTMLCanvasElement): [CanvasRenderingContext2D, number, number] {
   const r = canvas.getBoundingClientRect();
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
@@ -20,7 +33,7 @@ function fit(canvas: HTMLCanvasElement): [CanvasRenderingContext2D, number, numb
   return [ctx, r.width, r.height];
 }
 
-export class Mostradores {
+export class Mostradores<K extends FonteDosMostradores = FonteDosMostradores> {
   C: Cores = {};
   private shownRpm = 0;
   private ringPhase = 0; private ringSweep = 0; private lastNow = 0;
@@ -29,7 +42,42 @@ export class Mostradores {
   private fBuf: Float32Array<ArrayBuffer> | null = null;
   private raf = 0;
 
-  constructor(private k: ControleRonco) {}
+  constructor(protected k: K) {}
+
+  // ---------------------------------------------------------------- o que muda de uma família para outra
+  /** graus de um ciclo do motor no anel de ignição (720° no 4 tempos) */
+  protected ciclo() { return 720; }
+  /** a faixa vermelha no corte do motor; o fundo de escala 12% acima, em milhares */
+  protected escala(spec: Record<string, any>): EscalaDoContaGiros {
+    const red = spec.redline, max = Math.ceil((red * 1.12) / 1000) * 1000;
+    return { red, max, passo: max > 12000 ? 2000 : 1000, divisor: 1000 };
+  }
+  /** o arco e os números ficam vermelhos: o corte de giro */
+  protected noLimite(tele: Record<string, any>) { return !!tele.limiter; }
+  /** o arco de pressão no vão de baixo do mostrador e o nome dele (nenhum no aspirado) */
+  protected pressao(spec: Record<string, any>): string | null { return spec.aspiration === 'turbo' ? 'turbo' : null; }
+  /** segunda linha: velocidade e torque onde há rodas; rotação da hélice ou do rotor na aviação; só o torque no resto */
+  protected segundaLinha(g: CanvasRenderingContext2D, R: number, tele: Record<string, any>, spec: Record<string, any>) {
+    const n0 = (x: number) => Math.round(x).toLocaleString('pt-BR');
+    const torque = `${n0(tele.torque || 0)} N·m`;
+    const rodas = spec.portadores ? spec.portadores.includes('carro') : !spec.aviation;
+    const eixo = tele.Nr !== undefined ? `rotor ${n0(tele.Nr)} rpm` : tele.rpmHelice !== undefined ? `hélice ${n0(tele.rpmHelice)} rpm` : '';
+    const linha2 = rodas ? `${Math.round(tele.kmh || 0)} km/h  ·  ${torque}` : eixo ? `${eixo}  ·  ${torque}` : torque;
+    // (em mostrador pequeno a linha comprida encostaria nos algarismos da escala: fica só a rotação da hélice)
+    return eixo && !rodas && g.measureText(linha2).width > R * 0.84 ? eixo : linha2;
+  }
+  /** aviso no alto do mostrador: corte, largada e as fases da partida */
+  protected aviso(tele: Record<string, any>): [string, string] | null {
+    const C = this.C, n0 = (x: number) => Math.round(x).toLocaleString('pt-BR');
+    return tele.limiter ? [tele.launch ? '2-STEP' : 'CORTE', C.hot]
+      : tele.launch ? ['LARGADA', C.gold]
+      : tele.fase === 'energizar' ? [`ENERGIZANDO${tele.apito ? ` · ${n0(tele.apito)} Hz` : ''}`, C.gold]
+      : tele.state === 'crank' ? [tele.fase === 'girar' && tele.pas !== undefined ? `GIRANDO · ${Math.floor(tele.pas)} PÁS` : 'PARTIDA', C.gold] : null;
+  }
+  /** frequência de ignição: no 4 tempos, cada cilindro queima a cada duas voltas */
+  protected frequenciaDeIgnicao(rpm: number, N: number) { return (rpm / 60) * (N / 2); }
+  /** a leitura da ignição ao lado do ciclo, com o motor girando */
+  protected textoDaIgnicao(rpm: number, ff: number) { return `${ff.toFixed(0)} Hz · meia-ordem ${(rpm / 120).toFixed(1).replace('.', ',')} Hz`; }
 
   readColors() {
     const css = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -41,12 +89,12 @@ export class Mostradores {
   iniciar() {
     this.readColors();
     if (document.fonts) document.fonts.ready.then(() => this.readColors());
-    const frame = (now: number) => { this.frame(now); this.raf = requestAnimationFrame(frame); };
+    const frame = (now: number) => { this.quadro(now); this.raf = requestAnimationFrame(frame); };
     this.raf = requestAnimationFrame(frame);
   }
   parar() { cancelAnimationFrame(this.raf); }
 
-  private frame(now: number) {
+  protected quadro(now: number) {
     const k = this.k, tele = k.tele;
     if (tele.aviacao) escreverLeiturasAv(tele); // (família aviação: hélice, rotor, magnetos)
     const dt = this.lastNow ? Math.min(0.1, (now - this.lastNow) / 1000) : 0;
@@ -72,8 +120,8 @@ export class Mostradores {
     g.clearRect(0, 0, w, h);
     this.shownRpm += (tele.rpm - this.shownRpm) * 0.35;
     const shownRpm = this.shownRpm;
-    const red = spec.redline;
-    const max = Math.ceil((red * 1.12) / 1000) * 1000;
+    const { red, max, passo: step, divisor } = this.escala(spec);
+    const limite = this.noLimite(tele);
     const cx = w / 2, cy = h * 0.54, R = Math.min(w * 0.46, h * 0.5);
     const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
     const ang = (rpm: number) => a0 + (a1 - a0) * clamp(rpm / max, 0, 1.02);
@@ -88,13 +136,12 @@ export class Mostradores {
     g.strokeStyle = grad;
     g.beginPath(); g.arc(cx, cy, R * 0.92, ang(red), a1); g.stroke();
     // arco de rotação atual
-    g.strokeStyle = tele.limiter ? C.hot : C.gold;
+    g.strokeStyle = limite ? C.hot : C.gold;
     g.globalAlpha = 0.85;
     g.beginPath(); g.arc(cx, cy, R * 0.92, a0, ang(shownRpm)); g.stroke();
     g.globalAlpha = 1;
 
     // marcas
-    const step = max > 12000 ? 2000 : 1000;
     g.fillStyle = C.muted; g.strokeStyle = C.muted;
     g.font = `600 ${Math.round(R * 0.11)}px ${C.display}`;
     g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -106,17 +153,18 @@ export class Mostradores {
       g.beginPath(); g.moveTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); g.lineTo(cx + Math.cos(a) * r2, cy + Math.sin(a) * r2); g.stroke();
       if (major) {
         g.fillStyle = r >= red ? C.violet : C.muted;
-        g.fillText(String(r / 1000), cx + Math.cos(a) * R * 0.66, cy + Math.sin(a) * R * 0.66);
+        g.fillText(String(r / divisor), cx + Math.cos(a) * R * 0.66, cy + Math.sin(a) * R * 0.66);
       }
     }
     // letras miúdas do mostrador: nunca abaixo de 10 px
     const miudo = Math.max(10, Math.round(R * 0.06));
     g.font = `500 ${miudo}px ${C.mono}`;
     g.fillStyle = C.faint;
-    g.fillText('× 1000 rpm', cx, cy - R * 0.38);
+    g.fillText(`× ${divisor} rpm`, cx, cy - R * 0.38);
 
     // turbo: arco no vão de baixo do mostrador (onde não há escala), fora das leituras
-    if (spec.aspiration === 'turbo') {
+    const pressao = this.pressao(spec);
+    if (pressao) {
       const bmax = Math.max(0.5, spec.boost);
       const ba0 = Math.PI * 0.31, ba1 = Math.PI * 0.69;
       g.lineWidth = R * 0.03;
@@ -126,7 +174,7 @@ export class Mostradores {
       g.beginPath(); g.arc(cx, cy, R * 0.88, ba1, ba1 - (ba1 - ba0) * clamp(tele.boost / bmax, 0, 1), true); g.stroke();
       g.font = `500 ${miudo}px ${C.mono}`;
       g.fillStyle = C.blue;
-      g.fillText(`turbo +${(tele.boost || 0).toFixed(2).replace('.', ',')} bar`, cx, cy + R * 0.76);
+      g.fillText(`${pressao} +${(tele.boost || 0).toFixed(2).replace('.', ',')} bar`, cx, cy + R * 0.76);
     }
 
     // ponteiro
@@ -136,29 +184,18 @@ export class Mostradores {
     g.fillStyle = C.ink; g.beginPath(); g.arc(cx, cy, R * 0.035, 0, Math.PI * 2); g.fill();
 
     // números
-    g.fillStyle = tele.limiter ? C.hot : C.ink;
+    g.fillStyle = limite ? C.hot : C.ink;
     g.font = `800 ${Math.round(R * 0.3)}px ${C.display}`;
     g.fillText(Math.round(shownRpm / 10) * 10 + '', cx, cy + R * 0.3);
     g.font = `500 ${miudo}px ${C.mono}`;
     g.fillStyle = C.muted;
-    // segunda linha: velocidade e torque onde há rodas; rotação da hélice ou do rotor na aviação; só o torque no resto
-    const n0 = (x: number) => Math.round(x).toLocaleString('pt-BR');
-    const torque = `${n0(tele.torque || 0)} N·m`;
-    const rodas = spec.portadores ? spec.portadores.includes('carro') : !spec.aviation;
-    const eixo = tele.Nr !== undefined ? `rotor ${n0(tele.Nr)} rpm` : tele.rpmHelice !== undefined ? `hélice ${n0(tele.rpmHelice)} rpm` : '';
-    const linha2 = rodas ? `${Math.round(tele.kmh || 0)} km/h  ·  ${torque}` : eixo ? `${eixo}  ·  ${torque}` : torque;
-    // (em mostrador pequeno a linha comprida encostaria nos algarismos da escala: fica só a rotação da hélice)
-    g.fillText(eixo && !rodas && g.measureText(linha2).width > R * 0.84 ? eixo : linha2, cx, cy + R * 0.5);
+    g.fillText(this.segundaLinha(g, R, tele, spec), cx, cy + R * 0.5);
     // temperatura: a água nos motores com radiador; a cabeça dos cilindros nos refrigerados a ar
     const wt = tele.coolant ?? 20;
-    const rotT = (k as any).rotuloTemp ?? (spec.cooling === 'air' ? 'cabeça' : 'água');
+    const rotT = spec.cooling === 'air' ? 'cabeça' : 'água';
     g.fillStyle = wt < 60 ? C.blue : wt > 105 ? C.hot : C.muted;
     g.fillText(`${rotT} ${Math.round(wt)} °C${tele.fan ? '  ·  ventoinha' : ''}${tele.secAir ? '  ·  bomba de ar' : ''}`, cx, cy + R * 0.63);
-    // aviso no alto do mostrador: corte, largada e as fases da partida
-    const aviso: [string, string] | null = tele.limiter ? [tele.launch ? '2-STEP' : 'CORTE', C.hot]
-      : tele.launch ? ['LARGADA', C.gold]
-      : tele.fase === 'energizar' ? [`ENERGIZANDO${tele.apito ? ` · ${n0(tele.apito)} Hz` : ''}`, C.gold]
-      : tele.state === 'crank' ? [tele.fase === 'girar' && tele.pas !== undefined ? `GIRANDO · ${Math.floor(tele.pas)} PÁS` : 'PARTIDA', C.gold] : null;
+    const aviso = this.aviso(tele);
     if (aviso) {
       g.fillStyle = aviso[1];
       g.font = `600 ${Math.max(11, Math.round(R * 0.07))}px ${C.mono}`;
@@ -178,10 +215,11 @@ export class Mostradores {
     }
   }
 
-  // Ciclo de 720° no tempo real do virabrequim: o ângulo vem do motor e é extrapolado
+  // Ciclo de 720° (360° no 2 tempos) no tempo real do virabrequim: o ângulo vem do motor e é extrapolado
   // entre as leituras. Em giro alto o ponteiro vira borrão, como numa foto com obturador.
   private drawRing(canvas: HTMLCanvasElement, now: number, dt: number) {
     const { C, k, glow } = this, tele = k.tele, engine = k.estado.motor;
+    const CYC = this.ciclo();
     const [g, w, h] = fit(canvas);
     g.clearRect(0, 0, w, h);
     // O raio deixa lugar para os graus do lado de fora. Cada bancada (ou fileira do radial) tem a sua trilha, e os
@@ -195,21 +233,21 @@ export class Mostradores {
     for (let b = 0; b < nb; b++) {
       const fs = engine.fire.filter((_: number, c: number) => engine.bank[c] === b).sort((x: number, y: number) => x - y);
       for (let i = 0; i < fs.length && fs.length > 1; i++) {
-        const gap = i + 1 < fs.length ? fs[i + 1] - fs[i] : fs[0] + 720 - fs[i];
-        size = Math.min(size, ((gap / 720) * Math.PI * 2 * radius(b)) / 2 - 0.5);
+        const gap = i + 1 < fs.length ? fs[i + 1] - fs[i] : fs[0] + CYC - fs[i];
+        size = Math.min(size, ((gap / CYC) * Math.PI * 2 * radius(b)) / 2 - 0.5);
       }
     }
     size = Math.max(3.5, size);
     const running = tele.rpm > 60;
     if (running) {
       const age = Math.min(0.05, Math.max(0, (now - (tele.t || now)) / 1000));
-      this.ringPhase = (((tele.theta || 0) + tele.rpm * 6 * age) % 720 + 720) % 720;
-      this.ringSweep = Math.min(720, tele.rpm * 6 * dt);
+      this.ringPhase = (((tele.theta || 0) + tele.rpm * 6 * age) % CYC + CYC) % CYC;
+      this.ringSweep = Math.min(CYC, tele.rpm * 6 * dt);
     } else this.ringSweep = 0;
     const ringPhase = this.ringPhase, ringSweep = this.ringSweep;
-    const start = (ringPhase - ringSweep + 720) % 720;
+    const start = (ringPhase - ringSweep + CYC) % CYC;
     const glowTau = clamp(60 / Math.max(tele.rpm, 1), 0.03, 0.35);
-    const toA = (deg: number) => (deg / 720) * Math.PI * 2 - Math.PI / 2;
+    const toA = (deg: number) => (deg / CYC) * Math.PI * 2 - Math.PI / 2;
 
     // trilhas
     for (let b = 0; b < engine.banks; b++) {
@@ -219,7 +257,7 @@ export class Mostradores {
     // graus
     g.font = `500 10px ${C.mono}`; g.fillStyle = C.faint; g.textAlign = 'center'; g.textBaseline = 'middle';
     const fora = R + size + 3;
-    for (let d = 0; d < 720; d += 90) {
+    for (let d = 0; d < CYC; d += CYC / 8) {
       const a = toA(d);
       g.strokeStyle = C.line;
       g.beginPath(); g.moveTo(cx + Math.cos(a) * fora, cy + Math.sin(a) * fora); g.lineTo(cx + Math.cos(a) * (fora + 5), cy + Math.sin(a) * (fora + 5)); g.stroke();
@@ -231,9 +269,9 @@ export class Mostradores {
       const angs = engine.fire.map((f, c) => [f, c]).filter(([, c]) => engine.bank[c] === b).sort((x, y) => x[0] - y[0]);
       g.strokeStyle = b % 2 === 0 ? C.gold : C.blue;
       for (let i = 0; i < angs.length; i++) {
-        const fa = angs[i][0], fb = i + 1 < angs.length ? angs[i + 1][0] : angs[0][0] + 720;
+        const fa = angs[i][0], fb = i + 1 < angs.length ? angs[i + 1][0] : angs[0][0] + CYC;
         const gap = fb - fa;
-        g.globalAlpha = 0.18 + 0.5 * clamp(1 - gap / 720, 0, 1);
+        g.globalAlpha = 0.18 + 0.5 * clamp(1 - gap / CYC, 0, 1);
         g.lineWidth = 3;
         g.beginPath(); g.arc(cx, cy, radius(b), toA(fa) + 0.05, toA(fb) - 0.05); g.stroke();
       }
@@ -244,7 +282,7 @@ export class Mostradores {
     for (let c = 0; c < engine.N; c++) {
       const f = engine.fire[c];
       if (running && ringSweep > 0) {
-        const crossed = ringSweep >= 720 || (start <= ringPhase ? f > start && f <= ringPhase : f > start || f <= ringPhase);
+        const crossed = ringSweep >= CYC || (start <= ringPhase ? f > start && f <= ringPhase : f > start || f <= ringPhase);
         if (crossed) glow[c] = 1;
       }
       glow[c] *= Math.exp(-dt / glowTau);
@@ -273,7 +311,7 @@ export class Mostradores {
       // rastro do quadro: o ângulo que o virabrequim percorreu desde o último desenho
       g.fillStyle = C.muted; g.globalAlpha = clamp(12 / ringSweep, 0.05, 0.3);
       g.beginPath(); g.moveTo(cx, cy);
-      if (ringSweep >= 720) g.arc(cx, cy, R * 0.98, 0, Math.PI * 2);
+      if (ringSweep >= CYC) g.arc(cx, cy, R * 0.98, 0, Math.PI * 2);
       else g.arc(cx, cy, R * 0.98, toA(start), ha);
       g.closePath(); g.fill();
     }
@@ -344,15 +382,15 @@ export class Mostradores {
     g.lineTo(w, bot); g.closePath();
     g.fillStyle = C.blue; g.globalAlpha = 0.22; g.fill(); g.globalAlpha = 1;
     // frequência de ignição
-    const ff = (tele.rpm / 60) * (engine.N / 2);
+    const ff = this.frequenciaDeIgnicao(tele.rpm, engine.N);
     const ro = document.getElementById('roFreq');
-    if (ro) ro.textContent = tele.rpm > 60 ? `${ff.toFixed(0)} Hz · meia-ordem ${(tele.rpm / 120).toFixed(1).replace('.', ',')} Hz` : '—';
+    if (ro) ro.textContent = tele.rpm > 60 ? this.textoDaIgnicao(tele.rpm, ff) : '—';
     if (ff > f0 && ff < f1 && engine.N > 0) {
       const x = fx(ff);
       g.strokeStyle = C.gold; g.setLineDash([3, 3]);
       g.beginPath(); g.moveTo(x, top - h * 0.28); g.lineTo(x, bot); g.stroke(); g.setLineDash([]);
       g.textAlign = x > w - 110 ? 'right' : 'left';
-      legenda(`${(k as any).rotuloEvento ?? 'ignição'} ${ff.toFixed(0)} Hz`, x + (x > w - 110 ? -6 : 6), top - h * 0.26, C.gold);
+      legenda(`ignição ${ff.toFixed(0)} Hz`, x + (x > w - 110 ? -6 : 6), top - h * 0.26, C.gold);
     }
     g.fillStyle = C.faint; g.textAlign = 'right';
     for (const f of [50, 100, 200, 500, 1000, 2000, 5000]) if (fx(f) > 24) g.fillText(f >= 1000 ? `${f / 1000}k` : String(f), fx(f) - 2, bot - 12);

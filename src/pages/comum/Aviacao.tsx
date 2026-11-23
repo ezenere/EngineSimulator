@@ -4,12 +4,11 @@
 // cada quadro têm ids e são escritas por `escreverLeiturasAv` (no fim deste arquivo), chamada pelo laço dos mostradores,
 // fora do React. As teclas (M magnetos; [ e ] mistura, onde a página tem) ficam nas dicas de teclado de cada página
 // (`.hints`), não nos rótulos.
-import { ChipGroup, Field, Section, Slider } from '../../ui';
+import { ChipGroup, Field, Section, Slider, pct } from '../../ui';
 
 export type EstadoAv = { magnetos: string; mistura: number; rpmAlvo: number; coletivo: number; engatar: boolean; prime: number; blower: 'baixa' | 'alta' };
 export const AV_PADRAO: EstadoAv = { magnetos: 'ambos', mistura: 0.8, rpmAlvo: 1, coletivo: 0, engatar: false, prime: 0, blower: 'baixa' };
 
-const pct = (v: number) => `${Math.round(v * 100)}%`;
 const marcaMistura = (v: number) => (v < 0.05 ? 'corte' : v < 0.45 ? 'pobre demais' : v < 0.7 ? 'pobre' : v < 0.9 ? 'auto-rica' : 'rica');
 const linha = (id: string, k: string) => <div className="ro-row" key={id}><span className="k">{k}</span><span className="v mono" id={id}>—</span></div>;
 
@@ -17,6 +16,8 @@ export const MAGNETOS = [
   { valor: 'desligado', rotulo: 'OFF' }, { valor: 'esq', rotulo: 'ESQ' }, { valor: 'dir', rotulo: 'DIR' }, { valor: 'ambos', rotulo: 'AMBOS' },
 ];
 export const proximoMagneto = (m: string) => MAGNETOS[(MAGNETOS.findIndex((x) => x.valor === m) + 1) % MAGNETOS.length].valor;
+/** [ e ]: a mistura um passo mais rica ou mais pobre, entre o corte (0) e a rica (1), em centésimos */
+export const passoDaMistura = (m: number, d: number) => Math.min(1, Math.max(0, Math.round((m + d) * 100) / 100));
 
 export function MagnetosEMistura({ av, aoMudar, duasVelocidades }: { av: EstadoAv; aoMudar: (p: Partial<EstadoAv>) => void; duasVelocidades?: boolean }) {
   return (

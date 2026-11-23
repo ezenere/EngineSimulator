@@ -1,26 +1,16 @@
 // Mostradores da página Rotativos (ROTATIVO.md 7), desenhados em canvas a cada quadro, fora do React:
-//  - conta-giros, onda e espectro e a vista da via: os do Ronco (src/pages/ronco/mostradores.ts), alimentados por um
-//    controle "de fachada" em que o motor tem 2·eventos por volta (a frequência de ignição do Ronco é N/2 por volta);
+//  - conta-giros, onda e espectro e a vista da via: os das páginas a pistão (src/pages/comum/mostradores.ts),
+//    alimentados por um controle "de fachada" em que o motor tem 2·eventos por volta (a frequência de ignição do Ronco é
+//    N/2 por volta);
 //  - o anel do ciclo da câmara com 1 080° (720° no X-Engine): as 3 câmaras do rotor 1 em cores por flanco, as dos outros
 //    rotores por dentro, e o eixo excêntrico girando em tempo real;
 //  - o traço p–α do último ciclo da câmara 0 (64 pontos da telemetria);
 //  - as leituras que mudam a cada quadro: ignição e ordens, gás de escape, pós-queima, estouros/s, turbo secundário,
 //    janelas secundárias, pressão de pico; no motor de palhetas, a rotação, a pressão, a passagem de palheta e o hospedeiro.
 import type { ControleRotativo } from './controle';
-import { Mostradores } from '../ronco/mostradores';
+import { clamp } from '../comum/controle';
+import { Mostradores, fit } from '../comum/mostradores';
 import { escreverLeiturasAv, fumacaDaPartida } from '../comum/Aviacao';
-
-const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
-
-function fit(canvas: HTMLCanvasElement): [CanvasRenderingContext2D, number, number] {
-  const r = canvas.getBoundingClientRect();
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
-  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
-  const ctx = canvas.getContext('2d')!;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return [ctx, r.width, r.height];
-}
 
 export class MostradoresRot {
   private ronco: Mostradores;
