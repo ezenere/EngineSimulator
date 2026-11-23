@@ -8,7 +8,7 @@
 //   - a linha de estado da condução (maquinista.ts → linhaDeEstado) e o corte que o automático escolheu.
 import type { ControleVapor } from './controle';
 import { CENARIOS, corteDeRev, fmt, temAreia, temFreio } from './controle';
-import { linhaDeEstado } from './maquinista';
+import { linhaDeEstado, vMaxDaMarcha } from './maquinista';
 import type { RefsConducao } from './Conducao';
 
 const TAU = Math.PI * 2;
@@ -168,6 +168,8 @@ export function escreverConducao(c: ControleVapor, R: RefsConducao, ligado: bool
     regulador: e.cmd.regulador, reguladorEfetivo: c.reguladorEfetivo(), sentido: e.sentido, corteAuto: e.corteAuto, corte, reversao: e.cmd.reverser,
     patinando: !!m?.patinando, freando: e.freando || Math.max(e.cmd.freio, c.freioAuto) > 0.05, temFreio: temFreio(c.portador), temAreia: temAreia(P),
     presaHa: c.paradaAberta ? (performance.now() - c.paradaAberta) / 1000 : 0, jaAndou: c.jaAndou, rampa: e.rampa, marcha: e.marcha,
+    governando: c.portador === 'trator' && !!m && (m.governador as number) < Math.min(1, m.regulador as number) - 0.02,
+    vMaxMarcha: c.portador === 'trator' ? vMaxDaMarcha(P, e.marcha) : 0,
     rpm: p ? Math.abs(p.rpmEixo as number) : 0, carga: e.carga, pCaldeira: m ? m.pCaldeira : P.pNominal, pNominal: P.pNominal,
   });
   const put = (el: HTMLElement | undefined, t: string) => { if (el && el.textContent !== t) el.textContent = t; };

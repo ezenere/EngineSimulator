@@ -54,6 +54,9 @@ export interface PresetVapor {
   /** (extensões) */
   J?: number;                            // kg·m² do motor (rodeiro + bielas, ou volante), no eixo da roda
   rpmGovernado?: number;                 // estacionária / trator parado: alvo do governador de esferas
+  /** trator: rotação de trabalho (rpm de manivela), o ajuste do governador de esferas engatado (estrada) e na polia; a
+   *  velocidade máxima de cada marcha sai dela e da redução */
+  rpmNominal?: number;
   engrenagens?: { z: number };
   correias?: { dVolante: number; dPolia: number };
   queimador?: boolean;
@@ -211,7 +214,8 @@ export const PRESETS_VAPOR: readonly PresetVapor[] = [
   {
     id: 'aveling', nome: 'Aveling & Porter 8 nhp', familia: 'trator', tag: 'trator de estrada · nº 11630 ≈',
     cilindros: { n: 1, diametro: pol(8), curso: pol(10) }, reducao: 12, reducao2: 6, dRoda: 1.6, pNominal: psi(150), superaquecido: false, evaporacaoMax: 0.3,
-    massa: 10, massaAderente: 10, vMax: 8, J: 60, rpmGovernado: 75, governador: { kp: 0.03, ki: 0.01 },
+    // (rpmNominal: a manivela a 160 rpm dá 8,0 km/h em 2ª (6:1), a máxima da ficha, e 4,0 em 1ª; o VAPOR.md dá 150–320 rpm)
+    massa: 10, massaAderente: 10, vMax: 8, J: 60, rpmGovernado: 75, rpmNominal: 160, governador: { kp: 0.03, ki: 0.01 },
     escape: { dBico: 0.05, lDescarga: 0.4, vCaixa: 0.3, lChamine: 1.4, dChamine: 0.3 },
     apito: { tubos: [700], tipo: 'simples', nivelDb: 135 }, folga: 0.6,
     geometria: { comprimento: 6.5, largura: 2.4, altura: 3.5, xCilindros: 1.4, yCilindros: 0, xChamine: 2.6, xDomo: 0.8, xCabine: -2.4, zTopo: 2.4 },

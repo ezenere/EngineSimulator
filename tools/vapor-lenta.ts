@@ -3,8 +3,9 @@
 //   1. parado (regulador 0, 8 s): nenhum escape, nenhuma linha de chuff, a caldeira na pressão nominal;
 //   2. arrancada (reverser 80%, regulador 0,3 → 0,8; trilho molhado nas locomotivas, 300 t atrás): anda, e a
 //      locomotiva patina pelo menos uma vez ou passa dos 5 km/h; a estacionária fica no governador a ±5% da rotação;
-//      o trator anda em 1ª; o Stanley e o barco aceleram;
-//   3. cruzeiro com velocidade imposta (60% da máxima, corte 30%): chuffs/s = escapes por volta × voltas/s a ±2%;
+//      o trator anda em 1ª sem passar da máxima dela (+10 %: o governador); o Stanley e o barco aceleram;
+//   3. cruzeiro com velocidade imposta (60% da máxima, corte 30%; o trator em 2ª: a 1ª tem a metade da máxima, e acima
+//      dela o governador fecha a válvula): chuffs/s = escapes por volta × voltas/s a ±2%;
 //   4. drifting (regulador 0 na mesma velocidade): o canal da chaminé cai ≥ 12 dB (o bufo do ar bombeado; o Y6b, com
 //      as BP de 39", fica em −14);
 //   5. nenhum NaN em nenhum canal.
@@ -77,15 +78,24 @@ async function umCaso(id: string): Promise<Resultado> {
     notas.push(`arrancada: ${vk.toFixed(1)} km/h em 20 s${patinou ? ', patinou' : ''}`);
     if (vk < (tipo === 'trator' ? 1 : 3)) ok = false;
     if (tipo === 'locomotiva' && !patinou && vk < 5) ok = false;
+    // (o trator engatado tem o governador de esferas na linha de vapor: em 1ª, com o regulador a 80 %, não passa da
+    // rotação de trabalho × a redução, +10 %; antes, sem ele, chegava a 16,8 km/h em 20 s)
+    if (tipo === 'trator' && P.rpmNominal) {
+      const vMax1 = (P.rpmNominal / 60 / (P.reducao ?? 1)) * Math.PI * P.dRoda * 3.6;
+      notas.push(`máxima da 1ª ${vMax1.toFixed(2)} km/h`);
+      if (vk > 1.1 * vMax1) ok = false;
+    }
   }
   // 3. cruzeiro com velocidade imposta
   if (P.familia !== 'estacionaria') {
     const vKmh = 0.6 * P.vMax, vms = vKmh / 3.6;
-    cmd({ regulador: 1, cutoff: (0.3 - 0.15) / 0.7, trilho: 'seco', velocidadeFixa: vms });
+    cmd({ regulador: 1, cutoff: (0.3 - 0.15) / 0.7, trilho: 'seco', velocidadeFixa: vms, marcha: tipo === 'trator' ? 2 : undefined });
     m.fixar({ regulador: 1, cutoff: (0.3 - 0.15) / 0.7 });
     const lc = rodar(4);
     const wRoda = tipo === 'barco' ? vms / (0.75 * r) : vms / r;
-    const esperado = (escapesPorVolta(P) * wRoda) / TAU, medido = m.chuffsPorS();
+    // (escapesPorVolta é por volta de roda na redução da ficha; o trator em 2ª gira a manivela reducao2 vezes por volta)
+    const red = tipo === 'trator' ? (P.reducao2 ?? P.reducao ?? 1) / (P.reducao ?? 1) : 1;
+    const esperado = (escapesPorVolta(P) * red * wRoda) / TAU, medido = m.chuffsPorS();
     notas.push(`cruzeiro ${vKmh.toFixed(0)} km/h: ${medido.toFixed(2)} chuffs/s (${esperado.toFixed(2)})`);
     if (Math.abs(medido / esperado - 1) > 0.02) ok = false;
     // 4. drifting
