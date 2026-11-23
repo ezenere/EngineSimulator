@@ -301,12 +301,12 @@
   },
   "real3 · caminhão lenta (catc15, volvod13): CV do knock": {
     "grupo": "real3-b",
-    "medido": 0.3847,
+    "medido": 0.4133,
     "unidade": "",
     "folga": "±8 %",
     "alvo": "0.13–0.25",
-    "motivo": "o primeiro harmônico da ignição (30 Hz) sai 8 dB acima das gravações de 2–3 m: a irradiação de monopolo da chaminé (+6 dB/oitava) não basta para o pulso de 2 L por cilindro; o CV (0,28) é o da picape, um pouco irregular demais para o caminhão [23/11/2026: o CV está em 0,38 (sementes 0,38 / 0,36 / 0,41), não 0,28; a 4ª passada mediu nas picapes o efeito do clique de forma fixa por cilindro (0,57), sem conferir no caminhão.]",
-    "nota_folga": "folga alargada: o valor vai de 0,385 / 0,381 / 0,409 entre as bases 0, 1000 e 2000"
+    "motivo": "o primeiro harmônico da ignição (30 Hz) sai 8 dB acima das gravações de 2–3 m: a irradiação de monopolo da chaminé (+6 dB/oitava) não basta para o pulso de 2 L por cilindro; o CV (0,28) é o da picape, um pouco irregular demais para o caminhão [23/11/2026: o CV está em 0,38 (sementes 0,38 / 0,36 / 0,41), não 0,28; a 4ª passada mediu nas picapes o efeito do clique de forma fixa por cilindro (0,57), sem conferir no caminhão.] [23/11/2026, 5ª passada (os médios: `corpo` nos presets): com o corpo da batida (+3 dB no Cat, +4 no Volvo) o CV vai a 0,413 / 0,405 / 0,435 nas bases 0, 1000 e 2000 (era 0,385 / 0,381 / 0,409): o clique do cilindro dominante pesa mais na banda medida, como no ônibus em carga.]",
+    "nota_folga": "folga alargada: o valor vai de 0,413 / 0,405 / 0,435 entre as bases 0, 1000 e 2000"
   },
   "real3 · gerador sem carga (gen500): 30–60": {
     "grupo": "real3-d",
