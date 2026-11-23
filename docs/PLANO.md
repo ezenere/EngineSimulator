@@ -106,3 +106,22 @@ As duas auditorias estão mescladas: `docs/AUDITORIA-UI.md` (87 defeitos, 86 cor
 | Interface e documentação | Opus | `src/pages/**` (fora da Passagem), `src/ui/**`, `tools/*-navegador.mjs`, `docs/` | pendências I1 a I10 da auditoria visual, E5, E6, F4, F6, onda e espectro no Vapor |
 
 O retoque de som do Radial, do Vapor e do Elétrico (B4, B5, o grave do B6) vem depois, medido com o kit, quando os testes dessas famílias já tiverem teto.
+
+### Estado depois da passada de som (22/11/2026, `de664f3`)
+
+Todas as famílias tiveram a passada de som medida com o kit e estão mescladas na `reestruturacao`: Rotativos (duas passadas), motor-base (médios e jato da ponteira), Diesel, Radial, Vapor e Elétrico; mais os testes com teto (Radial, Vapor, Elétrico, Rotativos, Cena), as fichas (C1 a C6, C8 a C11, D1 a D3), a Passagem e os portadores, e a interface. O relatório de cada uma está no `TECNICO.md` (seção da família) e o caso no `REVISAO-DE-SOM.md`.
+
+**Falta o ouvido do dono em tudo isso.** Nenhuma segunda passada de som começa antes do veredito dele sobre a primeira: a régua do kit diz o que mudou, não o que agrada.
+
+**O que cada passada deixou aberto** (medido, com o motivo no relatório da família):
+
+- **Diesel:** grave de lenta 4 a 20 dB alto em 60–150 Hz; médios da cabine baixos sob carga; agudo das locomotivas em N8 ainda liso; gerador e locomotiva da página sem ventilador nem alternador (B2); `ENGRENAGENS.nivel` sem controle; os testes ainda sem teto (A1, A2, A6, A7, A8).
+- **Rotativos:** 787B a 7 700 rpm em ponto morto; filtro da cabine; Ro 80 (C7); palhetas e X-Engine sem medida.
+- **Motor-base (Ronco):** 400 Hz–1 kHz quase não mudou; Mustang frio; abafador original acima de 2,5 kHz (`src/acoustics/guias.ts`); a Aviação a pistão (`av`) tem o mesmo defeito de estalos que o Radial tinha (O-200: 19,6 por segundo contra 4,3).
+- **Radial:** Verners com 7 estalos por segundo; ruído de hélice liso na decolagem do T-6 (falta o choque da ponta e o termo de campo próximo).
+- **Vapor:** a rede de escape perde 40 % da vazão (`AMORT_ESCAPE`; mexer pede rever o bico das 14 fichas); patinagem com regulador cheio; ataque do chuff curto.
+- **Elétrico:** furadeira escura acima de 6 kHz; piso largo do ar-condicionado 3,5 a 7 dB alto na CPTM parada; Tesla de dentro com 13 dB a mais que a gravação em 2,5–6 kHz (lado pedido; o ouvido decide).
+- **Cena:** a reflexão do chão por fonte-imagem tira 6 dB de 400 Hz–1 kHz a 4 m (vale em ~460 Hz) e 3 a 4 dB de 400 Hz–6 kHz a 7,5 m em chão duro: candidato ao "sem médios" na Passagem, não medido contra gravação. O N700 de 10 vagões está no teto de 64 fontes.
+- **Kit:** o `ar` compara frações do leito, não nível absoluto; o total simétrico pune a simulação mais limpa; o `f0` pode parar num múltiplo.
+
+**Em andamento (Opus, não mexem no som):** o comum das quatro páginas a pistão (F1) e o estado que passa de uma configuração para a outra no motor-base (hoje cada `setConfig` recomeça as câmaras; só os Rotativos contornam).
