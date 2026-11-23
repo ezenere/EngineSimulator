@@ -98,6 +98,10 @@ function estrutura(fs: number, N: number, B: number, injBp: [number, number][], 
   return e;
 }
 
+/** estado de cada cilindro do diesel que passa numa troca de configuração com as mesmas câmaras (além do do motor-base) */
+const CAMARA_DIESEL = ['mf', 'mPil', 'Qp', 'Qm', 'igP', 'igM', 'phiP', 'dthP', 'dthD', 'soiM', 'thInjM', 'thMix', 'eD', 'eRel', 'queima', 'etapa', 'lam',
+  'arPreso', 'pAnt', 'pPk', 'angPk', 'dpPk', 'fechaRel', 'tEvoC', 'nQ', 'rgF', 'rgS'];
+
 export class DieselDSP extends EngineDSP {
   // estado próprio do diesel (declarados só para o TypeScript, como no EngineDSP)
   declare fuelCmd: any; declare mfMax: any; declare rpmMax: any; declare rpmNom: any; declare mPilMin: any; declare piloto: any; declare idi: any;
@@ -204,6 +208,10 @@ export class DieselDSP extends EngineDSP {
 
   // ------------------------------------------------------------------ configuração
   setConfig(cfg, calibrate = true) {
+    // troca com o motor funcionando (EngineDSP.guardarTroca): o estado de cada cilindro, o da injeção e o da estrutura são
+    // guardados antes de realocar, e o motor-base os põe de volta (`camposCamara`, `camposFiltros`)
+    const g = (this.trocaPendente = this.guardarTroca(cfg));
+    const ev = g ? { n: this.evN, M: this.eM } : null; // (impactos agendados no banco de modos: só com o mesmo banco)
     const N = cfg.N;
     const f64 = () => new Float64Array(N);
     this.mf = f64(); this.mPil = f64(); this.Qp = f64(); this.Qm = f64(); this.igP = f64(); this.igM = f64(); this.phiP = f64();
@@ -215,7 +223,8 @@ export class DieselDSP extends EngineDSP {
     this.cylK = Float64Array.from({ length: N }, () => 1 + 0.05 * sr.bi());
     this.ptBuf = new Float32Array((cfg.tempos === 2 ? 360 : 720) / 4); this.ptUlt = new Float32Array(this.ptBuf.length);
     super.setConfig(cfg, calibrate);
-    for (let c = 0; c < N; c++) this.aPrev[c] = ((this.theta - this.fire[c]) % this.ciclo + this.ciclo) % this.ciclo;
+    if (!this.trocaCamaras) for (let c = 0; c < N; c++) this.aPrev[c] = ((this.theta - this.fire[c]) % this.ciclo + this.ciclo) % this.ciclo;
+    if (ev && ev.M === this.eM) this.evN = ev.n;
     // dispersão fixa entre injetores (DIESEL.md 6.2): vazão de cada injetor/elemento da bomba e o atraso de cada bico
     // (estado do bico, ângulo do jato). Bombas mecânicas calibradas à mão espalham mais que a central do common-rail
     const si = new RNG(0x1d1e5e1 + N * 977);
@@ -229,8 +238,15 @@ export class DieselDSP extends EngineDSP {
     this.injA = Float64Array.from({ length: N }, () => da * si.bi());
     if (cfg.fuelLenta) this.fuelLenta = cfg.fuelLenta;
     if (cfg.refKnock) this.refKnock = cfg.refKnock;
-    this.gI = this.fuelLenta;
+    if (!this.trocaViva) this.gI = this.fuelLenta; // (com o motor funcionando o governador segue de onde estava)
   }
+
+  /** o 2 tempos e o 4 tempos não têm as mesmas câmaras (ciclo de 360° ou de 720°) */
+  geometriaCamaras() { return `${super.geometriaCamaras()},${this.ciclo}`; }
+  /** por cilindro: injeção (combustível, piloto, pré-mistura e difusa, atrasos), queima, λ, ar preso, picos e a aspereza da queima */
+  camposCamara() { return [...super.camposCamara(), ...CAMARA_DIESEL]; }
+  /** banco de modos da estrutura, reflexões do cofre e o traço p–θ do mostrador */
+  camposFiltros() { return [...super.camposFiltros(), 'eZ1', 'eZ2', 'eAcc', 'cfB', 'cfI', 'cfLP', 'ptBuf', 'ptUlt']; }
 
   freshStart() {
     super.freshStart();

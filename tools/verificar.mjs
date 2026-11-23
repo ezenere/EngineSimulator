@@ -1,8 +1,8 @@
 // Roda os portões do projeto em ordem, um de cada vez, e imprime um resumo (o que passou, o que falhou, quanto
 // levou). Um de cada vez de propósito: as medidas de tempo de CPU falham com a máquina ocupada.
 //
-//   npm run verificar            tudo: tipos, paridades, teste:*, lenta:*, build
-//   npm run verificar:rapido     o essencial em poucos minutos (paridades em amostra, famílias rápidas, build)
+//   npm run verificar            tudo: tipos, paridades, teste:*, lenta:*, troca:*, build
+//   npm run verificar:rapido     o essencial em poucos minutos (paridades em amostra, famílias rápidas, trocas, build)
 //   npm run verificar -- --navegador     também os roteiros de navegador (pedem Chromium em /usr/bin/chromium)
 //   npm run verificar -- --cpu           também as medidas de tempo de CPU (cpu:radial, cpu:vapor, cpu:eletrico,
 //                                        cpu:rotativo, cpu:cena), no fim e à parte: saem numa tabela própria e não
@@ -34,7 +34,7 @@ const COMPLETO = [
   ['paridade:acoustics'], ['paridade:ronco'], ['paridade:turbina'],
   ['teste:cena'], ['teste:passagem'], ['teste:diesel'], ['teste:radial'], ['teste:rotativo'], ['teste:eletrico'], ['teste:vapor'],
   ['lenta:ronco'], ['lenta:diesel'], ['lenta:radial'], ['lenta:rotativo'], ['lenta:eletrico'], ['lenta:vapor'],
-  ['troca:diesel'], ['geometria:radial'],
+  ['troca:ronco'], ['troca:diesel'], ['troca:radial'], ['troca:rotativo'], ['geometria:radial'],
   ['build'],
 ];
 const RAPIDOS = [
@@ -42,6 +42,7 @@ const RAPIDOS = [
   ['paridade:acoustics'], ['paridade:ronco', '--rapido'], ['paridade:turbina', 'narrow,fighter,regional,sst'],
   ['geometria:radial'], ['teste:rotativo'], ['teste:eletrico'], ['teste:vapor'],
   ['lenta:rotativo'], ['lenta:eletrico'], ['lenta:vapor'],
+  ['troca:ronco'], ['troca:radial'], ['troca:rotativo'],
   ['build'],
 ];
 const NAVEGADORES = ['ronco', 'turbina', 'diesel', 'radial', 'rotativo', 'eletrico', 'vapor', 'passagem'].map((f) => [`navegador:${f}`]);

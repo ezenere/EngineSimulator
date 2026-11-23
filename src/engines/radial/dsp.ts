@@ -80,7 +80,7 @@ export class RadialDSP extends EngineDSP {
     // carga de Gutin com o torque absorvido): sem isso a página tocava a lei do JetDSP, que só olha o Mach da ponta, e o
     // mesmo avião saía com a hélice 6 a 8 dB mais alta em radial.html do que na Passagem
     if (this.heliceSom) this.heliceSom.lei = 'carga';
-    this.rotAng = cfg.rotativo ? 0 : undefined;
+    this.rotAng = cfg.rotativo ? (this.trocaViva && this.rotAng !== undefined ? this.rotAng : 0) : undefined; // (com o motor funcionando, os cilindros seguem onde estavam)
   }
 
   tune(cfg) {
