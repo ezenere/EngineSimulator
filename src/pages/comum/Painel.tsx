@@ -55,25 +55,33 @@ export function Ambiente({ k, params }: { k: K; params: ParamsPistao }) {
   );
 }
 
-/** som de fundo do ambiente; `dicas`: o que cada escolha faz, [ligado, desligado] */
-export function SomDeFundo({ k, params, dicas }: { k: K; params: ParamsPistao; dicas?: [string, string] }) {
+/** som de fundo do ambiente; `dicas`: o que cada escolha faz, [ligado, desligado] (o padrão fala do motor; o Ronco fala
+ *  do carro e o Diesel tem as suas) */
+const DICAS_FUNDO: [string, string] = ['Vento, trânsito ao longe, ventilação do túnel, arquibancada…', 'Só o motor (a acústica do lugar, ecos e reverberação, continua)'];
+export function SomDeFundo({ k, params, dicas = DICAS_FUNDO }: { k: K; params: ParamsPistao; dicas?: [string, string] }) {
   return (
     <Field rotulo="Som de fundo do ambiente">
-      <ChipGroup id="ambSound" opcoes={[{ valor: true, rotulo: 'Ligado', titulo: dicas?.[0] }, { valor: false, rotulo: 'Desligado', titulo: dicas?.[1] }]}
+      <ChipGroup id="ambSound" opcoes={[{ valor: true, rotulo: 'Ligado', titulo: dicas[0] }, { valor: false, rotulo: 'Desligado', titulo: dicas[1] }]}
         atual={params.ambSound} aoEscolher={(v) => k.setParams({ ambSound: v }, true)} />
     </Field>
   );
 }
 
-/** volume do motor real ou arcade; `dicas`: [real, arcade]; `notaArcade`: a nota que aparece no arcade */
-export function VolumeDoMotor({ k, params, dicas, notaArcade }: { k: K; params: ParamsPistao; dicas?: [string, string]; notaArcade?: string }) {
+/** volume do motor real ou arcade; `dicas`: [real, arcade]; `notaArcade`: a nota que aparece no arcade (os padrões são
+ *  os do Ronco; o Diesel tem os seus, com a plena carga no lugar do giro alto) */
+const DICAS_VOLUME: [string, string] = [
+  'Nível de verdade: a marcha lenta fica uns 20 dB abaixo do giro alto em carga',
+  'Segura o som num nível médio em qualquer rotação: lenta e giro baixo sobem, o giro alto não muda',
+];
+const NOTA_ARCADE = 'Arcade: a lenta e o giro baixo ganham volume até ficar perto do giro alto. Útil em alto-falante pequeno ou volume baixo.';
+export function VolumeDoMotor({ k, params, dicas = DICAS_VOLUME, notaArcade = NOTA_ARCADE }: { k: K; params: ParamsPistao; dicas?: [string, string]; notaArcade?: string }) {
   return (
     <>
       <Field rotulo="Volume do motor">
-        <ChipGroup id="dynamics" opcoes={[{ valor: 'real', rotulo: 'Real', titulo: dicas?.[0] }, { valor: 'arcade', rotulo: 'Arcade', titulo: dicas?.[1] }]}
+        <ChipGroup id="dynamics" opcoes={[{ valor: 'real', rotulo: 'Real', titulo: dicas[0] }, { valor: 'arcade', rotulo: 'Arcade', titulo: dicas[1] }]}
           atual={params.dynamics} aoEscolher={(v) => k.setParams({ dynamics: v as 'real' | 'arcade' }, true)} />
       </Field>
-      {notaArcade && params.dynamics === 'arcade' && <p className="note">{notaArcade}</p>}
+      {params.dynamics === 'arcade' && <p className="note">{notaArcade}</p>}
     </>
   );
 }

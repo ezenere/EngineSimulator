@@ -34,6 +34,8 @@ export class ControleRotativo extends ControlePistao<Spec, MotorRotativo | null,
   }
 
   get palhetas() { return this.spec.tipo === 'palhetas'; }
+  /** avião e helicóptero: o comando de potência é a manete (como na Aviação do Ronco); no resto, o pedal ou o gatilho */
+  get comManete() { return !!this.spec.aviation; }
   protected montar(spec: Spec) { return geometria(spec); }
   /** configuração para o worklet: Wankel/X calibrado na thread principal; palhetas, o preset cru */
   protected configDoMotor(sr: number) {
@@ -44,6 +46,8 @@ export class ControleRotativo extends ControlePistao<Spec, MotorRotativo | null,
   protected depoisDaConfig() { this.enviarAv(); this.enviarPal(); }
   private enviarAv() { if (this.spec.aviation) this.audio?.send({ type: 'av', ...this.estado.av }); }
   private enviarPal() { if (this.palhetas) this.audio?.send({ type: 'palhetas', ...this.estado.pal }); }
+  // (a posição da manete de um avião vai ao DSP junto com a cadeia: ela fica onde foi deixada)
+  protected aoIniciarAudio() { if (this.comManete) this.sendInput(); }
 
   // (o motor de palhetas não tem `tune`: toda mudança vai como configuração)
   protected pushConfig(structural: boolean, fresh = false) { super.pushConfig(structural || this.palhetas, fresh); }
@@ -68,8 +72,11 @@ export class ControleRotativo extends ControlePistao<Spec, MotorRotativo | null,
   loadPreset(p: PresetRotativo) {
     const spec = specDe(p);
     const av = { ...AV_PADRAO };
+    const eraManete = this.comManete;
     this.mudar({ spec, motor: geometria(spec), presetId: p.id, av, pal: palDe(spec) }, true);
     this.pushConfig(true, true);
+    // (do carro para o avião e de volta: o comando de potência muda de pedal para manete)
+    if (eraManete || this.comManete) this.sendInput();
   }
 
   // ---------------------------------------------------------------- aviação e palhetas

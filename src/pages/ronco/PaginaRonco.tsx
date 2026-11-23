@@ -8,7 +8,7 @@ import { EngineDSP } from '../../engines/ronco/dsp';
 import { PRESETS_PAGINA as PRESETS } from '../../engines/ronco/presets';
 import urlRonco from '../../worklet/processador-ronco.ts?worker&url';
 import { ControleRonco, familyFor, type EstadoRonco } from './controle';
-import { Balanco, DICA_BALANCO, ManeteDePotencia, NavDePresets, Pedal, PosicoesDaManete } from '../comum/Palco';
+import { Balanco, BotaoDoFreio, DICA_BALANCO, ManeteDePotencia, NavDePresets, Pedal, PosicoesDaManete } from '../comum/Palco';
 import { Mostradores } from '../comum/mostradores';
 import { Painel } from './Painel';
 import { usarTeclado } from './teclado';
@@ -56,7 +56,6 @@ function Interior({ k, e }: { k: ControleRonco; e: EstadoRonco }) {
 
   const ligar = () => { k.toggleIgnition().catch((err) => console.error('Ronco: áudio não iniciou', err)); };
 
-  const freia = (on: boolean) => { k.input.brake = on ? 1 : 0; k.sendInput(); setFreio(on); };
 
   return (
     <div className="app">
@@ -88,8 +87,7 @@ function Interior({ k, e }: { k: ControleRonco; e: EstadoRonco }) {
             <button type="button" className="key" id="gDown" aria-label="Reduzir marcha" onClick={() => k.shift(-1)}>Q</button>
             <div className="gear-read"><span className="k">Marcha</span><span className="gear mono" id="gearRead">N</span></div>
             <button type="button" className="key" id="gUp" aria-label="Subir marcha" onClick={() => k.shift(1)}>E</button>
-            <button type="button" className={`key wide${freio ? ' on' : ''}`} id="brakeBtn" title="Freio (segure)"
-              onPointerDown={() => freia(true)} onPointerUp={() => freia(false)} onPointerLeave={() => freia(false)} onPointerCancel={() => freia(false)}>S · freio</button>
+            <BotaoDoFreio k={k} aceso={freio} aoFrear={setFreio} />
             {/* o texto, o `hidden` e o estado "aberta" vêm da telemetria, no laço dos mostradores */}
             <button type="button" className="valve-tag" id="valveTag" title="Troca o modo do escape ativo (B)" onClick={() => k.cycleValve()} hidden>válvula fechada</button>
           </div>

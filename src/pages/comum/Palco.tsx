@@ -4,6 +4,7 @@
 //    aviões e helicópteros (a da Turbina, src/ui/Manete.tsx: fica onde foi deixada), com os botões das posições (teclas
 //    1–4). O pedal se registra no controle (`k.pedal`, `k.pedalFill`) para `sendInput` escrever o preenchimento direto no
 //    DOM, fora do React;
+//  - o botão do freio;
 //  - os medidores de balanceamento da leitura do ciclo de ignição.
 import { useEffect, useRef, useSyncExternalStore, type PointerEvent } from 'react';
 import { FamilyNav, Manete, PresetNav, dec, type Familia, type PresetResumo } from '../../ui';
@@ -39,6 +40,15 @@ export function Pedal({ k, rotulo, nome = rotulo, aoSoltar }: { k: K; rotulo: st
       <div className="pedal-fill" id="pedalFill" ref={fill} />
       <span className="pedal-label">{rotulo}</span>
     </div>
+  );
+}
+
+/** botão do freio (segure); `aceso` e `aoFrear` são o estado da página, que o teclado também acende e apaga */
+export function BotaoDoFreio({ k, aceso, aoFrear }: { k: K; aceso: boolean; aoFrear: (on: boolean) => void }) {
+  const freia = (on: boolean) => { k.input.brake = on ? 1 : 0; k.sendInput(); aoFrear(on); };
+  return (
+    <button type="button" className={`key wide${aceso ? ' on' : ''}`} id="brakeBtn" title="Freio (segure)"
+      onPointerDown={() => freia(true)} onPointerUp={() => freia(false)} onPointerLeave={() => freia(false)} onPointerCancel={() => freia(false)}>S · freio</button>
   );
 }
 
