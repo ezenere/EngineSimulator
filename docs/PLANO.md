@@ -125,3 +125,12 @@ Todas as famílias tiveram a passada de som medida com o kit e estão mescladas 
 - **Kit:** o `ar` compara frações do leito, não nível absoluto; o total simétrico pune a simulação mais limpa; o `f0` pode parar num múltiplo.
 
 **Feito depois (Opus, sem mexer no timbre; `c9bf0a4`, `5b6e750` e o merge do motor-base):** o comum das quatro páginas a pistão em `src/pages/comum/` (F1), com os esquecimentos entre as páginas fechados, e o estado que passa de uma configuração para a outra no motor-base (`guardarTroca`/`passarTroca` em `src/engines/ronco/dsp.ts`; portões `troca:ronco|diesel|radial|rotativo`). Fica aberto: as trocas que mudam a geometria das câmaras (cilindrada, taxa, ordem de ignição) ainda recomeçam o motor, e a hélice recomeça de fase se mudar de pás, diâmetro ou rotação.
+
+### Veredito do dono (23/11/2026)
+
+**Diesel aprovado:** "ficou muito bom. O Diesel tá excelente! Agora sim é motor a diesel mesmo. Senti um pouco de falta nos médios ainda no diesel, mas mesmo assim ficou excelente!" O Diesel de `6ec6742` (quarta passada) passa a ser a referência: nada nele pode piorar. As outras famílias seguem sem veredito.
+
+O que vem para o Diesel, nesta ordem:
+
+1. **Testes com teto** (Opus, só `tools/`): o retrato `tools/diesel-desvios.json` é o "não pode piorar" do retoque.
+2. **Retoque dos médios** (Fable), pequeno. A pista medida está no `TECNICO.md` (Diesel → quarta passada → "Faltam médios em carga"): a carcaça do escape (`carcaca`), desligada nos presets, sobe 400–1000 Hz em 2 a 7 dB com linhas (não com ruído) em +18 a +24 dB; o que falta de 1 a 2,5 kHz na cabine não vem dela; e o grave de lenta 4 a 20 dB alto em 60–150 Hz come a margem de volume. O que entrar tem de ser conteúdo preso ao giro, nunca ruído largo, e a posição de antes de cada controle fica marcada.
