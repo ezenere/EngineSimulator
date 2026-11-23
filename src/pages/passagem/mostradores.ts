@@ -83,17 +83,39 @@ export class Medidor {
 // ------------------------------------------------------------------ telemetria em texto
 export interface Leituras { [k: string]: HTMLElement }
 
-/** Doppler da fonte escolhida: f'/f = 1/(1 − M·cos θ_e) com θ_e no instante de emissão (ouvinte parado) */
+/** nome do modo do observador */
+export const NOME_MODO: Record<string, string> = { pe: 'a pé', voo: 'voando', embarcado: 'embarcado' };
+
+/**
+ * Doppler da fonte escolhida (ou da mais próxima): f'/f = (1 + v_O·û/c)/(1 − M·cos θ_e), com θ_e no instante de emissão e
+ * û do ouvido para o ponto de emissão (o termo de cima é o de quem anda). Embarcado, o ouvinte anda com as fontes: × 1.
+ */
 export function dopplerEscolhida(c: ControlePassagem) {
   const t = c.tele; if (!t) return null;
   const F = t.cena.fontes; if (!F.length) return null;
-  const id = c.fonteFicha ?? (c.ouv.gimbal.alvo !== 'corpo' ? c.ouv.gimbal.alvo : null);
+  const id = c.fonteFicha ?? (c.obs.alvo !== 'corpo' ? c.obs.alvo : null);
   let i = id ? F.findIndex((f) => f.id === id) : -1;
   if (i < 0) { i = 0; for (let k = 1; k < F.length; k++) if (F[k].r < F[i].r) i = k; }
   const f = F[i], M = Math.abs(t.portador.v) / C_SOM;
-  const fator = c.ouv.modo === 'gimbal' ? 1 : 1 / (1 - M * Math.cos((f.thetaEmissao * Math.PI) / 180));
-  return { id: f.id, fator, r: f.r, atrasoMs: f.atrasoMs, ganhoDb: f.ganhoDb };
+  const junto = c.obs.modo === 'embarcado' && !c.ouvinteFixo;
+  let quem = 1;
+  if (!junto && !c.ouvinteFixo) {
+    const o = t.cena.ouvinte, e = f.posEmitida, r = Math.hypot(e[0] - o[0], e[1] - o[1], e[2] - o[2]) || 1, v = c.obs.velReal;
+    quem = 1 + (v[0] * (e[0] - o[0]) + v[1] * (e[1] - o[1]) + v[2] * (e[2] - o[2])) / (r * C_SOM);
+  }
+  const fator = junto ? 1 : quem / (1 - M * Math.cos((f.thetaEmissao * Math.PI) / 180));
+  return { id: f.id, fator, r: f.r, atrasoMs: f.atrasoMs, ganhoDb: f.ganhoDb, junto };
 }
+
+/** onde o observador está: o modo, o nome do ponto e a distância ao veículo */
+export function textoOnde(c: ControlePassagem, s: number) {
+  const o = c.obs, d = c.distanciaAoCorpo(s), nome = o.nome ? ` ${o.nome}` : '';
+  const corpo = NOME_CORPO[c.portador] ?? 'veículo';
+  if (o.modo === 'embarcado') return `embarcado${nome}${d > 0.2 ? ` · a ${fmt(d, d < 10 ? 1 : 0)} m ${corpo === 'veículo' ? 'dele' : `do ${corpo}`}` : ''}`;
+  return `${NOME_MODO[o.modo]}${nome} · a ${fmt(d, d < 10 ? 1 : 0)} m ${artigo(corpo)} · altura ${fmt(o.pos[2], 1)} m`;
+}
+const NOME_CORPO: Record<string, string> = { trem: 'trem', rotor: 'helicóptero', carro: 'carro', helice: 'avião', gerador: 'gerador', locomotiva: 'locomotiva', aviao: 'avião', trator: 'trator', barco: 'barco', drone: 'drone' };
+const artigo = (n: string) => (n === 'locomotiva' ? 'da locomotiva' : `do ${n}`);
 
 export function escreverLeituras(c: ControlePassagem, m: Medidor, l: Leituras, agora: number) {
   const t = c.tele, { s, v } = c.estimativa(agora);
@@ -103,30 +125,27 @@ export function escreverLeituras(c: ControlePassagem, m: Medidor, l: Leituras, a
   set('nivelZ', Number.isFinite(m.dB) && c.audio ? `${fmt(m.dB, 1)} dB · máx ${Number.isFinite(m.maxA) ? fmt(m.maxA, 1) : '—'} dB(A)` : '—');
   set('direto', t ? `${fmt(t.cena.splDbA, 1)} dB(A) sem o eco` : '—');
   set('v', `${fmt(Math.abs(v) * 3.6)} km/h${c.andando ? '' : ' (parado)'}`);
-  if (c.ouv.modo === 'fixo') set('nariz', xi < 0 ? `chegando: faltam ${fmt(-xi)} m` : xi <= L ? `passando: ${fmt(xi)} de ${fmt(L)} m` : `passou: ${fmt(xi - L)} m depois da cauda`);
+  if (c.obs.modo !== 'embarcado' || c.ouvinteFixo) set('nariz', xi < 0 ? `chegando: faltam ${fmt(-xi)} m` : xi <= L ? `passando: ${fmt(xi)} de ${fmt(L)} m` : `passou: ${fmt(xi - L)} m depois da cauda`);
   else set('nariz', 'você anda junto com o corpo');
+  set('onde', textoOnde(c, s));
   const d = dopplerEscolhida(c);
-  set('doppler', d ? (c.ouv.modo === 'gimbal' ? '× 1 (você anda junto)' : `× ${fmt(d.fator, 3)} · ${nomeFonte(c, d.id)}`) : '—');
+  set('doppler', d ? (d.junto ? '× 1 (você anda junto)' : `× ${fmt(d.fator, 3)} · ${nomeFonte(c, d.id)}`) : '—');
   set('pressao', t ? `${fmt(t.pressao.nariz, 1)} Pa · pico ${fmt(Math.max(Math.abs(t.pressao.max), Math.abs(t.pressao.min)), 1)} Pa` : '—');
   set('tunel', t && c.ambienteCena().tunel ? `${fmt(t.pressao.tunel / 1000, 2)} kPa` : 'sem túnel');
   set('vento', t ? `${fmt(t.cena.ventoMs, 1)} m/s` : '—');
   set('local', `${c.localEfetivo()}${c.portador === 'trem' && t ? ` · face ${t.lado > 0 ? 'esquerda' : 'direita'} do trem` : ''}`);
 }
 
-/** HUD da cena 3D (3.4, item 8): v, distância de cada grupo de fontes, pressão, vento, nível, Doppler */
+/** HUD sobre a cena: onde você está, o nível no ouvido, o veículo e o Doppler (curto: a cena é a protagonista) */
 export function textoHud(c: ControlePassagem, m: Medidor) {
   const t = c.tele;
   const linhas: string[] = [];
-  const v = c.estimativa().v;
-  linhas.push(`${fmt(Math.abs(v) * 3.6)} km/h · ${Number.isFinite(m.dBA) && c.audio ? fmt(m.dBA, 1) : '—'} dB(A)`);
+  const { s, v } = c.estimativa();
+  linhas.push(`${textoOnde(c, s)}`);
+  linhas.push(`${Number.isFinite(m.dBA) && c.audio ? fmt(m.dBA, 1) : '—'} dB(A) no ouvido · ${NOME_CORPO[c.portador] ?? 'veículo'} a ${fmt(Math.abs(v) * 3.6)} km/h`);
   if (t) {
-    // a fonte de cada tipo que está mais perto do ouvinte, com a distância
-    const grupos = new Map<string, number>();
-    t.cena.fontes.forEach((f) => { const tipo = c.fontes.find((x) => x.id === f.id)?.tipo ?? '?'; grupos.set(tipo, Math.min(grupos.get(tipo) ?? Infinity, f.r)); });
-    linhas.push([...grupos].map(([k, r]) => `${NOME_TIPO[k] ?? k} a ${fmt(r, r < 100 ? 1 : 0)} m`).join(' · '));
-    linhas.push(`pressão ${fmt(t.cena.pressaoPa, 1)} Pa · vento ${fmt(t.cena.ventoMs, 1)} m/s`);
     const d = dopplerEscolhida(c);
-    if (d && c.ouv.modo === 'fixo') linhas.push(`Doppler × ${fmt(d.fator, 3)} (${nomeFonte(c, d.id)})`);
+    if (d && !d.junto && Math.abs(v) > 0.5) linhas.push(`Doppler × ${fmt(d.fator, 3)} · vento ${fmt(t.cena.ventoMs, 1)} m/s`);
   }
   return linhas.join('\n');
 }

@@ -18,12 +18,13 @@
 >   - *Locomotiva (4.5).* Com o diesel acoplado, a tabela de rotação e a potência de notch 8 são as da ficha do motor; a potência é a do eixo (o texto dava `P/(η·ω)` sobre a nominal, que pedia mais que o motor tem), e há regulador de carga pelo combustível do governador.
 >   - *Carro (4.1).* Pneus e vento ligados pela ficha na Passagem (`configCarroLegado`); sem configuração, só o motor.
 >   - *Túnel (2.10).* A seção desenhada sai de `secaoTunel()` (via dupla, 9,5 × 6,8 m com 64 m², o trem na via do lado oposto ao ouvinte); a acústica continua só com a área.
+> - **A câmera é o ouvinte (23/11/2026, a tela nova da Passagem; seção 3).** O `Ouvinte` (1.5) ganhou o modo `'livre'` e o campo `livre` (`OuvinteLivre`: referencial `mundo` ou `corpo`, posição e velocidade do ouvido, rumo da cabeça, contador de saltos e o instante da amostra no relógio da página). É extensão: os modos `fixo` e `gimbal` não mudaram e continuam sendo a API das ferramentas (`teste:cena` e `teste:passagem` com os mesmos números). A página Passagem não tem mais gimbal: o ouvinte é o observador em primeira pessoa (3.2) e a cena 3D é o olho dele (3.4).
 
-Documento de projeto da etapa 1 (ver `PLANO.md`). Define as interfaces entre Motor, Portador e Cena, a Passagem universal, o modo de testes com ouvinte em gimbal e cena 3D, os portadores da etapa 1 e o plano de implementação com testes. A implementação segue este texto à letra; o que estiver marcado **decisão** não se renegocia dentro da etapa sem anotar no relatório. Unidades: metros, segundos, rad/s, N·m, pascal, kg. Referencial do corpo: `x` para a frente, `y` para a esquerda, `z` para cima, origem no centro do corpo ao nível do solo. Som: 48 kHz, blocos de 128 amostras no worklet, controle a cada 64 amostras.
+Documento de projeto da etapa 1 (ver `PLANO.md`). Define as interfaces entre Motor, Portador e Cena, a Passagem universal, o modo de testes com ouvinte em gimbal e cena 3D (hoje: em primeira pessoa, seção 3), os portadores da etapa 1 e o plano de implementação com testes. A implementação segue este texto à letra; o que estiver marcado **decisão** não se renegocia dentro da etapa sem anotar no relatório. Unidades: metros, segundos, rad/s, N·m, pascal, kg. Referencial do corpo: `x` para a frente, `y` para a esquerda, `z` para cima, origem no centro do corpo ao nível do solo. Som: 48 kHz, blocos de 128 amostras no worklet, controle a cada 64 amostras.
 
 - [1. Interfaces entre camadas](#1-interfaces-entre-camadas)
 - [2. Passagem universal](#2-passagem-universal)
-- [3. Modo de testes, ouvinte em gimbal e cena 3D](#3-modo-de-testes-ouvinte-em-gimbal-e-cena-3d)
+- [3. Modo de testes, ouvinte em primeira pessoa e cena 3D](#3-modo-de-testes-ouvinte-em-primeira-pessoa-e-cena-3d)
 - [4. Portadores da etapa 1](#4-portadores-da-etapa-1)
 - [5. Plano de implementação e verificação](#5-plano-de-implementação-e-verificação)
 - [6. O que já existe e como se encaixa](#6-o-que-já-existe-e-como-se-encaixa)
@@ -206,11 +207,20 @@ export interface Trajetoria {
 export type LocalOuvinte = 'fora' | 'cabine' | 'cofre' | 'ponteira';
 
 export interface Ouvinte {
-  modo: 'fixo' | 'gimbal';
+  modo: 'fixo' | 'gimbal' | 'livre';   // (extensão) 'livre': o ouvinte em primeira pessoa, seção 3.2
   pos: Vec3;                   // modo fixo: no mundo, z = altura do ouvido (1,6 em pé; 1,2 sentado)
   gimbal: { az: number; el: number; r: number; alvo: 'corpo' | string };   // graus, graus, m; alvo = 'corpo' ou id de fonte
   local: LocalOuvinte | 'auto'; // 'auto': 'cabine' se o ponto cair dentro do corpo, senão 'fora'
   binaural: boolean;           // ITD + ILD (padrão true)
+  livre?: OuvinteLivre;        // (extensão) modo 'livre'
+}
+
+export interface OuvinteLivre {   // (extensão, 23/11/2026)
+  ref: 'mundo' | 'corpo';      // pos e vel no mundo, ou no referencial do corpo (andando com ele)
+  pos: Vec3; vel: Vec3;        // m e m/s do ouvido, no instante da amostra
+  rumo: number;                // graus: para onde a cabeça olha no plano horizontal (0 = +x; com ref 'corpo', da frente do corpo)
+  salto: number;               // contador: mudou, a posição saltou (a Cena não varre o caminho)
+  t?: number;                  // s, relógio de quem manda (o quadro da página)
 }
 
 export interface TelemetriaCena {
@@ -410,7 +420,9 @@ $$\Delta p_e \approx \tfrac{1}{2}\rho v^2\,\frac{1 - (1-\beta)^2}{(1-\beta)^2}$$
 
 ---
 
-## 3. Modo de testes, ouvinte em gimbal e cena 3D
+## 3. Modo de testes, ouvinte em primeira pessoa e cena 3D
+
+> Até 23/11/2026 esta seção descrevia o ouvinte num gimbal em volta do corpo, com a cena 3D como uma bancada (cabeça arrastável, arcos, esferas das fontes, fantasma de emissão, corpo translúcido). A tela nova faz da página um lugar: **a câmera é o ouvinte**. O gimbal continua na Cena (modo `gimbal`, para as ferramentas), mas a página não o usa mais; os atalhos dele viraram pontos de vista (3.2).
 
 ### 3.1 Parâmetros livres
 
@@ -428,50 +440,64 @@ $$\Delta p_e \approx \tfrac{1}{2}\rho v^2\,\frac{1 - (1-\beta)^2}{(1-\beta)^2}$$
 
 Parado (`v` = 0 ou portador sem trajetória), a passagem vira o caso "ao redor do motor" de hoje, com o gimbal.
 
-### 3.2 Gimbal do ouvinte
+### 3.2 Ouvinte em primeira pessoa (a câmera é o ouvinte)
 
-Centro no `alvo` (centro do corpo ou uma fonte), `az` ∈ [−180°, 180°] (0 = frente do corpo, +90 = esquerda), `el` ∈ [−20°, 89°], `r` ∈ [0,3, 300] m, ouvido a `z ≥ 0,2` (não entra no chão). Atalhos do painel:
+O observador da página é uma pessoa no lugar: o olho fica a 1,65 m do chão (a plataforma, o tabuleiro, o talude) e o **ouvido 5 cm abaixo**, com a **cabeça do binaural (panorâmica, ITD, ILD) para onde a câmera olha**. Três modos: **a pé** (1,5 m/s; 6 m/s correndo), **voando** (10 m/s, 45 com Shift; sobe e desce a 8) e **embarcado** (o olho num ponto do corpo, andando com ele: o assento, ou junto do motor onde não há interior). A velocidade sobe e desce com 0,12 s de constante de tempo: o passo não começa nem para num degrau.
 
-| Atalho | az, el, r | `local` | O que domina |
-|---|---|---|---|
-| atrás no escape | 180°, −10°, 1,5 m (alvo `escape.0`) | fora | ponteira mais próxima pela diretividade `[-14…0]`; outras ponteiras pela distância |
-| ponteira | 180°, 0°, 0,3 m (alvo `escape.0`) | ponteira | só a ponteira do alvo; as outras fontes −20 dB (o `pipe` de hoje) |
-| na frente | 0°, 0°, 3 m | fora | admissão, hélice, rotor (eixo `[1,0,0]`); escape pela sombra/diretividade |
-| lateral | 90°, 0°, 5 m | fora | tudo, com ITD cheio entre fontes da frente e de trás |
-| câmera atrás (hoje `ext`) | 180°, 5°, 4 m | fora | o que o `ext` dá hoje |
-| cabine | ponto dentro do corpo (`[−0,3, 0,4, 1,1]` no carro) | cabine | lei da massa + habitáculo |
-| cofre | ponto no compartimento do motor | cofre | admissão, comando, bloco; escape por baixo |
-| em cima do pantógrafo / rotor | 0°, 89°, altura + 1 m | fora | pás e pantógrafo sem sombra |
+**Na Cena** (modo `livre`, `src/scene/cena.ts`). A página manda uma amostra do ouvido a cada ~33 ms (posição, velocidade, rumo, o instante do quadro). Entre duas amostras a Cena anda com a velocidade da última (até 0,25 s) e segue a posição por um filtro de 2ª ordem criticamente amortecido de 2,5 Hz com a velocidade como alimentação direta; o instante de cada amostra é o do quadro, pela demora estimada da mensagem (a menor vista, subindo 2 ms por segundo para seguir a deriva entre os relógios). Posição e velocidade ficam contínuas, a geometria do ouvinte (`GeoOuvinte`) leva a velocidade dele, e a derivada analítica do atraso (2.1) a usa: o atraso de cada fonte muda sem degrau nem quina, e **o Doppler de quem anda sai daí**, f′ = f·(1 + v_O·û/c). A cabeça gira por um polo de 25 ms. Com `ref: 'corpo'` o ouvido está no referencial do corpo: a posição vai ao mundo como a do gimbal e a velocidade soma a do corpo. Fora do corpo e no mundo, o campo próximo (nariz e cauda, vento, túnel, ronco da ponte) é o do ouvinte fixo, com a abscissa e a distância à lateral tiradas da posição do ouvido a cada trecho; no corpo (embarcado), nenhum, como no gimbal.
+
+**Saltos.** Um teletransporte (ponto de vista, embarcar, desembarcar), a troca de modo, de local, de binaural ou da fonte alvo não são varridos: o som desce em 20 ms (meio cosseno), fica 60 ms em silêncio (cobre a entrada de 50 ms que o propagador dá a uma fonte cujo atraso saltou e os filtros assentando), o ouvinte novo entra no fundo do silêncio e o som sobe em 50 ms. Entrar andando num segmento do corpo (ou sair dele) com o local `auto` troca o filtro do mesmo jeito, com 5 cm de histerese.
+
+**Prova** (`npx tsx tools/cena/ouvinte-movel.ts`): uma fonte tonal parada de 1 kHz, o ouvinte passando a 3 m a 1,5, 6 e 20 m/s, com as amostras chegando como as da página (33 ± 8 ms, 0–6 ms de fila). O desvio de frequência chegando e indo bate com f₀·v·cos θ/c a menos de 0,05% do desvio (o critério é ±5%); o degrau amostra a amostra e o resíduo acima de 5 kHz não passam do regime (o mesmo caminho com o ouvinte fixo e a fonte andando); as bandas laterais do zíper ficam abaixo de −90 dB (o ouvinte fixo arrastado por mensagens, o jeito antigo, dá −1 dB); um salto de 25 m e um giro de cabeça de 360° em 0,5 s sem estalo; e o livre parado no ponto do fixo, de frente para a via, é **idêntico amostra a amostra** ao fixo.
+
+**Ponto de chegada.** Cada preset põe o observador a pé na abscissa 0, à distância `lateral` do preset da lateral do corpo (quem dizia "a 7,5 m" nasce a 7,5 m), no chão do lugar, olhando o veículo chegar. **Regra:** onde uma pessoa de verdade ficaria para ver, nunca em cima da via (e ela pode descer para a via): a plataforma na estação; no túnel, a passarela de serviço do lado do observador, 0,75 m acima da via, com os nichos de refúgio na parede a cada 50 m (luminária em cada um, porta de emergência a cada 100 m); na ponte, o passeio de pedestres do tabuleiro, com meio-fio e guarda-corpo; na rua, a calçada; a céu aberto e no corte, a grama ao lado do lastro. A passarela e o passeio vão até o ponto de chegada: com os presets de hoje (túnel a 3 m, ponte a 5 m) as distâncias cabem na seção de `secaoTunel` e no tabuleiro, e nenhum ficou com o nicho como recuo.
+
+**Pontos de vista** (os atalhos do gimbal traduzidos; teclas 1–9):
+
+| Ponto | Onde | Modo (`local`) |
+|---|---|---|
+| Ponto de chegada | o do preset | a pé |
+| Ao lado da via | 3 m da lateral, na sua abscissa (ou na passarela, no passeio, na plataforma mais perto) | a pé |
+| Na plataforma | 2,5 m atrás da borda (estação) | a pé |
+| Do alto | 28 m de altura a 40 m da via (no ar, 45 m acima da trajetória) | voando |
+| Embarcar | o assento (carro [−0,3; 0,37; 1,15]; cabine do maquinista; cabine do avião, do helicóptero; janela do jato) ou junto do motor (gerador, drone, trator, barco, locomotiva a vapor) | embarcado (`auto`) |
+| Atrás do escape | 1,5 m atrás da ponteira | embarcado |
+| Na ponteira | 0,3 m | embarcado (`ponteira`) |
+| Na frente | 3 m à frente do nariz | embarcado |
+| De lado | 5 m do centro | embarcado |
+| Atrás | 4 m atrás da cauda, 5° acima | embarcado |
+| No cofre | 0,5 m da fonte de dentro | embarcado (`cofre`) |
+| Sobre o pantógrafo / o rotor | 1 m acima | embarcado |
+
+**Pendente (anotado, não feito nesta etapa):** a acústica do ambiente é a do cenário inteiro. Sair do túnel andando não tira a reverberação nem a onda do túnel (a onda usa a distância da boca, limitada a 0 fora dele); subir na plataforma, na passarela do túnel ou no passeio da ponte não muda o solo refletor (o chão acústico continua em z = 0, e o ouvido sobe junto: 2,35 m na passarela, 2,5 m na plataforma); dentro de um nicho do túnel a Cena não sabe do recuo; embaixo da ponte o ouvido fica a 0,2 m (a Cena não conhece o vale); o tabuleiro desenhado vai de −3,7 a +8,5 m, mas a reflexão continua só até 3,7 m do eixo; o túnel desenhado tem uma via e a passarela, a seção acústica é a de via dupla (só a área conta).
 
 ### 3.3 Filtros de localização
 
 Por fonte `i`, o ganho é o produto `D_i(θ_i)·S_i·G_r(r_i)·A_ar(r_i, f)·R_solo(f)` (seções 2.1–2.5) e depois o filtro do **local** do ouvinte; `θ_i` é o ângulo entre o eixo da fonte (no corpo, na pose do instante de emissão) e o vetor fonte→ouvinte. As tabelas de diretividade são as de 1.3 e 4.x e seguem a convenção de `DIR` (7 pontos, interpolação linear em dB).
 
-- **fora** (`binaural: true`): panorâmica por `pan = sin(azimute relativo à cabeça)` com lei de −3 dB, mais **ITD** por fonte `Δt = 0,65 ms·sin(az)` (anel curto de 2 ms por fonte, como `itdB` hoje para as ponteiras), **ILD**: shelf de −6 dB acima de 1,5 kHz no ouvido oposto, escalado por `|sin(az)|`, e sombra da cabeça para trás: −3 dB acima de 3 kHz para `|az| > 120°`. A cabeça olha para o alvo do gimbal.
+- **fora** (`binaural: true`): panorâmica por `pan = sin(azimute relativo à cabeça)` (a cabeça do livre olha para o rumo dele) com lei de −3 dB, mais **ITD** por fonte `Δt = 0,65 ms·sin(az)` (anel curto de 2 ms por fonte, como `itdB` hoje para as ponteiras), **ILD**: shelf de −6 dB acima de 1,5 kHz no ouvido oposto, escalado por `|sin(az)|`, e sombra da cabeça para trás: −3 dB acima de 3 kHz para `|az| > 120°`. A cabeça olha para o alvo do gimbal.
 - **cabine fechada**: perda de transmissão pela lei da massa `TL(f) = 20·log₁₀(f·m_s) − 47 dB` com `m_s = massaSuperficial`, limitada a [5, 45] dB, realizada como 2 passa-baixas de 1 polo com cortes `f₁ = 891/m_s` Hz (onde a lei da massa dá TL = 12 dB) e `f₂ = 2,6·f₁` (para o carro, `m_s` 12 → 74 e 190 Hz; **mas** o carro mantém o filtro atual por decisão: `lp 420 + lp 1100 + peak 70 Hz Q 1,1 +7 dB` reproduz o que foi ajustado de ouvido, e a fórmula serve para trem, helicóptero e gerador com carenagem; para o avião vale o atual `380/900/110 Hz`). Soma-se a ressonância do habitáculo (`peak` em `fCabine`, Q 1,1, +7 dB), e as fontes `dentro: true` chegam também por via **estrutural** (vibração do bloco: `vib` de hoje, `+1,2`; mecânica por `lp 1200`; admissão por `lp 900`, pesos 0,35/0,2 como hoje). Vento e rolamento chegam pela casca como as demais. Reverberação do ambiente: 25% (como `cabin` hoje).
 - **cofre**: fontes `dentro: true` diretas (pesos de hoje: admissão 1,0, mecânica 0,7, compressor 0,8, freio 1, bloco 0,8); fontes de fora pelo `lp 900` com 0,55 (o `bayEx`); sem propagação nem solo.
 - **ponteira**: fonte-alvo a 0,3 m, outras −20 dB, sem solo.
-- **auto**: cabine se o ponto do gimbal cai dentro de algum segmento (caixa `comprimento × largura × altura` acima de `zPiso`), senão fora.
+- **auto**: cabine se o ponto do gimbal (ou o ouvido do ouvinte livre) cai dentro de algum segmento (caixa `comprimento × largura × altura` acima de `zPiso`), senão fora.
 - **Combinação com a diretividade**: dentro (cabine/cofre) a diretividade e a sombra **não** se aplicam (a casca domina); fora, aplicam-se sempre. Para a hélice/rotor de perto a diretividade `[−18,…]` da `DIR.prop` no eixo é o que faz "na frente" soar oco e "de lado" cheio.
 
 ### 3.4 Cena 3D (three.js, só na thread principal)
 
-Desenhar, em unidades de metro, câmera perspectiva 50°:
+> O texto original (bancada: chão com grade, túnel semitransparente, esferas das fontes, fantasma de emissão, cabeça com arcos do gimbal, câmera orbital, arrasto das alças) foi trocado em 23/11/2026 pela cena em primeira pessoa abaixo.
 
-1. **Chão**: plano com grade de 10 m (fina) e 100 m (grossa), cor do solo (asfalto cinza, brita bege, grama verde); no túnel, um tubo de seção retangular 8 × 8 m (ou da `area`) ao longo da trajetória, semitransparente por dentro; na estação, piso elevado e cobertura; no corte, dois taludes; na ponte, tabuleiro estreito sem chão.
-2. **Via/pista**: fita de 3,5 m (estrada) ou dois trilhos com dormentes a 0,6 m (via) ao longo da trajetória; na volta, oval com os semicírculos; avião: linha tracejada no ar na `altitude`.
-3. **Corpo**: um `BoxGeometry` por segmento, com o vão entre eles, nariz/cauda como cunhas; truques como caixas sob o piso; pantógrafo como "Z" fino sobre o teto; hélice/rotor como disco transparente girando na rotação real (telemetria); cor do portador.
-4. **Fontes**: esfera de 0,2 m por fonte, cor por `tipo` (escape vermelho, admissão azul, mecânica laranja, pá ciano, rolamento amarelo, aero branco, vão magenta, pantógrafo verde, pressão roxo); raio escalado pelo `ganhoDb` instantâneo (telemetria) com `r = 0,15 + 0,25·clamp((g + 40)/40)`.
-5. **Fantasma de emissão**: cópia translúcida do corpo na pose `posEmitida` (onde estava o que você ouve agora). É o que torna o Doppler visível.
-6. **Ouvinte**: cabeça (esfera 0,25 m) com nariz (cone) na direção do alvo, a `z` do ouvido; arcos do gimbal (anel de azimute no plano do alvo, arco de elevação) e linha pontilhada até o alvo com o `r` escrito.
-7. **Trajetória**: linha; marcador de "ponto mais próximo"; no avião supersônico, o cone de Mach (como no canvas atual).
-8. **HUD** (texto): `v`, distância de cada grupo de fontes, `pressaoPa`, `ventoMs`, `splDbA`, Doppler estimado da fonte-alvo.
+Um lugar visto por uma pessoa, em metros, câmera perspectiva de 60° (72° com a tela em pé) **no olho do observador**. Tudo opaco, sombreamento plano:
 
-**Câmera**: três modos, tecla `C`. (a) **Orbital no ouvinte** (padrão): `OrbitControls` com alvo na cabeça; (b) **Segue o corpo**: alvo no centro do corpo, posição relativa fixa escolhida pelo arrasto; (c) **Livre**. A trajetória "reta" reaparece do outro lado: a câmera não segue o salto, o corpo some e reaparece.
+1. **Céu e luz**: cúpula em degradê do horizonte ao zênite, sol direcional com o disco, luz do céu (hemisférica) e neblina de distância na cor do horizonte (recua quando se voa alto).
+2. **Chão e via**: grama em volta da via e da estrada, a cor ou a textura do solo no resto; lastro, dormentes e trilhos (a outra via no túnel e na ponte); estrada com faixas e calçada.
+3. **Ambientes**, com as medidas em que o observador pisa (`lugar.ts`): túnel da seção da Cena com piso, a passarela de serviço, os nichos de refúgio com luminária e porta de emergência, as luminárias e as bocas; estação com plataforma de 0,9 m, faixa amarela, colunas, bancos, parede e cobertura a 7 m; corte com os taludes; ponte com tabuleiro, passeio de pedestres, guarda-corpo, pilares e o vale.
+4. **Corpo**: um segmento por caixa de superelipse, com o vão entre eles, nariz e cauda afilados, truques, pantógrafo; rodas, asas, empenagem; pás opacas girando (rotor, hélice, drone); as silhuetas das máquinas a vapor. Os modelos detalhados por portador são a etapa 2.
+5. **Vista técnica** (desligada por padrão, tecla T): marcadores opacos das fontes, raio pelo ganho, e a linha da trajetória.
+6. **Sobre a cena**: o resumo (onde você está, a distância ao veículo, o nível, o Doppler), os modos, a ajuda das teclas (some sozinha) e, no toque, o círculo de andar.
 
-**Arrasto** (raycast no plano do chão com `shift` para altura): a **cabeça** (muda `pos` no modo fixo ou `az/el/r` no gimbal, com snap a 5° e 0,5 m), as **alças do gimbal** (anel: azimute; arco: elevação; linha: distância), o **corpo** ao longo da via (muda `s`, para posicionar antes da passagem), a **lateral da via** (muda `trajetoria.lateral`), a **altura da linha de voo** (`altitude`). Clique numa fonte: vira alvo do gimbal e mostra a ficha (tipo, posição, `refDist`, diretividade, ganho). Tudo que o arrasto muda vai para o worklet com rampa de 20 ms, pelo `atualizar()`.
+**Controles**: W A S D ou setas andam, Shift corre, o mouse olha (Pointer Lock com um clique; Esc solta; sem ele, arrastar olha), V voa, E/Q sobem e descem, B embarca e desembarca, 1–9 os pontos de vista, Espaço dispara, R repete, T a vista técnica, H a ajuda. No toque: arrastar na cena olha, o círculo anda. O que as alças mudavam ficou no painel: a lateral do ponto de chegada, a altitude, a posição do corpo parado.
 
-Desempenho: 30 fps, telemetria do worklet a cada 1024 amostras (21 ms) interpolada linearmente; sem sombras dinâmicas; um só `requestAnimationFrame` compartilhado com os mostradores.
+Desempenho: um quadro por `requestAnimationFrame` (o observador anda, a amostra do ouvinte sai no máximo a cada 33 ms, a cena desenha), sem sombras dinâmicas; a telemetria do worklet chega a cada 1024 amostras e a posição do corpo é interpolada.
 
 ---
 

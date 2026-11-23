@@ -598,7 +598,7 @@ Camadas novas da etapa 1 (projeto em `docs/CENA.md`): o **portador** carrega o m
 | `src/carriers/trem.ts`, `ruido.ts` | Trem de N vagões e os geradores de ruído calibrados em L_W dB(A) |
 | `src/carriers/helice.ts`, `rotor.ts`, `gerador.ts`, `locomotiva.ts`, `carro.ts`, `aviao.ts`, `base.ts`, `compat.ts`, `teste.ts` | Demais portadores (tabelas, cargas, governadores, fontes), o carro e o avião dos motores adaptados, tabela motor × portador, portador e motor de bancada para os testes |
 | `src/engines/ronco/motor.ts`, `diesel/motor.ts`, `turbina/motor.ts`, `src/scene/estrondo.ts` | Adaptadores `Motor` dos DSPs existentes e o estrondo da Cena (ver [Adaptadores de motor](#adaptadores-de-motor)) |
-| `tools/cena/` | `render-passagem.ts` (WAV + telemetria), `analise.ts`, `medidas.ts`, `portadores.ts`, `motores.ts` (motores adaptados), `legado.ts` (referências do legado, commit `02c185f`), `cpu.ts`, `valida.ts` |
+| `tools/cena/` | `render-passagem.ts` (WAV + telemetria), `analise.ts`, `medidas.ts`, `portadores.ts`, `motores.ts` (motores adaptados), `legado.ts` (referências do legado, commit `02c185f`), `cpu.ts`, `valida.ts`, `ouvinte-movel.ts` (o ouvinte livre andando: Doppler, estalo, zíper) |
 
 ### Propagação
 
@@ -622,6 +622,17 @@ Camadas novas da etapa 1 (projeto em `docs/CENA.md`): o **portador** carrega o m
 - **Túnel (2.10):** a frente da onda de Hara (0,75×) nasce quando o nariz cruza a boca, chega ao ouvinte em `(x_O − x_entrada)/c`, reflete invertida na outra boca e volta, com período `2L/c` e −20% por reflexão; subida de meio cosseno em `L_nariz/v`. Vento: `Δp/(ρc)` depois da frente, `u_a = v·β/(1−β)·0,75` durante o corpo e esteira de 3 s, somado em quadratura com o vento induzido de 2.8.
 - **Vento no ouvinte:** `70 + 60·log₁₀(u/10)` dB, passa-baixa de 150 Hz e ombro de −12 dB em 1 kHz, ruído independente por ouvido, passa-alta de 20 Hz.
 - **Ponte:** ronco de 31–125 Hz pelos truques sobre o tabuleiro perto do ouvinte (peso `1/(1 + (ξ/15 m)²)` por truque), `K_PONTE` = 26 calibrado para os +5 dB de 2.10 em 31–125 Hz na passagem de validação (medido +5,0 dB; o 0,042 de antes somava 0,0 dB).
+
+### Ouvinte livre (a câmera)
+
+Extensão de 23/11/2026 para a Passagem em primeira pessoa (CENA.md 3.2): `Ouvinte.modo = 'livre'` com `Ouvinte.livre` (`OuvinteLivre` em `src/scene/tipos.ts`). Os modos `fixo` e `gimbal` passam pelo mesmo código de antes, e o `teste:cena` e o `teste:passagem` deram os mesmos números.
+- **Amostras e seguimento** (`CenaPassagem.alvoLivre`, `passoLivre`): cada mensagem traz a posição e a velocidade do ouvido no instante `t` do quadro da página; a Cena estima a demora da fila (a menor vista, subindo `LIVRE_DERIVA` = 2 ms/s) e põe a amostra no instante certo. Entre amostras, o alvo anda com a velocidade dela por até `LIVRE_PREVISAO` (0,25 s) e o ouvido o segue por um filtro de 2ª ordem criticamente amortecido de `LIVRE_FREQ` (2,5 Hz) com a velocidade como alimentação direta, a cada bloco de controle; o rumo da cabeça, por um polo de 25 ms. A `GeoOuvinte` recebe a velocidade do ouvido, e a derivada analítica do atraso (`dτ/dt = û·(v_s − v_O)/(c + û·v_s)`) a usa: a parábola do atraso dentro do bloco emenda sem quina e o Doppler de quem anda sai dela.
+- **Referenciais:** `mundo` (o observador a pé ou voando) ou `corpo` (embarcado: a posição vai ao mundo como a do gimbal, a velocidade soma a do corpo, o rumo soma o da via).
+- **Campo próximo:** com o livre no mundo e fora do corpo, o mesmo do fixo, com a abscissa (`via.abscissaDe(x)`) e a distância à lateral do corpo (`|y − yOuvinte| − largura/2`) tiradas da posição do ouvido a cada trecho (a distância da boca do túnel limitada a 0); embarcado, nenhum (como no gimbal).
+- **Local `auto`:** cabine dentro de um segmento (`dentroLivre`, segmento a segmento na via), conferido a cada 4 blocos de controle com 5 cm de histerese.
+- **Saltos** (`envelopeSalto`, `aplicarSalto`): contador `salto`, referencial, modo, local, binaural ou fonte alvo diferentes. O som desce em 20 ms (meio cosseno), fica 60 ms calado, o ouvinte novo entra no fundo, e sobe em 50 ms. O silêncio cobre a entrada de 50 ms do propagador nas fontes cujo atraso saltou.
+- **Histórico:** com o livre, o histórico do corpo cobre um ouvinte até `DIST_LIVRE` (300 m) da via.
+- **Prova** (`npx tsx tools/cena/ouvinte-movel.ts [--wav pasta]`, 22 conferências em ~2 s): fonte de 1 kHz parada, ouvinte passando a 3 m a 1,5, 6 e 20 m/s com as mensagens como as da página (33 ± 8 ms, 0–6 ms de fila). Doppler chegando e indo: 0,435 / 1,744 / 5,825% contra o esperado, diferença de 0,00 a 0,03% do desvio (critério ±5%); degrau amostra a amostra e resíduo acima de 5 kHz iguais aos do regime (o mesmo caminho com o ouvinte fixo e a fonte andando: os dois têm o degrau de −48 dB do filtro do ar que troca de fio para passa-baixa perto de 10 m, que é do propagador e ficou como está); bandas laterais do zíper −94 a −91 dB (o controle negativo, o fixo arrastado por mensagens, dá −1 dB); salto de 25 m sem estalo (resíduo −89 dB) e com o nível novo pela distância (−12,54 dB contra −12,53); giro da cabeça de 360° em 0,5 s sem estalo; e o livre parado no ponto do fixo, de frente para a via, idêntico ao fixo amostra a amostra. Fica fora do `teste:cena` (as 102 medidas não mudam de conta) e do `verificar`, por enquanto: entra com uma linha `"teste:ouvinte"` no `package.json`.
 
 ### Portadores
 
@@ -794,14 +805,18 @@ As respostas ao impulso não eram o problema: `gerarRespostaPorBanda` usa a band
 
 ## Página Passagem e modo de testes
 
-`passagem.html` e `src/pages/passagem/` formam a interface da Cena nova (CENA.md 3). Um portador passa pelo ouvinte: o trem de N vagões (sem motor ou com a tração elétrica), o helicóptero (pistão de aviação, radial, rotativo ou sem motor), o carro (Ronco, Diesel, radial, rotativo, elétrico ou o Stanley a vapor), o avião de hélice (turboélice, radial, pistão de aviação ou rotativo), o gerador (Diesel, X-Engine ou o Corliss), a locomotiva (Diesel ou a vapor), o avião a jato (Turbina), o trator e o barco a vapor e o drone, com os motores pelos [adaptadores](#adaptadores-de-motor). São 10 portadores e 29 presets de passagem (`PORTADORES` e `PRESETS_PASSAGEM` em `presets.ts`). O ouvinte fica parado junto à via ou num gimbal 3D em torno do corpo, e há uma cena three.js. O padrão é o das outras páginas: estado e mensagens fora do React, painel com os componentes de `src/ui/`, mostradores em canvas e um único `requestAnimationFrame`.
+`passagem.html` e `src/pages/passagem/` formam a interface da Cena nova (CENA.md 3). Um portador passa pelo ouvinte: o trem de N vagões (sem motor ou com a tração elétrica), o helicóptero (pistão de aviação, radial, rotativo ou sem motor), o carro (Ronco, Diesel, radial, rotativo, elétrico ou o Stanley a vapor), o avião de hélice (turboélice, radial, pistão de aviação ou rotativo), o gerador (Diesel, X-Engine ou o Corliss), a locomotiva (Diesel ou a vapor), o avião a jato (Turbina), o trator e o barco a vapor e o drone, com os motores pelos [adaptadores](#adaptadores-de-motor). São 10 portadores e 29 presets de passagem (`PORTADORES` e `PRESETS_PASSAGEM` em `presets.ts`). Desde 23/11/2026 a tela é um lugar visto por uma pessoa: **a câmera é o ouvinte**. Você nasce no ponto de chegada do preset (ao lado da via, olhando o veículo chegar), anda, corre, voa ou embarca, e ouve de onde está, olhando para onde olha (o ouvinte `livre` da Cena, [abaixo](#ouvinte-livre-a-câmera)). O padrão é o das outras páginas: estado e mensagens fora do React, painel com os componentes de `src/ui/`, mostradores em canvas e um único `requestAnimationFrame`.
 
 | Arquivo | O que faz |
 |---|---|
-| `controle.ts` | `ControlePassagem`. Guarda o estado e manda as mensagens ao worklet. Monta a sonda do portador na thread principal: geometria, lista de fontes e calibrações. Cuida de disparar e parar, dos atalhos do gimbal, do "voltar ao padrão" e da geometria do ouvinte no mundo |
+| `controle.ts` | `ControlePassagem`. Guarda o estado e manda as mensagens ao worklet. Monta a sonda do portador na thread principal: geometria, lista de fontes e calibrações. Cuida de disparar e parar, do "voltar ao padrão", das teclas e do observador (pontos de vista, embarcar, o ouvinte que vai para a Cena) |
+| `observador.ts` | `Observador`: o olho em primeira pessoa (a pé, voando, embarcado), a velocidade suavizada, o passo corrigido pelo lugar, os saltos |
+| `lugar.ts` | `Lugar`: o chão e as paredes de cada ambiente (plataforma, tabuleiro, túnel, taludes) e as medidas que a cena 3D desenha |
+| `pontos.ts` | Ponto de chegada de cada preset, assento de cada portador e os pontos de vista (os atalhos do gimbal traduzidos) |
+| `entrada.ts` | Mouse (Pointer Lock, arrasto) e toque sobre a cena |
 | `presets.ts` | Portadores, motores com adaptador, ambientes, solos, os padrões do trem e os presets de passagem |
-| `Painel.tsx`, `PaginaPassagem.tsx` | Painel, barra, presets, vista 3D, telemetria e gráficos |
-| `cena3d.ts`, `cena3d-cores.ts` | Cena three.js, num chunk próprio carregado sob demanda |
+| `Painel.tsx`, `PaginaPassagem.tsx` | Painel (com a seção "Você", as leituras e os gráficos), barra, presets, a cena com o resumo, a ajuda das teclas e o círculo de andar do toque |
+| `cena3d.ts`, `cena3d-cores.ts` | Cena three.js em primeira pessoa, num chunk próprio carregado sob demanda |
 | `mostradores.ts` | Nível no ouvido, telemetria em texto, HUD, onda de pressão, espectrograma e osciloscópio |
 | `tools/passagem-navegador.mjs` | Teste da página no navegador |
 
@@ -820,18 +835,18 @@ As respostas ao impulso não eram o problema: `gerarRespostaPorBanda` usa a band
 | Mensagem | Conteúdo | Quando |
 |---|---|---|
 | `portador` | `trem`, `rotor`, `carro`, `helice`, `gerador`, `locomotiva`, `aviao`, `trator`, `barco` ou `drone`, com a configuração; com motor, `motor: { familia, cfg }` (calibrado na página) e o `comando` inicial | Mudança estrutural: N, passo, vão, nariz…, troca de motor ou de preset |
-| `cena` | Ambiente, trajetória e ouvinte | A cada mudança; o worklet faz rampas de 20 ms |
+| `cena` | Ambiente, trajetória e ouvinte (o observador: modo `livre`) | A cada mudança; o worklet faz rampas de 20 ms. Enquanto o observador anda ou olha, só `{ ouv }`, no máximo a cada 33 ms (`INTERVALO_OUVINTE`); um salto vai na hora |
 | `comando` | Velocidade fixa, coletivo, pedal, marcha, notch, degrau de carga | Ao disparar, parar e mudar a velocidade ou o comando do motor |
 | `params` | `master` e `posicao` | `posicao` chama `CenaPassagem.reposicionar` |
 | `ar` | Umidade e temperatura | Ao mudar o ar |
 
-Arrasto e sliders contínuos marcam a cena como pendente. `enviarPendentes()` manda no máximo uma mensagem por quadro.
+Sliders contínuos marcam a cena como pendente; o observador que andou ou olhou marca o ouvinte. `enviarPendentes()` manda no máximo uma mensagem por quadro, e a do ouvinte no máximo a cada 33 ms.
 
 **Passagem.**
-- **Disparar:** põe o nariz a `x0` m antes do ouvinte (600 m no trem) e liga a velocidade fixa. `reposicionar` recomeça o histórico de poses e zera a onda do túnel.
+- **Disparar:** põe o nariz a `x0` m antes de você (da sua abscissa na via; embarcado, a do último ponto fora; 600 m no trem) e liga a velocidade fixa. `reposicionar` recomeça o histórico de poses e zera a onda do túnel.
 - **"Uma vez":** depois de a cauda se afastar 800 m (no máximo meia via), o corpo para longe, inaudível.
 - **"Repetindo":** o corpo segue. A reta "reaparece do outro lado" e o túnel dispara de novo, porque `CenaPassagem` reduz o nariz à via.
-- **Teclas:** <kbd>Espaço</kbd> dispara ou para, <kbd>R</kbd> alterna repetir, <kbd>G</kbd> alterna o gimbal e <kbd>C</kbd> troca a câmera, com a cena em foco.
+- **Teclas** (o mapa aparece na cena ao abrir e com <kbd>H</kbd>, e some sozinho; `TECLAS` em `controle.ts`): <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> ou as setas andam, <kbd>Shift</kbd> corre, o mouse olha (um clique na cena trava o ponteiro, <kbd>Esc</kbd> solta; sem Pointer Lock, arrastar olha), <kbd>V</kbd> voa ou volta a pé, <kbd>E</kbd>/<kbd>Q</kbd> (ou <kbd>PgUp</kbd>/<kbd>PgDn</kbd>) sobem e descem voando, <kbd>B</kbd> embarca e desembarca, <kbd>1</kbd>–<kbd>9</kbd> são os pontos de vista, <kbd>Espaço</kbd> dispara ou para, <kbd>R</kbd> alterna repetir, <kbd>T</kbd> liga a vista técnica. As teclas do veículo que a página tinha (<kbd>G</kbd> do gimbal, <kbd>C</kbd> da câmera) saíram; o veículo é comandado pelo painel. Num campo, seletor ou slider do painel as teclas são dele (as setas mexem no slider). A janela que perde o foco solta as teclas apertadas.
 
 **Portadores e compatibilidade.**
 - Os portadores aparecem pela tabela `COMPAT` (CENA 1.6, mais o `aviao`, o `trator`, o `barco` e o `drone`).
@@ -860,26 +875,32 @@ Arrasto e sliders contínuos marcam a cena como pendente. `enviarPendentes()` ma
   Esses foram os da etapa dos adaptadores. Depois entraram: "Helicóptero R44 sobrevoando" com o IO-540; Corsair, Yak-52, P-47, Sherman e Cessna 172 (radial e aviação); RX-7 na rua, 787B em Hunaudières e RQ-7 Shadow (rotativos); Pacific a 100 km/h, Big Boy arrancando e Maria Fumaça na estação (vapor); Tesla na rua, Taurus partindo, metrô chegando na estação, N700 no túnel e drone pairando (elétrico). Sem motor ficam cinco trens (os três trem-bala, que são as passagens de referência do CENA 2.10/2.11 a 300–350 km/h, onde a tração fica 15–20 dB abaixo do aero, e nenhum trem elétrico da ficha anda a 350; convencional na estação, regional no corte). As legendas dão a distância à lateral do corpo (o controle), com a do eixo entre parênteses onde ela importa (carro na rua: 5,1 m, 6 m do eixo).
 - **Padrões por portador** (`PADROES`, CENA 3.1): carro em volta de 800 m com curvas de 60 m; locomotiva em volta de 2000 m e raio de 400 m; hélice, helicóptero e avião em reta de 6000 m a 150 m; trator em reta de 600 m a 6 km/h; barco a 20 m da margem; drone a 10 m de altura. Os presets de passagem andam numa reta.
 
-**Ouvinte.**
-- **Parado junto à via:** posição ao longo da via, altura do ouvido e distância à lateral.
-- **No gimbal:** azimute, elevação e distância em torno do centro do corpo ou de uma fonte (`alvo`). Os limites são os de 3.2.
-- **Atalhos** (3.2): resolvidos para as fontes do portador.
+**Ouvinte: você** (23/11/2026; o gimbal, a cabeça arrastável e as alças saíram).
+- **O observador** (`observador.ts`): o olho fica a 1,65 m do chão do lugar (a pé) e o ouvido 5 cm abaixo, com a cabeça para onde a câmera olha. Anda a 1,5 m/s, corre a 6, voa a 10 (45 com Shift) e sobe a 8; a velocidade sobe e desce com 0,12 s de constante de tempo (nunca num degrau). Embarcado, o olho fica num ponto do corpo e anda com ele; dá para olhar em volta e se mexer devagar dentro do segmento.
+- **O lugar** (`lugar.ts`): o chão e as paredes de cada ambiente, com as medidas que a cena desenha. **Regra:** você nasce onde uma pessoa de verdade ficaria para ver (a calçada, a plataforma, a passarela do túnel, o passeio da ponte, a grama ao lado do lastro), nunca em cima da via, e pode descer para a via se quiser. Na estação a plataforma tem 0,9 m (de 0,35 m da lateral do trem até a parede do fundo, a 10 m dela) e a cobertura fica a 7 m; no túnel, a seção de `secaoTunel` com a passarela de serviço do lado do observador (0,75 m acima da via, da borda até a parede, com faixa amarela na borda e corrimão na parede) e os nichos de refúgio na parede a cada 50 m até 400 m do ponto de chegada (2,2 m de largura, 1,1 m de fundo, 2,3 m de altura, cada um com a luminária, e a porta de emergência a cada 100 m); a pé e voando não se atravessa a parede, o teto nem as laterais dos nichos, e de fora só se entra pela boca; o túnel desenhado tem uma via só (o lado do observador é a passarela; a acústica continua a da área); na ponte, o tabuleiro vai de −3,7 a +8,5 m da via, com o passeio de pedestres do lado do observador (meio-fio de 0,2 m) e guarda-corpo dos dois lados, a segunda via entre a via e o passeio quando cabe, e embaixo o vale a 28 m; no corte, o talude de 45° entre 8 e 20 m sobe até 12 m. A passarela do túnel e o passeio da ponte chegam até 0,6 m antes do ponto de chegada (a passarela nunca a menos de 2 m da via; o passeio, de 2,4 m): quem dizia "a 3 m" nasce a 3 m, em cima deles. Limites suaves: 280 m de cada lado da via e a ponta da reta.
+- **O ponto de chegada** (`pontos.ts`): a pé, na abscissa 0, à distância `lateral` do preset da lateral do corpo (quem dizia "a 7,5 m" nasce a 7,5 m), no chão do lugar (na plataforma da estação, na passarela do túnel, em frente a um nicho com porta, no passeio da ponte, na calçada da rua), olhando o veículo chegar: a via 45 m antes (no chão), onde ele aparece (no ar), ou a frente dele (parado ou partindo). A tabela por preset está no relatório da tela nova, abaixo.
+- **Pontos de vista** (os atalhos do gimbal traduzidos; teclas 1–9 na ordem do painel, só os que existem no portador e no lugar):
 
-  | Atalho | Posição |
-  |---|---|
-  | Frente | 3 m à frente do nariz |
-  | Lateral | 90°, 5 m |
-  | Câmera atrás | atrás da cauda |
-  | Cabine | ponto dentro do primeiro vagão; o local automático vira `cabine` |
-  | Sobre o pantógrafo / sobre o rotor | 1 m acima, a 89° |
-  | Escape, ponteira, cofre | desabilitados no trem sem motor (não tem escape nem fonte `dentro`) |
+  | Ponto | Onde | Modo |
+  |---|---|---|
+  | Ponto de chegada | o do preset | a pé |
+  | Ao lado da via | 3 m da lateral, onde você está ao longo da via (ou mais longe, na passarela, no passeio ou na plataforma mais perto) | a pé |
+  | Na plataforma | 2,5 m atrás da borda (só na estação) | a pé |
+  | Do alto | 28 m de altura a 40 m da via (no ar: 45 m acima da trajetória, a 60 m) | voando |
+  | Embarcar | o assento: banco do motorista (carro), cabine do maquinista (trem, locomotiva diesel), cabine (avião de hélice, helicóptero, caça), janela atrás da asa (jato de linha); onde não há interior, junto do motor por fora: estrado entre a máquina e o tênder (vapor), plataforma de trás (trator), convés (barco), ao lado (gerador, drone) | embarcado |
+  | Atrás do escape | 1,5 m atrás da ponteira (o 180°, −10° de antes) | embarcado |
+  | Na ponteira | a 0,3 m, local `ponteira` | embarcado |
+  | Na frente | 3 m à frente do nariz, olhando o veículo | embarcado |
+  | De lado | 5 m do centro, do lado do ponto de chegada | embarcado |
+  | Atrás | 4 m atrás da cauda, 5° acima | embarcado |
+  | No cofre | 0,5 m da fonte de dentro, local `cofre` | embarcado |
+  | Sobre o pantógrafo / o rotor | 1 m acima, olhando para baixo | embarcado |
 
-- **Filtro do local:** os de 3.3, aplicados pela Cena (`RegrasLocal`).
-  - **Fora:** diretividade × sombra × propagação, mais ITD/ILD.
-  - **Cabine:** lei da massa e ressonância do habitáculo.
-  - **Cofre:** fontes de dentro diretas.
-  - **Ponteira:** só a fonte alvo, as outras −20 dB.
-  - **Automático:** a página mostra o local resolvido com a mesma regra da Cena.
+  O assento não está no `Corpo` dos portadores (só as caixas dos segmentos): sai das medidas do corpo, em `pontos.ts`. Dentro de um segmento o local `auto` vira cabine; fora (os pontos junto do motor) fica fora.
+- **"Desembarcar"** (B, ou o botão) volta ao último ponto a pé ou de voo. Os pontos do mundo trocam de modo; um ponto do corpo, embarcado, troca de ponto sem perder o lugar de volta.
+- **Filtro do local:** os de 3.3, aplicados pela Cena (`RegrasLocal`). `auto` (o padrão): cabine se o ouvido cai dentro de um segmento (entrar andando no vagão parado conta), senão fora; os pontos "Na ponteira" e "No cofre" trazem o deles. Os chips do painel forçam um.
+- **Painel, seção "Você":** como você está (a pé, voando, embarcado), os pontos de vista, voltar ao ponto de chegada, embarcar, onde você está (o modo, o ponto e a distância à caixa do segmento mais perto), o filtro do local e a cabeça (binaural ou mono). Os parâmetros das alças de antes ficaram em sliders: a lateral (agora "Ponto de chegada: distância à lateral do veículo", que leva você ao ponto novo ao soltar), a altitude e a posição do corpo parado ("Veículo parado: o nariz a").
+- **Ferramentas:** `ControlePassagem.ouvinteFixo` manda o ouvinte fixo de antes (o `teste:passagem` mede com ele, e os números não mudaram).
 
 **Modo de testes.** Todos os parâmetros da tabela 3.1 ficam livres:
 
@@ -895,44 +916,23 @@ Arrasto e sliders contínuos marcam a cena como pendente. `enviarPendentes()` ma
 - **Aero do truque:** sai do orçamento quando não cabe. Fica 25 dB abaixo do rolamento, então não se ouve.
 - **"Voltar ao padrão":** devolve os valores do CENA para o portador. No trem: reta de 3000 m, 3 m da lateral, 350 km/h, túnel, umidade de 60%, 20 °C, 10 vagões de 25 m.
 
-**Cena 3D** (3.4).
+**Cena 3D** (3.4, refeita em 23/11/2026).
 
-*Carga.* A cena é carregada por `import('./cena3d')`, num chunk de 600 kB com o three.js. Ela nunca segura o áudio: se o WebGL faltar, a página segue com os mostradores e um aviso.
+*Carga.* A cena é carregada por `import('./cena3d')`, num chunk de ~560 kB com o three.js. Ela nunca segura o áudio: se o WebGL faltar, a página segue com os mostradores e um aviso, e o observador anda e ouve do mesmo jeito (o teclado, o mouse e o toque não dependem dela).
 
-*Cenário.*
-- Mundo em metros, com z para cima.
-- Chão com grades de 10 m e 100 m, na cor ou textura do solo. As texturas são CC0 da Poly Haven (`public/3d/LICENSES.md`).
-- Via com trilhos e dormentes a 0,6 m. No ar, a via vira uma linha tracejada na altitude.
-- Ambientes: túnel semitransparente da seção do ambiente; estação com plataforma, cobertura a 7 m e pilares; corte com taludes a 45°; ponte com tabuleiro de 3,7 m, pilares e vale.
+*Primeira pessoa.* A câmera é o olho do observador (`olhoNoMundo`): posição e rumo no mundo, ou no corpo quando embarcado (o rumo é somado ao da via). Campo de visão de 60° (72° com a tela em pé). Um quadro por `requestAnimationFrame`: o observador anda, a amostra do ouvinte sai, a cena desenha.
 
-*Corpo.*
-- Trem por segmento, com o vão entre eles. A geometria é parametrizada: seções de superelipse, nariz e cauda afilados em bico de pato, faixa e janelas.
-- Truques, pantógrafo em "Z" com a carenagem, e o rotor com disco e pás.
-- Fantasma translúcido na posição de emissão da fonte escolhida: `s − v·τ`.
+*Lugar.* Tudo opaco e em sombreamento plano. Céu em degradê (cúpula que anda com a câmera), sol direcional com o disco no céu, luz do céu (hemisférica) e neblina da cor do horizonte, que recua quando você voa alto. Chão de grama em volta da via e da estrada, na cor do solo no resto (água, o pátio de concreto do gerador); a textura CC0 da brita da Poly Haven (`public/3d/LICENSES.md`) no lastro (o concreto ficou na cor lisa: a textura dele puxava para o marrom de terra e não é mais carregada). Via férrea com lastro, dormentes a 0,6 m e trilhos (a outra via na ponte, quando cabe antes do passeio); estrada com duas faixas, faixa amarela, bordas brancas e calçada de terra. Túnel com piso, paredes e teto da seção da Cena, a passarela de serviço com faixa amarela e corrimão, os nichos de refúgio com luminária e as portas de emergência, as luminárias do teto e as testas das bocas; estação com plataforma de 0,9 m, faixa amarela, colunas, bancos, parede do fundo e cobertura; corte com os taludes e o alto; ponte com tabuleiro, passeio com meio-fio, guarda-corpo, pilares, o vale e o rio. As medidas são as de `lugar.ts` (o que se vê é o que se pisa).
 
-*Fontes e ouvinte.*
-- Esferas das fontes coloridas por tipo, com raio `0,15 + 0,25·clamp((g + 40)/40)`.
-- Cabeça com nariz para o alvo, anel do azimute, arco da elevação e linha tracejada com a distância.
-- Alças da lateral e da altitude, e o ponto mais próximo da via.
-- HUD com v, distância de cada grupo de fontes, pressão, vento, dB(A) e Doppler.
+*Corpo.* A geometria de antes, opaca: trem por segmento, com o vão entre eles, seções de superelipse, nariz e cauda afilados em bico de pato, faixa e janelas, truques, pantógrafo em "Z" com a carenagem; carro com rodas e vidros; aviões com asas, empenagem e as pás da hélice (uma por motor no turboélice); helicóptero com as pás do rotor e da cauda; drone com as quatro hélices; locomotiva a vapor, trator e barco com a silhueta própria. As pás giram a uma fração da rotação real (estroboscópico). O fantasma de emissão, as esferas das fontes, a cabeça, os arcos do gimbal, as alças, a grade do chão e os rótulos saíram.
 
-*Câmera.* Três modos: no ouvinte (padrão), seguindo o corpo, e livre.
+*Vista técnica* (tecla <kbd>T</kbd>, desligada por padrão): marcadores opacos das fontes, cor por tipo e raio `0,15 + 0,25·clamp((g + 40)/40)` pelo ganho da telemetria, e a linha da trajetória.
 
-*Arrasto.* Por raycast, com passo de 5° e 0,5 m.
+*Sobre a cena.* O resumo (como e onde você está, a distância ao veículo, o nível no ouvido, a velocidade dele e o Doppler), os três modos à mão e o botão de recolher o painel em cima; a ajuda das teclas embaixo, que some em 9 s; na tela de toque, o círculo de andar (e subir e descer voando). A cena é o palco inteiro, com o painel ao lado (400 px, recolhível); abaixo de 1100 px, uma coluna com a cena em 62% da altura da tela (58% até 720 px) e o painel embaixo.
 
-| Peça | O que muda |
-|---|---|
-| Cabeça | parado: x e lateral, e altura com Shift; gimbal: azimute e distância, e elevação com Shift |
-| Anel | azimute |
-| Arco | elevação |
-| Linha | distância |
-| Corpo | `s`, ao longo da via |
-| Seta verde | lateral |
-| Seta azul | altitude |
+*Capturas* do ponto de chegada (a passarela do túnel e o nicho com a porta de emergência, a estação, o corte, o passeio da ponte), do trem e do carro parados perto e do celular a 400 px: `docs/passagem/`.
 
-Um clique numa esfera faz da fonte o alvo do gimbal e mostra a ficha dela: tipo, posição, `refDist`, diretividade, ganho, distância e atraso.
-
-*Desempenho.* Cerca de 30 fps, sem sombras dinâmicas. A posição do corpo é interpolada da telemetria, que chega a cada 1024 amostras.
+*Desempenho.* Materiais difusos (Lambert) em vez dos de PBR, as peças repetidas (luminárias, colunas, bancos, pilares, dormentes) em instâncias, os dormentes só até 150 m de você (o trecho anda junto), o antisserrilhado só em tela de densidade baixa e a densidade de pixels adaptativa (desce até 0,5 quando o intervalo entre quadros passa de 45 ms, sobe quando fica abaixo de 20 ms). Na cena do túnel: 93 chamadas de desenho e ~22 mil triângulos. O passo do observador acompanha o tempo de cada quadro (até 1 s, em pedaços de 0,1 s): um quadro lento não atrasa quem anda, e o som não depende do quadro. No Chromium sem cabeça (WebGL em software) com a máquina ocupada os quadros vêm a 1–3 por segundo; o teste do navegador mede as velocidades do observador, não as do relógio.
 
 **Mostradores.**
 - **Nível no ouvido:** um analisador lê a soma seco + molhado antes do compressor, com FFT própria de 8192 pontos (Hann) e ponderação A analítica. Vai para dB SPL pela escala absoluta: 124 dB SPL − 20·log₁₀(master). Isso inclui o campo reverberante, que o `splDbA` da Cena (só o direto) não tem.
@@ -947,29 +947,19 @@ Um clique numa esfera faz da fonte o alvo do gimbal e mostra a ficha dela: tipo,
 - **Onda de pressão:** 11 s de histórico, com os extremos de cada telemetria (o pico de 41 ms do nariz não se perde) e as parcelas de nariz e cauda e do túnel.
 - **Espectrograma, espectro e osciloscópio:** do analisador da saída.
 
-**Teste** (`npm run navegador:passagem [-- url] [--firefox] [--reserva] [--foto arq.png]`). Sem url, o teste serve o `dist/` em `http://127.0.0.1:<porta>/data/engine/`. O roteiro confere:
-1. **Estrutura:** presets, portadores pela compatibilidade, seções, os 22 sliders do modo de testes, atalhos e cena 3D desenhando.
-2. **Passagem no túnel:** dispara o trem-bala a 350 km/h e confere:
-   - o AudioWorklet e as mensagens (trem de 10 vagões com duas faces e calibrações, túnel com a boca a 500 m);
-   - a reverberação por banda com `normalize = false`;
-   - a onda de compressão de ~2 kPa (medido 1996 Pa), chegando 3,7 s antes do nariz;
-   - a onda de nariz pico a pico (153 Pa);
-   - o nível no ouvido (111–112 dB(A));
-   - as leituras e o HUD.
-3. **Gimbal:**
-   - atalho lateral, com os sliders acompanhando;
-   - elevação;
-   - arrasto da cabeça na cena com o mouse de verdade (o worklet recebe);
-   - atalho da cabine, que vira o local `cabine`;
-   - ficha da fonte.
-4. **Ambiente:** a troca manda a mensagem e gera uma resposta ao impulso nova.
-5. **Parâmetros do modo de testes:** lateral e número de vagões (o trem é montado de novo).
-6. **Céu aberto:** passagem repetindo.
-7. **Câmeras e helicóptero.**
-8. **Carro na rua:** o preset monta o carro com o Ronco calibrado na página (`kAbs`), a seção Motor lista os presets do Ronco, a passagem anda a 108 km/h em 3ª com o motor preso às rodas (3997 rpm) e o ouvido chega a 88,8 dB(A).
-9. **Locomotiva:** o EMD 710 (uso locomotiva) sobe ao notch 8 (881 rpm) e o ouvido chega a 88,4 dB(A).
-10. **"Voltar ao padrão".**
-11. **Console sem erros.**
+**Teste** (`MUDO=1 npm run navegador:passagem [-- url] [--firefox] [--reserva] [--foto arq.png]`; sempre `MUDO=1` com alguém ouvindo outra coisa nas caixas). Sem url, o teste serve o `dist/` em `http://127.0.0.1:<porta>/data/engine/`. O roteiro confere:
+1. **Estrutura:** presets, portadores pela compatibilidade, as seções (com "Você" em primeiro), os sliders do modo de testes (sem os do gimbal), os pontos de vista do trem, a cena como protagonista, a ajuda das teclas na tela (e que some sozinha), a cena 3D desenhando e toda opaca.
+2. **Ponto de chegada e passagem no túnel:** a pé na passarela de serviço (0,75 m), a 3 m da lateral, olhando o trem chegar; o ouvinte livre na mensagem (ouvido 5 cm abaixo do olho, com o instante do quadro); a passagem a 350 km/h com a onda de compressão de ~2 kPa antes do nariz, a onda de nariz no ouvinte livre e o nível no ouvido (105–125 dB(A)).
+3. **Andar:** W anda a 1,5 m/s e para sem degrau ao soltar (a posição do ouvinte na telemetria da Cena acompanha; amostras com a velocidade, no máximo ~30 por segundo), Shift + W corre a 6 m/s, a parede do túnel segura, arrastar na cena olha (e a cabeça do ouvinte vai junto). As velocidades são as do observador, não as do relógio da parede: no Chromium sem cabeça, com o WebGL em software, os quadros podem vir a 1–3 por segundo.
+4. **Voar:** V, E sobe a 8 m/s até o teto do túnel, o ouvinte da Cena sobe junto, V volta ao chão (a passarela); da passarela, andando para o lado da via, você desce para a via.
+5. **Embarcar e desembarcar:** pelo botão e pela tecla B; o ouvinte no referencial do corpo; a cabine do maquinista vira o local `cabine`; desembarcar volta ao ponto a pé.
+6. **Cada ponto de vista** do painel (modo e mensagem), as teclas 5 e 1, H (ajuda), T (vista técnica) e o painel recolhido.
+7. **Ambiente:** a estação (resposta ao impulso nova, o observador em cima da plataforma), o slider do ponto de chegada, o de vagões, a passagem a céu aberto repetindo, o helicóptero.
+8. **Cada um dos 29 presets** carrega, com o observador a pé no ponto de chegada (a lateral do preset, olho a 1,65 m do chão do lugar); na ponte, no passeio; trocar de preset não acumula texturas nem geometrias na placa de vídeo.
+9. **Carro na rua** (Camaro do Ronco calibrado na página, 3ª a 108 km/h, 80–100 dB(A)), **RX-7** e **locomotiva** EMD em N8.
+10. **"Voltar ao padrão"**, com você no ponto de chegada.
+11. **Celular a 400 px** (Chromium, toque emulado): a cena de pé sem rolar de lado, o círculo de andar anda e arrastar na cena olha.
+12. **Console sem erros.**
 
 **Resultado:** passa em Chromium (worklet e reserva) e em Firefox.
 ## Adaptadores de motor

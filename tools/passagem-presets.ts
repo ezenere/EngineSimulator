@@ -1,7 +1,15 @@
 // Teste offline dos presets da página Passagem: monta cada um pelo MESMO caminho da página e do worklet e mede.
 //
 //   npx tsx tools/passagem-presets.ts [ids separados por vírgula] [--combinacoes] [--sem-sequencia] [--j N]
-//                                     [--md arquivo.md] [--json arquivo.json]
+//                                     [--md arquivo.md] [--json arquivo.json] [--camera]
+//
+// Ouvinte. A página põe você no ponto de chegada do preset como observador em primeira pessoa (o modo 'livre' da
+// Cena: o ouvido 5 cm abaixo do olho, a cabeça para onde a câmera olha, que é o veículo chegando). Este teste mede com o
+// ouvinte FIXO de antes (`ControlePassagem.ouvinteFixo`): parado ao lado da via na lateral do preset, a 1,6 m, de frente
+// para ela; é a régua dos números de sempre, que não mudam com a tela nova (tools/cena/ouvinte-movel.ts prova que o
+// livre no mesmo ponto, de frente para a via, dá o mesmo som amostra a amostra). `--camera` mede com o observador da
+// página, como ele nasce: a cabeça virada para o veículo chegando muda a panorâmica, o ITD e o ILD, e na estação ele
+// fica em cima da plataforma (o ouvido mais alto).
 //
 // Como monta. A classe `ControlePassagem` de src/pages/passagem/controle.ts (a que a página usa) é carregada aqui
 // no Node, com uma cadeia de áudio de mentira cujo `send()` entrega cada mensagem (clonada, como o postMessage faz)
@@ -121,6 +129,8 @@ const tem = (nome: string) => argv.includes(nome);
 const COM_VALOR = ['--j', '--md', '--json', '--filho', '--saida'];
 const idsArg = argv.filter((a, i) => !a.startsWith('--') && !COM_VALOR.includes(argv[i - 1]))[0];
 const COMBOS = tem('--combinacoes');
+/** mede com o observador da página (ponto de chegada) em vez do ouvinte fixo de antes */
+const CAMERA = tem('--camera');
 const J = Math.max(1, +(opcao('--j') ?? Math.min(8, Math.max(1, Math.floor(os.cpus().length / 2)))));
 
 // ------------------------------------------------------------------ trabalhos
@@ -204,6 +214,8 @@ async function novaSessao(cru: boolean): Promise<Sessao> {
   relogio.ms = 0;
   const s: Sessao = { c: new ControlePassagem(), dsp: new CenaDSP(FS), amb: null, splMax: -Infinity, ultimaTele: null };
   s.dsp.cru = cru;
+  // (o ouvinte fixo de antes, a régua de sempre; com --camera, o observador da página no ponto de chegada)
+  s.c.ouvinteFixo = !CAMERA;
   s.dsp.post = (m: any) => {
     const copia = structuredClone(m);
     s.ultimaTele = copia;

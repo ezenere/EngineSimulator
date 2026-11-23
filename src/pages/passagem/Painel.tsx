@@ -1,24 +1,67 @@
-// Painel de controles da Passagem / modo de testes. Como nas outras páginas, o painel inteiro é
-// montado de novo quando algo estrutural muda (tópico "painel"); as seções que o arrasto na cena 3D
-// mexe (ouvinte, trajetória) assinam também o tópico "ouvinte", e os sliders acompanham o valor novo.
-import { useLayoutEffect, useRef } from 'react';
+// Painel de controles da Passagem / modo de testes, ao lado da cena (que é a protagonista; o painel recolhe). Como
+// nas outras páginas, o painel é montado de novo quando algo estrutural muda (tópico "painel"); a seção "Você" (o
+// observador: modo, pontos de vista, local) e a trajetória assinam também o tópico "ouvinte". As leituras e os
+// gráficos (`extra`) ficam fora da parte remontada: os canvas e os campos que o quadro escreve não são trocados.
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { ChipGroup, Field, Section, Slider } from '../../ui';
 import { COMPAT } from '../../carriers/compat';
 import { TREM_PAGINA_PADRAO, AMBIENTES, SOLOS, PORTADORES, NOME_MOTOR, MOTORES_PRONTOS, ESPERA_MOTOR, situacaoPortador, motoresProntos, presetsDoMotor } from './presets';
 import { fmt, useTopico, AR_PADRAO, PADROES, type ControlePassagem } from './controle';
-import { COR_TIPO } from './cena3d-cores';
-import { NOME_TIPO, nomeFonte } from './mostradores';
+import type { ModoObservador } from './observador';
 
-export function Painel({ c }: { c: ControlePassagem }) {
+export function Painel({ c, extra, recolhido }: { c: ControlePassagem; extra?: ReactNode; recolhido?: boolean }) {
   const versao = useTopico(c, 'painel');
   const aside = useRef<HTMLElement>(null);
   const scroll = useRef(0);
   scroll.current = aside.current?.scrollTop ?? scroll.current;
   useLayoutEffect(() => { if (aside.current) aside.current.scrollTop = scroll.current; }, [versao]);
   return (
-    <aside className="controls" id="controls" aria-label="Parâmetros da passagem" ref={aside}>
+    <aside className="controls" id="controls" aria-label="Parâmetros da passagem" ref={aside} hidden={recolhido}>
+      <Voce c={c} />
       <Conteudo key={versao} c={c} />
+      {extra}
     </aside>
+  );
+}
+
+/** O observador: como está (a pé, voando, embarcado), os pontos de vista, onde está e o filtro do local. */
+function Voce({ c }: { c: ControlePassagem }) {
+  useTopico(c, 'ouvinte', 'painel');
+  const o = c.obs, pontos = c.pontosDeVista();
+  return (
+    <Section titulo="Você">
+      <Field rotulo="Como você está">
+        <ChipGroup<ModoObservador> id="modoObservador" atual={o.modo} aoEscolher={(m) => c.setModoObservador(m)} opcoes={[
+          { valor: 'pe', rotulo: 'A pé', titulo: 'Em pé no chão do lugar; W A S D anda, Shift corre' },
+          { valor: 'voo', rotulo: 'Voando', titulo: 'Sobe e desce livre (E sobe, Q desce); tecla V' },
+          { valor: 'embarcado', rotulo: 'Embarcado', titulo: 'No assento do veículo, andando com ele; tecla B' },
+        ]} />
+      </Field>
+      <Field rotulo="Pontos de vista">
+        <div className="chips" id="pontos" role="group" aria-label="Pontos de vista">
+          {pontos.map((p, i) => <button key={p.id} type="button" className="chip" data-id={p.id} title={`${p.titulo}${i < 9 ? ` (tecla ${i + 1})` : ''}`} onClick={() => c.irPara(p)}>{i < 9 && <kbd>{i + 1}</kbd>} {p.nome}</button>)}
+        </div>
+      </Field>
+      <div className="acoes">
+        <button type="button" className="key wide" id="chegada" onClick={() => c.irPara(pontos[0])}>Voltar ao ponto de chegada</button>
+        <button type="button" className="key wide" id="embarcar" aria-pressed={o.modo === 'embarcado'} onClick={() => c.embarcar()}>{o.modo === 'embarcado' ? 'Desembarcar' : 'Embarcar'}</button>
+      </div>
+      <p className="note mono" id="ondeEstou" aria-live="polite" ref={(e) => { if (e) c.leituraOnde = e; }}>—</p>
+      <Field rotulo="Filtro do local">
+        <ChipGroup id="local" atual={o.local} aoEscolher={(v) => c.setLocal(v)} opcoes={[
+          { valor: 'auto' as const, rotulo: 'Automático', titulo: 'Cabine se você está dentro do veículo, senão fora' },
+          { valor: 'fora' as const, rotulo: 'Fora', titulo: 'Diretividade, sombra, solo e propagação + ITD/ILD' },
+          { valor: 'cabine' as const, rotulo: 'Cabine', titulo: 'Lei da massa da casca e ressonância do habitáculo' },
+          { valor: 'cofre' as const, rotulo: 'Cofre', titulo: 'Fontes de dentro diretas; as de fora por um passa-baixa de 900 Hz' },
+          { valor: 'ponteira' as const, rotulo: 'Ponteira', titulo: 'Só a fonte alvo; as outras −20 dB, sem solo' },
+        ]} />
+      </Field>
+      <p className="note" id="localEfetivo">{`Local agora: ${c.localEfetivo()}.`}</p>
+      <Field rotulo="Cabeça">
+        <ChipGroup id="binaural" atual={c.ouv.binaural} aoEscolher={(v) => { c.setOuvinte({ binaural: v }); c.enviarPendentes(); }} opcoes={[{ valor: true, rotulo: 'Dois ouvidos (binaural)', titulo: 'Diferença de tempo e de nível entre os ouvidos (ITD + ILD), para onde você olha' }, { valor: false, rotulo: 'Mono' }]} />
+      </Field>
+      <p className="note">Clique na cena para olhar com o mouse (<kbd>Esc</kbd> solta). <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> andam, <kbd>Shift</kbd> corre, <kbd>V</kbd> voa, <kbd>B</kbd> embarca, <kbd>H</kbd> mostra as teclas.</p>
+    </Section>
   );
 }
 
@@ -71,7 +114,6 @@ function Conteudo({ c }: { c: ControlePassagem }) {
       </Section>
 
       <Trajetoria c={c} />
-      <Ouvinte c={c} />
 
       {trem && <Trem c={c} />}
       {c.portador === 'rotor' && (
@@ -144,8 +186,9 @@ function Passagem({ c }: { c: ControlePassagem }) {
         <button type="button" className="key wide" id="repetir" aria-pressed={c.repetir} onClick={() => c.setRepetir(!c.repetir)}>{c.repetir ? 'Repetindo em volta' : 'Uma vez'}</button>
       </div>
       <Slider id="vKmh" rotulo="Velocidade" min={0} max={c.portador === 'rotor' ? 400 : c.portador === 'aviao' ? 2500 : 600} passo={5} valor={c.vKmh} formatar={(v) => `${km(v)} · Mach ${fmt(v / 3.6 / 343, 3)}`} aoMudar={(v) => c.setV(v)} />
-      <Slider id="x0" rotulo="O nariz parte a" min={50} max={2000} passo={10} valor={c.x0} formatar={(v) => `${fmt(v)} m do ouvinte`} aoMudar={(v) => { c.x0 = v; }} />
-      <p className="note"><kbd>Espaço</kbd> dispara ou para · <kbd>R</kbd> repetir · <kbd>G</kbd> gimbal · <kbd>C</kbd> câmera (com a cena em foco)</p>
+      <Slider id="x0" rotulo="O nariz parte a" min={50} max={2000} passo={10} valor={c.x0} formatar={(v) => `${fmt(v)} m de você`} aoMudar={(v) => { c.x0 = v; }} />
+      <Slider id="corpoParado" rotulo="Veículo parado: o nariz a" min={-500} max={500} passo={1} valor={c.narizParado()} formatar={(v) => `${fmt(Math.abs(v))} m ${v < 0 ? 'antes de você' : v > 0 ? 'depois de você' : '(na sua frente)'}`} aoSoltar={(v) => c.pararCorpoEm(v)} />
+      <p className="note"><kbd>Espaço</kbd> dispara ou para · <kbd>R</kbd> repetir</p>
     </Section>
   );
 }
@@ -163,63 +206,8 @@ function Trajetoria({ c }: { c: ControlePassagem }) {
       </Field>
       <Slider id="comprimento" rotulo={t.tipo === 'reta' ? 'Comprimento da reta' : 'Perímetro da volta'} min={200} max={20000} passo={50} valor={t.comprimento} formatar={m(0)} aoSoltar={(v) => c.setTraj({ comprimento: v }, true)} />
       {t.tipo === 'volta' && <Slider id="raio" rotulo="Raio das curvas" min={20} max={3000} passo={10} valor={t.raioCurva} formatar={m(0)} aoSoltar={(v) => c.setTraj({ raioCurva: v }, true)} />}
-      <Slider id="lateral" rotulo="Distância do ouvinte à lateral" min={0} max={300} passo={0.5} valor={t.lateral} formatar={m(1)} aoMudar={(v) => c.setTraj({ lateral: v })} />
+      <Slider id="lateral" rotulo="Ponto de chegada: distância à lateral do veículo" min={0} max={250} passo={0.5} valor={t.lateral} formatar={m(1)} aoSoltar={(v) => c.setTraj({ lateral: v })} />
       <Slider id="altitude" rotulo="Altitude do corpo" min={0} max={3000} passo={1} valor={t.altitude} formatar={m(0)} aoMudar={(v) => c.setTraj({ altitude: v })} />
-    </Section>
-  );
-}
-
-function Ouvinte({ c }: { c: ControlePassagem }) {
-  useTopico(c, 'ouvinte');
-  const o = c.ouv, g = o.gimbal;
-  const ficha = c.fonteFicha ? c.fontes.find((f) => f.id === c.fonteFicha) : null;
-  const tf = ficha && c.tele ? c.tele.cena.fontes.find((x) => x.id === ficha.id) : null;
-  return (
-    <Section titulo="Ouvinte">
-      <Field rotulo="Onde">
-        <ChipGroup id="modoOuvinte" atual={o.modo} aoEscolher={(v) => c.setModo(v)} opcoes={[{ valor: 'fixo' as const, rotulo: 'Parado junto à via' }, { valor: 'gimbal' as const, rotulo: 'No gimbal do corpo', titulo: 'Anda com o corpo, em torno dele ou de uma fonte' }]} />
-      </Field>
-      <Field rotulo="Atalhos">
-        <div className="chips" id="atalhos" role="group" aria-label="Atalhos de posição do ouvinte">
-          {c.atalhos().map((a) => <button key={a.id} type="button" className="chip" data-id={a.id} disabled={!a.ok} title={a.titulo} onClick={() => c.aplicarAtalho(a)}>{a.nome}</button>)}
-        </div>
-      </Field>
-      <Field rotulo="Filtro do local">
-        <ChipGroup id="local" atual={o.local} aoEscolher={(v) => c.setLocal(v)} opcoes={[
-          { valor: 'auto' as const, rotulo: 'Automático', titulo: 'Cabine se o ponto cai dentro do corpo, senão fora' },
-          { valor: 'fora' as const, rotulo: 'Fora', titulo: 'Diretividade, sombra, solo e propagação + ITD/ILD' },
-          { valor: 'cabine' as const, rotulo: 'Cabine', titulo: 'Lei da massa da casca e ressonância do habitáculo' },
-          { valor: 'cofre' as const, rotulo: 'Cofre', titulo: 'Fontes de dentro diretas; as de fora por um passa-baixa de 900 Hz' },
-          { valor: 'ponteira' as const, rotulo: 'Ponteira', titulo: 'Só a fonte alvo; as outras −20 dB, sem solo' },
-        ]} />
-      </Field>
-      <p className="note" id="localEfetivo">{`Local agora: ${c.localEfetivo()}.`}</p>
-      {o.modo === 'fixo' ? <>
-        <Slider id="ouvX" rotulo="Posição ao longo da via" min={-500} max={500} passo={0.5} valor={o.pos[0]} formatar={m(1)} aoMudar={(v) => c.setOuvinte({ pos: [v, 0, o.pos[2]] })} />
-        <Slider id="ouvZ" rotulo="Altura do ouvido" min={0.2} max={20} passo={0.1} valor={o.pos[2]} formatar={m(1)} aoMudar={(v) => c.setOuvinte({ pos: [o.pos[0], 0, v] })} />
-      </> : <>
-        <Field rotulo="Alvo do gimbal">
-          <select id="alvo" className="sel" value={g.alvo} onChange={(e) => { c.setOuvinte({}, { alvo: e.target.value }); c.escolherFonte(e.target.value === 'corpo' ? null : e.target.value); }}>
-            <option value="corpo">Centro do corpo</option>
-            {c.fontes.filter((f) => f.tipo !== 'pressao').map((f) => <option key={f.id} value={f.id}>{nomeFonte(c, f.id)}</option>)}
-          </select>
-        </Field>
-        <Slider id="az" rotulo="Ângulo em volta (azimute)" min={-180} max={180} passo={1} valor={g.az} formatar={(v) => `${fmt(v)}° ${Math.abs(v) < 20 ? '(frente)' : Math.abs(v) > 160 ? '(trás)' : v > 0 ? '(esquerda)' : '(direita)'}`} aoMudar={(v) => c.setOuvinte({}, { az: v })} />
-        <Slider id="el" rotulo="Ângulo acima do chão (elevação)" min={-20} max={89} passo={1} valor={g.el} formatar={(v) => `${fmt(v)}°`} aoMudar={(v) => c.setOuvinte({}, { el: v })} />
-        <Slider id="r" rotulo="Distância ao alvo" min={0.3} max={300} passo={0.1} valor={g.r} formatar={m(1)} aoMudar={(v) => c.setOuvinte({}, { r: v })} />
-      </>}
-      <Field rotulo="Cabeça">
-        <ChipGroup id="binaural" atual={o.binaural} aoEscolher={(v) => { c.setOuvinte({ binaural: v }); c.enviarPendentes(); }} opcoes={[{ valor: true, rotulo: 'Dois ouvidos (binaural)', titulo: 'Diferença de tempo e de nível entre os ouvidos (ITD + ILD)' }, { valor: false, rotulo: 'Mono' }]} />
-      </Field>
-      {ficha && (
-        <div className="ficha" id="ficha">
-          <b><i className="cor-fonte" style={{ background: `#${COR_TIPO[ficha.tipo].toString(16).padStart(6, '0')}` }} aria-hidden="true" />{nomeFonte(c, ficha.id)}</b>
-          <span>Fonte <span className="mono">{ficha.id}</span> ({NOME_TIPO[ficha.tipo] ?? ficha.tipo}{ficha.dentro ? ', dentro do corpo' : ''}), em ({ficha.pos.map((x) => fmt(x, 2)).join('; ')}) m no corpo · nível medido a {fmt(ficha.refDist, 1)} m</span>
-          <span>Diretividade de 0° a 180°: [{ficha.dir.tabela.join(', ')}] dB · eixo ({ficha.dir.eixo.join(', ')}) · convecção {ficha.dir.expConv}</span>
-          {tf && <span>Agora: ganho {fmt(tf.ganhoDb, 1)} dB · a {fmt(tf.r, 1)} m · atraso de {fmt(tf.atrasoMs, 1)} ms</span>}
-          <button type="button" className="chip" onClick={() => c.escolherFonte(null)}>Fechar</button>
-        </div>
-      )}
     </Section>
   );
 }

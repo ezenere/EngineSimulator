@@ -1,34 +1,63 @@
-/* Página Passagem: a cena 3D no lugar dos instrumentos; ao lado, as leituras (soltas, como nas outras páginas) e os três
-   gráficos em quadro. Peças e tokens de src/ui/estilo.css. */
+/* Página Passagem: a cena 3D em primeira pessoa é a protagonista e ocupa o palco todo; o painel fica ao lado e recolhe
+   (as leituras e os gráficos foram para ele). Sobre a cena: o resumo (onde você está, o nível), os modos e o botão do
+   painel em cima; a ajuda das teclas embaixo, que some sozinha; no toque, o círculo de andar. Peças e tokens de
+   src/ui/estilo.css. */
 .passagem .palco {
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  grid-template-areas: "vista lado";
+  grid-template-areas: "vista";
 }
-.vista3d { grid-area: vista; position: relative; min-height: 320px; min-width: 0; background: var(--bg); }
-#cena3d { width: 100%; height: 100%; display: block; touch-action: none; outline: none; }
+.passagem.painel-recolhido { grid-template-columns: minmax(0, 1fr); grid-template-areas: "bar" "presets" "cluster"; }
+.vista3d { grid-area: vista; position: relative; min-height: 360px; min-width: 0; background: #c9d8e4; }
+#cena3d { width: 100%; height: 100%; display: block; touch-action: none; outline: none; cursor: crosshair; }
 #cena3d:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
-/* por cima da cena: o resumo à esquerda e a câmera à direita; em tela estreita a câmera vai para a linha de cima */
-.sobre { position: absolute; inset: 0 0 auto 0; display: flex; flex-wrap: wrap-reverse; align-items: flex-end; justify-content: space-between; gap: var(--e-2); padding: var(--e-2) 10px; pointer-events: none; }
-.hud { flex: 1 1 220px; min-width: 0; margin: 0; padding: 4px 8px; border-radius: var(--r-p); font-size: var(--t-mini); line-height: 1.5; color: var(--ink); background: color-mix(in srgb, var(--bg) 62%, transparent); white-space: pre-wrap; max-width: max-content; }
+.sobre { position: absolute; inset: 0 0 auto 0; display: flex; flex-wrap: wrap-reverse; align-items: flex-start; justify-content: space-between; gap: var(--e-2); padding: var(--e-2) 10px; pointer-events: none; }
+.hud { flex: 1 1 240px; min-width: 0; margin: 0; padding: 5px 9px; border-radius: var(--r-p); font-size: var(--t-mini); line-height: 1.55; color: var(--ink); background: color-mix(in srgb, var(--bg) 72%, transparent); white-space: pre-wrap; max-width: max-content; }
 .hud:empty { display: none; }
-.vista3d .camera { flex: 0 0 auto; margin-left: auto; pointer-events: auto; }
-.vista3d .camera .chip { background: color-mix(in srgb, var(--raise) 88%, transparent); }
-.aviso3d { position: absolute; inset: auto 0 45% 0; margin: 0; padding-inline: var(--e-4); text-align: center; color: var(--muted); }
-.dica3d { position: absolute; left: 8px; right: 8px; bottom: 6px; margin: 0; padding: 4px 8px; border-radius: var(--r-p); font-size: var(--t-mini); color: var(--muted); background: color-mix(in srgb, var(--bg) 72%, transparent); pointer-events: none; }
+.rapido { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--e-chip); margin-left: auto; pointer-events: auto; }
+.vista3d .chip { background: color-mix(in srgb, var(--raise) 90%, transparent); }
+.aviso3d { position: absolute; inset: auto 0 45% 0; margin: 0; padding-inline: var(--e-4); text-align: center; color: var(--bg); font-weight: 600; }
 
-.lado { grid-area: lado; min-height: 0; min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--e-4); }
-.passagem .telemetria { align-content: start; min-width: 0; --larg-chave: 78px; }
-.passagem .graficos { display: grid; grid-template-rows: repeat(3, minmax(84px, 1fr)); gap: var(--e-3); min-height: 0; min-width: 0; }
+/* ajuda das teclas: pequena, embaixo, some sozinha (e volta com H) */
+.ajuda {
+  position: absolute; left: 10px; bottom: 10px; max-width: min(440px, calc(100% - 20px)); margin: 0; padding: 9px 12px;
+  border-radius: var(--r); background: color-mix(in srgb, var(--bg) 84%, transparent); color: var(--ink); font-size: var(--t-mini);
+  pointer-events: none; animation: ajuda-some 0.8s 8s forwards;
+}
+.ajuda b { font-weight: 600; color: var(--gold); }
+.ajuda dl { display: grid; grid-template-columns: repeat(2, minmax(0, max-content)); gap: 3px 16px; margin: 6px 0 0; }
+.ajuda dl div { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.ajuda dt, .ajuda dd { margin: 0; }
+.ajuda dd { color: var(--muted); }
+.ajuda .so-toque { display: none; margin: 6px 0 0; color: var(--muted); }
+@keyframes ajuda-some { to { opacity: 0; } }
+
+/* círculo de andar (só em tela de toque) e, voando, subir e descer */
+.manche { display: none; position: absolute; left: 14px; bottom: 14px; align-items: flex-end; gap: var(--e-3); pointer-events: none; }
+.manche-base {
+  width: 112px; height: 112px; border-radius: 50%; display: grid; place-items: center; touch-action: none; pointer-events: auto;
+  border: 2px solid color-mix(in srgb, var(--ink) 60%, transparent); background: color-mix(in srgb, var(--bg) 45%, transparent);
+}
+.manche-bola { width: 46px; height: 46px; border-radius: 50%; background: color-mix(in srgb, var(--ink) 80%, transparent); transition: transform .06s; }
+.manche-alto { display: grid; gap: var(--e-2); pointer-events: auto; }
+.manche-alto .chip { min-height: 44px; min-width: 76px; touch-action: none; }
+@media (pointer: coarse) {
+  .manche { display: flex; }
+  /* no toque, a ajuda é só a do toque (o mapa das teclas não serve e taparia a cena) */
+  .ajuda { left: auto; right: 10px; max-width: min(260px, calc(100% - 150px)); }
+  .ajuda dl, .ajuda b { display: none; }
+  .ajuda .so-toque { display: block; margin: 0; color: var(--ink); }
+}
+
+/* o painel: leituras e gráficos no fim */
+.passagem .telemetria { align-content: start; min-width: 0; --larg-chave: 82px; }
+.passagem .graficos .quadro { height: 104px; }
 
 @media (max-width: 1100px) {
-  .passagem .palco { grid-template-columns: minmax(0, 1fr); grid-template-rows: 440px auto; grid-template-areas: "vista" "lado"; }
-  .lado { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); grid-template-rows: auto; }
-  .passagem .graficos { grid-template-rows: repeat(3, 104px); }
+  .passagem .palco { grid-template-rows: 62vh; }
+  .vista3d { min-height: 320px; }
 }
 @media (max-width: 720px) {
-  .passagem .palco { grid-template-rows: 340px auto; }
-  .lado { grid-template-columns: minmax(0, 1fr); }
-  .passagem .graficos { grid-template-rows: repeat(3, 110px); }
-  .dica3d { display: none; }
+  .passagem .palco { grid-template-rows: 58vh; }
+  .hud { font-size: 10.5px; flex-basis: 100%; }
 }
