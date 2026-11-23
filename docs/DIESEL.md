@@ -7,7 +7,7 @@
 > - **Pulso do escape.** Passou a `∝ √T` (gancho `ccDens`), e as fontes contínuas foram refeitas: sem chiado de borboleta, sopro do compressor no lugar do chiado do turbo, ruído da turbina e do sopro seguindo a pressão instantânea, fundo mecânico −18 dB ([Terceira passada](TECNICO.md#terceira-passada-o-mar-do-turbo-e-o-ar-da-lenta)).
 > - **Atrito (1.2, item 14).** +0,57 bar sobre o do Ronco, não ×1,6.
 > - **Jake (1.2 item 11, 3.4).** A janela é de −8° a +40° em volta do PMS de compressão; os 350–390° do texto caem no PMS de troca de gases.
-> - **Câmbio.** O automático do diesel é próprio (`cambio()` na subclasse, pontos pela rotação de potência); o do Ronco fica desligado.
+> - **Câmbio.** O automático do diesel é próprio (`cambio()` na subclasse); o do Ronco fica desligado. Os pontos de troca saem da rotação de potência, da máxima, do pedal e do modo de condução: pé leve sobe cedo, pé no fundo vai até perto da faixa vermelha (TECNICO → Diesel → câmbio automático).
 > - **Fichas (6.2).** São 16 presets: o MAN B&W (`manbw`, nº 17, extra) não foi feito. Hilux com raio de roda 0,375 m (0,39 no texto); Duramax com a ordem real escrita na numeração do Ronco (1-8-7-3-6-5-4-2); início de injeção EMD 8° e GE 19°.
 > - **Fontes para a Cena (decisão 10).** O apito do turbo sai na fonte `turbo` (não `compressor`), e ela substitui a `turbo` do portador locomotiva.
 > - **Alvos (decisão 12, tabela 4.4, Apêndice A).** O alvo principal dos testes passou a ser o conjunto de gravações "real3", que não está no repositório; as bandas do EMD e da GE da tabela 4.4 saíram dos testes. `npm run teste:diesel` passa com 66 medidas fora do alvo aceitas como desvio (seção "Desvios conhecidos" do Diesel).

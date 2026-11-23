@@ -946,11 +946,34 @@ export class DieselDSP extends EngineDSP {
     if (au) this.cambio(dtc);
   }
 
-  // Câmbio automático do diesel. Pontos de troca pela rotação de potência (rpmNom), não pela máxima: o caminhão com
-  // caixa automatizada (Opticruise, I-Shift) sobe em ~1400–1600 rpm com o pé no fundo e volta em ~1000–1100; a picape
-  // automática sobe de 2000 a 3000 conforme o pedal. Sem acelerar segura a marcha (freio-motor) e só sobe para não
-  // passar da máxima. A condição tem de durar um pouco (a rotação do diesel ondula com o governador e a embreagem) e
-  // depois de cada troca há uma espera, para não subir em cascata com 12 marchas.
+  // Câmbio automático do diesel. Os pontos de troca saem da rotação de potência (rpmNom) e da máxima governada (rpmMax),
+  // pelo pedal e pelo modo de condução. Com o pé leve sobe cedo, no torque (caminhão ~1200 rpm, picape ~2000). Com o pé
+  // no fundo, no modo automático, leva o giro até um pouco acima da rotação de potência, perto da faixa vermelha (o
+  // "kickdown" da picape, o modo de potência do Opticruise e do I-Shift): antes subia a 0,80–0,88 da rotação de
+  // potência com qualquer pedal, 66–77% da faixa vermelha, e o motor nunca chegava ao alto do giro. O modo econômico
+  // guarda esses pontos de antes. Sem acelerar segura a marcha (freio-motor) e só sobe para não passar da máxima. A
+  // condição tem de durar um pouco (a rotação do diesel ondula com o governador e a embreagem) e depois de cada troca
+  // há uma espera, para não subir em cascata com 12 marchas.
+  pontosDeTroca(t: number, solto: boolean) {
+    const nom = this.rpmNom, pes = this.classe !== 'leve', I = this.idle;
+    const lo = nom * (pes ? 0.62 : 0.58), dLo = nom * (pes ? 0.53 : 0.40);
+    // o alto do giro com o pé no fundo: 5% acima da rotação de potência ou 90% da máxima, o que for maior, sem passar
+    // de 95% da máxima (acima disso o governador já corta e o motor carregado não chegaria lá)
+    const topo = Math.min(0.95 * this.rpmMax, Math.max(1.05 * nom, 0.9 * this.rpmMax));
+    // [ponto alto do modo, quanto do caminho entre o pé leve e ele o pedal já andou]
+    const modo = this.driveMode;
+    const [hi, f] = modo === 'eco' ? [nom * (pes ? 0.80 : 0.88), t]      // (os pontos de antes: sobe o mais cedo possível)
+      : modo === 'normal' ? [nom, t]                                     // (até a rotação de potência)
+      : modo === 'sport' ? [topo, Math.pow(t, 0.6)]                      // (sobe alto já com meio pedal)
+      : modo === 'track' ? [0.97 * this.rpmMax, 1]                       // (sempre quase na máxima)
+      : [topo, Math.pow(t, 1.6)];                                        // (automático: só o fim do pedal leva ao alto)
+    const up = solto ? 0.97 * this.rpmMax : lo + (hi - lo) * f;
+    // a redução acompanha a subida na mesma proporção de antes (0,59/0,80 no pesado, 0,52/0,88 no leve)
+    const dHi = hi * (pes ? 0.59 / 0.80 : 0.52 / 0.88);
+    const down = solto ? Math.max(1.3 * I, 0.36 * nom) : dLo + (dHi - dLo) * f;
+    return [up, down];
+  }
+
   cambio(dtc) {
     if (this.gear <= 0 || this.shifting || this.state !== 'run') { this.trocaT = 0; return; }
     // marcha de saída: parado, a picape sai em 1ª; o caminhão com caixa automatizada de 10–12 marchas escolhe uma
@@ -961,16 +984,21 @@ export class DieselDSP extends EngineDSP {
       return;
     }
     if (this.shiftCool > 0) { this.trocaT = 0; return; }
-    const n = this.ratios.length - 1, g = this.gear, rpm = this.rpmAvg, nom = this.rpmNom, I = this.idle;
+    const n = this.ratios.length - 1, g = this.gear, rpm = this.rpmAvg, I = this.idle;
     const t = clamp(this.thrTarget, 0, 1), pes = this.classe !== 'leve';
     const solto = t < 0.05;
-    let up = solto ? 0.97 * this.rpmMax : nom * (pes ? 0.62 + 0.18 * t : 0.58 + 0.30 * t);
+    let [up, down] = this.pontosDeTroca(t, solto);
     // (governador de todas as rotações: o pedal escolhe a rotação, e com carga o motor fica abaixo dela pelo droop)
     if (!solto && this.gov === 'todas-as-rotacoes' && this.rpmAlvo > 0) up = Math.min(up, 0.9 * this.rpmAlvo);
-    const down = Math.min(0.8 * up, solto ? Math.max(1.3 * I, 0.36 * nom) : nom * (pes ? 0.53 + 0.06 * t : 0.40 + 0.12 * t));
+    down = Math.min(0.8 * up, down);
     const r = this.ratios;
     let quer = 0;
-    if ((this.locked || rpm > 1.05 * up) && g < n && rpm > up && (rpm * r[g + 1]) / r[g] > Math.max(1.1 * I, 0.85 * down)) {
+    // (a marcha de cima não pode deixar o motor abaixo do ponto de redução, senão o câmbio caça. Numa caixa de degrau
+    // largo — a 1ª→2ª do ônibus é 1,76, a do 6V92 é 1,83 — a rotação depois da troca cai sempre abaixo dele: aí o que
+    // vale é o degrau da própria caixa, senão o motor ficava preso na 1ª até a máxima. Quem impede a caça nesse caso é a
+    // condição da redução, que exige a marcha de baixo abaixo de 0,92 do ponto de subida)
+    const piso = g < n ? Math.max(1.1 * I, 0.85 * Math.min(down, (0.92 * up * r[g + 1]) / r[g])) : 0;
+    if ((this.locked || rpm > 1.05 * up) && g < n && rpm > up && (rpm * r[g + 1]) / r[g] > piso) {
       // caixa automatizada de caminhão pula marchas quando a de cima ainda deixa o motor acima do ponto de troca
       quer = 1;
       if (pes) while (g + quer < n && (rpm * r[g + quer + 1]) / r[g] > Math.max(down * 1.15, 0.92 * up)) quer++;

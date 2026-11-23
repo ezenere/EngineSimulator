@@ -20,11 +20,11 @@ export type EstadoDiesel = EstadoPistao<Spec, MotorDiesel> & { portador: Portado
 export type Telemetria = Record<string, any> & { rpm: number; theta: number; state: string };
 
 export const DRIVE_MODES: [string, string, string][] = [
-  ['track', 'Pista', 'Sobe quase na rotação máxima e reduz cedo'],
-  ['sport', 'Esportivo', 'Sobe alto e reduz em giro médio'],
-  ['normal', 'Normal', 'Trocas em giro médio, como no dia a dia'],
-  ['eco', 'Econômico', 'Sobe o mais cedo possível (caminhões carregados)'],
-  ['auto', 'Automático', 'Decide pelo quanto você pisa'],
+  ['track', 'Pista', 'Sobe sempre quase na rotação máxima'],
+  ['sport', 'Esportivo', 'Sobe alto já com meio pedal'],
+  ['normal', 'Normal', 'Sobe no máximo na rotação de potência, conforme o pedal'],
+  ['eco', 'Econômico', 'Sobe o mais cedo possível, no torque (caminhão carregado na estrada)'],
+  ['auto', 'Automático', 'Pé leve sobe cedo; pé no fundo leva o giro até perto da faixa vermelha'],
 ];
 
 export const familyFor = (layout: string, n: number, tempos = 4) => familiaDiesel(layout, n, tempos);
