@@ -6,7 +6,7 @@
 // Campo próximo (não passa pelo anel): onda de nariz/cauda, onda de compressão do túnel, vento induzido
 // e do pistão, ronco estrutural da ponte, som de fundo. A pressão inteira vai para a telemetria; ao
 // alto-falante só o resíduo acima de 20 Hz.
-import type { Ambiente, Trajetoria, Ouvinte, Cena, TelemetriaCena, Vec3, FonteSonora, LocalOuvinte } from './tipos';
+import type { Ambiente, Trajetoria, Ouvinte, OuvinteLivre, Cena, TelemetriaCena, Vec3, FonteSonora, LocalOuvinte } from './tipos';
 import type { Portador } from '../carriers/tipos';
 import { BLOCO_CONTROLE, PA_FS, P_REF, RAMPA, C_SOM } from './constantes';
 import { Propagador, GeoOuvinte, type RegrasLocal } from './propagador';
@@ -33,6 +33,35 @@ export const K_PONTE = 26;
 export const velocidadeSom = (t: number) => C_SOM * Math.sqrt((273.15 + t) / 293.15);
 
 export interface OpcoesCena { ur?: number; blocoMax?: number; /** desliga a sombra do corpo (diagnóstico) */ semSombra?: boolean; /** ganho do ronco da ponte (calibração; padrão K_PONTE) */ kPonte?: number }
+
+// ---------------------------------------------------------------- ouvinte livre (extensão: a câmera da Passagem)
+// O ouvido segue as amostras da página por um filtro de 2ª ordem criticamente amortecido com a velocidade dela como
+// alimentação direta: entre duas mensagens ele anda com a velocidade da última (até LIVRE_PREVISAO), e o que a
+// previsão errou é corrigido sem degrau. Posição e velocidade ficam contínuas, e com elas o atraso de cada fonte e a
+// derivada dele (o Doppler de quem anda). A cabeça gira por um polo de LIVRE_TAU_RUMO.
+/** Hz do filtro que segue a posição mandada (só a correção passa por ele: a velocidade vai direto) */
+export const LIVRE_FREQ = 2.5;
+/** s: até quanto tempo depois da última mensagem o ouvido continua andando com a velocidade dela */
+export const LIVRE_PREVISAO = 0.25;
+/** s, constante de tempo do giro da cabeça */
+export const LIVRE_TAU_RUMO = 0.025;
+/** s por s: quanto a demora estimada das mensagens sobe sozinha (segue a deriva entre o relógio da página e o do áudio) */
+export const LIVRE_DERIVA = 0.002;
+/**
+ * s: num salto o som desce em SALTO_DESCE, fica em silêncio SALTO_SEGURA e sobe em SALTO_SOBE, as duas rampas em meio
+ * cosseno (uma rampa reta tem quina, e a quina é um estalinho acima de 5 kHz). O silêncio cobre a entrada de 50 ms que o
+ * propagador dá a uma fonte cujo atraso saltou (rampa reta), os anéis do ITD e os filtros do ar assentando.
+ */
+export const SALTO_DESCE = 0.02, SALTO_SEGURA = 0.06, SALTO_SOBE = 0.05;
+/** m: com o ouvinte livre, o histórico do corpo cobre um ouvinte até esta distância da via (fora o comprimento da via) */
+export const DIST_LIVRE = 300;
+/** m de folga para o ouvido livre entrar ou sair de um segmento (o local 'auto' não fica alternando na parede) */
+const HISTERESE_DENTRO = 0.05;
+// estado do ouvido livre em Float64Array (lv): posição e velocidade atuais, rumo (rad), alvo (posição e velocidade da
+// mensagem, rumo), instante da mensagem
+const LV_P = 0, LV_V = 3, LV_RUMO = 6, LV_AP = 7, LV_AV = 10, LV_ARUMO = 13, LV_T = 14;
+/** o `livre` de um ouvinte no modo 'livre' (sem ele: parado na `pos`, de frente para a via) */
+const livreDe = (o: Ouvinte): OuvinteLivre => o.livre ?? { ref: 'mundo', pos: o.pos, vel: [0, 0, 0], rumo: 90, salto: 0 };
 
 export class CenaPassagem implements Cena {
   fs = 48000;
@@ -84,6 +113,24 @@ export class CenaPassagem implements Cena {
   inCone = false;
   /** instante (s, fim do trecho) em que o cone alcançou o ouvinte pela última vez */
   tCone = NaN;
+  // ouvinte livre (modo 'livre'): estado do ouvido (índices LV_*), referencial e contador de saltos do alvo em uso
+  lv = new Float64Array(16);
+  lvRef: OuvinteLivre['ref'] = 'mundo';
+  lvSalto = 0;
+  /** s: demora estimada das mensagens (chegada − relógio da página) e a chegada da última */
+  private lvDemora = NaN; private lvChegada = 0;
+  /** coeficientes por bloco de controle: o filtro da posição (ω², 2ω, dt) e o polo do rumo */
+  private lvK = new Float64Array(4);
+  /**
+   * Salto (teletransporte, embarcar, troca de local ou de modo): o som desce (fase 1), fica em silêncio (2) enquanto
+   * o ouvinte salta e os anéis assentam, e sobe (3). `saltoOuv` é o ouvinte que entra no fundo do silêncio.
+   */
+  saltoFase: 0 | 1 | 2 | 3 = 0;
+  saltoG = 1;
+  private saltoN = 0;
+  private saltoPronto = false;
+  private saltoOuv: Ouvinte | null = null;
+  private nDentro = 0;
   constructor(op: OpcoesCena = {}) {
     if (op.ur) this.ur = op.ur;
     this.semSombra = !!op.semSombra;
@@ -118,6 +165,149 @@ export class CenaPassagem implements Cena {
     this.definirAlvos(true);
     this.portador = null;
     this.amostra = 0;
+    // ouvinte livre: os coeficientes do bloco de controle e o estado já no alvo (sem salto)
+    const dt = BLOCO_CONTROLE / fs, w = 2 * Math.PI * LIVRE_FREQ;
+    this.lvK[0] = w * w; this.lvK[1] = 2 * w; this.lvK[2] = dt; this.lvK[3] = 1 - Math.exp(-dt / LIVRE_TAU_RUMO);
+    this.saltoFase = 0; this.saltoG = 1; this.saltoOuv = null; this.saltoPronto = false;
+    if (ouv.modo === 'livre') this.alvoLivre(livreDe(ouv), true);
+  }
+
+  // ---------------------------------------------------------------- ouvinte livre
+  /** põe o alvo do ouvido livre (a amostra da página); com `agora`, o ouvido já fica nele, parado na velocidade dela */
+  private alvoLivre(l: OuvinteLivre, agora: boolean) {
+    const L = this.lv, D = Math.PI / 180;
+    L[LV_AP] = l.pos[0]; L[LV_AP + 1] = l.pos[1]; L[LV_AP + 2] = l.pos[2];
+    L[LV_AV] = l.vel[0]; L[LV_AV + 1] = l.vel[1]; L[LV_AV + 2] = l.vel[2];
+    // instante da amostra: o do quadro da página, pela demora estimada (a menor vista, subindo LIVRE_DERIVA por
+    // segundo para seguir a deriva entre os dois relógios), ou o da chegada
+    const chegada = this.amostra / this.fs;
+    if (typeof l.t === 'number' && Number.isFinite(l.t)) {
+      const d = chegada - l.t;
+      this.lvDemora = agora || !Number.isFinite(this.lvDemora) ? d : Math.min(this.lvDemora + LIVRE_DERIVA * Math.max(0, chegada - this.lvChegada), d);
+      this.lvChegada = chegada;
+      L[LV_T] = Math.min(chegada, l.t + this.lvDemora);
+    } else L[LV_T] = chegada;
+    // rumo desdobrado perto do atual (a cabeça gira pelo lado mais curto)
+    let r = l.rumo * D;
+    if (!agora) { while (r - L[LV_RUMO] > Math.PI) r -= 2 * Math.PI; while (r - L[LV_RUMO] < -Math.PI) r += 2 * Math.PI; }
+    L[LV_ARUMO] = r;
+    if (agora) {
+      const idade = Math.min(LIVRE_PREVISAO, chegada - L[LV_T]);
+      for (let i = 0; i < 3; i++) { L[LV_P + i] = L[LV_AP + i] + L[LV_AV + i] * idade; L[LV_V + i] = L[LV_AV + i]; }
+      L[LV_RUMO] = r;
+      this.lvRef = l.ref; this.lvSalto = l.salto;
+    }
+  }
+
+  /**
+   * Mensagem com o ouvinte quando ele é (ou era) o livre. Uma amostra nova do mesmo trajeto só muda o alvo; um salto
+   * (contador `salto`, referencial, modo, local, binaural ou fonte alvo diferentes) passa pelo silêncio curto.
+   */
+  private receberLivre(o: Ouvinte) {
+    const a = this.saltoOuv ?? this.ouv;
+    const l = o.modo === 'livre' ? livreDe(o) : null, la = a.modo === 'livre' ? livreDe(a) : null;
+    const salto = o.modo !== a.modo || o.local !== a.local || o.binaural !== a.binaural || o.gimbal.alvo !== a.gimbal.alvo
+      || !l || !la || l.ref !== la.ref || l.salto !== la.salto;
+    if (salto || (this.saltoFase === 1 || (this.saltoFase === 2 && !this.saltoPronto))) {
+      // (uma amostra que chega durante a descida é do ouvinte que vai entrar)
+      this.saltoOuv = o;
+      if (this.saltoFase === 0 || this.saltoFase === 3) this.saltoFase = 1;
+      else if (this.saltoFase === 2) this.saltoPronto = false;
+      return;
+    }
+    this.ouv = o;
+    this.alvoLivre(l, false);
+  }
+
+  /** no fundo do silêncio: entra o ouvinte que esperava (salta), e o local e as regras são aplicados de novo */
+  private aplicarSalto() {
+    const o = this.saltoOuv; this.saltoOuv = null;
+    // (o mesmo ouvinte: só o local 'auto' mudou, sem salto de posição)
+    if (o && o !== this.ouv) {
+      this.posAlvo = [...o.pos] as [number, number, number]; this.gimAlvo = { ...o.gimbal };
+      this.ouv = o;
+      if (o.modo === 'livre') this.alvoLivre(livreDe(o), true);
+      else {
+        // (saiu do livre: a posição do fixo e o gimbal já entram no alvo, sem a rampa de 20 ms)
+        this.definirAlvos(false);
+        for (let i = 2; i <= 7; i++) { this.rCur[i] = this.rAlvo[i]; this.rPasso[i] = 0; }
+      }
+    }
+    if (this.portador) this.aplicarLocal();
+  }
+
+  /** avança o ouvido livre um bloco de controle até o instante tj (s): filtro de 2ª ordem e polo do rumo */
+  private passoLivre(tj: number) {
+    const L = this.lv, K = this.lvK, w2 = K[0], z2 = K[1], dt = K[2];
+    const te = tj - L[LV_T];
+    const prev = te < 0 ? 0 : te > LIVRE_PREVISAO ? LIVRE_PREVISAO : te;
+    const segue = te <= LIVRE_PREVISAO ? 1 : 0;   // a página parou de mandar: o alvo para onde a previsão acabou
+    for (let i = 0; i < 3; i++) {
+      const vA = L[LV_AV + i], pA = L[LV_AP + i] + vA * prev;
+      const a = w2 * (pA - L[LV_P + i]) + z2 * (vA * segue - L[LV_V + i]);
+      L[LV_V + i] += a * dt;
+      L[LV_P + i] += L[LV_V + i] * dt;
+    }
+    L[LV_RUMO] += (L[LV_ARUMO] - L[LV_RUMO]) * K[3];
+  }
+
+  /** geometria do ouvinte livre com o corpo em s (velocidade v) */
+  private geometriaLivre(s: number, v: number) {
+    const G = this.geo, L = this.lv;
+    let ang = L[LV_RUMO];
+    if (this.lvRef === 'corpo') {
+      const p = this.via.ponto(s + L[LV_P], this.pv), by = L[LV_P + 1];
+      G.x = p.x + by * p.nx; G.y = p.y + by * p.ny;
+      const z = this.altitude + L[LV_P + 2];
+      G.z = Math.max(0.2, z);
+      G.vx = v * p.tx + L[LV_V] * p.tx + L[LV_V + 1] * p.nx; G.vy = v * p.ty + L[LV_V] * p.ty + L[LV_V + 1] * p.ny; G.vz = z > 0.2 ? L[LV_V + 2] : 0;
+      ang += Math.atan2(p.ty, p.tx);
+    } else {
+      G.x = L[LV_P]; G.y = L[LV_P + 1]; G.z = Math.max(0.2, L[LV_P + 2]);
+      G.vx = L[LV_V]; G.vy = L[LV_V + 1]; G.vz = L[LV_P + 2] > 0.2 ? L[LV_V + 2] : 0;
+    }
+    const c = Math.cos(ang), sn = Math.sin(ang);
+    G.fx = c; G.fy = sn; G.lx = -sn; G.ly = c;
+  }
+
+  /**
+   * Quanto o ouvido livre está para dentro do segmento do corpo mais próximo (m; negativo: fora dele), com o corpo onde
+   * está agora. O local 'auto' do livre: cabine dentro de um segmento (3.3), como no gimbal.
+   */
+  private dentroLivre(): number {
+    const p = this.portador; if (!p) return -Infinity;
+    const corpo = p.corpo, L = this.lv, sgs = corpo.segmentos, s = p.cinematica.s;
+    let melhor = -Infinity, frente = corpo.comprimento / 2;
+    for (let k = 0; k < sgs.length; k++) {
+      const sg = sgs[k], xc = frente - sg.comprimento / 2;
+      let bx: number, by: number, bz: number;
+      if (this.lvRef === 'corpo') { bx = L[LV_P] - xc; by = L[LV_P + 1]; bz = L[LV_P + 2]; }
+      else {
+        const q = this.via.ponto(s + xc, this.pv), dx = L[LV_P] - q.x, dy = L[LV_P + 1] - q.y;
+        bx = dx * q.tx + dy * q.ty; by = dx * q.nx + dy * q.ny; bz = L[LV_P + 2] - this.altitude;
+      }
+      const d = Math.min(sg.comprimento / 2 - Math.abs(bx), sg.largura / 2 - Math.abs(by), bz - sg.zPiso, sg.altura - bz);
+      if (d > melhor) melhor = d;
+      frente -= sg.comprimento + sg.vao;
+    }
+    return melhor;
+  }
+
+  /**
+   * Silêncio do salto, amostra a amostra, sobre a saída e o envio. `saltoG` é a fase da rampa (0 = calado, 1 = cheio)
+   * e o ganho é o meio cosseno dela; um salto novo no meio da subida desce de onde estava.
+   */
+  private envelopeSalto(oL: Float32Array, oR: Float32Array, sL: Float32Array, sR: Float32Array, n: number) {
+    let u = this.saltoG;
+    const desce = 1 / (SALTO_DESCE * this.fs), sobe = 1 / (SALTO_SOBE * this.fs);
+    for (let k = 0; k < n; k++) {
+      if (this.saltoFase === 1) { u -= desce; if (u <= 0) { u = 0; this.saltoFase = 2; this.saltoPronto = false; } }
+      else if (this.saltoFase === 2) { u = 0; if (this.saltoPronto && --this.saltoN <= 0) this.saltoFase = 3; }
+      else if (this.saltoFase === 3) { u += sobe; if (u >= 1) { u = 1; this.saltoFase = 0; } }
+      const g = u >= 1 ? 1 : u <= 0 ? 0 : 0.5 - 0.5 * Math.cos(Math.PI * u);
+      oL[k] *= g; oR[k] *= g; sL[k] *= g; sR[k] *= g;
+    }
+    this.saltoG = u;
   }
 
   /** umidade relativa (%) da absorção do ar (2.3); padrão 60 */
@@ -153,6 +343,7 @@ export class CenaPassagem implements Cena {
     if (!this.portador) return this.ladoOuvinte;
     let y: number;
     if (this.ouv.modo === 'gimbal') y = this.posGimbalCorpo()[1];
+    else if (this.ouv.modo === 'livre' && this.lvRef === 'corpo') y = this.lv[LV_P + 1];
     else {
       const p = this.via.ponto(this.portador.cinematica.s, this.pv);
       y = (this.geo.x - p.x) * p.nx + (this.geo.y - p.y) * p.ny;
@@ -172,7 +363,9 @@ export class CenaPassagem implements Cena {
       this.lateralAlvo = t.lateral; this.altitudeAlvo = t.altitude;
       this.traj = t;
     }
-    if (p.ouv) {
+    // (o ouvinte livre, e a passagem de um modo para o livre e de volta, vão pelo caminho dele: amostras e saltos)
+    if (p.ouv && (p.ouv.modo === 'livre' || this.ouv.modo === 'livre' || this.saltoOuv)) this.receberLivre(p.ouv);
+    else if (p.ouv) {
       this.posAlvo = [...p.ouv.pos] as [number, number, number];
       this.gimAlvo = { ...p.ouv.gimbal };
       this.ouv = p.ouv;
@@ -201,7 +394,9 @@ export class CenaPassagem implements Cena {
     this.portador = portador;
     this.fontesP = portador.fontes();
     const c = portador.cinematica;
-    const dm = this.via.distMax(this.traj.lateral + 50, this.traj.altitude) + portador.corpo.comprimento;
+    // (o ouvinte livre anda: o histórico cobre até DIST_LIVRE da via, além da lateral do ouvinte fixo)
+    const livre = this.ouv.modo === 'livre' || this.saltoOuv?.modo === 'livre';
+    const dm = this.via.distMax(livre ? Math.max(this.traj.lateral + 50, DIST_LIVRE) : this.traj.lateral + 50, this.traj.altitude) + portador.corpo.comprimento;
     this.hist = new Historico(dm / 343 + 0.5, BLOCO_CONTROLE / this.fs);
     this.hist.reiniciar(this.amostra / this.fs, c.s, c.v);
     this.prop.preparar(this.fontesP, portador.corpo, this.via, this.hist, dm, portador.tipo === 'aviao');
@@ -228,7 +423,7 @@ export class CenaPassagem implements Cena {
         if (b[0] <= frente && b[0] >= frente - s.comprimento && Math.abs(b[1]) < s.largura / 2 && b[2] > s.zPiso && b[2] < s.altura) local = 'cabine';
         frente -= s.comprimento + s.vao;
       }
-    }
+    } else if (o.local === 'auto' && o.modo === 'livre' && this.portador && this.dentroLivre() > 0) local = 'cabine';
     this.local = local;
     const alvo = o.gimbal.alvo;
     let r: RegrasLocal;
@@ -290,6 +485,7 @@ export class CenaPassagem implements Cena {
   /** geometria do ouvinte no instante em que o corpo está em s (com velocidade v) */
   private geometria(s: number, v: number) {
     const G = this.geo, largura = this.portador?.corpo.segmentos[0]?.largura ?? 2;
+    if (this.ouv.modo === 'livre') { this.geometriaLivre(s, v); return; }
     if (this.ouv.modo === 'fixo') {
       G.x = this.pos[0]; G.y = this.via.yOuvinte - (this.lateral + largura / 2); G.z = Math.max(0.2, this.pos[2]);
       G.vx = 0; G.vy = 0; G.vz = 0; G.fx = 0; G.fy = 1; G.lx = -1; G.ly = 0;
@@ -330,6 +526,8 @@ export class CenaPassagem implements Cena {
 
   processar(portador: Portador, canais: Float32Array[], outL: Float32Array, outR: Float32Array, sendL: Float32Array, sendR: Float32Array, n: number) {
     if (portador !== this.portador || portador.fontes() !== this.fontesP) this.preparar(portador);
+    // salto do ouvinte livre: o som chegou ao silêncio no bloco anterior, o ouvinte novo entra agora
+    if (this.saltoFase === 2 && !this.saltoPronto) { this.aplicarSalto(); this.saltoPronto = true; this.saltoN = Math.round(SALTO_SEGURA * this.fs); }
     const P = this.prop, fs = this.fs, c = portador.cinematica;
     const T = this.amostra;
     P.zerarAcumuladores(n);
@@ -338,6 +536,9 @@ export class CenaPassagem implements Cena {
     bL.fill(0, 0, n); bR.fill(0, 0, n);
     const L = portador.corpo.comprimento, largura = portador.corpo.segmentos[0]?.largura ?? 2;
     const fixo = this.ouv.modo === 'fixo' && this.local === 'fora';
+    const livre = this.ouv.modo === 'livre';
+    // (o ouvinte livre fora do corpo e sem andar com ele sente o campo próximo como o fixo, na posição em que está)
+    const livreMundo = livre && this.lvRef === 'mundo' && this.local === 'fora';
     const sO = this.via.abscissaDe(this.pos[0]);
     const tFim = (T + n) / fs;
     let ini = 0;
@@ -349,6 +550,14 @@ export class CenaPassagem implements Cena {
       const tj = (T + ini + N) / fs, dtj = tFim - tj;
       const sj = c.s - c.v * dtj + 0.5 * c.a * dtj * dtj, vj = c.v - c.a * dtj;
       this.hist.empurrar(sj, vj);
+      if (livre) {
+        this.passoLivre(tj);
+        // local 'auto' do livre: entrar num segmento (ou sair dele) troca o filtro no fundo de um silêncio curto
+        if (this.ouv.local === 'auto' && this.saltoFase === 0 && (++this.nDentro & 3) === 0) {
+          const d = this.dentroLivre();
+          if ((this.local === 'cabine' && d < -HISTERESE_DENTRO) || (this.local === 'fora' && d > HISTERESE_DENTRO)) { this.saltoOuv = this.ouv; this.saltoFase = 1; }
+        }
+      }
       this.geometria(sj, vj);
       // M ≥ 0,9 numa reta: o resolvedor fechado (2.1) e o estrondo no cone, como no flyby legado
       P.supersonico = this.via.tipo === 'reta' && Math.abs(vj) >= 0.9 * P.c;
@@ -364,10 +573,13 @@ export class CenaPassagem implements Cena {
       let p = 0, u = 0;
       let pTun = 0;
       this.pNariz = 0;
-      if (fixo) {
-        const xiN = this.reduzir(sj + L / 2 - sO), xiC = xiN - L;
+      if (fixo || livreMundo) {
+        // (livre: a abscissa e a distância à lateral do corpo saem da posição do ouvido, a cada trecho)
+        const sOk = livreMundo ? this.via.abscissaDe(this.geo.x) : sO;
+        const lat = livreMundo ? Math.max(0, Math.abs(this.geo.y - this.via.yOuvinte) - largura / 2) : this.lateral;
+        const xiN = this.reduzir(sj + L / 2 - sOk), xiC = xiN - L;
         // distância do ouvinte à lateral do corpo; com o corpo no alto (helicóptero, avião) conta a altura
-        const d = this.altitude > 0 ? Math.hypot(this.lateral, this.altitude) : this.lateral;
+        const d = this.altitude > 0 ? Math.hypot(lat, this.altitude) : lat;
         p = ondaNariz(xiN, xiC, vj, d, portador.corpo.cpNariz, portador.corpo.nariz || 1, portador.corpo.cauda || 1);
         this.pNariz = p;
         // vento induzido (2.8): sobe ao longo do corpo, esteira de 3 s depois da cauda
@@ -384,7 +596,7 @@ export class CenaPassagem implements Cena {
           if (!isNaN(this.narizAnt) && this.narizAnt - nariz > this.via.comp / 2) this.tunel.zerar();
           if (this.tunel.tEntrada < 0 && !isNaN(this.narizAnt) && this.narizAnt < tun.xEntrada && nariz >= tun.xEntrada && vj > 0) {
             const tc = tj - (nariz - tun.xEntrada) / vj;
-            this.tunel.entrar(tc, vj, portador.corpo.areaFrontal, tun.area, portador.corpo.nariz || 10, sO - tun.xEntrada, tun.comprimento);
+            this.tunel.entrar(tc, vj, portador.corpo.areaFrontal, tun.area, portador.corpo.nariz || 10, livreMundo ? Math.max(0, sOk - tun.xEntrada) : sO - tun.xEntrada, tun.comprimento);
           }
           this.narizAnt = nariz;
           pTun = this.tunel.pressao(tj);
@@ -401,7 +613,7 @@ export class CenaPassagem implements Cena {
         // ponte: ronco estrutural pelos truques sobre o tabuleiro perto do ouvinte
         if (this.amb.id === 'ponte') {
           let s = 0;
-          for (const x of this.xTruques) { const xi = (sj + x - sO) / 15; s += 1 / (1 + xi * xi); }
+          for (const x of this.xTruques) { const xi = (sj + x - sOk) / 15; s += 1 / (1 + xi * xi); }
           this.ponteGAlvo = this.kPonte * s * Math.pow(Math.max(0, vj) / (300 / 3.6), 1.5);
         } else this.ponteGAlvo = 0;
       }
@@ -473,6 +685,8 @@ export class CenaPassagem implements Cena {
     const es = this.estrondo;
     if (es.ativo) for (let k = 0; k < n && es.ativo; k++) { const bm = es.amostra(); outL[k] += bm; outR[k] += bm * 0.97; sendL[k] += bm * 0.6; sendR[k] += bm * 0.6; }
     es.age += n / this.fs;
+    // salto do ouvinte livre: silêncio curto sobre tudo (direto, campo próximo, fundo, envio, estrondo)
+    if (this.saltoFase !== 0) this.envelopeSalto(outL, outR, sendL, sendR, n);
     // nível A com constante 'F': filtra em bloco
     this.pa[0].bloco(ta, n); this.pa[1].bloco(tb, n);
     let eA = this.eA;

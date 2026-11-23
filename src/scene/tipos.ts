@@ -121,11 +121,39 @@ export interface Trajetoria {
 export type LocalOuvinte = 'fora' | 'cabine' | 'cofre' | 'ponteira';
 
 export interface Ouvinte {
-  modo: 'fixo' | 'gimbal';
+  /** (extensão) 'livre': o ouvinte em primeira pessoa (a câmera da página Passagem), em `livre` */
+  modo: 'fixo' | 'gimbal' | 'livre';
   pos: Vec3;                   // modo fixo: no mundo, z = altura do ouvido (1,6 em pé; 1,2 sentado)
   gimbal: { az: number; el: number; r: number; alvo: 'corpo' | string };   // graus, graus, m; alvo = 'corpo' ou id de fonte
   local: LocalOuvinte | 'auto'; // 'auto': 'cabine' se o ponto cair dentro do corpo, senão 'fora'
   binaural: boolean;           // ITD + ILD (padrão true)
+  /** (extensão) posição, velocidade e rumo da cabeça do modo 'livre'; os outros modos não leem */
+  livre?: OuvinteLivre;
+}
+
+/**
+ * (Extensão do CENA.md 1.5: o ouvinte em primeira pessoa da Passagem, docs/CENA.md 3.) O ouvido anda por onde a câmera
+ * anda e a cabeça do binaural (panorâmica, ITD, ILD) aponta para onde ela olha. A página manda uma amostra por quadro
+ * (posição e velocidade no instante da mensagem); entre duas, a Cena anda com a velocidade e segue a posição por um
+ * filtro de 2ª ordem: posição e velocidade contínuas, e o atraso de cada fonte muda sem degrau (o Doppler de quem anda
+ * sai da variação dele, como o da fonte). Um salto (teletransporte, embarcar) não é varrido: a Cena abaixa o som,
+ * salta e sobe de novo.
+ */
+export interface OuvinteLivre {
+  /** 'mundo': pos e vel no mundo (z para cima; a via ao longo de x). 'corpo': no referencial do corpo, andando com ele */
+  ref: 'mundo' | 'corpo';
+  pos: Vec3;                   // m, o ouvido
+  vel: Vec3;                   // m/s, no mesmo referencial
+  /** graus: para onde a cabeça olha no plano horizontal (0 = +x, 90 = +y); com ref 'corpo', em relação à frente do corpo */
+  rumo: number;
+  /** contador: mudou, a posição saltou (a Cena não varre o caminho entre a anterior e a nova) */
+  salto: number;
+  /**
+   * s no relógio de quem manda (a página: o instante do quadro em que pos e vel valiam). Opcional: com ele, a Cena
+   * estima a demora da mensagem (a menor vista, que sobe devagar) e põe a amostra no instante certo; sem ele, no
+   * instante em que a mensagem chega, e a espera variável da fila vira um tremor de posição.
+   */
+  t?: number;
 }
 
 export interface TelemetriaCena {
