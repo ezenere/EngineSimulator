@@ -128,9 +128,20 @@ Todas as famílias tiveram a passada de som medida com o kit e estão mescladas 
 
 ### Veredito do dono (23/11/2026)
 
-**Diesel aprovado:** "ficou muito bom. O Diesel tá excelente! Agora sim é motor a diesel mesmo. Senti um pouco de falta nos médios ainda no diesel, mas mesmo assim ficou excelente!" O Diesel de `6ec6742` (quarta passada) passa a ser a referência: nada nele pode piorar. As outras famílias seguem sem veredito.
+**Diesel aprovado:** "ficou muito bom. O Diesel tá excelente! Agora sim é motor a diesel mesmo. Senti um pouco de falta nos médios ainda no diesel, mas mesmo assim ficou excelente!" O Diesel de `6ec6742` (quarta passada) passa a ser a referência: nada nele pode piorar. As outras famílias seguem sem veredito. Perguntado onde falta o médio: "tanto acelerando quanto na lenta"; e como ouve: "Eu ouço no padrão. Não mexo" (o que vale é o padrão da página: microfone `ext`, equalização zerada, valores do preset; melhora que só existe num controle fora do padrão não existe para ele).
 
 O que vem para o Diesel, nesta ordem:
 
 1. **Testes com teto** (Opus, só `tools/`): o retrato `tools/diesel-desvios.json` é o "não pode piorar" do retoque.
 2. **Retoque dos médios** (Fable), pequeno. A pista medida está no `TECNICO.md` (Diesel → quarta passada → "Faltam médios em carga"): a carcaça do escape (`carcaca`), desligada nos presets, sobe 400–1000 Hz em 2 a 7 dB com linhas (não com ruído) em +18 a +24 dB; o que falta de 1 a 2,5 kHz na cabine não vem dela; e o grave de lenta 4 a 20 dB alto em 60–150 Hz come a margem de volume. O que entrar tem de ser conteúdo preso ao giro, nunca ruído largo, e a posição de antes de cada controle fica marcada.
+
+### Passagem em primeira pessoa (pedido do dono, 23/11/2026)
+
+"Remodele a tela de passagem. A ideia é que o ouvinte seja literalmente a câmera, não um boneco no meio do local. Eu como câmera quero ouvir da posição onde eu estou. E obviamente que isso vai necessitar de novos controles de câmera e posição. E também seria legal se o modelo 3D fosse opaco e os cenários fossem low poly mas mais 'reais'. Como se eu fosse um boneco e pudesse andar pelo local, ver o local. Algo mais realistinha. Bem simples, mas sem essa coisa de transparência. A ideia é ser o observador em um cenário hipotético."
+
+Em duas etapas (Opus, território `src/pages/passagem/**` e, de forma aditiva, o ouvinte em `src/scene/**`):
+
+1. **A câmera é o ouvinte.** Primeira pessoa a pé (anda, corre, olha), modo de voo, embarcar no veículo; a posição e o rumo da cabeça do ouvinte da Cena seguem a câmera; saem da cena padrão a cabeça do ouvinte, o gimbal, as alças, a grade, as esferas das fontes, o fantasma de emissão e todo material translúcido; os presets viram pontos de chegada. A API antiga do ouvinte (fixo e gimbal) continua para as ferramentas: os números do `teste:cena` não mudam.
+2. **O lugar e os modelos.** Cenários low poly opacos por situação (rua, linha em campo aberto, corte, estação, túnel, ponte, pista, píer, pátio) e modelos low poly dos veículos com as dimensões do portador.
+
+Regra para qualquer trabalho futuro na Passagem: a câmera é o único ouvinte, nada translúcido, e o capricho vai para o que se vê da altura do olho no ponto de chegada de cada preset.
