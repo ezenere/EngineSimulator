@@ -1,5 +1,6 @@
 // Constantes do Elétrico (docs/ELETRICO.md). Unidades do CENA: m, s, rad/s, N·m, Pa; 48 kHz, controle a cada 64 amostras.
 import type { Diretividade } from '../../scene/tipos';
+import type { ListaLinhas } from './linhas';
 
 export const TAU = Math.PI * 2;
 /** amostras entre recálculos das listas de linhas (decisão 1: a cada 64) */
@@ -17,7 +18,7 @@ export const PISO_LINHA_DB = -60;
 export const F_MIN = 10;
 
 /** L_max por fonte (4.1) */
-export const LMAX = { motor: 96, inversor: 64, reducao: 32, escovas: 8, helice: 16, aux: 12, ventilador: 8, avas: 6 } as const;
+export const LMAX = { motor: 96, inversor: 64, reducao: 32, escovas: 8, helice: 16, aux: 24, ventilador: 8, avas: 6 } as const;
 
 /** curva da carcaça (1.1, decisão): passa-alta de 2 polos em f_carc + platô + passa-baixa de 1 polo em 8 kHz */
 export const F_CARC = { carro: 400, trem: 250, pequena: 1000 } as const;
@@ -26,6 +27,62 @@ export function hCarcaca(f: number, fCarc: number) {
   const r = f / fCarc, r4 = r * r * r * r, q = f / F_CARC_LP;
   return Math.sqrt(r4 / (1 + r4)) / Math.sqrt(1 + q * q);
 }
+
+/**
+ * Relevo da carcaça: a carcaça e a estrutura têm modos, e a resposta de verdade não é a curva lisa de 1.1: sobe e desce
+ * alguns dB a cada fração de oitava. Um relevo fixo por máquina (semente da unidade), em dB sobre o log da frequência:
+ * soma de 10 cossenos de 3 a 12 ciclos por oitava (picos e vales de 1/12 a 1/3 de oitava de largura), com desvio-padrão
+ * `prof` dB (padrão 2: picos e vales de ±4 a ±5 dB). É o que dá vida às linhas sem ruído: uma ordem que varre na aceleração acende e apaga ao cruzar os modos, e
+ * com a rotação passeando cada linha ganha a sua própria respiração (as linhas deixam de subir e descer todas juntas).
+ * Tabela de 1024 pontos de 20 Hz a 24 kHz, montada uma vez; `ganho(f)` só interpola (sem alocação).
+ */
+export class Relevo {
+  private t = new Float64Array(N_RELEVO + 2);
+  readonly prof: number;
+  constructor(semente: number, prof: number) {
+    this.prof = prof;
+    if (!(prof > 0)) { this.t.fill(1); return; }
+    // (gerador próprio, sem estado fora daqui: um xorshift de 32 bits)
+    let s = (semente >>> 0) || 0x9e3779b9;
+    const rnd = () => { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s * 2.3283064365386963e-10; };
+    const K = 10, cp = new Float64Array(K), fa = new Float64Array(K);
+    for (let k = 0; k < K; k++) { cp[k] = 3 * Math.pow(4, rnd()); fa[k] = TAU * rnd(); }
+    const g = (prof * Math.SQRT2) / Math.sqrt(K);
+    for (let i = 0; i < N_RELEVO + 2; i++) {
+      const x = (i / N_RELEVO) * OITAVAS_RELEVO;
+      let d = 0;
+      for (let k = 0; k < K; k++) d += Math.cos(TAU * cp[k] * x + fa[k]);
+      this.t[i] = Math.pow(10, (g * d) / 20);
+    }
+  }
+  /**
+   * Multiplica pelo relevo as amplitudes das linhas [de, ate) de uma lista, no lugar (um laço só, sem devolver número por
+   * linha: uma chamada por linha a uma função que o V8 não embute devolve o double numa caixa e aloca no laço de áudio).
+   */
+  aplicar(L: ListaLinhas, de: number, ate: number) {
+    if (this.prof <= 0) return;
+    const t = this.t, f = L.f, a = L.a, K = N_RELEVO / OITAVAS_RELEVO;
+    for (let i = de; i < ate; i++) {
+      const x = f[i];
+      if (x < 20) { a[i] *= t[0]; continue; }
+      const u = Math.log2(x * 0.05) * K;
+      if (u >= N_RELEVO) { a[i] *= t[N_RELEVO]; continue; }
+      const j = u | 0;
+      a[i] *= t[j] + (t[j + 1] - t[j]) * (u - j);
+    }
+  }
+  /** fator linear do relevo em f (Hz): para fora do laço de áudio (testes, telemetria) */
+  ganho(f: number) {
+    if (this.prof <= 0) return 1;
+    const u = Math.log2(f < 20 ? 1 : f * 0.05) * (N_RELEVO / OITAVAS_RELEVO), t = this.t;
+    if (u >= N_RELEVO) return t[N_RELEVO];
+    const i = u | 0, fr = u - i;
+    return t[i] + (t[i + 1] - t[i]) * fr;
+  }
+}
+const N_RELEVO = 1024, OITAVAS_RELEVO = Math.log2(24000 / 20);
+/** profundidade padrão do relevo da carcaça (dB de desvio-padrão; o preset muda em `ressonancia`) */
+export const RELEVO_PADRAO = 2;
 
 /** convenção dos motores novos: canal em Pa a 7,5 m (4.2) */
 export const REF_DIST_ELETRICO = 7.5;

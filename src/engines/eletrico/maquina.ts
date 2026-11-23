@@ -6,7 +6,7 @@
 // vem da sonda (`kAbs`, motor.ts) na condição de referência.
 import type { PresetEletrico } from './dsp';
 import type { ListaLinhas } from './linhas';
-import { TAU, MEC, chave, I_VAZIO, I_VAZIO_CC, F_CARC, F_CARC_LP } from './constantes';
+import { TAU, MEC, chave, I_VAZIO, I_VAZIO_CC, F_CARC, F_CARC_LP, type Relevo } from './constantes';
 
 /** estado elétrico e mecânico da máquina, recalculado a cada bloco de controle */
 export class EstadoMaquina {
@@ -85,6 +85,14 @@ export function pesoLaterais(fe: number) { const x = (2 * Math.abs(fe) - 1.5) / 
 const W_M = [1, Math.pow(10, -10 / 20), Math.pow(10, -18 / 20)];        // m = 1, 2, 3
 const W_K = [1, 0.5, Math.pow(10, -14 / 20)];                            // k = 0, ±1, ±2
 const DOBRA = 2 * (W_K[1] * W_K[1] + W_K[2] * W_K[2]);
+/**
+ * Ondulação de torque (6f_e, 12f_e, 18f_e) da máquina de INDUÇÃO, relativa à lei de 1.1 (−12 dB). Numa síncrona de ímã
+ * ela nasce na própria máquina (ranhuras contra os ímãs); na de indução vem do 5º e do 7º harmônicos da corrente, que o
+ * PWM senoidal quase não tem e a onda quadrada tem (essa parte quem emite é o `Inversor`, no modo de bloco). As duas
+ * gravações de dentro de trem IGBT (CPTM 9500 e 9000, ELETRICO 3.2) têm o engrenamento e as ranhuras como as famílias
+ * que sobem e nenhuma em 12·f_rot; com a lei cheia, 6f_e era a linha mais forte da cabine.
+ */
+const K_6E_INDUCAO = 0.25;
 
 /** categorias de amplitude (uma por mecanismo; o fator é calculado uma vez por bloco) */
 const C2E = 0, C6E = 1, CRAN = 2, CBAR = 3, CCC = 4, CMAG = 5, CBLDC = 6, CEXT = 7;
@@ -101,7 +109,10 @@ export class ForcasMotor {
   /** fatores por categoria do bloco */
   amp = new Float64Array(8);
   fc: number;
-  constructor(p: PresetEletrico) {
+  /** relevo da carcaça (modos): multiplica a curva lisa em cada linha; null = curva lisa */
+  relevo: Relevo | null;
+  constructor(p: PresetEletrico, relevo: Relevo | null = null) {
+    this.relevo = relevo;
     const L: [number, number, number, number, number, number, number][] = [];
     const exc = Math.pow(10, (-20 + 12 * (p.excentricidade ?? 0.2)) / 20);
     const add = (k: number, cr: number, ce: number, c0: number, cat: number, w: number, fl: number, laterais: boolean) => {
@@ -169,7 +180,7 @@ export class ForcasMotor {
     const Ie = Math.max(e.I, I_VAZIO), gI = Math.sqrt(Ie), A2 = 2 * phi;
     const mod = p.maquina === 'inducao' ? 1 + 0.19 * Math.sin(fase) : 1;
     a[C2E] = A2;
-    a[C6E] = Math.min(A2, A2 * 0.1 * (Ie / I_VAZIO));
+    a[C6E] = Math.min(A2, A2 * 0.1 * (Ie / I_VAZIO)) * (p.maquina === 'inducao' ? K_6E_INDUCAO : 1);
     a[CRAN] = (p.maquina === 'inducao' ? 0.6 : 1) * phi * gI * mod;
     a[CBAR] = 1.5 * phi * gI * mod;
     a[CMAG] = A2 * 0.4 * (1 + 1.51 * Math.max(e.I, 0));
@@ -181,15 +192,40 @@ export class ForcasMotor {
   emitir(L: ListaLinhas, fr: number, fe: number) {
     const wl = pesoLaterais(fe), sl = Math.sqrt(wl), F = Math.sqrt(1 + (1 - wl) * DOBRA), fc = this.fc;
     const A = this.amp, K = this.chave, CR = this.cr, CE = this.ce, C0 = this.c0, CT = this.cat, W = this.w, FL = this.fl;
+    const rv = this.relevo, n0 = L.n;
+    // (as linhas vão direto para os vetores da lista: passar `f` e `a` por uma chamada que o V8 não embute põe cada
+    // número numa caixa, e são ~70 linhas por unidade a cada bloco de controle)
+    const lc = L.chave, lf = L.f, la = L.a, lz = L.fase, cap = L.cap;
+    let n = L.n, semH = 0;
     for (let i = 0; i < this.n; i++) {
       const fl = FL[i];
+      if (fl === SEMH) { semH++; continue; }
       if (fl === LAT && sl === 0) continue;
       let f = CR[i] * fr + CE[i] * fe + C0[i];
       if (f < 0) f = -f;
       const r = f / fc, r4 = r * r * r * r, q = f * (1 / F_CARC_LP);
-      let a = A[CT[i]] * W[i] * (fl === SEMH ? 1 : Math.sqrt(r4 / (1 + r4)) / Math.sqrt(1 + q * q));
+      let a = A[CT[i]] * W[i] * (Math.sqrt(r4 / (1 + r4)) / Math.sqrt(1 + q * q));
+      // ranhuras e barras: a onda de força tem ordem espacial alta (|Z_r − Z_s| ± 2p: 6 a 14 no Taurus) e irradia mal em
+      // baixa frequência: mais 6 dB/oitava abaixo de 2·f_carc. Com o trem devagar essas linhas ficavam sozinhas em
+      // 150–400 Hz (Taurus a 12 km/h: 198 Hz, 27 dB sobre o piso; a gravação A no patamar tem as linhas dali 4–10 dB sobre o piso)
+      const ct = CT[i];
+      if (ct === CRAN || ct === CBAR) { const u = f / (2 * fc); a *= u / Math.sqrt(1 + u * u); }
       if (fl === LAT) a *= sl; else if (fl === CENTRO) a *= F;
-      L.por(K[i], f, a);
+      if (a > 0 && n < cap) { lc[n] = K[i]; lf[n] = f; la[n] = a; lz[n] = NaN; n++; }
+    }
+    L.n = n;
+    // o relevo dos modos da carcaça, de uma vez (sem chamada por linha)
+    if (rv !== null) rv.aplicar(L, n0, n);
+    // o desbalanceamento sacode a máquina inteira: sem a curva da carcaça nem o relevo
+    if (semH > 0) {
+      for (let i = 0; i < this.n; i++) {
+        if (FL[i] !== SEMH) continue;
+        let f = CR[i] * fr + CE[i] * fe + C0[i];
+        if (f < 0) f = -f;
+        const a = A[CT[i]] * W[i];
+        if (a > 0 && n < cap) { lc[n] = K[i]; lf[n] = f; la[n] = a; lz[n] = NaN; n++; }
+      }
+      L.n = n;
     }
   }
 }

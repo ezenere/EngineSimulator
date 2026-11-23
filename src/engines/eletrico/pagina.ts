@@ -3,10 +3,11 @@
 // (src/worklet/processador-eletrico.ts, `eletrico-engine`) e, de reserva, na thread principal.
 //
 // Mensagens (além das do CenaDSP: 'cena', 'params', 'ar'):
-//   { type: 'preset', cfg, trem?, pneusAero? }   monta o portador do preset com o motor já calibrado na página (`cfg` de
-//                                                 prepararMotorEletrico: kAbs por fonte); a velocidade continua
+//   { type: 'preset', cfg, trem?, pneusAero?, pneusDb?, ventoDb? }   monta o portador do preset com o motor já calibrado
+//                                                 na página (`cfg` de prepararMotorEletrico: kAbs por fonte); a velocidade continua
 //   { type: 'input', acelerador?, freio?, ignicao? }
-//   { type: 'eletrico', modulacao?, avas?, cargaFracao?, inclinacao?, massaExtra?, velocidadeImposta? (m/s | null), re? }
+//   { type: 'eletrico', modulacao?, avas?, cargaFracao?, inclinacao?, massaExtra?, velocidadeImposta? (m/s | null), re?,
+//     pneusDb?, ventoDb? }                       (pneus e vento do carro, dB sobre o CENA 4.1: mudam sem remontar)
 // Telemetria: a do CenaDSP (a cada 1024 amostras), com a do portador trazendo a do motor (rpm, torque, potencia, corrente,
 // fE, fC, N, modo, M, fluxo, nota, notaNome, linhas…).
 import { CenaDSP } from '../../scene/dsp-cena';
@@ -19,12 +20,15 @@ import type { CfgEletrico } from './motor';
 export class DSPEletricoPagina extends CenaDSP {
   cmd: Record<string, unknown> = { pedal: 0, freio: 0, ignicao: false };
   carga = { inclinacao: 0, massaExtra: 0 };
+  ar: { pneusDb?: number; ventoDb?: number } = {};
   message(m: any) {
     if (!m) return;
     if (m.type === 'preset') {
       const cfg = m.cfg as CfgEletrico;
       const vAnt = this.portador ? this.portador.cinematica.v : 0;
-      const p = montarPortadorEletrico(cfg, this.fs, (m.trem || {}) as Partial<ConfigTrem>, undefined, { pneusAero: m.pneusAero !== false });
+      if (typeof m.pneusDb === 'number') this.ar.pneusDb = m.pneusDb;
+      if (typeof m.ventoDb === 'number') this.ar.ventoDb = m.ventoDb;
+      const p = montarPortadorEletrico(cfg, this.fs, (m.trem || {}) as Partial<ConfigTrem>, undefined, { pneusAero: m.pneusAero !== false, ...this.ar });
       this.montar(p);
       p.comandar({ pedal: 0, ...this.cmd });
       // a velocidade imposta continua; sem ela, o portador começa parado
@@ -46,6 +50,12 @@ export class DSPEletricoPagina extends CenaDSP {
       if (m.cargaFracao !== undefined) c.cargaFracao = m.cargaFracao;
       if (m.velocidadeImposta !== undefined) c.velocidadeFixa = m.velocidadeImposta;
       if (m.re !== undefined) c.marcha = m.re ? -1 : 1;
+      if (typeof m.pneusDb === 'number') this.ar.pneusDb = m.pneusDb;
+      if (typeof m.ventoDb === 'number') this.ar.ventoDb = m.ventoDb;
+      if ((typeof m.pneusDb === 'number' || typeof m.ventoDb === 'number') && this.portador instanceof CarroEletrico) {
+        const cf = this.portador.cfg;
+        this.portador.definirAr(this.ar.pneusDb ?? cf.pneusDb ?? 0, this.ar.ventoDb ?? cf.ventoDb ?? 0);
+      }
       if (typeof m.inclinacao === 'number') this.carga.inclinacao = m.inclinacao;
       if (typeof m.massaExtra === 'number') this.carga.massaExtra = m.massaExtra;
       Object.assign(this.cmd, c);

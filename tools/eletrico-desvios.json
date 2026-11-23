@@ -7,58 +7,6 @@
     "alvo": "≤ 64 fontes",
     "motivo": "O trem de 16 vagões não cabe nas 64 fontes da Cena nem sem motor (2 truques + corpo + vão por vagão: 67 com uma face; maxVagoes dá 15). O orçamento é da Cena (CENA 5.1) e do trem sem motor, que esta etapa não muda; o N700 entra no trem-bala de 10 vagões da Passagem (8 carros motores, 63 fontes, agrupado por carro)."
   },
-  "pneus do carro a 80 km/h, a 7,5 m (só pneus, asfalto, CENA 4.1)": {
-    "grupo": "portadores",
-    "medido": 75.7,
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "73 ± 2 dB(A)",
-    "motivo": "Era a medida em campo livre (70,7 dB(A)), com este motivo: os 73 dB(A) do CENA 4.1 somam as 4 rodas como se as 4 estivessem a 7,5 m; no corpo de 4,6 × 1,85 m o par do lado de lá fica 1,55 m mais longe e os eixos a ±1,4 m: 70,7 dB(A) no máximo da passagem em campo livre, com os 95 dB(A) por roda do CENA à letra (no asfalto a imagem da fonte no chão soma +5 dB). Agora medido no asfalto, a condição do alvo e a da página (AUDITORIA T-ELE-04): passa do alvo pelo outro lado, 75,7 dB(A), 0,7 dB acima da faixa. Para a etapa de som: calibrar os pneus na condição em que se ouvem."
-  },
-  "AVAS a 2 m, 10 km/h (asfalto)": {
-    "grupo": "avas",
-    "medido": 62.9,
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "61 ± 1,5 dB(A)",
-    "motivo": "AUDITORIA T-ELE-04: o passo 7 pede o AVAS a 2 m no asfalto; o nível foi acertado em campo livre (61,8 dB(A), dentro), e no asfalto a reflexão no chão soma: 62,9 dB(A), 0,4 dB acima da faixa. Para a etapa de som: calibrar a lei de nível na condição do alvo."
-  },
-  "AVAS a 2 m, 20 km/h (asfalto)": {
-    "grupo": "avas",
-    "medido": 70.4,
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "67 ± 1,5 dB(A)",
-    "motivo": "AUDITORIA T-ELE-04: idem a 20 km/h: 70,4 dB(A) no asfalto (68,3 em campo livre), 1,9 dB acima da faixa de 67 ± 1,5; com o ruído de 1 kHz subindo 3 dB por 10 km/h, a reflexão do chão pesa mais na velocidade. Para a etapa de som."
-  },
-  "Taurus no patamar (A, estação, 4 m): bandas 20–60 / 60–150 / 400–1k / 1–2,5k / 2,5–6k": {
-    "grupo": "alvos-3.7",
-    "medido": [
-      -20,
-      -9.3,
-      -0.7,
-      -5.8,
-      -13
-    ],
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "-11.5 / -1.8 / +3.2 / -2.0 / -12.4 (±6 / ±6 / ±4 / ±4 / ±4 dB)",
-    "motivo": "AUDITORIA T-ELE-05: falta grave no Taurus: 20–60 Hz em −20,0 (gravação A −11,5) e 60–150 em −9,3 (−1,8), 8,5 e 7,5 dB abaixo, além dos ±6 dB; o miolo fica no limite (400–1k −0,7 contra +3,2; 1–2,5k −5,8 contra −2,0, que mudava de estado com a semente). Antes o vetor de alvos estava deslocado uma casa e o grave não entrava no critério. Para a etapa de som (item 1 do Elétrico, B6)."
-  },
-  "CPTM 9500 parado (de dentro): bandas 20–60 / 60–150 / 400–1k / 1–2,5k / 2,5–6k": {
-    "grupo": "alvos-3.7",
-    "medido": [
-      -13.7,
-      -4.6,
-      1.8,
-      -0.4,
-      -17.2
-    ],
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "-5.5 / -1.3 / +0.9 / -4.3 / -18.7 (±6 / ±6 / ±4 / ±4 / ±4 dB)",
-    "motivo": "AUDITORIA T-ELE-05: falta grave no metrô de dentro: 20–60 Hz em −13,7 (gravação −5,5), 8,2 dB abaixo, além dos ±6 dB; 1–2,5k em −0,4 contra −4,3, perto do limite (mudava de estado com a semente). Antes o vetor de alvos estava deslocado uma casa e o grave não entrava no critério. Para a etapa de som (item 1 do Elétrico)."
-  },
   "Mavic pairado: bandas 20–60 / 60–150 / 400–1k / 1–2,5k / 2,5–6k": {
     "grupo": "alvos-3.7",
     "medido": [
@@ -113,33 +61,6 @@
     "motivo": "A2 (AUDITORIA T-ELE-03): passa por menos de 5 % da tolerância e cai fora com outras sementes (896 Hz a toda a velocidade, com sementes de 896 a 932, contra 550–900); fica declarada à beira, com teto.",
     "beira": true
   },
-  "furadeira sem fio: bandas 20–60 / 60–150 / 400–1k / 1–2,5k / 2,5–6k": {
-    "grupo": "alvos-3.7",
-    "medido": [
-      -26,
-      -17.9,
-      4.7,
-      17.3,
-      13.2
-    ],
-    "unidade": "dB",
-    "folga": "±1 dB",
-    "alvo": "-25.4 / -23.5 / +4.9 / +17.0 / +16.7 (±6 / ±6 / ±4 / ±4 / ±4 dB)",
-    "motivo": "A2 (AUDITORIA T-ELE-03): passa por menos de 5 % da tolerância e cai fora com outras sementes (60–150 Hz em −17,9 contra −23,5 ± 6 e 2,5–6k em +13,2 contra +16,7 ± 4: as duas na borda; a 2,5–6k mudava de estado com a semente); fica declarada à beira, com teto.",
-    "beira": true
-  },
-  "Tesla: portadora na cabine": {
-    "grupo": "alvos-3.7",
-    "medido": [
-      9785,
-      -41.4
-    ],
-    "unidade": "",
-    "folga": "±5 % (≥ 1.5)",
-    "alvo": "≈ 10 kHz, ≥ 40 dB abaixo do grave",
-    "motivo": "A2 (AUDITORIA T-ELE-03): passa por menos de 5 % da tolerância e cai fora com outras sementes (−41,4 dB contra ≥ 40 abaixo do grave); fica declarada à beira, com teto.",
-    "beira": true
-  },
   "Leaf a 85 km/h: 96·f_rot": {
     "grupo": "alvos-3.7",
     "medido": 9357,
@@ -150,11 +71,11 @@
   },
   "Leaf: razão das duas famílias agudas": {
     "grupo": "alvos-3.7",
-    "medido": 1.412,
+    "medido": 1.5,
     "unidade": "",
     "folga": "±2 %",
     "alvo": "1,46 ± 0,05",
     "beira": true,
-    "motivo": "AUDITORIA F-ELE-09 e A2: a linha mais forte de 5,5–7,5 kHz é o 4º harmônico do engrenamento do 1º estágio, 4 × 17 = 68·f_rot, e a razão 96/68 = 1,412 fica na borda de baixo do alvo (1,46 ± 0,05). Com os dentes errados de antes (16) era 96/64 = 1,500, na borda de cima: o teste passava por coincidência. A família a 1/1,46 da gravação (65,8·f_rot) não é nenhuma linha do modelo: para a etapa de som, identificar o que ela é."
+    "motivo": "AUDITORIA F-ELE-09, A2 e etapa de som: a segunda família é procurada na janela de ordens do alvo (96/1,51 a 96/1,41 de f_rot, com 2 % de folga). Ali o modelo tem duas linhas: a lateral de ranhura 48·f_rot + 4·f_e = 64·f_rot (razão 1,500) e o 4º harmônico do engrenamento, 68·f_rot (1,412); com o relevo da carcaça (os modos mudam cada linha de ±2 dB) a mais forte passou a ser a de 64, na borda de cima do alvo (1,46 ± 0,05). A família a 1/1,46 da gravação (65,8·f_rot) continua sem linha própria no modelo: na gravação (leaf-aceleracao-dentro, 8–15 s) o que há entre 5,5 e 7,5 kHz são linhas fixas em 6,25, 9,0, 9,6 e 10,0 kHz, que não seguem a velocidade, e famílias paralelas fracas sob estalos de banda larga; a leitura de 6,5 kHz aos 14 s não se separa da linha fixa de 6,25 kHz. Fica à beira, com teto."
   }
 }

@@ -2,7 +2,7 @@
 // os canais das fontes direto, sem `tap`); este arquivo acrescenta o nível absoluto: os `niveis` do preset são L_W dB(A)
 // na condição de referência (torque nominal na rotação de base: motor, inversor, redução; rotação nominal: ventilador,
 // escovas, hélice em pairado; o auxiliar é constante), e `kAbs` por fonte vem de uma sonda na thread principal
-// (`sondarNivelEletrico`: 0,5 s na condição de referência, RMS ponderado A pelo `Acumulador` de ronco/motor.ts, `paDeLw`),
+// (`sondarNivelEletrico`: 1,25 s na condição de referência, RMS ponderado A pelo `Acumulador` de ronco/motor.ts, `paDeLw`),
 // como `sondarNivelDiesel`. O AVAS é calibrado analiticamente (avas.ts). Com o chopper a referência do inversor é D = 0,5
 // (meia rotação de base): em D = 1 (série plena) ele não soa.
 import type { FonteSonora } from '../../scene/tipos';
@@ -19,6 +19,11 @@ const BASES: IdCanalEletrico[] = ['motor', 'inversor', 'reducao', 'ventilador', 
 function medir(p: PresetEletrico, fs: number, fracBase: number) {
   const d = new EletricoDSP(fs);
   d.configurar({ ...p, kAbs: undefined }, fs);
+  // compressor, ventilação e transformador têm calibração própria (auxiliares.ts): ficam fora da sonda
+  if (d.auxi) d.auxi.mudo = true;
+  // a sonda mede a máquina sem o passeio da rotação nem o tremor de amplitude (a "vida" das linhas): com eles o nível de
+  // 1 s depende de onde o passeio estava (no Mavic, ±0,4% sobre o relevo da carcaça: 1 a 2 dB)
+  for (const U of d.uni) { U.jit.desvio = 0; U.jit.tremorDb = 0; }
   const wb = (p.rpmBase * TAU) / 60;
   d.comandar({ acelerador: 1, ignicao: true, partida: false, omegaImposta: wb * fracBase, torqueFixo: p.Tn, v: 20 } as never);
   // ventiladores forçados já na rotação (a subida de 1,5 s fica fora da sonda)
@@ -31,7 +36,9 @@ function medir(p: PresetEletrico, fs: number, fracBase: number) {
   const acc = new Map<IdCanalEletrico, Acumulador>();
   for (const b of idx.keys()) acc.set(b, new Acumulador(fs));
   const B = 128, saidas = d.canais.map(() => new Float32Array(B));
-  const N = Math.round(0.5 * fs), ini = Math.round(0.25 * fs);
+  // 1 s de medida depois de 0,25 s: as linhas têm vida (tremor de amplitude a 3 Hz, a rotação passeando sobre o relevo da
+  // carcaça, laterais a poucos Hz que batem devagar) e 0,25 s pegavam um instante dela (até 2 dB de erro na calibração)
+  const N = Math.round(1.25 * fs), ini = Math.round(0.25 * fs);
   for (let k = 0; k < N; k += B) {
     d.processar(saidas, B);
     if (k >= ini) for (const [b, i] of idx) { const a = acc.get(b)!, x = saidas[i]; for (let j = 0; j < B; j++) a.somar(x[j]); }

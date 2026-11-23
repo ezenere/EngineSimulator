@@ -20,6 +20,13 @@ import type { ComandoEletrico } from '../engines/eletrico/dsp';
 
 const G = 9.81;
 const V_REF_PNEU = 80 / 3.6;
+/**
+ * Pneus e vento do carro elétrico, em dB sobre os níveis do CENA 4.1 (95 dB(A) por roda e 80 dB(A) de aero a 80 km/h).
+ * Pneus em −2,5 dB: os 73 ± 2 dB(A) a 7,5 m do CENA são no asfalto, onde a imagem da fonte no chão soma 5 dB (com os 95 à
+ * letra davam 75,7; assim, 73,2, e a passagem a 30 km/h e 6 m ainda cabe nos 62 ± 3). Vento em −6 dB: de dentro, a 100 km/h, pneus e vento eram 96%
+ * do nível ponderado A e o trem de força 4%. São o tempero, não o som do carro; a página tem um controle para cada um.
+ */
+export const PNEUS_DB_PADRAO = -2.5, VENTO_DB_PADRAO = -6;
 
 // (o pneu é a FontePneu de ruido.ts, a do CENA 4.1: 95 dB(A) por roda a 80 km/h, 98 no ônibus)
 
@@ -49,6 +56,8 @@ export interface ConfigCarroEletrico {
   aderencia?: number;
   /** liga os pneus e o aero (padrão true: decisão 5; a página tem a chave para ouvir o trem de força sozinho) */
   pneusAero?: boolean;
+  /** nível dos pneus e do vento em dB sobre o CENA 4.1 (padrões: PNEUS_DB_PADRAO e VENTO_DB_PADRAO) */
+  pneusDb?: number; ventoDb?: number;
   semente?: number;
 }
 
@@ -90,6 +99,8 @@ export class CarroEletrico implements Portador {
     }
     if (c.trole) this.propria({ id: 'trole', tipo: 'pantografo', pos: [-1, 0, 4.0], dir: omni, refDist: 7.5, dentro: false }, new FonteTrole(fs, prox()));
     for (const p of this.proprias) { p.g.calibrar(); p.g.gCal /= Math.sqrt(fatorPotenciaDir(p.f.dir.tabela)); }
+    this.gCal0 = this.proprias.map((p) => p.g.gCal);
+    this.definirAr(c.pneusDb ?? PNEUS_DB_PADRAO, c.ventoDb ?? VENTO_DB_PADRAO);
     const self = this;
     this.carga = {
       inercia: 0,
@@ -99,6 +110,15 @@ export class CarroEletrico implements Portador {
   }
 
   private propria(f: FonteSonora, g: FonteRuido) { this.proprias.push({ f, g }); }
+  private gCal0: number[] = [];
+  /** nível dos pneus e do vento, em dB sobre o CENA 4.1 (os controles "Pneus" e "Vento" da página) */
+  definirAr(pneusDb: number, ventoDb: number) {
+    this.cfg.pneusDb = pneusDb; this.cfg.ventoDb = ventoDb;
+    this.proprias.forEach((p, i) => {
+      const db = p.f.id.startsWith('pneu') ? pneusDb : p.f.id === 'aero' ? ventoDb : 0;
+      p.g.gCal = this.gCal0[i] * Math.pow(10, db / 20);
+    });
+  }
 
   private massa() { return this.cfg.massa + (this.cfg.massaExtra ?? 0); }
   /** força resistente (N) a v (m/s), positiva contra o movimento */

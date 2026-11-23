@@ -23,6 +23,7 @@ qualquer veículo, antigo ou novo.
 - [Caso: os médios](#caso-os-médios)
 - [Caso: papel rasgando](#caso-papel-rasgando)
 - [Caso: Radial: o estalo por explosão, o chiado do anel e a página diferente da Passagem](#caso-radial-o-estalo-por-explosão-o-chiado-do-anel-e-a-página-diferente-da-passagem)
+- [Caso: Elétrico: o trem parado e a linha viva](#caso-elétrico-o-trem-parado-e-a-linha-viva)
 - [Ferramentas](#ferramentas)
 - [O que olhar em cada tipo de veículo](#o-que-olhar-em-cada-tipo-de-veículo)
 
@@ -796,6 +797,91 @@ torque no modelo (a rede de tubos devolve ao motor pouco do que reflete depois d
 - **Dois critérios podem puxar para lados opostos na mesma gravação.** O T-6G real tem 11,5 picos por segundo e p90/p10 de 15,5 dB; "até 6 picos" e "pulso a menos ≤ 1,3" não cabem juntos. Ficou do lado de menos picos (5,5; pulso a menos 1,6).
 - **Medir a página num ouvido só.** A soma em mono dos dois ouvidos tirava 2 a 4 dB de 1–2,5 kHz e fazia parte do "a página é mais escura".
 - **Encher o vão com tique não resolve.** A batida periódica do motor-base, a 0 dB, levava o Verner 3V de 12 para 20 picos por segundo: mais eventos isolados, não menos.
+
+## Caso: Elétrico: o trem parado e a linha viva
+
+**Queixa:** a regra de gosto ("mais motor e menos som de ar do motor"), "no geral, os motores estão sem médios", e o
+que os testes já mediam: grave faltando no Taurus e no metrô, metrô parado em silêncio digital, "soa a sintetizador".
+Num elétrico o motor é o canto (ordens da máquina e da redução, portadora do inversor com as laterais, engrenamento);
+pneu, vento e ventilação são o ar.
+
+**Como se mediu.** O kit ouvido supõe um ciclo, e uma máquina elétrica não tem um só: as ordens do eixo, `f_e` com
+escorregamento, a portadora fixa e os auxiliares na frequência da rede não têm múltiplo comum. Três ferramentas novas
+(detalhes no `TECNICO.md`, seção do Elétrico):
+
+- `tools/eletrico-fontes.ts`: o preset pela Cena na condição da gravação (arrancada livre, ouvinte ao lado do motor ou
+  na cabine, estação) e o conjunto por fonte com a mesma semente, para o `orcamento.py`.
+- `tools/eletrico-vida.py`: sem ciclo. Por banda, HNR (linhas ÷ piso entre elas) e planura do piso; por linha, AM, FM,
+  largura e saia. Com o trem acelerando vale o HNR de tempo curto (quadros de ~170 ms).
+- `tools/eletrico-ouvido.py`: a régua, dez casos contra gravações casadas, com o kit onde há um ciclo (a portadora ÷ 10
+  no patamar do Taurus, a volta do eixo na furadeira, a dos motores de ventilação no trem parado).
+
+**O que se achou** (antes, nas mesmas condições das gravações):
+
+- **O grave do trem é ventilador.** No Taurus parado e no patamar, 20–150 Hz é o largo dos sopradores de tração
+  (plano até ~150 Hz, depois −3 dB por oitava) e as ordens do eixo deles. O modelo punha o largo num passa-banda
+  fixo em 1 kHz: o "ar" ficava todo em 0,5–2 kHz e o grave 15 a 20 dB abaixo. O ruído de um ventilador escala com
+  a passagem de pá.
+- **O metrô parado não tinha fonte.** Ventilação `null`, conversor auxiliar em dois presets: zeros na saída. A
+  gravação de plataforma tem o compressor de ar (um pente de ordens de 9,75 Hz que liga e desliga), os motores de
+  ventilação (58 Hz e múltiplos) e o largo do ar-condicionado.
+- **"Sintetizador" era linha parada sobre silêncio.** Linhas 20 a 30 dB acima do piso (gravações: 8 a 15), com 0,6 a
+  1 Hz de largura (1 a 10), HNR de +7 a +16 dB onde as gravações têm −1 a −10, e tons que nenhuma gravação tem: a
+  passagem de pá de um soprador de 50 Hz numa locomotiva de sopradores a 60 Hz, a do ventilador da furadeira 41 dB
+  sobre o piso, grupos da portadora "≈" até 4,8 kHz.
+- **O trem de força do Tesla** ficava 29 dB abaixo do total na passagem a 100 km/h (24 em regime a 7,5 m) e 12 de
+  dentro: pneus 2,7 dB acima do alvo (calibrados em campo livre, medidos no asfalto) e vento no nível de catálogo.
+  Hoje: 26, 21 e 9 dB.
+
+**O que foi implementado** (por mecanismo; arquivos e números no `TECNICO.md`):
+
+| Mudança | Por quê |
+|---|---|
+| Ruído de ventilador na escala da passagem de pá, e as ordens 1 e 3 do eixo do soprador | É o grave do trem; o que estava em 1 kHz desce para onde a gravação o tem |
+| Auxiliares: compressor que cicla, ventilação e ar-condicionado, transformador | Trem parado soa, e muda sozinho (o compressor liga e desliga) |
+| Par `f − f_e`, `f + f_e` no lugar da linha em `f` do inversor, com as fases presas ao fluxo | A força é a ondulação da corrente vezes o fluxo: o tom da portadora bate em 2·`f_e`, não fica parado |
+| Relevo dos modos da carcaça (±2 dB, sorteado uma vez por unidade) | A ordem que sobe acende e apaga ao cruzar as ressonâncias |
+| Chocalho da redução folgada, em várias pancadas fora de compasso; arrasto que mantém os dentes engrenados | O chiado da furadeira é a planetária, não o ventilador: sai o tom de pá, entra a máquina |
+| Ondulação de torque da indução 12 dB abaixo | Com a tração chegando à cabine pela estrutura, 6·`f_e` era a linha mais forte; as gravações de dentro não a têm |
+| Tração na cabine do trem pela estrutura; pneus −2,5 dB e vento −6 dB no carro, cada um com o seu slider | O motor tem de se ouvir de dentro sem esconder nada: baixa-se o tempero, não se sobe o motor |
+| Linhas fixas e grupos medidos no lugar dos "≈" | Tom que a gravação não tem é o primeiro suspeito |
+
+**Resultado** (kit ouvido, total; mesmas condições): Taurus no patamar 1,78 → 1,16 (`ar` 2,20 → 0,80), Taurus parado
+2,46 → 1,23, CPTM parada na plataforma 1,97 → 1,42, furadeira 2,48 → 1,68; as cinco bandas do Taurus e da CPTM
+parada dentro da tolerância, com 20–150 Hz; nenhum trem em silêncio; AVAS e pneus no alvo. O que NÃO melhorou no
+número: a CPTM acelerando de dentro (1,24 → 1,77) e o Tesla de dentro (2,23 → 2,31). Painéis de antes e depois em
+`docs/ouvido/eletrico/` (Taurus no patamar e parado, CPTM 9500 de dentro acelerando e parada na plataforma, Tesla de
+dentro, furadeira).
+
+**Lições:**
+
+- **Renderize o antes nas condições do depois.** A primeira régua comparava o depois em arrancada livre com o antes em
+  velocidade imposta: metade da "melhora" de largura de linha era a aceleração. O código de antes saiu de um
+  `git archive` para uma pasta à parte e foi renderizado de novo.
+- **O número do kit piora quando se acerta o que ele não vê.** Na cabine do metrô acelerando, as linhas mais fortes da
+  gravação são o engrenamento e as fixas do conversor; dobradas no ciclo do eixo, viram "ruído". O antes (cabine sem
+  motor nenhum) ganhava no total. O HNR de tempo curto mostrou o contrário: em 400 Hz–1 kHz, +6,5 dB na gravação,
+  −11,8 antes, −2,0 depois. Escolha a medida pelo sinal, não o sinal pela medida.
+- **Abrir um caminho mostra o que estava escondido.** Com a tração chegando à cabine pela estrutura, a linha mais forte
+  era a ondulação de torque em 6·`f_e`, que nenhuma gravação de dentro tem. Enquanto o motor não se ouvia, ninguém a
+  ouvia: todo caminho novo pede a tabela por fonte de novo.
+- **Pancada periódica é tom.** A primeira versão do chocalho da furadeira batia uma vez por volta e prendia 42% da
+  envoltória de 1–6 kHz ao giro (um zumbido em 247 Hz, curtose 5,8); a gravação tem 1% e curtose 3,2. Vários planetas
+  fora de compasso dão a mesma potência sem a nota (0% e 3,3). O `ar` do kit subiu de 0 para 0,83 com isso: periódico
+  ele não contava como "ar", mas era errado.
+- **A vida da linha gravada é em parte propagação.** A linha de 598 Hz do Taurus tem 6 a 10 Hz de largura na gravação
+  e desce uns 10 Hz (de ≈ 605 para ≈ 595) enquanto a locomotiva passa: Doppler e reflexões da estação. Não se põe passeio na fonte
+  para imitar o que é do caminho.
+- **Meça com o estado da fonte que a gravação tem.** O compressor liga com a ignição e para aos 16 s: o mesmo trem dá
+  3 a 4 dB a mais em 20–150 Hz conforme o trecho. As duas gravações da CPTM parada casam com ele desligado.
+- **O chão conta nos médios.** O Taurus parado a 4 m perde 6 dB em 400 Hz–1 kHz na reflexão do chão da Cena; sem o
+  chão, as cinco bandas ficam a menos de 3 dB da gravação. Antes de mexer na fonte por falta de médios, renderize sem
+  o chão.
+
+**Pendente:** furadeira escura acima de 6 kHz (12 dB); engrenamento menos saliente e 1–2,5 kHz a mais na cabine do
+metrô acelerando (o ruído de rolamento de dentro, do portador, é fraco); o Tesla de dentro com 13 dB a mais que o
+Plaid em 2,5–6 kHz (outro carro: o ouvido decide se é muito); MP 73, BPF do Mavic, do-re-mi a 0,6 m/s² e a segunda
+família aguda do Leaf, não tocados.
 
 ## Ferramentas
 

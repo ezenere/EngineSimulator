@@ -95,14 +95,25 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
       tipo: 'gto', fc: PATAMAR_TAURUS, fcMax: 600, modo: 'escada',
       escada: { f0: ESCADA_F0, delta: ESCADA_DELTA, notas: NOTAS_TAURUS, patamar: PATAMAR_TAURUS },
       sincrona: [15, 11, 9, 7, 5, 3, 1],
-      // grupos 2f_c, 3f_c, 4f_c medidos no patamar (3.1: D −4/−9/−8, A −11/−15/−22): os do meio
-      // (≈ dali para cima: o GTO com poucos pulsos põe energia até 8·f_c; a gravação D tem 2996 Hz a −22)
-      perfilGrupos: [0, -6, -9, -9, -14, -17, -20, -23],
+      // grupos 2f_c, 3f_c, 4f_c medidos no patamar (3.1: D −4/−9/−8, A −11/−15/−22): os do meio. Dali para cima a única
+      // medida é 5·f_c na gravação D, 2996 Hz a −22 dB (a A não tem nada acima de 2,4 kHz): o 5º grupo fica nela e os
+      // seguintes caem 4 dB cada. Estavam em −14, −17, −20 e −23 (≈): no patamar, quatro tons puros de 3 a 4,8 kHz, 30 dB
+      // sobre o piso, onde a gravação não tem tom (o kit: HNR de 2,5–6 kHz +7 dB contra −24)
+      perfilGrupos: [0, -6, -9, -9, -22, -26, -30, -34],
     },
-    // linhas fixas da locomotiva parada (conversor auxiliar e ventilação, 3.1)
-    auxLinhas: [[176, 0], [527, 0], [688, -1]], auxRuido: -3,
-    reducao: { estagios: [{ Zp: 26, Zc: 96 }], eta: 0.97 }, ventilacao: { forcada: true, B: 9, rpm: 2950 }, carcaca: 'trem',
-    niveis: { motor: 100, inversor: 96, reducao: 96, ventilador: 95, aux: 77 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 2, detune: 0.003,
+    // linhas fixas da locomotiva parada (conversor auxiliar e ventilação, 3.1); e, acima de 1 kHz, as do conversor de
+    // entrada em espera e do auxiliar, medidas na gravação A parada (3–12 s) em relação à de 526 Hz: 1660 Hz a −7 dB, com
+    // vizinhas a 34 Hz (2 × 16,7), 2000 e 2092 a −12 e −13, e os grupos de 3,7, 4,0 e 5,3 kHz a −13..−15. Sem elas a
+    // locomotiva parada não tinha tom nenhum acima de 1 kHz (HNR −13 e −18 dB em 1–2,5 e 2,5–6 kHz; a gravação, −5 e −2)
+    auxLinhas: [[176, 0], [527, 0], [688, -1], [1075, -13], [1660, -7], [1728, -14], [2000, -12], [2092, -13], [3669, -14], [3719, -14], [4000, -15], [5270, -13]], auxRuido: -3,
+    // sopradores de 9 pás em motores de 2 polos a 60 Hz do conversor auxiliar: 58,5 Hz (3 510 rpm), passagem de pá em
+    // 527 Hz, a linha fixa mais forte da locomotiva parada (gravação A: 58,3, 175,4 = 3× e 526,4 = 9×). Estava com 2 950 rpm
+    // (motor de 50 Hz): passagem de pá em 442 Hz, um tom que nenhuma gravação tem
+    reducao: { estagios: [{ Zp: 26, Zc: 96 }], eta: 0.97 }, ventilacao: { forcada: true, B: 9, rpm: 3510 }, carcaca: 'trem',
+    // 15 kV, 16,7 Hz: o transformador zumbe em 33,4 Hz e múltiplos (gravação A parada: 33,7 Hz, 16 dB abaixo da banda de
+    // 150–400 Hz: quase não se ouve, é infrassom; em dB(A) o número fica pequeno)
+    auxiliares: { compressor: 62, transformador: 44, fTracao: 16.7 },
+    niveis: { motor: 100, inversor: 96, reducao: 96, ventilador: 91, aux: 79 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 2, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 230,
     aprox: ['Zs', 'Zr', 'reducao (3,69)', 'lista síncrona', 'Tn (300 kN de partida)'],
     portador: {
@@ -117,7 +128,9 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     maquina: 'inducao', p: 2, Zs: 48, Zr: 40, Tn: 13050, Pmax: 1600000, rpmBase: 1170, rpmMax: 3500, J: 25, escorregamentoNominal: 0.02,
     inversor: { tipo: 'igbt', fc: 1000, modo: 'auto', sincrona: IGBT_TREM },
     reducao: { estagios: [{ Zp: 27, Zc: 100 }], eta: 0.97 }, ventilacao: { forcada: true, B: 9, rpm: 2950 }, carcaca: 'trem',
-    niveis: { motor: 100, inversor: 92, reducao: 96, ventilador: 95 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 2, detune: 0.003,
+    auxiliares: { compressor: 62, transformador: 44, fTracao: 16.7 },
+    // sopradores em 91 dB(A) (4.2 dava 95): com 95 a locomotiva parada soava quase tanto quanto arrancando
+    niveis: { motor: 100, inversor: 92, reducao: 96, ventilador: 91 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 2, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 200,
     aprox: ['Zs', 'Zr', 'reducao (3,7)', 'fc', 'lista síncrona'],
     portador: {
@@ -134,11 +147,13 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     maquina: 'cc-serie', p: 2, Zs: 46, Zc: 139, Tn: 793, Pmax: 110000, rpmBase: 1325, rpmMax: 3500, J: 6,
     inversor: { tipo: 'chopper', fc: 350, modo: 'chopper' },
     reducao: { estagios: [{ Zp: 15, Zc: 93 }], eta: 0.96 }, ventilacao: { forcada: false, B: 12 }, escovas: { Zc: 139, desgaste: 0.3 }, carcaca: 'trem',
+    // parado na plataforma: compressor e os motores dos auxiliares (como as gravações da Frota J e da Frota L)
+    auxiliares: { compressor: 72, ventilacao: 76 },
     niveis: { motor: 95, inversor: 94, reducao: 96, ventilador: 92, escovas: 90 }, Tregen: 0.8, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 90,
     aprox: ['Zs', 'Zc', 'reducao (6,2)', 'f_ch (sem gravação)', 'Tn (esforço de partida ≈)', 'vMaxKmh (a fonte dá 100)'],
     portador: {
-      tipo: 'trem', carrosMotores: [1, 2, 3, 4, 5, 6], motoresPorTruque: 2, rw: 0.43, massaTotal: 240000, carroAux: 2,
+      tipo: 'trem', carrosMotores: [1, 2, 3, 4, 5, 6], motoresPorTruque: 2, rw: 0.43, massaTotal: 240000, carroAux: 1,
       davis: { A: 7000, B: 120, C: 12 },
       config: { N: 6, Lc: 21.5, vao: 0.8, lNariz: 1.5, lCauda: 1.5, cpNariz: 0.3, largura: 3.1, altura: 3.7, zPiso: 0.5, pantografos: [], carenagem: false },
     },
@@ -151,12 +166,15 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     inversor: { tipo: 'igbt', fc: 1500, modo: 'auto', sincrona: IGBT_TREM, fcAux: 1333, fRede: 60 },
     // engrenamento Z_p 16 (família 1) e ranhuras Z_s 36 (família 2): 36/16 = 2,25, medido 2,24 (3.2); barras não aparecem
     reducao: { estagios: [{ Zp: 16, Zc: 101 }], eta: 0.96 }, ventilacao: null, carcaca: 'trem',
-    auxLinhas: [[542, 0], [656, -12]], auxRuido: 6,
-    niveis: { motor: 98, inversor: 92, reducao: 98, ventilador: 0, aux: 85 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
+    // 542 e 656 Hz em relação à de 1333 Hz (0 dB): medidas de dentro, parada (84–92 s): +6 e −6 dB (estavam em 0 e −12, e
+    // o auxiliar em 85 dB(A): com a de 542 Hz mais forte o canal vai a 89 para a de 1333 Hz ficar onde estava)
+    auxLinhas: [[542, 6], [656, -6]], auxRuido: 4,
+    auxiliares: { compressor: 74, ventilacao: 76 },
+    niveis: { motor: 98, inversor: 92, reducao: 98, ventilador: 0, aux: 89 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 90,
     aprox: ['reducao (6,3)', 'fc', 'Tn'],
     portador: {
-      tipo: 'trem', carrosMotores: [2, 3, 6, 7], motoresPorTruque: 2, rw: 0.43, massaTotal: 360000, carroAux: 1,
+      tipo: 'trem', carrosMotores: [2, 3, 6, 7], motoresPorTruque: 2, rw: 0.43, massaTotal: 360000, carroAux: 2,
       davis: { A: 10000, B: 150, C: 14 },
       config: { N: 8, Lc: 20, vao: 0.8, lNariz: 1.5, lCauda: 1.5, cpNariz: 0.3, largura: 3.0, altura: 3.9, zPiso: 0.5, pantografos: [2, 6], carenagem: false },
     },
@@ -171,6 +189,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     // medida e sem explicação física
     reducao: { estagios: [{ Zp: 18, Zc: 117 }], eta: 0.96 }, ventilacao: null, carcaca: 'trem',
     linhasExtras: [[25.92, -3]],
+    auxiliares: { compressor: 72, ventilacao: 76 },
     niveis: { motor: 98, inversor: 92, reducao: 98, ventilador: 0 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 90,
     aprox: ['Zp 18 e Zs 44 (das razões medidas)', 'reducao (6,5)', 'fc'],
@@ -189,6 +208,7 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     maquina: 'inducao', p: 2, Zs: 48, Tn: 740, Pmax: 180000, rpmBase: 2323, rpmMax: 4000, J: 3, escorregamentoNominal: 0.02,
     inversor: { tipo: 'igbt', fc: 1250, modo: 'auto', sincrona: [15, 9, 5, 3, 1] },
     reducao: { estagios: [{ Zp: 15, Zc: 102 }], eta: 0.96 }, ventilacao: null, carcaca: 'trem',
+    auxiliares: { compressor: 72, ventilacao: 76 },
     niveis: { motor: 98, inversor: 92, reducao: 96, ventilador: 0 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 90,
     aprox: ['Zs', 'reducao (6,8)', 'fc', 'lista síncrona', 'Tn (esforço de partida ≈)'],
@@ -203,7 +223,9 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     maquina: 'inducao', p: 2, Zs: 48, Tn: 1780, Pmax: 305000, rpmBase: 1640, rpmMax: 5500, J: 4, escorregamentoNominal: 0.015,
     inversor: { tipo: 'igbt', fc: 1200, modo: 'auto', sincrona: IGBT_TREM },
     reducao: { estagios: [{ Zp: 29, Zc: 81 }], eta: 0.97 }, ventilacao: { forcada: true, B: 9, rpm: 3550 }, carcaca: 'trem',
-    niveis: { motor: 100, inversor: 92, reducao: 96, ventilador: 95 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
+    // 25 kV, 60 Hz (Tokaido): transformador em 120 Hz
+    auxiliares: { compressor: 72, ventilacao: 76, transformador: 62, fTracao: 60 },
+    niveis: { motor: 100, inversor: 92, reducao: 96, ventilador: 90 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 4, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 300,
     aprox: ['Zs', 'fc', 'lista síncrona'],
     // o trem-bala da Passagem (10 vagões de 25 m, 8 motores): 715 t × 10/16
@@ -219,7 +241,9 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     // inversor de corrente a tiristores: sem portadora; 6f_e é o "apito" subindo com a velocidade; chopper de entrada em 1,5 kV CC
     inversor: { tipo: 'csi', fc: 0, modo: 'sincrona', fcEntrada: 300 },
     reducao: { estagios: [{ Zp: 30, Zc: 69 }], eta: 0.97 }, ventilacao: { forcada: true, B: 9, rpm: 2950 }, carcaca: 'trem',
-    niveis: { motor: 100, inversor: 94, reducao: 96, ventilador: 95 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 2, detune: 0.003,
+    // 25 kV, 50 Hz: transformador em 100 Hz
+    auxiliares: { compressor: 66, transformador: 60, fTracao: 50 },
+    niveis: { motor: 100, inversor: 94, reducao: 96, ventilador: 90 }, Tregen: 1, vRegenMin: 10 / 3.6, nUnidades: 2, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 320,
     aprox: ['p', 'Zs', 'reducao (2,3)', 'fcEntrada'],
     portador: {
@@ -235,6 +259,8 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     // classe medida (Citadis, Urbos): f_c fixa 2,09–2,52 kHz com 2f_c mais forte que f_c (3.4)
     inversor: { tipo: 'igbt', fc: 2200, modo: 'assincrona', perfilGrupos: [0, 2] },
     auxLinhas: [[167, 0], [1942, -22], [3879, -16], [5473, -24]],
+    // bonde de piso baixo: freio hidráulico, sem compressor de ar; só a ventilação
+    auxiliares: { ventilacao: 72 },
     reducao: { estagios: [{ Zp: 17, Zc: 102 }], eta: 0.96 }, ventilacao: null, carcaca: 'trem',
     niveis: { motor: 95, inversor: 90, reducao: 92, ventilador: 0, aux: 82 }, Tregen: 1, vRegenMin: 8 / 3.6, nUnidades: 2, detune: 0.003,
     fontes: FONTES_TREM, vMaxKmh: 70,
@@ -250,8 +276,10 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
     maquina: 'cc-serie', p: 2, Zs: 38, Zc: 100, Tn: 1345, Pmax: 150000, rpmBase: 1065, rpmMax: 3500, J: 2,
     inversor: { tipo: 'chopper', fc: 500, modo: 'chopper' },
     reducao: { estagios: [{ Zp: 8, Zc: 76 }], eta: 0.95 }, ventilacao: { forcada: true, B: 9, rpm: 3550 }, escovas: { Zc: 100, desgaste: 0.3 }, carcaca: 'trem',
-    niveis: { motor: 95, inversor: 94, reducao: 93, ventilador: 96, escovas: 92 }, Tregen: 0.6, avas: null,
-    fontes: { motor: dentro([-3.5, 0, 0.6]), inversor: dentro([-3.0, 0, 2.9]), reducao: dentro([-4.0, 0, 0.5]), ventilador: fora([-3.2, 0.9, 1.0]), escovas: dentro([-3.5, 0.1, 0.6]) },
+    niveis: { motor: 95, inversor: 94, reducao: 93, ventilador: 88, escovas: 92 }, Tregen: 0.6, avas: null,
+    // o compressor dos freios e das portas, sob o piso atrás do eixo dianteiro: o som do trólebus parado no ponto
+    auxiliares: { compressor: 70 },
+    fontes: { motor: dentro([-3.5, 0, 0.6]), inversor: dentro([-3.0, 0, 2.9]), reducao: dentro([-4.0, 0, 0.5]), ventilador: fora([-3.2, 0.9, 1.0]), escovas: dentro([-3.5, 0.1, 0.6]), aux: fora([1.5, -0.9, 0.5]) },
     vMaxKmh: 70,
     aprox: ['Zs', 'Zc', 'reducao (9,5)', 'f_ch'],
     portador: { tipo: 'carro', massa: 18000, CdA: 0.6 * 7.5, Crr: 0.009, rw: 0.51, corpo: 'onibus', pneus: 6, trole: true },
@@ -260,12 +288,18 @@ export const PRESETS_ELETRICO: PresetEletrico[] = [
   {
     id: 'furadeira', name: 'Furadeira sem fio', tag: 'CC escovado · 12 lâminas', family: 'ferramentas', nome: 'Furadeira sem fio (CC escovado 2 polos)', familia: 'eletrico',
     maquina: 'universal', p: 1, Zs: 8, Zc: 12, Tn: 0.83, Pmax: 650, rpmBase: 7500, rpmMax: 15000, J: 3e-5, curvaLinear: true,
-    inversor: null,
-    // planetária de 2 estágios (≈): ×6 e ×3 de f_rot (as ordens 3 e 6 da gravação)
-    reducao: { estagios: [{ Zp: 6, Zc: 20 }, { Zp: 10, Zc: 30 }], eta: 0.9 }, ventilacao: { forcada: false, B: 10 }, escovas: { Zc: 12, desgaste: 0.2 }, carcaca: 'pequena',
-    linhasExtras: [[5, -6]], faiscamento: 0.5,
-    // escovas 101 e ventilador 86 (4.2 dá 94 e 90): acertados contra a furadeira sem fio 2 (3.5: ×12 a 0 dB, ×8 a −1)
-    niveis: { motor: 92, inversor: 0, reducao: 96, ventilador: 86, escovas: 101 },
+    inversor: null, excentricidade: 0,
+    // planetária de 2 estágios (≈): ×6 e ×3 de f_rot (as ordens 3 e 6 da gravação). Rendimento 0,8 (era 0,9): com a graxa e
+    // os dois estágios, um quinto do torque nominal fica na própria caixa, e é isso que mantém os dentes engrenados em vazio
+    reducao: { estagios: [{ Zp: 6, Zc: 20 }, { Zp: 10, Zc: 30 }], eta: 0.8, folga: 0.9 }, ventilacao: { forcada: false, B: 10 }, escovas: { Zc: 12, desgaste: 0.2 }, carcaca: 'pequena',
+    // ferramenta de mão sem regulação: a rotação passeia ±0,5% (medido na gravação: 6 a 19 centésimos de semitom nas linhas)
+    linhasExtras: [[5, -6]], faiscamento: 1.0, jitter: 0.005,
+    // escovas 101 (4.2 dá 94): acertadas contra a furadeira sem fio 2 (3.5: ×12 a 0 dB, ×8 a −1). O ventilador estava em 86
+    // e era o que mais soava em vazio: um tom puro na passagem de pá (2 473 Hz, 41 dB sobre o piso) e harmônicos, que a
+    // gravação não tem; o chiado da furadeira de verdade (1–12 kHz, 7 dB ACIMA das linhas) é a planetária folgada e as
+    // escovas. Ventilador em 73, folga da redução 0,9 e faiscamento 1,0; motor 94,5 e escovas 104, com o desbalanceamento
+    // no mínimo (as ordens 5, 6, 8 e 12 ficavam 4 a 6 dB abaixo das da gravação em relação à 1ª)
+    niveis: { motor: 94.5, inversor: 0, reducao: 96, ventilador: 73, escovas: 104 },
     fontes: FONTES_MESA,
     aprox: ['reducao (dentes)', 'Tn', 'ordem 5 (medida)'],
     portador: { tipo: 'bancada', carga: 'degrau', Tcarga: 0.6 * 0.83, inercia: 1e-5 },

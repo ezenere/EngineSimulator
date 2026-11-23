@@ -9,7 +9,7 @@
 // semente do ruído (T-ELE-03) são a mediana de 3 sementes. CPU e coletas de lixo: `npm run cpu:eletrico`.
 //
 //   npx tsx tools/eletrico/valida.ts [grupos...] [--semente N] [--atualizar[=nome exato]]
-//   grupos: linhas maquina magneticas inversor modos mecanica avas niveis portadores alvos-3.7 cena passagem
+//   grupos: linhas maquina magneticas inversor modos mecanica avas niveis auxiliares portadores alvos-3.7 cena passagem
 // Sai ≠ 0 se houver falha (os desvios do retrato aparecem como "desv", com o teto).
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -59,6 +59,18 @@ function somaCanais(r: { canais: Float32Array[]; ids: string[] }, prefixos: stri
   r.ids.forEach((id, i) => { if (prefixos.some((p) => id === p || id.startsWith(p + '.'))) { const c = r.canais[i]; for (let j = 0; j < n; j++) s[j] += c[j]; } });
   return s;
 }
+/**
+ * Nível de um GRUPO de linhas em volta de f (dB re 20 µPa): a potência de ±larg·f. É a medida de um tom que tem vida:
+ * o par f ± f_e do inversor, que bate, ou uma ordem de uma ferramenta cuja rotação passeia. O pico de uma raia (`nivelEm`)
+ * lê 3 a 8 dB a menos num tom assim e depende da fase da batida.
+ */
+function nivelGrupo(x: ArrayLike<number>, t0: number, t1: number, f: number, larg: number) {
+  const [fw, P] = welch(x, Math.round(t0 * SR), Math.round(t1 * SR), 8192);
+  return 10 * Math.log10(potFaixa(fw, P, f * (1 - larg), f * (1 + larg)) / 4e-10 + 1e-30);
+}
+/** as medidas das leis de 1.1 e 1.3 são com a carcaça lisa (sem o relevo dos modos, que muda cada linha de ±2 dB) */
+const LISO = { jitter: 0, ressonancia: 0 };
+
 /** nível de uma linha corrigido pela curva da carcaça (para conferir as leis da tabela 1.1) */
 const semH = (dBv: number, f: number, fc: number) => dBv - dB(hCarcaca(f, fc));
 
@@ -153,7 +165,7 @@ function gMaquina() {
 function gMagneticas() {
   const fc = F_CARC.carro;
   const leaf = preset('leaf');
-  const m = motor('leaf', { jitter: 0 });
+  const m = motor('leaf', LISO);
   const T = 0.6 * leaf.Tn;
   m.comandar({ acelerador: 1, ignicao: true, partida: false, omegaImposta: wDe(5000), torqueFixo: T } as never);
   const r = renderMotor(m, 1.6), x = canal(r, 'motor');
@@ -166,7 +178,7 @@ function gMagneticas() {
   {
     // as leis do grupo de ranhuras num Leaf com Z_s = 46: com Z_s/p inteiro (48/4) a linha m = 1, k = 0 cai em 12·f_e e
     // soma em potência com a ondulação de torque (linhas.ts funde as frequências iguais), o que mascara a lei
-    const mv = motor('leaf', { jitter: 0, Zs: 46 });
+    const mv = motor('leaf', { ...LISO, Zs: 46 });
     mv.comandar({ acelerador: 1, ignicao: true, partida: false, omegaImposta: wDe(5000), torqueFixo: T } as never);
     const xv = canal(renderMotor(mv, 1.6), 'motor'), Lv = (f: number) => nivelEm(xv, 0.5, 1.6, f, 0.003);
     const c0 = semH(Lv(46 * fr).dB, 46 * fr, fc);
@@ -183,7 +195,7 @@ function gMagneticas() {
   // indução com escorregamento: barras em (1 − s)·Z_r·f_e/p
   {
     const pd = (PRESETS_ELETRICO[0].segundo)!;
-    const mi = motor(pd, { jitter: 0 });
+    const mi = motor(pd, LISO);
     mi.comandar({ acelerador: 1, ignicao: true, partida: false, omegaImposta: wDe(3000), torqueFixo: pd.Tn } as never);
     const ri = renderMotor(mi, 1.4), xi = canal(ri, 'motor'), ti: any = mi.telemetria();
     const s = (ti.fE - pd.p * ti.fRot) / ti.fE, esp = ((1 - s) * pd.Zr! * ti.fE) / pd.p;
@@ -193,7 +205,7 @@ function gMagneticas() {
   // fluxo: 2f_e cai 6 dB/oitava acima da base
   {
     const lv = (rpm: number) => {
-      const mm = motor('leaf', { jitter: 0 });
+      const mm = motor('leaf', LISO);
       mm.comandar({ acelerador: 1, ignicao: true, partida: false, omegaImposta: wDe(rpm), torqueFixo: 0.2 * leaf.Tn } as never);
       const rr = renderMotor(mm, 1.2), f = (2 * 4 * rpm) / 60;
       return semH(nivelEm(canal(rr, 'motor'), 0.4, 1.2, f, 0.003).dB, f, fc);
@@ -276,8 +288,9 @@ function gModos() {
     if (acel === 0.35) {
       // harmônicos no patamar (3.1, D 21–26 s): 2f_c −4..−9, 3f_c −5..−15, 4f_c −3..−10
       const t0 = fin.length ? fin[0].t + 0.2 : 9;
-      const l1 = nivelEm(r.inv, t0, t0 + 1.5, 598, 0.01).dB;
-      const h = [2, 3, 4].map((m) => nivelEm(r.inv, t0, t0 + 1.5, 598 * m, 0.01).dB - l1);
+      // (o grupo inteiro de cada harmônico: o par m·f_c ± f_e, a ±24 Hz)
+      const l1 = nivelGrupo(r.inv, t0, t0 + 1.5, 598, 0.04);
+      const h = [2, 3, 4].map((m) => nivelGrupo(r.inv, t0, t0 + 1.5, 598 * m, 0.04 / m) - l1);
       caso('Taurus, patamar: 2f_c / 3f_c / 4f_c contra f_c', '−4..−9 / −5..−15 / −3..−10 dB', h.map((x) => sg(x)).join(' / '), dentro(h[0], -9, -4) && dentro(h[1], -15, -5) && dentro(h[2], -10, -3), h, 'dB');
     }
   }
@@ -305,7 +318,7 @@ function gModos() {
   {
     const base = preset('model3');
     const roda = (modo: string) => {
-      const m = motor(base, { inversor: { tipo: 'sic', fc: 6000, modo: modo as never, delta: 0.15 }, jitter: 0 });
+      const m = motor(base, { inversor: { tipo: 'sic', fc: 6000, modo: modo as never, delta: 0.15 }, ...LISO });
       m.comandar({ acelerador: 1, ignicao: true, partida: false, omegaImposta: wDe(3000), torqueFixo: base.Tn } as never);
       return canal(renderMotor(m, 2.2), 'inversor');
     };
@@ -320,7 +333,7 @@ function gModos() {
   {
     const p = preset('frotaa');
     const lv = (D: number) => {
-      const m = motor('frotaa', { jitter: 0 });
+      const m = motor('frotaa', LISO);
       m.comandar({ acelerador: 1, ignicao: true, partida: false, omegaImposta: D * wDe(p.rpmBase), torqueFixo: p.Tn } as never);
       return nivelEm(canal(renderMotor(m, 1.2), 'inversor'), 0.4, 1.2, 350, 0.005).dB;
     };
@@ -335,7 +348,7 @@ function gModos() {
 function gMecanica() {
   const p = preset('model3');
   const roda = (T: number, rpm = 7700, dur = 1.4) => {
-    const m = motor('model3', { jitter: 0 });
+    const m = motor('model3', LISO);
     m.comandar({ acelerador: 1, ignicao: true, partida: false, omegaImposta: wDe(rpm), torqueFixo: T } as never);
     return canal(renderMotor(m, dur), 'reducao');
   };
@@ -359,13 +372,13 @@ function gMecanica() {
   }
   // furadeira: comutador em 12 e 24·f_rot, e o faiscamento modulado em Z_c·f_rot
   {
-    const m = motor('furadeira', { jitter: 0 });
+    const m = motor('furadeira', LISO);
     m.comandar({ acelerador: 1, ignicao: true, partida: false, omegaImposta: null } as never);
     const r = renderMotor(m, 2.5), xe = canal(r, 'escovas'), t: any = m.telemetria();
     const l12 = nivelEm(xe, 1, 2.5, 12 * t.fRot, 0.004).f, l24 = nivelEm(xe, 1, 2.5, 24 * t.fRot, 0.004).f;
     caso('furadeira: 247,5 × 12 e × 24', '2970 e 5940 Hz ±1%', `${f1(l12)} e ${f1(l24)} Hz (f_rot ${f1(t.fRot, 1)})`, rel(l12, 2970) <= 0.01 && rel(l24, 5940) <= 0.01, [l12, l24], 'Hz');
     // faiscamento sozinho (sem os tons): envoltória de 2–10 kHz
-    const m2 = motor('furadeira', { jitter: 0 });
+    const m2 = motor('furadeira', LISO);
     const U = m2.uni[0], orig = U.esc!.linhas.bind(U.esc!);
     U.esc!.linhas = (e, L, det) => orig(e, L, det, true);
     m2.comandar({ acelerador: 1, ignicao: true, partida: false, omegaImposta: null } as never);
@@ -448,8 +461,11 @@ function gNiveis() {
         const m = motor(p);
         m.comandar({ acelerador: 1, ignicao: true, partida: false, omegaImposta: wDe(p.rpmBase) * frac, torqueFixo: p.Tn, v: 20 } as never);
         for (const U of m.uni) if (U.ven && p.ventilacao?.forcada) U.ven.wv = U.ven.fRef();
+        // (compressor, ventilação e transformador têm calibração própria: fora da sonda, como em motor.ts)
+        if (m.auxi) m.auxi.mudo = true;
         let uRef = 0; m.uni.forEach((U, i) => { if (Math.abs(U.det - 1) < Math.abs(m.uni[uRef].det - 1)) uRef = i; });
-        const r = renderMotor(m, 0.5);
+        // (3 s de medida: as linhas têm vida, e o nível de um instante sobe e desce com ela)
+        const r = renderMotor(m, 3.25);
         m.canais.forEach((ch, i) => {
           if ((ch.u !== uRef && ch.u !== -1) || ch.base === 'avas') return;
           if (chopper && ((frac === 1) === (ch.base === 'inversor'))) return;
@@ -478,6 +494,42 @@ function gNiveis() {
   }
   caso('sonda: cada fonte no L_W do preset (todos os presets)', '±1 dB', `pior ${sg(pior, 2)} dB (${quem})`, Math.abs(pior) <= 1, pior, 'dB');
   caso('todos os presets, 4 estados × 2 s: sem NaN, abaixo de −1 dBFS a 7,5 m', 'nenhum', nanOuAlto.length ? nanOuAlto.join('; ') : 'nenhum', nanOuAlto.length === 0, nanOuAlto.length, '');
+}
+
+// =============================================================================================== 8b. auxiliares do trem parado
+function gAuxiliares() {
+  // o compressor liga e desliga (pressostato): 90 s do metrô parado; o estado sai do próprio modelo e o nível, do canal `aux`
+  {
+    const m = motor('cptm9500');
+    m.comandar({ acelerador: 0, ignicao: true, partida: false, v: 0 } as never);
+    const est: { t: number; on: boolean }[] = [];
+    const r = renderMotor(m, 90, [], (t) => est.push({ t, on: m.auxi!.ligadoComp }));
+    const x = canal(r, 'aux');
+    const trocas: number[] = []; for (let i = 1; i < est.length; i++) if (est[i].on !== est[i - 1].on) trocas.push(est[i].t);
+    const liga = trocas.length >= 1 ? trocas[0] : NaN, para = trocas.length >= 2 ? trocas[1] - trocas[0] : NaN;
+    caso('compressor do metrô parado: liga e desliga em 90 s', '≥ 3 trocas; 13–19 s ligado, 27–41 s parado', `${trocas.length} trocas (aos ${trocas.map((t) => f1(t, 0)).join(', ')} s): ${f1(liga, 1)} s ligado, ${f1(para, 1)} s parado`, trocas.length >= 3 && dentro(liga, 13, 19) && dentro(para, 27, 41), [trocas.length, liga, para], '');
+    // nível de 65–100 Hz (as ordens mais fortes do compressor, 78 e 88 Hz, onde a ventilação não tem linha) ligado contra parado
+    const nv = (t0: number, t1: number) => { const [fw, P] = welch(x, Math.round(t0 * SR), Math.round(t1 * SR), 16384); return 10 * Math.log10(potFaixa(fw, P, 65, 100) / 4e-10 + 1e-30); };
+    const on = nv(2, liga - 1), off = nv(liga + 2, liga + para - 1);
+    caso('compressor: 65–100 Hz do canal auxiliar, ligado contra parado', '≥ +6 dB', `${sg(on - off)} dB (${f1(on)} e ${f1(off)} dB SPL a 7,5 m)`, on - off >= 6, on - off, 'dB');
+  }
+  // parado contra partindo, na plataforma (3 m da lateral, ao lado do 1º truque motor, estação sem o murmúrio): nas
+  // gravações de plataforma (Frota J, Frota L, CPTM 9500) o trem parado fica 4 a 11 dB abaixo dele mesmo partindo ou
+  // chegando; o simulado tem de ficar nesse nível ou abaixo, e não em silêncio
+  for (const id of ['cptm9500', 'metropolis', 'frotaa']) {
+    const nivel = (parte: boolean) => {
+      const t = portador(id, {}, { faces: 'uma', ladoOuvinte: 1 }) as Trem;
+      t.comandar(parte ? { pedal: 1, ignicao: true, velocidadeFixa: null } : { pedal: 0, ignicao: true, velocidadeFixa: 0 });
+      const f = t.fontes().find((q) => /^(motor|tracao)/.test(q.id))!, larg = t.corpo.segmentos[0].largura, alt = t.corpo.segmentos[0].altura;
+      const y = larg / 2 + 3, z = 1.6 - alt / 2, rr = Math.hypot(f.pos[0], y, z);
+      const { L, R } = renderCena(t, { amb: { ...ambientePassagem('estacao'), fundo: { vento: 0, ventilacao: 0, murmurio: 0 } }, traj: { tipo: 'volta', comprimento: 20000, raioCurva: 3000, lateral: 3 },
+        ouv: { modo: 'gimbal', gimbal: { az: (Math.atan2(y, f.pos[0]) * 180) / Math.PI, el: (Math.asin(z / rr) * 180) / Math.PI, r: rr, alvo: 'corpo' }, local: 'fora', binaural: false }, dur: parte ? 8 : 14 });
+      const x = mono(L, R), [fw, P] = welch(x, Math.round((parte ? 3 : 6) * SR), Math.round((parte ? 8 : 14) * SR), 8192);
+      return 10 * Math.log10(potFaixa(fw, P, 20, 12000) / 4e-10);
+    };
+    const par = nivel(false), arr = nivel(true);
+    caso(`${id} na plataforma: parado contra partindo`, '−4 a −20 dB (gravações −4 a −11)', `${sg(par - arr)} dB (${f1(par)} e ${f1(arr)} dB SPL a 3 m)`, dentro(par - arr, -20, -4), par - arr, 'dB');
+  }
 }
 
 // =============================================================================================== 9. portadores
@@ -530,26 +582,28 @@ function gPortadores() {
 // =============================================================================================== 10. alvos da tabela 3.7
 // (os números que o projetista mediu nas gravações, copiados para cá: este grupo não abre gravação nenhuma)
 function gAlvos37() {
-  // Taurus parado: linhas fixas a −8..−12 dB do tom do inversor em escada
+  // Taurus parado: linhas fixas a −8..−12 dB do tom do inversor em escada. Medido no ouvido, como a gravação: ao lado do
+  // meio da locomotiva, a 7,5 m, primeiro parada (as linhas) e depois arrancando (o tom); sem chão e sem fundo, para a
+  // interferência do solo num ponto só não decidir a medida (a 4 m no concreto ela tira 10 dB de 688 Hz). As linhas de
+  // 176 e 527 Hz são dos sopradores (3ª ordem e passagem de pá, 9 × 58,5 Hz) e do auxiliar; antes a medida era só do canal
+  // `aux` contra o canal do inversor de um truque, e contra a nota mais longa, que é a primeira (G3, com o torque ainda
+  // subindo: 9 dB abaixo das outras). O tom é a potência do grupo f_c ± f_e (o par bate: numa nota só o nível depende da
+  // fase da batida), em média de potência sobre as notas dos 4 primeiros segundos.
   {
-    const t = portador('taurus') as Trem, tr = t.tracao!;
-    const B = 128, S = t.fontes().map(() => new Float32Array(B)), N = 4 * SR;
-    const iAux = tr.motor.canais.findIndex((c) => c.base === 'aux'), iInv = tr.motor.canais.findIndex((c) => c.base === 'inversor' && c.u === 0);
-    const aux = new Float32Array(N), inv = new Float32Array(N);
+    const t = portador('taurus', {}, { faces: 'uma', ladoOuvinte: -1 }) as Trem;
     t.comandar({ pedal: 0, ignicao: true, velocidadeFixa: 0 });
-    for (let k = 0; k < N; k += B) { t.processar(S, B, 1 / SR); aux.set(tr.canais[iAux].subarray(0, B), k); }
-    t.comandar({ pedal: 0.63, velocidadeFixa: null });
-    for (let k = 0; k < N; k += B) { t.processar(S, B, 1 / SR); inv.set(tr.canais[iInv].subarray(0, B), k); }
-    // o tom do inversor: o patamar mais longo da escada nos primeiros 4 s (pico do canal do inversor dentro dele)
-    const pts = patamares(rastrear(inv, 0, 4, 150, 800)).filter((p) => NOTAS_TAURUS.some((n) => rel(p.f, n) <= 0.01)).sort((a, b) => b.dur - a.dur);
-    const pt = pts[0] ?? { f: 262, t: 2, dur: 0.4 };
-    const lt = linha(inv, pt.t, pt.t + pt.dur - 0.05, pt.f * 0.98, pt.f * 1.02).dB;
-    const ls = [176, 527, 688].map((f) => nivelEm(aux, 1, 4, f, 0.01).dB - lt);
-    caso('Taurus parado: 176, 527, 688 Hz contra o tom em escada', '−8..−12 dB', ls.map((x) => sg(x)).join(' / '), ls.every((x) => dentro(x, -12, -8)), ls, 'dB');
+    const { L, R } = renderCena(t, { amb: { ...ambientePassagem('ceu'), solo: { tipo: 'nenhum' } as any, fundo: { vento: 0, ventilacao: 0, murmurio: 0 } }, traj: { lateral: 7.5, comprimento: 4000 }, ouv: { pos: [0, 0, 1.6], binaural: false }, dur: 14, s0: -t.corpo.comprimento / 2 + 12.5,
+      eventos: [[10, () => t.comandar({ pedal: 0.63, velocidadeFixa: null })]] });
+    const x = mono(L, R);
+    const pts = patamares(rastrear(x, 10, 14, 150, 800)).filter((p) => NOTAS_TAURUS.some((n) => rel(p.f, n) <= 0.01));
+    const nota = (p: { f: number; t: number; dur: number }) => { const [fw, P] = welch(x, Math.round(p.t * SR), Math.round((p.t + p.dur) * SR), 4096); return potFaixa(fw, P, p.f * 0.94, p.f * 1.06); };
+    const lt = 10 * Math.log10((pts.length ? pts.reduce((a, p) => a + nota(p), 0) / pts.length : 1e-30) / 4e-10);
+    const ls = [176, 527, 688].map((f) => nivelGrupo(x, 5, 10, f, 0.012) - lt);
+    caso('Taurus parado: 176, 527, 688 Hz contra o tom em escada', '−8..−12 dB', `${ls.map((v) => sg(v)).join(' / ')} (no ouvido, a 7,5 m; tom ${f1(lt)} dB SPL em ${pts.length} notas)`, ls.every((v) => dentro(v, -12, -8)), ls, 'dB');
   }
   // CPTM 9500: razão das famílias e o SIV
   {
-    const m = motor('cptm9500', { jitter: 0 }), p = preset('cptm9500');
+    const m = motor('cptm9500', LISO), p = preset('cptm9500');
     m.comandar({ acelerador: 0.6, ignicao: true, partida: false, omegaImposta: (60 / 3.6) * 6.3125 / 0.43 } as never);
     const r = renderMotor(m, 1.5), x = somaCanais(r, ['motor', 'reducao']);
     const fr = (m.telemetria() as any).fRot;
@@ -562,7 +616,7 @@ function gAlvos37() {
   }
   // CPTM 9000: 1 : 1,44 : 2,45
   {
-    const m = motor('cptm9000', { jitter: 0 });
+    const m = motor('cptm9000', LISO);
     m.comandar({ acelerador: 0.6, ignicao: true, partida: false, omegaImposta: (50 / 3.6) * 6.5 / 0.43 } as never);
     const r = renderMotor(m, 1.5), x = somaCanais(r, ['motor', 'reducao']), fr = (m.telemetria() as any).fRot;
     const a = linha(x, 0.4, 1.5, 16 * fr, 20 * fr).f, b = linha(x, 0.4, 1.5, 24 * fr, 28 * fr).f, c = linha(x, 0.4, 1.5, 42 * fr, 46 * fr).f;
@@ -581,7 +635,9 @@ function gAlvos37() {
       // a família que sobe, fora da portadora fixa (9,8–10,2 kHz, que a gravação também tem, fraca): a linha mais forte a
       // ±1% de 96·f_rot, a tolerância do alvo (a janela de 8–11 kHz de antes deixava o detector pular para a lateral
       // f_c − 2f_e do inversor, a −1,4%)
-      const top = linha(r, 0.4, 1.5, 96 * fr * 0.99, Math.min(9800, 96 * fr * 1.01)), seg = linha(r, 0.4, 1.5, 5500, 7500);
+      // a segunda família: a linha mais forte na janela de ordens do alvo (96/1,51 a 96/1,41, com 2% de folga: 62,3 a 69,4·f_rot).
+      // A janela de 5,5–7,5 kHz deixava entrar 72·f_rot = 18·f_e, que com o relevo da carcaça passa as outras
+      const top = linha(r, 0.4, 1.5, 96 * fr * 0.99, Math.min(9800, 96 * fr * 1.01)), seg = linha(r, 0.4, 1.5, (96 * fr) / 1.54, (96 * fr) / 1.383);
       return { f: top.f, fr, raz: top.f / seg.f };
     });
     const fTop = m3(ls.map((l) => l.f), 0), fr = mediana(ls.map((l) => l.fr)), raz = m3(ls.map((l) => l.raz), 3);
@@ -601,11 +657,15 @@ function gAlvos37() {
   }
   // bonde IGBT: f_c fixa 2,0–2,5 kHz, 2f_c ≥ f_c
   {
-    const m = motor('flexity', { jitter: 0 });
+    const m = motor('flexity', LISO);
     m.comandar({ acelerador: 0.6, ignicao: true, partida: false, omegaImposta: (20 / 3.6) * 6 / 0.3 } as never);
     const x = canal(renderMotor(m, 1.5), 'inversor');
-    const a = linha(x, 0.4, 1.5, 2000, 2500), b = nivelEm(x, 0.4, 1.5, 2 * a.f, 0.005);
-    caso('bonde IGBT (Flexity): f_c fixa e 2f_c', '2,0–2,5 kHz, 2f_c ≥ f_c', `${f1(a.f, 0)} Hz, 2f_c ${sg(b.dB - a.dB)} dB`, dentro(a.f, 2000, 2500) && b.dB >= a.dB, [a.f, b.dB - a.dB], '');
+    // a portadora soa como o par f_c ± f_e (e o leque das laterais): f_c é o centro de potência do grupo de 2,0–2,5 kHz, e
+    // os níveis são os dos grupos inteiros (±8% de f_c e de 2f_c)
+    const [fw, Pw] = welch(x, Math.round(0.4 * SR), Math.round(1.5 * SR), 8192);
+    let sp = 0, sf = 0; for (let i = 0; i < fw.length; i++) if (fw[i] > 2000 && fw[i] < 2500) { sp += Pw[i]; sf += Pw[i] * fw[i]; }
+    const fcM = sf / sp, g1 = 10 * Math.log10(potFaixa(fw, Pw, fcM * 0.92, fcM * 1.08)), g2 = 10 * Math.log10(potFaixa(fw, Pw, 2 * fcM * 0.92, 2 * fcM * 1.08));
+    caso('bonde IGBT (Flexity): f_c fixa e 2f_c', '2,0–2,5 kHz, 2f_c ≥ f_c', `${f1(fcM, 0)} Hz, 2f_c ${sg(g2 - g1)} dB`, dentro(fcM, 2000, 2500) && g2 >= g1, [fcM, g2 - g1], '');
   }
   // furadeira sem fio
   {
@@ -613,7 +673,9 @@ function gAlvos37() {
       const m = motor('furadeira');
       m.comandar({ acelerador: 1, ignicao: true, partida: false } as never);
       const r = renderMotor(m, 3), x = r.soma, fr = (m.telemetria() as any).fRot;
-      const L = [1, 2, 3, 5, 6, 8, 12, 24].map((o) => nivelEm(x, 1, 3, o * fr, 0.005).dB), mx = Math.max(...L);
+      // (potência em ±1,5% de cada ordem, como no Mavic: a rotação de uma ferramenta de mão passeia e a k-ésima ordem
+      // espalha k vezes mais; o pico de uma raia lia a ×12 até 8 dB abaixo)
+      const L = [1, 2, 3, 5, 6, 8, 12, 24].map((o) => nivelGrupo(x, 1, 3, o * fr, 0.015)), mx = Math.max(...L);
       return { fr, d: [L[5] - mx, L[6] - mx, L[7] - L[6]], b: bandas(x, 1, 3).b };
     });
     const fr = mediana(fs3.map((f) => f.fr)), d = [0, 1, 2].map((k) => mediana(fs3.map((f) => f.d[k])));
@@ -621,10 +683,11 @@ function gAlvos37() {
     caso('furadeira sem fio: ×8 e ×12 contra o máximo; ×24 contra ×12', '≥ −3 / ≥ −3 / −10 ± 4 dB', `${sg(d[0])} / ${sg(d[1])} / ${sg(d[2])} dB`, d[0] >= -3 && d[1] >= -3 && perto(d[2], -10, 4), d, 'dB');
     bandasCaso('furadeira sem fio', fs3.map((f) => f.b), [-25.4, -23.5, 0, 4.9, 17.0, 16.7]);
   }
-  // furadeira de rede (variante: universal, Z_c 10, 23 200 rpm)
+  // furadeira de rede (variante: universal, Z_c 10, 23 200 rpm; comutador de rede, que faísca mais: escovas 109 e
+  // faiscamento 3, redução folgada. Até a etapa de som a banda era segurada pelo tom do ventilador em 10·f_rot)
   {
     const base = preset('furadeira');
-    const rede = { ...base, id: 'furadeira-rede', Zc: 10, Zs: 10, rpmMax: 23500, rpmBase: 11750, Tn: 0.9, Pmax: 1100, escovas: { Zc: 10, desgaste: 0.8 }, linhasExtras: [[2, 0], [4, -2]] as [number, number][], faiscamento: 1.5, reducao: { estagios: [{ Zp: 9, Zc: 30 }, { Zp: 12, Zc: 27 }], eta: 0.9 } } as PresetEletrico;
+    const rede = { ...base, id: 'furadeira-rede', Zc: 10, Zs: 10, rpmMax: 23500, rpmBase: 11750, Tn: 0.9, Pmax: 1100, escovas: { Zc: 10, desgaste: 0.8 }, linhasExtras: [[2, 0], [4, -2]] as [number, number][], faiscamento: 3, reducao: { estagios: [{ Zp: 9, Zc: 30 }, { Zp: 12, Zc: 27 }], eta: 0.8, folga: 1 }, niveis: { ...base.niveis, escovas: 109 } } as PresetEletrico;
     const m = motor(rede);
     m.comandar({ acelerador: 1, ignicao: true, partida: false } as never);
     const r = renderMotor(m, 3), x = r.soma, fr = (m.telemetria() as any).fRot;
@@ -786,7 +849,7 @@ function gPassagem() {
 // (CPU e coletas de lixo: tools/eletrico/cpu.ts, `npm run cpu:eletrico`)
 
 // ---------------------------------------------------------------------------------------------- execução
-const GRUPOS: Record<string, () => void> = { linhas: gLinhas, maquina: gMaquina, magneticas: gMagneticas, inversor: gInversor, modos: gModos, mecanica: gMecanica, avas: gAvas, niveis: gNiveis, portadores: gPortadores, 'alvos-3.7': gAlvos37, cena: gCena, passagem: gPassagem };
+const GRUPOS: Record<string, () => void> = { linhas: gLinhas, maquina: gMaquina, magneticas: gMagneticas, inversor: gInversor, modos: gModos, mecanica: gMecanica, avas: gAvas, niveis: gNiveis, auxiliares: gAuxiliares, portadores: gPortadores, 'alvos-3.7': gAlvos37, cena: gCena, passagem: gPassagem };
 const op = lerOpcoes(process.argv.slice(2));
 iniciarSementes(op.semente);
 const rodar = op.resto.length ? op.resto : Object.keys(GRUPOS);

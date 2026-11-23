@@ -15,11 +15,12 @@ import type { Motor, EstadoMotor, TelemetriaMotor, FamiliaMotor } from '../../ca
 import { BancoDeLinhas, ListaLinhas, JitterEixo } from './linhas';
 import { EstadoMaquina, estadoEletrico, ForcasMotor, torqueDisponivel, naRede, escovado } from './maquina';
 import { Inversor, linhasAux, type ModoModulacao, type ModoEfetivo } from './inversor';
-import { Reducao, Ventilador, Escovas, Helice, RuidoBanda } from './mecanica';
+import { Reducao, Ventilador, Escovas, Helice, RuidoBanda, RuidoVentilador } from './mecanica';
 import { Avas, type ModoAvas } from './avas';
+import { Auxiliares, temAuxiliares, type PresetAuxiliares } from './auxiliares';
 import { Bq } from '../../scene/filtros';
 import {
-  TAU, BLOCO, LMAX, REF_DIST_ELETRICO, DIR_MOTOR, DIR_AVAS, DIR_HELICE, OMNI, NOME_MEC, NOMES_NOTAS,
+  TAU, BLOCO, LMAX, REF_DIST_ELETRICO, DIR_MOTOR, DIR_AVAS, DIR_HELICE, OMNI, NOME_MEC, NOMES_NOTAS, Relevo, RELEVO_PADRAO,
 } from './constantes';
 
 // ---------------------------------------------------------------- preset (4.1, com as extensões anotadas)
@@ -49,7 +50,8 @@ export interface PresetEletrico {
     /** (extensão) chopper de entrada do CSI (TGV em 1,5 kV CC), Hz */
     fcEntrada?: number;
   };
-  reducao: { estagios: { Zp: number; Zc: number }[]; eta: number; retos?: boolean };
+  /** `folga` (som): folga dos dentes, 0 (justa) a 1 (planetária folgada): o chocalho em vazio (mecanica.ts) */
+  reducao: { estagios: { Zp: number; Zc: number }[]; eta: number; retos?: boolean; folga?: number };
   ventilacao: null | { forcada: boolean; B: number; rpm?: number };
   escovas?: { Zc: number; desgaste: number };
   helice?: { B: number; D: number; rotores: number; detune: number[]; harmonicos?: number[]; largoDb?: number; largoCarga?: boolean };
@@ -80,6 +82,10 @@ export interface PresetEletrico {
   faiscamento?: number;
   /** desvio do passeio de frequência do eixo (padrão 0,05%; o ESC do drone oscila ±1,5%) */
   jitter?: number;
+  /** (som) relevo da carcaça: desvio-padrão em dB dos picos e vales dos modos sobre a curva lisa (padrão 2; 0 = lisa) */
+  ressonancia?: number;
+  /** (som) auxiliares do trem: compressor de ar, ventilação e ar-condicionado, transformador (auxiliares.ts) */
+  auxiliares?: PresetAuxiliares;
   /** campos de catálogo aproximados (decisão 8: ficam marcados) */
   aprox?: string[];
   /** segundo motor (Tesla AWD: dianteiro de indução) */
@@ -122,19 +128,25 @@ class Unidade {
   cMotor = -1; cInv = -1; cRed = -1; cVen = -1; cEsc = -1; cHel = -1;
   faseSlip = 0;
   forcas: ForcasMotor;
+  /** relevo da carcaça desta unidade (cada motor tem os seus modos) */
+  relevo: Relevo | null;
   constructor(p: PresetEletrico, fs: number, u: number, det: number, sem: number) {
     this.det = det;
-    this.forcas = new ForcasMotor(p);
-    this.jit = new JitterEixo(fs, sem ^ 0x31, p.jitter ?? 5e-4, 0.5, p.jitter && p.jitter > 2e-3 ? 2 : 0.3);
+    const prof = p.ressonancia ?? RELEVO_PADRAO;
+    this.relevo = prof > 0 ? new Relevo(sem ^ 0x7e1e0, prof) : null;
+    this.forcas = new ForcasMotor(p, this.relevo);
+    // o tremor de amplitude cresce com o passeio da rotação: ±0,6 dB no padrão (0,05%), ±1,25 dB numa ferramenta de mão (0,5%)
+    const jt = p.jitter ?? 5e-4;
+    this.jit = new JitterEixo(fs, sem ^ 0x31, jt, 0.5 + 150 * jt, jt > 2e-3 ? 2 : 0.3);
     this.bMotor = new BancoDeLinhas(fs, LMAX.motor, sem + 1);
-    this.inv = p.inversor ? new Inversor(p, fs, sem + 2) : null;
+    this.inv = p.inversor ? new Inversor(p, fs, sem + 2, this.relevo) : null;
     this.bInv = p.inversor ? new BancoDeLinhas(fs, LMAX.inversor, sem + 3) : null;
     const temRed = p.reducao.estagios.length > 0;
-    this.red = new Reducao(p, fs, sem + 4);
+    this.red = new Reducao(p, fs, sem + 4, this.relevo);
     this.bRed = temRed ? new BancoDeLinhas(fs, LMAX.reducao, sem + 5) : null;
     this.ven = p.ventilacao ? new Ventilador(p, fs, sem + 6) : null;
     this.bVen = p.ventilacao ? new BancoDeLinhas(fs, LMAX.ventilador, sem + 7) : null;
-    this.esc = p.escovas ? new Escovas(p, fs, sem + 8) : null;
+    this.esc = p.escovas ? new Escovas(p, fs, sem + 8, this.relevo) : null;
     this.bEsc = p.escovas ? new BancoDeLinhas(fs, LMAX.escovas, sem + 9) : null;
     this.hel = p.helice ? new Helice(p, fs, sem + 10) : null;
     this.bHel = p.helice ? new BancoDeLinhas(fs, LMAX.helice, sem + 11) : null;
@@ -148,6 +160,8 @@ class Unidade {
   }
 }
 
+/** 1ª chave das linhas do conversor auxiliar no banco (MEC.aux = 15) */
+const CHAVE_AUX = (15 << 16) | 1;
 /** desvios de rotação das unidades (trem: rodas de diâmetros diferentes; ±detune) */
 const DESVIOS = [0, 0.6, -0.6, 1];
 
@@ -171,6 +185,11 @@ export class EletricoDSP implements Motor {
   private regen = 0; private Tf = 0;
   // fontes compartilhadas
   bAux: BancoDeLinhas | null = null; lAux = new ListaLinhas(32); cAux = -1; ruidoAux: RuidoBanda | null = null; rmsAux = 0;
+  private auxN = 0; private auxF = new Float64Array(0); private auxA = new Float64Array(0);
+  /** compressor, ventilação e transformador (calibração própria, fora da sonda) */
+  auxi: Auxiliares | null = null;
+  /** 0..1: o conversor de `fcAux` (CPTM 9500) só toca com o trem parado */
+  private gEstacao = 1;
   avas: Avas | null = null; bAvas: BancoDeLinhas | null = null; lAvas = new ListaLinhas(8); cAvas = -1; cAvasRe = -1;
   private pos = 0;           // amostra dentro do bloco de controle
   private semente = 0x5e1e;
@@ -203,14 +222,25 @@ export class EletricoDSP implements Motor {
       if (U.bHel) U.cHel = add('helice');
     });
     const inv = p.inversor;
-    if ((inv && inv.fcAux) || p.auxLinhas?.length) {
-      this.bAux = new BancoDeLinhas(fs, LMAX.aux, this.semente + 77); this.canais.push({ id: 'aux', base: 'aux', u: -1, out: this.canais.length }); this.cAux = this.canais.length - 1;
-      // ventiladores do auxiliar: largo de 60 Hz a 1 kHz (passa-baixa suave, Q 0,5), na potência relativa do preset
+    const temLinhasAux = !!((inv && inv.fcAux) || p.auxLinhas?.length);
+    this.auxi = null; this.gEstacao = 1; this.cAux = -1;
+    if (temLinhasAux || temAuxiliares(p.auxiliares)) {
+      this.canais.push({ id: 'aux', base: 'aux', u: -1, out: this.canais.length }); this.cAux = this.canais.length - 1;
+      if (temAuxiliares(p.auxiliares)) this.auxi = new Auxiliares(p.auxiliares!, fs, inv?.fRede ?? 60, this.semente + 0x4a00);
+    }
+    if (temLinhasAux) {
+      this.bAux = new BancoDeLinhas(fs, LMAX.aux, this.semente + 77);
+      // as linhas do auxiliar são fixas: a tabela é montada uma vez, e o bloco de controle só a copia (porTabela)
+      this.lAux.limpar(); linhasAux(p, this.lAux);
+      this.auxN = this.lAux.n; this.auxF = this.lAux.f.slice(0, this.auxN); this.auxA = this.lAux.a.slice(0, this.auxN);
+      // ventiladores do auxiliar (ar-condicionado, dutos): o largo de ventilador com f_b 250 Hz (plano de 14 a 250 Hz,
+      // −6 dB/oitava acima e −12 acima de 2,5 kHz: a densidade medida de dentro da CPTM 9500 parada), na potência relativa do preset. Era um
+      // passa-alta em 60 Hz com passa-baixa em 1 kHz: sem nada em 20–60 Hz, onde a gravação tem o rumor dos dutos.
       if (p.auxRuido !== undefined) {
         this.lAux.limpar(); linhasAux(p, this.lAux);
         let e = 0; for (let i = 0; i < this.lAux.n; i++) e += 0.5 * this.lAux.a[i] * this.lAux.a[i];
         this.rmsAux = Math.sqrt(e) * Math.pow(10, p.auxRuido / 20);
-        this.ruidoAux = new RuidoBanda(fs, this.semente + 79, [new Bq().hp(fs, 60, 0.7071), new Bq().lp(fs, 1000, 0.5)]);
+        this.ruidoAux = new RuidoVentilador(fs, this.semente + 79, 250, 14, 10);
       } else this.ruidoAux = null;
     } else { this.bAux = null; this.ruidoAux = null; }
     if (p.avas !== undefined) {
@@ -342,8 +372,17 @@ export class EletricoDSP implements Motor {
       if (U.esc && U.bEsc) { U.lEsc.limpar(); U.esc.linhas(e, U.lEsc, U.det); U.bEsc.atualizar(U.lEsc, jf, jg * this.kAbs.escovas); }
       if (U.hel && U.bHel) { U.lHel.limpar(); U.hel.linhas(e, U.lHel, U.det, fBase); U.bHel.atualizar(U.lHel, jf, jg * this.kAbs.helice); }
     }
-    // auxiliar (constante, com a ignição) e AVAS
-    if (this.bAux) { this.lAux.limpar(); if (this.ign) linhasAux(p, this.lAux); this.bAux.atualizar(this.lAux, 1, this.kAbs.aux); this.ruidoAux?.alvo(this.ign ? this.rmsAux : 0); }
+    // auxiliar (com a ignição) e AVAS. O conversor de `fcAux` da CPTM 9500 (1333 Hz ± 57) só aparece com o trem parado:
+    // na gravação de dentro ele liga quando o trem para e some ao partir (medido de 3 em 3 s: presente em 18–27, 69–92 e
+    // 96–132 s, ausente em 30–66 e 135–210 s, andando). Com a velocidade do portador conhecida, sai em 1 s acima de 3 km/h.
+    if (this.bAux) {
+      // (na sonda e nos testes de bancada, que impõem o torque, o conversor fica ligado)
+      if (p.inversor?.fcAux && this.vConhecida && this.torqueFixo == null) this.gEstacao += ((vp < 0.8 ? 1 : 0) - this.gEstacao) * Math.min(1, dt / 0.35);
+      const la = this.lAux;
+      la.limpar(); if (this.ign) { la.tF = 1; la.tG = 1; la.porTabela(CHAVE_AUX, this.auxF, this.auxA, this.auxN); }
+      this.bAux.atualizar(la, 1, this.kAbs.aux * this.gEstacao); this.ruidoAux?.alvo(this.ign ? this.rmsAux : 0);
+    }
+    this.auxi?.controle(dt, this.ign, e.I);
     if (this.avas && this.bAvas) {
       this.lAvas.limpar();
       const vS = this.re ? -vp : vp;
@@ -373,7 +412,11 @@ export class EletricoDSP implements Motor {
         if (U.bEsc) { const o = saidas[U.cEsc]; if (o) { U.bEsc.processar(o, k, m); U.esc!.ruido(o, k, m, pos, BLOCO, this.kAbs.escovas); } }
         if (U.bHel) { const o = saidas[U.cHel]; if (o) { U.bHel.processar(o, k, m); U.hel!.largo.processar(o, k, m, pos, BLOCO, this.kAbs.helice); } }
       }
-      if (this.bAux && saidas[this.cAux]) { this.bAux.processar(saidas[this.cAux], k, m); this.ruidoAux?.processar(saidas[this.cAux], k, m, pos, BLOCO, this.kAbs.aux); }
+      if (this.cAux >= 0 && saidas[this.cAux]) {
+        const o = saidas[this.cAux];
+        if (this.bAux) { this.bAux.processar(o, k, m); this.ruidoAux?.processar(o, k, m, pos, BLOCO, this.kAbs.aux); }
+        this.auxi?.processar(o, k, m, pos);
+      }
       if (this.bAvas) {
         const o = saidas[this.re ? this.cAvasRe : this.cAvas];
         if (o) { this.bAvas.processar(o, k, m); this.avas!.processar(o, k, m, pos, BLOCO); }
