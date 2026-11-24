@@ -13,7 +13,7 @@
 //  · plataforma (o item da tela nova): o campo reverberante com o ouvido 0,9 m mais alto, na plataforma.
 import type { Linha } from './medidas';
 import { renderPassagem, SR, type ResultadoPassagem } from './render-passagem';
-import { ambientePassagem, secaoTunel } from '../../src/scene/ambientes';
+import { ambientePassagem, ambienteDoLugar, secaoTunel } from '../../src/scene/ambientes';
 import type { Ambiente, IdAmbiente, LugarAcustico, Ouvinte, Vec3 } from '../../src/scene/tipos';
 import { PA_FS } from '../../src/scene/constantes';
 import { Bq } from '../../src/scene/filtros';
@@ -157,6 +157,44 @@ export function medirLugar(): Linha[] {
     const dRev = alto.rev - fundo.rev, dDir = alto.dir - altoSem.dir;
     L.push(linha(P, 'corte: no alto (10 m além da borda) a reverberação cai e a borda tapa o direto', 'reverberação ≤ −6 dB do fundo; direto ≤ −5 dB do mesmo ponto sem o corte',
       `reverberação ${sinal(dRev)} dB, direto ${sinal(dDir)} dB; L_Aeq ${f1(alto.total)} no alto, ${f1(fundo.total)} dB(A) no fundo`, dRev <= -6 && dDir <= -5, [dRev, dDir], 'dB'));
+  }
+  // ---------------------------------------------------------------- o piso sob o ouvinte (a plataforma)
+  {
+    // ruído parado na lateral de um trem (m 1,69, z 1,8) e o ouvido na plataforma (m 4,5, z 2,5): o reflexo é o do piso
+    // da plataforma (0,9 m), e o primeiro nulo do pente fica em c/(2Δr) com a imagem do ouvido nesse plano, não no da via
+    const ms = 1.69, zs = 1.8, mo = 4.5, zo = 2.5, c = 343;
+    const nulo = (zp: number) => c / (2 * (Math.hypot(mo - ms, zo + zs - 2 * zp) - Math.hypot(mo - ms, zo - zs)));
+    const a = amb('estacao');
+    a.lugar = { ...a.lugar!, pisos: [{ s0: -160, s1: 160, m0: 2.03, m1: 12.03, z: 0.9 }] };
+    const r = renderPassagem({
+      portador: 'teste', fontesTeste: [{ pos: [0, -ms, zs], sinal: 'ruido', paRms: 1 }], corpoTeste: { largura: 0.05, altura: 0.05, zPiso: 0, comprimento: 0.05 },
+      v: 0, d: 3, amb: a, dur: 6, sCentro0: 0, reverb: false, ouvinte: { ...livre(0, mo, zo), binaural: false },
+    });
+    // espectro médio do direto de 1 a 6 s, resolução de 1,5 Hz; o mínimo entre 120 e 320 Hz
+    const nseg = 32768, acc = new Float64Array(nseg / 2);
+    for (let i = SR; i + nseg <= r.dL.length; i += nseg / 2) { const P = A.espectro(r.dL, i, nseg, nseg); for (let k = 0; k < P.length; k++) acc[k] += P[k]; }
+    let kMin = Math.round((120 * nseg) / SR);
+    for (let k = kMin; k <= Math.round((320 * nseg) / SR); k++) if (acc[k] < acc[kMin]) kMin = k;
+    const f = (kMin * SR) / nseg, fPiso = nulo(0.9), fVia = nulo(0);
+    L.push(linha(P, 'plataforma: o reflexo de uma fonte acima dela é o do piso (primeiro nulo do pente)', `c/(2Δr) com o plano a 0,9 m: ${f1(fPiso, 0)} Hz ± 5% (o chão da via daria ${f1(3 * fVia, 0)} Hz)`,
+      `${f1(f, 0)} Hz`, Math.abs(f / fPiso - 1) <= 0.05, f, 'Hz'));
+  }
+  // ---------------------------------------------------------------- estação subterrânea (o metrô)
+  {
+    // a caixa de azulejo, 160 m, as pontas dando nos túneis: ruído parado no meio da estação, na via; o campo
+    // reverberante na plataforma e no túnel, 100 m além da ponta (o campo guiado cai como o do túnel, d₀ = √S)
+    const lug: LugarAcustico = { estacao: { s0: -80, s1: 80, mLonge: -10.6, mFundo: 7.55, teto: 5.4, tipo: 'subterranea' }, fundoFora: { vento: 0, ventilacao: 0, murmurio: 0 } };
+    const a = ambienteDoLugar(amb('estacao', false), lug), cob = amb('estacao');
+    const ouvir = (x: Ambiente, s: number, m: number, z: number) => renderPassagem({
+      portador: 'teste', fontesTeste: [{ pos: [0, 0, 1.0], sinal: 'ruido', paRms: 1 }], corpoTeste: { largura: 0.05, altura: 0.05, zPiso: 0, comprimento: 0.05 },
+      v: 0, d: 3, amb: x, dur: 6, sCentro0: 0, ouvinte: livre(s, m, z),
+    });
+    const nv = (r: ResultadoPassagem) => { const n = r.L.length, rl = new Float32Array(n), rr = new Float32Array(n); for (let i = 0; i < n; i++) { rl[i] = r.L[i] - r.dL[i]; rr[i] = r.R[i] - r.dR[i]; } return { rev: A.leq(rl, rr, SR, PA_FS, 2 * SR, n), dir: A.leq(r.dL, r.dR, SR, PA_FS, 2 * SR, n) }; };
+    const pl = nv(ouvir(a, 10, 3.68, 2.5)), pc = nv(ouvir(cob, 10, 3.68, 2.5)), tu = nv(ouvir(a, 180, 3.68, 1.6));
+    const S = (7.55 + 10.6) * 5.4, esperado = -10 * Math.log10(1 + Math.pow(100 / Math.sqrt(S), 1.6));
+    const dSub = pl.rev - pc.rev;
+    L.push(linha(P, 'estação subterrânea: o campo reverberante na plataforma contra a coberta; e 100 m túnel adentro', `na plataforma ≥ +5 dB sobre a coberta (a caixa fechada: wet pela área de absorção); no túnel ≤ −10 dB (o acoplamento guiado, ${f1(esperado)} dB, mais a distância)`,
+      `plataforma ${sinal(dSub)} dB sobre a coberta (reverberação − direto ${sinal(pl.rev - pl.dir)} contra ${sinal(pc.rev - pc.dir)}; wet ${f1(a.reverb.wet, 2)}, RT ${a.reverb.rt60!.map((x) => f1(x, 1)).join('/')} s); no túnel ${sinal(tu.rev - pl.rev)} dB`, dSub >= 5 && tu.rev - pl.rev <= -10, [dSub, tu.rev - pl.rev], 'dB'));
   }
   // ---------------------------------------------------------------- ponte
   {

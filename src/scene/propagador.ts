@@ -4,9 +4,10 @@
 // solo por fonte-imagem, sombra do corpo (shelf de Maekawa), ITD/ILD e panorâmica.
 //
 // Orçamento (5.1): MAX_FONTES anéis, geometria (raiz, acos, Maekawa) só a cada 64 amostras, nada é
-// alocado depois de preparar(). O anel guarda só os últimos DIST_ANEL/c + 0,1 s; o que passa disso
-// vira um deslocamento inteiro fixo (`off`), reancorado com crossfade de potência constante de 50 ms
-// quando o trecho variável sai da janela. O Doppler vem da VARIAÇÃO do atraso, que fica toda no anel.
+// alocado depois de preparar(). O anel guarda o atraso até a distância máxima da trajetória, dentro do orçamento de
+// memória (ORCAMENTO_ANEL); só se ele não couber (uma via muito longa do modo de testes) o que passa vira um
+// deslocamento inteiro fixo (`off`), reancorado com crossfade de potência constante de 50 ms quando o trecho variável
+// sai da janela.
 import type { FonteSonora } from './tipos';
 import type { Corpo, Segmento } from '../carriers/tipos';
 import { C_SOM, MAX_FONTES, R_MIN, DIST_ANEL, ITD_MAX } from './constantes';
@@ -22,6 +23,8 @@ const ITD_ANEL = 128;          // amostras (2,7 ms a 48 kHz)
 const LARGURA_PAN = 0.5;       // ver docs/TECNICO.md: pan inteiro (lei de −3 dB) zeraria o ouvido oposto a 90°
 /** s: constante de tempo da ocultação pelo lugar (a borda da boca raspando a linha de visada não vira degrau) */
 const TAU_LUGAR = 0.025;
+/** s: quando o plano da imagem de uma fonte troca (o piso elevado ou o chão da via), o reflexo desce e sobe em meio cosseno */
+const IMAGEM_DESCE = 0.02, IMAGEM_SOBE = 0.03;
 
 /** Geometria do ouvinte num instante (preenchida pela Cena a cada bloco de controle). */
 export class GeoOuvinte {
@@ -98,7 +101,10 @@ const S_PA = 52;
 const S_PB = 53;
 const S_E100 = 54;
 const S_E1K = 55;
-const N_ESTADO = 56;
+// (extensão, o piso) o plano refletor da imagem desta fonte e a rampa do reflexo quando ele troca
+const S_ZP = 56;
+const S_IMGF = 57;
+const N_ESTADO = 58;
 export const S_ESTADO = { sa: S_SA, sb: S_SB, fade: S_FADE, ganhoDb: S_GANHODB };
 
 export class EstadoFonte {
@@ -128,19 +134,20 @@ export class EstadoFonte {
   get ex() { return this.s[S_EX]; } get ey() { return this.s[S_EY]; } get ez() { return this.s[S_EZ]; }
   get r() { return this.s[S_R]; } get theta() { return this.s[S_THETA]; } get ganhoDb() { return this.s[S_GANHODB]; } get atrasoMs() { return this.s[S_ATRASOMS]; }
   get sa() { return this.s[S_SA]; } get sb() { return this.s[S_SB]; } get fade() { return this.s[S_FADE]; }
+  /** (o piso) altura do plano em que a imagem desta fonte reflete */
+  get zImagem() { return this.s[S_ZP]; }
 
-  constructor(f: FonteSonora, seg: Segmento, fs: number, distAnel: number) {
+  constructor(f: FonteSonora, seg: Segmento, fs: number, n: number) {
     this.f = f; this.seg = seg;
     this.bx = f.pos[0]; this.by = f.pos[1]; this.bz = f.hCorpo ?? f.pos[2];
     const e = f.dir.eixo, ne = Math.hypot(e[0], e[1], e[2]) || 1;
     this.ax = e[0] / ne; this.ay = e[1] / ne; this.az = e[2] / ne;
     this.tab = f.dir.tabela; this.expConv = f.dir.expConv; this.refDist = f.refDist;
     this.agudo = f.agudo ?? null;
-    let n = 1024; while (n < (distAnel / C_SOM + 0.1) * fs + 512) n <<= 1;
     this.anel = new Float32Array(n); this.mask = n - 1; this.cap = n - 512;
     const v = this.s;
     v[S_FADE] = 1; v[S_KAR] = 0; v[S_KARALVO] = 1; v[S_B1] = 0; v[S_SA] = 1; v[S_SB] = 1; v[S_SAALVO] = 1; v[S_SBALVO] = 1;
-    v[S_SEA] = 1; v[S_SEB] = 1; v[S_SEAALVO] = 1; v[S_SEBALVO] = 1;
+    v[S_SEA] = 1; v[S_SEB] = 1; v[S_SEAALVO] = 1; v[S_SEBALVO] = 1; v[S_IMGF] = 1;
     v[S_IL] = 1; v[S_IR] = 1; v[S_ILALVO] = 1; v[S_IRALVO] = 1; v[S_PL] = 1; v[S_PR] = 1; v[S_PLALVO] = 1; v[S_PRALVO] = 1;
     v[S_PESO] = 1; v[S_R] = 1; v[S_THETA] = 90; v[S_GANHODB] = -120;
   }
@@ -177,6 +184,13 @@ export class Propagador {
   zRefEnvio = NaN;
   /** (extensão) altura do plano refletor do solo (0 = o chão da via; embaixo da ponte, o vale) */
   zSolo = 0;
+  /**
+   * (extensão, o piso) o piso elevado sob o ouvinte livre: s0, s1, m0, m1, z (z = NaN: nenhum). A imagem de cada fonte
+   * cujo ponto de reflexão cai nele (a fonte acima dele) usa o plano dele; as outras, o chão da via (zSolo).
+   */
+  piso = new Float64Array([0, 0, 0, 0, NaN]);
+  /** plano da imagem da fonte do momento (posto antes de resolver o caminho 1) */
+  zpImagem = 0;
   regras: RegrasLocal = { diretividade: true, sombra: true, solo: true, binaural: true, rota: null, envio: 1 };
   kSh: number; kHb: number; kIld: number;
   iteracoesExtra = 0;
@@ -197,9 +211,20 @@ export class Propagador {
     this.corpo = corpo; this.via = via; this.hist = hist;
     const lista = fontes.filter((f) => f.tipo !== 'pressao');
     if (lista.length > MAX_FONTES) throw new Error(`Cena: ${lista.length} fontes com propagação, o máximo é ${MAX_FONTES}`);
-    // (o avião, com poucas fontes, guarda o anel inteiro: o resolvedor fechado lê atrasos de vários segundos, 5.1)
-    const distAnel = anelCompleto ? distMax : Math.min(distMax, DIST_ANEL);
-    this.fontes = lista.map((f) => new EstadoFonte(f, segmentoEm(corpo, f.pos[0]), this.fs, distAnel));
+    // O anel guarda o atraso inteiro até a distância máxima da trajetória (5.1, revisto em 23/11/2026): com o atraso
+    // exato não há reancoragem. Antes o anel parava em DIST_ANEL e o excedente virava um deslocamento fixo, reancorado com
+    // um crossfade de 50 ms entre duas leituras distantes de 0,3 a 0,8 s; num tom (a hélice a 2 km, o motor) as duas
+    // leituras têm fases quaisquer e o crossfade cavava o nível e espalhava bandas laterais (resíduo de −34 dB acima de
+    // 5 kHz com o ouvinte voando a 45 m/s). O limite agora é o orçamento de memória de todos os anéis do portador
+    // (ORCAMENTO_ANEL): o trem de 64 fontes numa reta de 3 km cabe (1 MB por fonte, 1 870 m); só uma via muito mais longa
+    // do modo de testes passa dele, e aí volta o deslocamento de antes. O avião guarda o anel inteiro, como antes.
+    const precisa = amostrasAnel(distMax, this.fs);
+    let n = precisa;
+    if (!anelCompleto) {
+      let orc = 1024; while (orc * 2 * 4 * lista.length <= ORCAMENTO_ANEL) orc <<= 1;
+      n = Math.max(amostrasAnel(Math.min(distMax, DIST_ANEL), this.fs), Math.min(precisa, orc));
+    }
+    this.fontes = lista.map((f) => new EstadoFonte(f, segmentoEm(corpo, f.pos[0]), this.fs, n));
     this.indices = fontes.map((f) => lista.indexOf(f));
     this.primeiro = true;
   }
@@ -227,7 +252,7 @@ export class Propagador {
   rs = new Float64Array(16);   // sx sy sz ux uy uz r cT uN v tx ty nx ny τ s(abscissa da fonte na emissão)
   resolver(es: EstadoFonte, cam: number, tRec: number, O: GeoOuvinte) {
     const h = this.hist, via = this.via, p = this.pv, pv = p.v, rs = this.rs, hr = h.res;
-    const oz = cam === 0 ? O.z : 2 * this.zSolo - O.z, ox = O.x, oy = O.y;
+    const oz = cam === 0 ? O.z : 2 * this.zpImagem - O.z, ox = O.x, oy = O.y;
     const bx = es.bx, by = es.by, bz = es.bz;
     let tau = es.tau[cam], r = 1, sx = 0, sy = 0, sz = 0;
     const lim = 1 / this.fs;
@@ -274,7 +299,8 @@ export class Propagador {
       // ---------------- geometria no fim do trecho
       let fcDir = 1e9;
       for (let cam = 0; cam < 2; cam++) {
-        if (cam === 1 && !usaSolo) { es.ativo[1] = 0; es.gAlvo[1] = 0; continue; }
+        if (cam === 1 && !usaSolo) { es.ativo[1] = 0; es.gAlvo[1] = 0; es.s[S_ZP] = this.zSolo; es.s[S_IMGF] = 1; continue; }
+        if (cam === 1) this.planoImagem(es, O, N);
         this.resolver(es, cam, tRec, O);
         const rs = this.rs, tau = rs[14];
         const M = rs[9 /*v*/] / this.c, mc = M * rs[7 /*cT*/];            // M·cosθ_e (velocidade · direção fonte→ouvinte)
@@ -398,11 +424,12 @@ export class Propagador {
           // reflexão: só onde o ponto de reflexão cai sobre o solo refletor (ponte: tabuleiro)
           let ok = 1;
           if (this.soloLargura < Infinity) {
-            const fr = es.bz + this.alt - this.zSolo, fo = O.z - this.zSolo, t = fr / Math.max(1e-6, fr + fo);
+            const fr = es.bz + this.alt - this.zpImagem, fo = O.z - this.zpImagem, t = fr / Math.max(1e-6, fr + fo);
             const yr = rs[1 /*sy*/] + (O.y - rs[1 /*sy*/]) * t - this.via.yOuvinte;
             ok = Math.abs(yr) <= this.soloLargura ? 1 : 0;
           }
-          g *= this.soloGanho * ok;
+          const fi = es.s[S_IMGF];
+          g *= this.soloGanho * ok * (fi >= 1 ? 1 : 0.5 - 0.5 * Math.cos(Math.PI * fi));
         }
         es.gAlvo[cam] = g * es.s[S_FADE];
         // atraso em amostras no fim do trecho; salto (fonte que reapareceu do outro lado da reta) → fade
@@ -430,6 +457,39 @@ export class Propagador {
     void corpo;
   }
   alvoD = new Float64Array(2); alvoDD = new Float64Array(2);
+
+  /**
+   * (extensão, o piso) o plano da imagem da fonte neste trecho, em this.zpImagem. Com o ouvinte em cima de um piso elevado
+   * (a plataforma, a passarela), a fonte acima dele reflete nele se o ponto de reflexão especular cair dentro da área
+   * dele (t = (z_f − z_p)/((z_f − z_p) + (z_o − z_p)) ao longo da reta horizontal da fonte ao ouvinte); senão, no chão da
+   * via. A troca de plano não é varrida: o reflexo desce em 20 ms, o caminho da imagem recomeça no plano novo e ele sobe
+   * em 30 ms (meio cosseno). Com o rs do caminho direto (rs[15], a abscissa da fonte na emissão) ainda no rascunho.
+   */
+  private planoImagem(es: EstadoFonte, O: GeoOuvinte, N: number) {
+    let alvo = this.zSolo;
+    const P = this.piso, pz = P[4], LG = this.lugar;
+    if (pz === pz && LG !== null) {
+      const zs = this.alt + es.bz;
+      if (zs > pz + 0.05 && O.z > pz) {
+        const t = (zs - pz) / ((zs - pz) + (O.z - pz)), lo = LG.ouv;
+        const ss = this.rs[15], ms = -this.via.sentido * es.by;
+        let sr = ss + t * (lo[0] - ss);
+        const mr = ms + t * (lo[1] - ms);
+        // (na volta, s reduzido para perto do piso)
+        if (this.via.tipo !== 'reta') { const L = this.via.comp, c = 0.5 * (P[0] + P[1]); sr -= L * Math.round((sr - c) / L); }
+        if (sr >= P[0] && sr <= P[1] && mr >= P[2] && mr <= P[3]) alvo = pz;
+      }
+    }
+    const v = es.s, dz = alvo - v[S_ZP];
+    if (dz > 0.05 || dz < -0.05) {
+      v[S_IMGF] -= N / (IMAGEM_DESCE * this.fs);
+      if (v[S_IMGF] <= 0) { v[S_IMGF] = 0; v[S_ZP] = alvo; es.ativo[1] = 0; }
+    } else {
+      v[S_ZP] = alvo;
+      if (v[S_IMGF] < 1) v[S_IMGF] = Math.min(1, v[S_IMGF] + N / (IMAGEM_SOBE * this.fs));
+    }
+    this.zpImagem = v[S_ZP];
+  }
   /** rascunho da saída de LugarCena.acoplar para a fonte (AC_*) e o coeficiente da suavização da ocultação no trecho */
   ac = new Float64Array(6); kLugar = 0;
   /** contador de trechos (a sombra de referência do envio é refeita a cada 4, alternando as fontes) */
@@ -553,16 +613,21 @@ export class Propagador {
     this.primeiro = false;
   }
 
+  /**
+   * Deslocamento do anel para o atraso D (amostras): 0 enquanto o atraso inteiro cabe nele (o caso de sempre desde que o
+   * anel guarda a trajetória toda, 5.1); só quando não cabe, o de antes, que deixa o trecho variável em 60% do anel.
+   */
+  private deslocamento(es: EstadoFonte, D: number) { return D <= es.cap - 0.05 * this.fs ? 0 : Math.max(0, Math.round(D - 0.6 * es.cap)); }
   private ancorar(es: EstadoFonte, D: number, agora: boolean) {
-    const novo = Math.max(0, Math.round(D - 0.6 * es.cap));
+    const novo = this.deslocamento(es, D);
     if (agora) { es.s[S_OFF] = novo; es.s[S_XFN] = 0; }
     else { es.s[S_OFFVELHO] = es.s[S_OFF]; es.s[S_OFF] = novo; es.s[S_XFN] = Math.round(0.05 * this.fs); es.s[S_XF] = 0; }
   }
   private verificarAncora(es: EstadoFonte, D1: number, D2: number) {
     if (es.s[S_XFN] > 0) return;
     const lo = D1 - es.s[S_OFF], hi = D2 - es.s[S_OFF];
-    if ((es.s[S_OFF] > 0 && lo < 0.25 * es.cap) || hi > 0.9 * es.cap) {
-      const novo = Math.max(0, Math.round(D1 - 0.6 * es.cap));
+    if ((es.s[S_OFF] > 0 && lo < 0.25 * es.cap) || hi > es.cap - 0.02 * this.fs) {
+      const novo = this.deslocamento(es, D1);
       if (novo !== es.s[S_OFF]) this.ancorar(es, D1, false);
     }
   }
@@ -689,6 +754,11 @@ export function arBilinear(s: Float64Array, fp: number, fs: number) {
   const K = Math.tan((Math.PI * fp) / fs);
   s[S_KARALVO] = K / (1 + K); s[S_B1] = K / (1 + K); s[S_KAR] = (K - 1) / (K + 1);
 }
+
+/** bytes que os anéis de todas as fontes de um portador podem ocupar (5.1): 64 MB */
+export const ORCAMENTO_ANEL = 64 * 1024 * 1024;
+/** amostras do anel (potência de 2) para guardar o atraso até `dist` m, mais 0,1 s e a folga da leitura */
+export function amostrasAnel(dist: number, fs: number) { let n = 1024; while (n < (dist / C_SOM + 0.1) * fs + 512) n <<= 1; return n; }
 
 /** segmento do corpo que contém a abscissa x (referencial do corpo, x = 0 no centro, frente em +L/2) */
 export function segmentoEm(corpo: Corpo, x: number): Segmento {

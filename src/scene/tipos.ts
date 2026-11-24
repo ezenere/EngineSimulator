@@ -122,10 +122,15 @@ export interface LugarAcustico {
   /** o tubo do túnel de s0 a s1 (as bocas), entre as paredes mLonge e mPerto, do chão ao teto `altura`; `nicho`: o fundo
    *  dos nichos de refúgio além da parede do lado do ouvinte (quem está num nicho está dentro do túnel) */
   tunel?: { s0: number; s1: number; mLonge: number; mPerto: number; altura: number; nicho?: number };
-  /** a cobertura da estação de s0 a s1, sobre m de `mLonge` (a beira do telhado do lado de lá) a `mFundo` (a parede do
-   *  fundo, fechada até o teto), na altura `teto`; do lado de lá, o muro de `muro` m de altura em `mMuro`, aberto dele
-   *  até o teto; as pontas (s0 e s1) abertas */
-  estacao?: { s0: number; s1: number; mLonge: number; mFundo: number; teto: number; mMuro: number; muro: number };
+  /**
+   * A estação, de s0 a s1, sobre m de `mLonge` a `mFundo` (a parede do fundo, fechada até o teto), até o `teto`. Por `tipo`:
+   *  · 'coberta' (o padrão: o galpão de superfície): `mLonge` é a beira do telhado do lado de lá, com o muro de `muro` m
+   *    em `mMuro` e aberto dele até o teto; as pontas abertas;
+   *  · 'subterranea' (o metrô): a caixa fechada de concreto e azulejo; as pontas dão nos túneis, da mesma seção;
+   *  · 'gare' (a estação antiga): a cobertura de telha sobre a plataforma, aberta do lado da via (de `mLonge`, o lado de
+   *    lá da via, do chão ao teto) e nas pontas.
+   */
+  estacao?: { s0: number; s1: number; mLonge: number; mFundo: number; teto: number; mMuro?: number; muro?: number; tipo?: 'coberta' | 'subterranea' | 'gare' };
   /** o corte (trincheira ao longo da via inteira): o fundo até `m0` dos dois lados, os taludes até `m1`, o alto a `alto` */
   corte?: { m0: number; m1: number; alto: number };
   /** a ponte (viaduto ao longo da via): o tabuleiro de m0 a m1 com o topo em z = 0 e a laje de `espessura`; embaixo, o
@@ -133,6 +138,11 @@ export interface LugarAcustico {
   ponte?: { m0: number; m1: number; espessura: number; vale: number; fundo: number; borda: number };
   /** som de fundo fora do lugar (padrão: o do céu aberto) */
   fundoFora?: EspecFundo;
+  /**
+   * Os pisos elevados em que se pisa (as plataformas, a passarela do túnel): de s0 a s1, de m0 a m1, na altura z. Quem
+   * está em cima de um tem nele o refletor próximo das fontes cujo ponto de reflexão cai nele (lugar.ts, propagador.ts).
+   */
+  pisos?: { s0: number; s1: number; m0: number; m1: number; z: number }[];
 }
 
 export interface Trajetoria {

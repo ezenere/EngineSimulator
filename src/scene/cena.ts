@@ -152,6 +152,8 @@ export class CenaPassagem implements Cena {
   modoVale = false; private trocaVale = false; zChaoLivre = 0;
   /** o acoplamento do ouvinte ao campo reverberante do lugar e a distância dele à abertura (telemetria e testes) */
   acoplamentoOuvinte = 1; distAbertura = 0;
+  /** o piso elevado em que o ouvinte livre está (índice em lg.pisos) ou −1 */
+  pisoOuvinte = -1;
   constructor(op: OpcoesCena = {}) {
     if (op.ur) this.ur = op.ur;
     this.semSombra = !!op.semSombra;
@@ -404,6 +406,7 @@ export class CenaPassagem implements Cena {
     this.amb = amb;
     this.lg.configurar(amb.lugar, this.via);
     if (this.lg.tipo !== TIPO_PONTE) { this.modoVale = false; this.trocaVale = false; this.zChaoLivre = 0; if (this.prop) this.prop.zSolo = 0; }
+    this.pisoOuvinte = -1; if (this.prop) this.prop.piso[4] = NaN;
     const s = SOLOS[this.soloTipo()];
     this.soloGAlvo = this.trocaVale ? 0 : s.ganho;
     if (agora) this.soloG = this.soloGAlvo;
@@ -598,6 +601,7 @@ export class CenaPassagem implements Cena {
       P.zRefEnvio = livre ? Z_REF_ENVIO : NaN;
       if (this.lugarAtivo) this.lugarDoOuvinte();
       else if (this.modoVale && !this.trocaVale) { this.trocaVale = true; this.soloGAlvo = 0; this.definirAlvos(false); }
+      if (!this.lugarAtivo && this.pisoOuvinte >= 0) { this.pisoOuvinte = -1; P.piso[4] = NaN; }
       // M ≥ 0,9 numa reta: o resolvedor fechado (2.1) e o estrondo no cone, como no flyby legado
       P.supersonico = this.via.tipo === 'reta' && Math.abs(vj) >= 0.9 * P.c;
       P.trecho(ini, N, tj, this.geo);
@@ -761,6 +765,12 @@ export class CenaPassagem implements Cena {
     lg.q[6] = o[0]; lg.q[7] = o[1]; lg.q[8] = o[2];
     lg.acoplar(o, 3);
     this.acoplamentoOuvinte = o[3 + AC_C]; this.distAbertura = o[3 + AC_D];
+    // o piso elevado sob o ouvinte (a plataforma, a passarela): o propagador escolhe, fonte a fonte, se ela reflete nele
+    if (lg.nPisos > 0) {
+      const k = lg.pisoSob(this.pisoOuvinte >= 0 ? HISTERESE_VALE : -HISTERESE_VALE), pp = this.prop.piso;
+      this.pisoOuvinte = k;
+      if (k >= 0) { const o = k * 5; for (let i = 0; i < 5; i++) pp[i] = lg.pisos[o + i]; } else pp[4] = NaN;
+    }
     if (lg.tipo === TIPO_PONTE) {
       const p = lg.ponte, m = o[1], z = o[2], h = this.modoVale ? -HISTERESE_VALE : HISTERESE_VALE;
       // embaixo: fora da largura do tabuleiro ou abaixo do topo dele
