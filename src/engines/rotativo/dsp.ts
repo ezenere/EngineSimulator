@@ -228,7 +228,8 @@ export class RotativoDSP extends EngineDSP {
   }
 
   /** gancho 9: tiques das vedações de ápice nas bordas das janelas (peso 0,3) e nos furos das velas (0,15); o ar zera no IO */
-  janelasRot(c: number, a: number, ap: number) {
+  janelasRot(c: number) {
+    const a = this.amA, ap = this.amAp;
     const jE = this.jEx, jA = this.jAd, rng = this.rng;
     if (c === 0) this.traco[Math.min(63, (a / this.cyc * 64) | 0)] = this.p[0]; // (traço p–α da câmara 0 para o mostrador)
     if (ap < jE.abre && a >= jE.abre) {
@@ -271,9 +272,10 @@ export class RotativoDSP extends EngineDSP {
   }
 
   /** gancho 12: janela de escape trapezoidal (o primário é o do rotor) */
-  escapeRot(c: number, a: number, p: number, T: number, run: Line, Zr: number) {
+  escapeRot(c: number, run: Line) {
+    const a = this.amA, p = this.amP, T = this.amT, Zr = this.Zr;
     const j = this.jEx;
-    if (a <= j.abre || a >= j.fecha) return 0;
+    if (a <= j.abre || a >= j.fecha) { this.amSaida = 0; return; }
     const A = this.AexMax * this.cylEx[c] * areaJanela(a, j);
     const m = this.exhaustFlow(A, p, T, P0 + 2 * run.in0, Zr);
     if (m > 0) this.mEscAc += m; // (escoamento médio do escape, para a ponteira: `BocaRot`)
@@ -292,13 +294,14 @@ export class RotativoDSP extends EngineDSP {
       const Mj = pr > 1 ? Math.min(1, Math.sqrt(5 * (Math.pow(pr, 0.4 / 1.4) - 1))) : 0;
       if (Mj > this.MjEO[c]) this.MjEO[c] = Mj;
     }
-    return m;
+    this.amSaida = m;
   }
 
   /** gancho 14: janela de admissão (primária + secundária/auxiliar pela rotação, `AinMaxRpm`) */
-  admissaoRot(c: number, a: number, pMan: number, p: number, T: number) {
+  admissaoRot(c: number) {
+    const a = this.amA, pMan = this.amPMan, p = this.amP, T = this.amT;
     const j = this.jAd;
-    if (a <= j.abre || a >= j.fecha) return 0;
+    if (a <= j.abre || a >= j.fecha) { this.amSaida = 0; return; }
     const m = flow(this.AinMaxRpm * this.cylIn[c] * areaJanela(a, j), pMan, T_MAN, p, T);
     // composição: o que a câmara devolve ao duto de admissão na sobreposição fica no duto do rotor e volta para a câmara
     // seguinte que aspirar por ele (o duto é varrido pelo ar novo conforme a vazão passa)
@@ -319,7 +322,7 @@ export class RotativoDSP extends EngineDSP {
       const qd = Math.min((1 - this.kPlen) * q, mDuto - this.admQ[r]);
       this.admQ[r] += qd; this.plenQ = Math.min(this.plenQ + q - qd, mPlen);
     }
-    return m;
+    this.amSaida = m;
   }
 
   /** densidade do pulso na abertura (gancho do densC): a referência do Ronco, 1 650 K, com teto 1,8 (o do Ronco, 1,3,
@@ -339,16 +342,17 @@ export class RotativoDSP extends EngineDSP {
    * quente se mistura (`PosQueimaBoca`, um nó da rede que injeta no ponto quente: depois do downpipe e do catalisador,
    * antes do pré-silencioso e do abafador).
    */
-  posQueimaRot(c: number, a: number, Zr: number) {
+  posQueimaRot(c: number) {
+    const a = this.amA, Zr = this.Zr;
     const h = this.hcQ[c], j = this.jEx;
-    if (h <= 0 || a <= j.abre || a >= j.fecha) return 0;
+    if (h <= 0 || a <= j.abre || a >= j.fecha) { this.amSaida = 0; return; }
     const t = ((a - j.abre) * DEG) / Math.max(this.omega, 10);
-    if (t > 0.06) return 0;
+    if (t > 0.06) { this.amSaida = 0; return; }
     const env = (Math.exp(-t / 0.012) - Math.exp(-t / 0.002)) / 0.01;
     const mEq = (0.2857 * h * env) / (RGAS * 1100);
     this.hcBoca += mEq;
     // (a parte que veio da mistura crua de uma falha queima bem mais turbulenta que o HC de uma queima normal)
-    return Zr * mEq * this.kHC * this.kPrim * (1 + (this.hcTurb + (this.kTurbCru * this.hcC[c]) / h) * this.ruidoHC(0));
+    this.amSaida = Zr * mEq * this.kHC * this.kPrim * (1 + (this.hcTurb + (this.kTurbCru * this.hcC[c]) / h) * this.ruidoHC(0));
   }
 
   /** ruído de combustão turbulenta: branco → passa-alta de 1ª ordem em 400 Hz → passa-baixa de 1ª ordem em 3 kHz (2 estados por canal) */
@@ -360,7 +364,8 @@ export class RotativoDSP extends EngineDSP {
   }
 
   /** gancho 16: engrenagem fixa / coroa do rotor (34·rpm/60, harmônicos k^−2) e o 2º turbo do sequencial */
-  mecanicaRot(omega: number, rf: number) {
+  mecanicaRot() {
+    const omega = this.amOmega, rf = this.amRf;
     const ph = this.phW;
     let m = (Math.sin(DENTES_ENGRENAGEM * ph) + 0.25 * Math.sin(2 * DENTES_ENGRENAGEM * ph) + 0.11 * Math.sin(3 * DENTES_ENGRENAGEM * ph)) * 0.0012 * rf * rf;
     // vedações de ápice e laterais raspando na carcaça: chiado granulado contínuo (2–6 kHz), que funde os tiques das bordas
@@ -375,7 +380,7 @@ export class RotativoDSP extends EngineDSP {
       m += Math.sin(this.phT2) * 0.04 * lvl * this.kApito;
     }
     void omega;
-    return m;
+    this.amSaida = m;
   }
 
   /** o chiado do turbo (o filtro `turboHiss` do Ronco) segue o mesmo `kApito` do apito: na cabine, onde o agudo do escape
@@ -389,8 +394,9 @@ export class RotativoDSP extends EngineDSP {
   /** apito do turbo (o tom do Ronco, `sen + 0,25·sen 2`), atenuado por `kApito`: no Ronco ele sai como um tom puro de até
    *  6,7 kHz, 34–46 dB acima do piso em plena carga (medido no FD com o kit ouvido; a gravação de bordo não tem tom
    *  nenhum ali). O turbo é um detalhe por cima do motor: de fábrica fica a 30% (−10 dB); o controle "Apito do turbo" sobe */
-  apitoRot(lvl: number) {
-    return (Math.sin(this.phT) + 0.25 * Math.sin(2 * this.phT + 0.7)) * 0.02 * lvl * this.kApito;
+  apitoRot() {
+    const lvl = this.amLvl;
+    this.amSaida = (Math.sin(this.phT) + 0.25 * Math.sin(2 * this.phT + 0.7)) * 0.02 * lvl * this.kApito;
   }
 
   /** gancho 17: parede do coletor; o gás do Wankel sai a 900–1 000 °C em carga (lenta 400–500) */
