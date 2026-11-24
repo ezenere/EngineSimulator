@@ -166,7 +166,7 @@ Mesclado na `reestruturacao`, nesta ordem: câmbio do Diesel (`3098531`), Passag
   2. **O que se ouve de onde se está** (`src/scene/**`): a acústica do ambiente ainda é a do cenário inteiro (sair andando do túnel não muda nada; a estação e o metrô ficam 2 a 4 dB mais baixos com o ouvido na plataforma). O ambiente passa a depender da posição do ouvinte, sem mexer nos números dos pontos de chegada.
 - **Sem veredito do dono ainda:** Rotativos, Ronco, Radial, Vapor e Elétrico (som), e o retoque dos médios do Diesel. Nenhuma segunda passada de som começa antes.
 
-### Estado em 24/11/2026 (`81a6c01`)
+### Estado no fim de 23/11/2026 (`81a6c01`)
 
 O que estava "em correção" na seção anterior entrou:
 
