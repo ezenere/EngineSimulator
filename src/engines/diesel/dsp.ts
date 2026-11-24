@@ -12,10 +12,12 @@ import {
   TAU, P0, RGAS, GAM, SOUND_SPEED, clamp, smooth, flow,
   RNG, Biquad, Line, Junction, TwoPort, Radiator, port,
 } from '../../acoustics';
-import { EngineDSP } from '../ronco/dsp';
+import { EngineDSP, AM } from '../ronco/dsp';
 import { T_MAN, T_EXREF } from '../ronco/constantes';
 import { LHV, ESTEQ, CETANO_PADRAO, K_ATRASO, R_UNIV, BSFC, INJECAO, NOTCH_POT, K_MEC, K_VALV, K_FUNDO, K_VIB, K_CALOR, K_MISTURA, K_TURBINA, K_SOPRO, K_CHIADO_TURBO, K_MOD_TURBO, K_CHOQUE, EST, EST_COMB, EST_VALV, K_ASPEREZA, ASPEREZA_FIXA, F_ASPEREZA, K_JATO, JATO_V0, JATO_V1, COFRE, EST_SAIA, SAIA, EXP_TIQUE, ENGRENAGENS, EST_ENG, CORPO } from './constantes';
 import { DoisPortasDiesel } from './escape';
+// (os índices do vetor `am` do EngineDSP que os ganchos daqui usam, em constantes do módulo: ver AM em src/engines/ronco/dsp.ts)
+const AM_RF = AM.RF, AM_PMAN = AM.PMAN, AM_PUP = AM.PUP, AM_RUNNING = AM.RUNNING, AM_CRANKING = AM.CRANKING, AM_CUT = AM.CUT, AM_RPM = AM.RPM, AM_DEG = AM.DEG, AM_A = AM.A, AM_AP = AM.AP, AM_P = AM.P, AM_V = AM.V, AM_T = AM.T, AM_COLDN = AM.COLDN, AM_SAIDA = AM.SAIDA;
 
 // Carga e comando vindos de um portador externo (CENA.md 1.2). TODO(integração carriers/): trocar por
 // `import type { Carga } from '../../scene/tipos'` quando a camada de portadores entrar na branch.
@@ -151,6 +153,8 @@ export class DieselDSP extends EngineDSP {
     this.kBatida = 1; this.kChocalho = 1; this.kRot = 1; this.kVar = 1; this.kTiques = 1; this.kValvulas = 1; this.kSaia = 1; this.kEng = 1; this.kEv = 1; this.kFrio = 1;
     this.evN = 0; this.evT = new Int32Array(64); this.evW = new Uint8Array(64); this.evO = new Int32Array(64); this.evA = new Float64Array(64); this.jatoMed = 0; this.apFreq = 0; this.apNorm = 0; this.apAm = 0;
     this.queimasBoas = 0; this.cicloEv = 0; this.egtN = 0; this.egtD = 0; this.egtNs = 0; this.egtDs = 0; this.lentaBaixa = false; this.fuelLenta = 0.1; this.fuelPartida = 0.5;
+    // (as que o controle, as mensagens e as ferramentas criariam com o motor rodando: ver o fim do construtor do EngineDSP)
+    this.advInj = 0; this.estadoAnt = ''; this.boostD = 0; this.trocaT = 0; this.trocaDir = 0; this.lamInst = undefined; this.fRede = 0; this.boostFixo = 0; this.lentaFixa = 0;
   }
 
   // ------------------------------------------------------------------ mensagens
@@ -522,7 +526,8 @@ export class DieselDSP extends EngineDSP {
   }
 
   // arma a injeção no curso de compressão e dispara piloto e principal (item 7)
-  injetar(c, a, ap, running, cranking, cut, rpm) {
+  injetar(c) {
+    const a = this.am[AM_A], ap = this.am[AM_AP], running = this.am[AM_RUNNING] === 1, cranking = this.am[AM_CRANKING] === 1, cut = this.am[AM_CUT] === 1, rpm = this.am[AM_RPM];
     const cyc = this.ciclo, h = cyc / 2;
     // fechamento do injetor (tique)
     const aRel = a < h ? a : a - cyc, apRel = ap < h ? ap : ap - cyc;
@@ -702,7 +707,8 @@ export class DieselDSP extends EngineDSP {
   kv() { return this.kv0() * clamp(this.rpmAvg / this.idle, 0.5, 4); }
 
   // trem de válvulas, ar por ciclo e massa presa nos 2T (itens 8 e 9)
-  valvulas(c, a, ap) {
+  valvulas(c) {
+    const a = this.am[AM_A], ap = this.am[AM_AP];
     const evo = this.evo, evc = this.evc, ivo = this.ivo, ivc = this.ivc, rng = this.rng;
     if (this.tempos === 4) {
       const fecha = cruza(ap, a, evc) || cruza(ap, a, ivc);
@@ -724,7 +730,8 @@ export class DieselDSP extends EngineDSP {
   }
 
   // queima em Wiebe dupla + pico de pressão + dp/dθ medido → excitação do knock (itens 10, 2.4–2.6)
-  queimar(c, a, p, V, deg) {
+  queimar(c) {
+    const a = this.am[AM_A], p = this.am[AM_P], V = this.am[AM_V], deg = this.am[AM_DEG];
     const cyc = this.ciclo, aRel = a < cyc / 2 ? a : a - cyc;
     if (p > this.pPk[c]) { this.pPk[c] = p; this.angPk[c] = aRel; }
     if (c === 0 && this.ptBuf) { const i = Math.floor(a / 4); if (i < this.ptBuf.length) this.ptBuf[i] = p; }
@@ -779,11 +786,12 @@ export class DieselDSP extends EngineDSP {
       if ((aRel > this.igM[c] + this.dthP[c] && this.eD[c] >= 0.997 * (1 - this.phiP[c]) * this.Qm[c]) || aRel > 0.45 * cyc) { this.queima[c] = 0; this.nQ[c] = 0; this.rgF[c] = 0; this.rgS[c] = 0; }
     }
     this.pAnt[c] = p;
-    return dQ;
+    this.am[AM_SAIDA] = dQ;
   }
 
   // válvula de escape, Jake e contrapressão do freio de descarga (item 11)
-  escapar(c, a, p, T, run, Zr) {
+  escapar(c, run) {
+    const a = this.am[AM_A], p = this.am[AM_P], T = this.am[AM_T], Zr = this.Zr;
     const pb = P0 + this.pBack + 2 * run.in0;
     const evo = this.evo, evc = this.evc;
     if (a > evo && a < evc) {
@@ -793,7 +801,7 @@ export class DieselDSP extends EngineDSP {
       // o refluxo quando a onda do Jake de outro cilindro chega pelo coletor)
       const ml = (0.1 * this.m[c]) / this.dt, mx = clamp(this.exhaustFlow(A, p, T, pb, Zr), -ml, ml);
       if (mx > 0) { this.egtN += mx * T; this.egtD += mx; }
-      return mx;
+      this.am[AM_SAIDA] = mx; return;
     }
     if (this.jakeOn && this.jakeCil[c]) {
       // Jake: abre o escape perto do PMS de compressão (de −20° a +30°) e solta o ar comprimido (3.4)
@@ -811,10 +819,10 @@ export class DieselDSP extends EngineDSP {
           const M2 = (2 / (GAM - 1)) * (Math.pow(pr, (GAM - 1) / GAM) - 1);
           this.bankJ[Math.min(this.cfg.bank[c], this.bankJ.length - 1)].inj += Zr * mx * K_CHOQUE * Math.min(M2 - 1, 6) * this.rng.bi();
         }
-        return mx;
+        this.am[AM_SAIDA] = mx; return;
       }
     }
-    return 0;
+    this.am[AM_SAIDA] = 0;
   }
 
   // Fator do pulso que entra no tubo na abertura do escape. O Ronco usa T/1650 K ("vazão volumétrica"), acertado no
@@ -824,21 +832,23 @@ export class DieselDSP extends EngineDSP {
   densidade(T) { return clamp(Math.sqrt(T / T_EXREF), 0.1, 1.3); }
 
   // válvula de admissão (4T) ou janelas na camisa (2T, perfil quadrado: o pistão descobre a janela em ~15°) (item 13)
-  admitir(c, a, pMan, p, T) {
+  admitir(c) {
+    const a = this.am[AM_A], pMan = this.am[AM_PMAN], p = this.am[AM_P], T = this.am[AM_T];
     const ivo = this.ivo, ivc = this.ivc;
     if (a > ivo && a < ivc) {
       const sv = Math.sin(Math.PI * (a - ivo) / (ivc - ivo));
       const A = this.AinMax * this.cylIn[c] * Math.min(1, (this.tempos === 2 ? 2.5 : 1.5) * sv * sv);
-      return flow(A, pMan, T_MAN, p, T);
+      this.am[AM_SAIDA] = flow(A, pMan, T_MAN, p, T); return;
     }
-    return 0;
+    this.am[AM_SAIDA] = 0;
   }
 
   // Mecânica do diesel (item 22): a estrutura do motor (banco de modos) respondendo à queima e aos impactos, mais o
   // pouco que não passa por ela (anel da bomba rotativa, fundo contínuo). O nível absoluto é K_MEC × `mecanica` do
   // preset; os impactos são referidos ao pico da batida de lenta quente do próprio motor (`refKnock`, medido na sonda
   // de calibração só com a queima), como no DIESEL.md 2.7
-  mecanica(rf, coldN, pMan) {
+  mecanica() {
+    const rf = this.am[AM_RF], coldN = this.am[AM_COLDN], pMan = this.am[AM_PMAN];
     const rng = this.rng, M = this.eM, acc = this.eAcc;
     // impactos agendados: cada um entra no banco pelo caminho da sua peça
     let n = this.evN;
@@ -898,7 +908,7 @@ export class DieselDSP extends EngineDSP {
     LP[0] += kk * ((o0 - h) * G[0] - LP[0]); LP[1] += kk * ((o1 - h) * G[1] - LP[1]); LP[2] += kk * ((o2 - h) * G[2] - LP[2]); LP[3] += kk * ((o3 - h) * G[3] - LP[3]);
     B0[0][I[0]] = x + LP[0]; B0[1][I[1]] = x + LP[1]; B0[2][I[2]] = x + LP[2]; B0[3][I[3]] = x + LP[3];
     if (++I[0] >= B0[0].length) I[0] = 0; if (++I[1] >= B0[1].length) I[1] = 0; if (++I[2] >= B0[2].length) I[2] = 0; if (++I[3] >= B0[3].length) I[3] = 0;
-    return m + this.gCofre * 0.5 * (o0 - o1 + o2 - o3);
+    this.am[AM_SAIDA] = m + this.gCofre * 0.5 * (o0 - o1 + o2 - o3);
   }
 
   // Som do turbo (item 23, 5). O que se ouve de um turbo é o apito: a passagem das pás principais do compressor, um
@@ -908,7 +918,8 @@ export class DieselDSP extends EngineDSP {
   // compressor, chiado da wastegate, esteira da turbina) existe, mas chega abafada pela caixa do filtro e pelo abafador:
   // é um tempero. (Até a 3ª passada era o contrário: as pás contadas com as intermediárias punham o apito acima de
   // 16 kHz, inaudível, e a banda larga era a fonte dominante em carga: "quando o turbo sobe, faz som de mar".)
-  turboSom(pMan, pUp, P) {
+  turboSom(P) {
+    const pMan = this.am[AM_PMAN], pUp = this.am[AM_PUP];
     let tur = 0;
     const dt = this.dt, rng = this.rng;
     if (this.turbo && this.turboRpmMax) {
@@ -954,7 +965,7 @@ export class DieselDSP extends EngineDSP {
       }
     }
     if (this.pBack > 2000) tur += this.fbF.run(rng.bi()) * 0.006 * (this.pBack / 3e5) * P.air;
-    return tur;
+    this.am[AM_SAIDA] = tur;
   }
 
   // ------------------------------------------------------------------ controle (a cada 16 amostras)

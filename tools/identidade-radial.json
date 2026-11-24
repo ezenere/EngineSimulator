@@ -1,0 +1,282 @@
+{
+ "r1820 · partida": {
+  "hash": "c8f3ab4941f80444f171b540e3c63bbc048188119d18e23f23dd064b83fd875f",
+  "seg": "73b02e5f 6d06a5f4 268a8455 1f3af378 aba93bd6 12c761f9 a772fcc8 6c55e66a 10f1a321 3cbee0d1 5b39cab5 4aa2c341"
+ },
+ "r1820 · subida": {
+  "hash": "0a80fba701973d60639cfcb47d0c99040177638f02ad1baa7c4be932d17e3f36",
+  "seg": "803d89fe b455cafa e95d39e5 6b0e86f4 11f3f5de 4ce41830 5769f2b1 6dafb9d8 fd9d862e ad79def7"
+ },
+ "r1820 · meiaManete": {
+  "hash": "da2a70f1ee617b07e9cd374f9ff055e25644658fa7f732055137ad247025219d",
+  "seg": "3b4859ec a53276ce 7ea7eeb8 4d65de56 9bfbe3ae eef2a1db 2ef60cb5 11912640 2e6bb89d"
+ },
+ "r1820 · rua": {
+  "hash": "397858f330cc763dcc2568fcf57f97d90eb6509a71635e67a47dc1da8d66e799",
+  "seg": "8e329bcc 6518e39b ec98f7c7 2539b38c fef5e23b 5d4aa656"
+ },
+ "r1830 · partida": {
+  "hash": "abb9a10f6aedc07b0655eed6b53fe247ca5c33f7fc211112bca99064590b48bf",
+  "seg": "2c951fbe 426b49b1 9ecc54fe 6dd93434 78a18f12 51801eb9 d94354b9 1581f2bf c45c0b2e cdc8eec7 273b5aab f0dd15d8"
+ },
+ "r1830 · subida": {
+  "hash": "bde81d8ea5719ed9c9a389e859b94b1863e0a4595143747ff9902b227f6123c0",
+  "seg": "4ec9495e cc69e926 bd899d68 f98766ae dae9d328 a10c587f 15893f45 c263c4c3 83b03327 4305f5f7"
+ },
+ "r1830 · meiaManete": {
+  "hash": "65d8984bdab41e1ef41ff1aac0b8817422d02694ca47d347c1b01d239cd4bf33",
+  "seg": "4c82a682 533c863c 91900cca a4d9c5c4 83a5a428 077f10b5 0ca1d5c7 4cf6aca4 84803ee0"
+ },
+ "r1830 · rua": {
+  "hash": "f37942d7a3a123c2ffbea052949384530bcc22cd23839386c48ea1839ef48844",
+  "seg": "cb11b0bf 0105b869 42fc94e9 a92534c2 a0a56aa6 706b93e4"
+ },
+ "r1830 · trocaConfig": {
+  "hash": "60e815f9b76c6045d5b26c13d2dd06897411e41c2d95dfc93af2e173974bb45d",
+  "seg": "afbbcf0a fe8a5daa 233baced 99a1a56f f7c1bbd4 31f4ed87 dbb097a5 1f473461"
+ },
+ "r2800 · partida": {
+  "hash": "cc441ade7295aabf6006ca4ceaf45e806a0ebf140be9c5a1c7b1d183c08a9e3e",
+  "seg": "55df5f7d b6c6eadb b96e3755 4531b930 8d0009f9 700decb4 1afc51d8 2ff3167f 49e59d69 bbfd21de ed9133c1 94004987"
+ },
+ "r2800 · subida": {
+  "hash": "29c13ad673565108b92bd187de03aae8a4889f103a2095b6d907c8bf14ec1ef5",
+  "seg": "2b6699d2 16f8cef8 fadbeaa8 0e032d80 f2c06bfc 73480308 a3de55f9 5ead95b5 68874197 876b0c69"
+ },
+ "r2800 · meiaManete": {
+  "hash": "e3f6d23060e1d08be3de5927f3637873c26b08df2ffc141a96602bc94c2c7d90",
+  "seg": "a3edd648 cf11baa4 42862407 f205a8b9 d61dd501 4f726f33 2bcba666 017f4301 bc9bbad8"
+ },
+ "r2800 · rua": {
+  "hash": "ffd371d7fe164ba0470ca6b7fff059b800c2b344e6bfcc57756ebde35a4a0201",
+  "seg": "15eb4244 09f1a1b0 6b70b36a 9ff57894 625f994b f2326e87"
+ },
+ "r2800turbo · partida": {
+  "hash": "fd70bd68da15dab8954c82b8c0651148e8702ae3ae3e915614180ccadfc91753",
+  "seg": "83969c03 dbc9e991 42807ccb 54b8f92a 5f33b2d0 bad67e60 7794b2ad 4c2475b4 c3603db3 ef63f241 271494d9 4e8449cc"
+ },
+ "r2800turbo · subida": {
+  "hash": "f4f66e6a6a705245db96c1e4dbad14f5349c72fd7891acfbf86e1012354cc2c6",
+  "seg": "e35cb8e2 ad18c43a d53b5e74 452b9d8b 752a6de6 fb1d07d4 d94d61eb 33497e33 ee941c08 6b4edbf2"
+ },
+ "r2800turbo · meiaManete": {
+  "hash": "9cff6e9de28ce099a7b852c6ee924fa4a7e804f2f5cfb85257411899bac5e907",
+  "seg": "0de1d661 8f6894a2 cfadd3e7 72c8163a 9631c233 256221bb 10decd30 a34f99d9 b83ccd80"
+ },
+ "r2800turbo · rua": {
+  "hash": "b4bb5eb766551c0b19d1afefa6d0ee1c84003e834246222c52c8d33a5efa5928",
+  "seg": "9d91acf1 4da5e5b3 57ff1d56 b98e2d86 9d94a66e 9f0e19b9"
+ },
+ "r4360 · partida": {
+  "hash": "c147245351e7a4b36e4450c6f9e9c66a373d72a59c8127ef2c90dcc0b72c19b3",
+  "seg": "542aae70 908c174b 622c9990 e3c6429e b1dac062 e977738b 05b62e6a 3b0f7f00 51c4a0dd 7f14df05 0580136d 38e420b2"
+ },
+ "r4360 · subida": {
+  "hash": "98123216f026f42283756a762560e26e2e740c34f9581f2d584bbdef2063a96b",
+  "seg": "3ef26e74 e6c647d5 92192054 cc584e7c 334f47ac 4e44b0d4 332f8390 3edee6c9 7e462599 c4c4ba96"
+ },
+ "r4360 · meiaManete": {
+  "hash": "25606197bc80a3f196d773e5a8a2d84d757dcd4487c8fdbad40b1c8317ffa381",
+  "seg": "42ec5fa1 f0893662 3532fcdd 7e826fe2 0a1e5286 31d754ca f62a7c5b c01fde89 0baced95"
+ },
+ "r4360 · rua": {
+  "hash": "cf1b0620e80b4f29aa27ea09c37476104a391e692c92788a539a2bedf2299f6f",
+  "seg": "1a71a870 4ab536a4 46413cee d9ea79fe 1cf46b03 e394ae6c"
+ },
+ "r1340 · partida": {
+  "hash": "f768051c6b4bc8ad0401ee364eea33477f7690a9e5839cf6c843a92d4fd64f82",
+  "seg": "213c6070 64e9c336 f1782c75 65fca6b1 41901fba 20f6e2bc 5d6ea154 8a94fade 97709126 42b13a41 64399f22 ebaf8031"
+ },
+ "r1340 · subida": {
+  "hash": "529518f2da90016ddcc9c19aad9afca46ddcc6a40169f48fc2885155ac6747de",
+  "seg": "82e8c713 33006df4 c0b6241c 6504feed 4d3a867e f5b33055 0acde01f e9276a18 17466594 b1c6260d"
+ },
+ "r1340 · meiaManete": {
+  "hash": "f48bdf2d94317e36e36d22747723d2eb3a11881d04e127038ed1cf6873f82b20",
+  "seg": "f4d5456c 1eea1080 c6ec3232 16909b10 9d5726e4 12355c3d 663a841e 38e84995 a5361c77"
+ },
+ "r1340 · rua": {
+  "hash": "c742edf892cb6fe64436f9ceb4bcc8cc9a5894597a72cc0ae480f19fc363a34b",
+  "seg": "eff358bc ce6e88cc c8ae60a9 7d630d98 3a0af432 a2e77be6"
+ },
+ "r1340 · trocaConfig": {
+  "hash": "c86eeb896b7217a7d64456e4bd6ce438aa0d6db21a0d156ac4b8f9decb22a973",
+  "seg": "a1242367 43f37fc2 1271b5ff 3b96f109 8f8b39e4 158addae 49a7d2a4 1f474717"
+ },
+ "r985 · partida": {
+  "hash": "ae1d41aa8e4754b9501dda3fae5d65f3149519fca5b2c9e930b0535715fe3b67",
+  "seg": "9d89897a a9b680fa c805ad45 fba390b8 4fb57e9f 4d36e940 8e68dc25 9b69f244 53a01ef6 435dc49b 99427dff af5f8671"
+ },
+ "r985 · subida": {
+  "hash": "9b2bba87aeacb7234547af57063d266ab5678c171cc1dbc5c6222a1c3df0013c",
+  "seg": "480440a9 e311a733 3d2fdad6 ba58f48c a2291666 132faa4a 61d24fcc 899bda2a 28297057 8d483de0"
+ },
+ "r985 · meiaManete": {
+  "hash": "e9d5dec2fb7a53c9401d05eea3a1e4f116ad6ccca5956a2f9bf775b2aa367d2e",
+  "seg": "53f3e559 f20dd5f8 419085d8 c67e3748 ded63c1e a537c569 e3115ffe 450c663c 8bb06aa7"
+ },
+ "r985 · rua": {
+  "hash": "c2bad751b5806fddccad81f8901e521455798d7c5a256f7901c38adee4381af2",
+  "seg": "44131c18 84d0b408 d8a54460 3fd005d3 e25d3cc7 598165b9"
+ },
+ "m14p · partida": {
+  "hash": "b758d925c1250713fe80dc36cb3530e3a3e5be32bb78ac37a7f837d76987e153",
+  "seg": "0a69348f e71a40cd 40b7764a c99ad1c1 19a26ce0 7bf2e267 3168e285 112b6438 4af9a812 a3fad453 d5e2b717 611478f1"
+ },
+ "m14p · subida": {
+  "hash": "1881922545dbda84491f6580760e6c575e92d04485fb1d4fb8fd7997928f280a",
+  "seg": "d64aca75 8e21b96d 82ea0f76 8b49a780 508bac25 8ada818f 246b890e 69f9581a e994359d b92bb85e"
+ },
+ "m14p · meiaManete": {
+  "hash": "023d8c44fef6813f14b16858b5db7fd32e272abf05bc3b9ebdc674a863b5a367",
+  "seg": "4492a779 08e88093 e57ec51e 5032ae29 c077b6ef b8be6432 7e919c6b 9e27bb07 e497477b"
+ },
+ "m14p · rua": {
+  "hash": "51c2d876be24d6ef497ce118ba1999b9522b2608454b1f873e5a233c711efcd8",
+  "seg": "826a1afc 2ea889a7 053032e5 4957a8fa fafaf2b8 dae12929"
+ },
+ "m14pf · partida": {
+  "hash": "5def73a9bcaf7809ede3e12cf4cdbb471620018f7ec67906bd21fb428d6fbba3",
+  "seg": "74b27f4a b8a354f5 76ef0d97 d27dbec0 ca90d76c a5fd4dec 48c84a6a 6615fbfb bdb05976 eb4b587c 649f0387 09af5b5b"
+ },
+ "m14pf · subida": {
+  "hash": "7f547eb80fd50edb79b4eab705f13f9afa4bc3d058f9d7e45e092e7958ec6237",
+  "seg": "eedd694a c24f7205 c77e2391 7f4242b3 8b4737ad 956b85d1 2a4b311b f17681ab d7ec92ca 449af497"
+ },
+ "m14pf · meiaManete": {
+  "hash": "0562f5f0d58b3c8f7ba6571830760e4f18564fabaadf9b1c8aec14b6787c85f5",
+  "seg": "6c95e3f0 1a06091e d1191420 82ffde10 3a10bc83 e5cc2b63 faa77ee1 e2b0a8f3 5357cff3"
+ },
+ "m14pf · rua": {
+  "hash": "24c54631d766feea6caa680ea6cbd47e9da36781c185ed7482f2a0fe5114356f",
+  "seg": "15b3c99b ccd9c86b cc36b2ef 74e99381 863cdfb8 3d15a37a"
+ },
+ "rotec2800 · partida": {
+  "hash": "8dcc5616fa2b91d4198c8a0cef58767f3fd32d0f5d733bc7a7c6090707e86b11",
+  "seg": "408844d1 f766d87d b5fc61a2 03bd3e97 a3eb0231 00850ff5 debbc9f0 7f82a08b 84878c78 6b5b08dc a5a55613 4c48d96f"
+ },
+ "rotec2800 · subida": {
+  "hash": "85f85c390ac46b84681bae1969ea24ef05c37f5c3622fe80d62b34ecb0364618",
+  "seg": "4c8cabaf d478fbc8 2eee5554 9fa9c03b 385b4163 139d09b6 489e4a75 f3c9439f 8bfb194d 76108287"
+ },
+ "rotec2800 · meiaManete": {
+  "hash": "159899dd7a774ec3269c808d69a8e19e080ba630322fb212e3b33f326ac4cb2d",
+  "seg": "507542e8 d6a012ba 53421a74 c38aebf4 583c8328 6846b5f8 ee41376e 05e6b663 44c5d852"
+ },
+ "rotec2800 · rua": {
+  "hash": "c0cb8a05f1176c8ad03ccd95a0323700ce327ee38020391e8a3170c92989c497",
+  "seg": "6ac11d66 a4db07f4 0f41b745 4ee2476e e5b94f7f 02719a00"
+ },
+ "rotec3600 · partida": {
+  "hash": "e8447ad1bf7fd23fc4ba415fe9cf07952cd63535e6b7d57f6836cc7faf0c8d5c",
+  "seg": "f97de77b a8fcccfa 0c57fdee 37e31623 abb172ce bf24bb73 7d28f2a2 9b9e41ed 458ac780 97b6dc03 4d2158d3 6f089cf7"
+ },
+ "rotec3600 · subida": {
+  "hash": "a29a51f03fc8632d0fac908f8590529c6e9024c1efc27c9f1353dcda81c5024d",
+  "seg": "35c8a7ff d84ef8b4 4f38443c e22c31ea 8fc072de 5a48ba2a 09a48b3f 687cfbbc 87a3f5fa cffaeee1"
+ },
+ "rotec3600 · meiaManete": {
+  "hash": "b0eee782864dd40c972e3ca678f289ff3fe10c0221a57b9c49a79963fa926e34",
+  "seg": "80fe2298 cd7663a1 877bf091 e4c9be09 44de87d7 d57af14f ffa6e67b 53ceb6bc 45f1b724"
+ },
+ "rotec3600 · rua": {
+  "hash": "d587300e4126d017ba32986a206a858d6b3aa28c7fdd1558ac0c811756562681",
+  "seg": "6a3657cd 02be0110 726e6077 66bac666 1cd7ddf0 32d4f64f"
+ },
+ "verner3 · partida": {
+  "hash": "5df8530dd4cc52225cf43c3177d1849fdb9f0fb4293daede2f50fdeabb3c6bef",
+  "seg": "cd50a05e 7a2eb9fb 2417c91e e797500d 53eca854 7b994682 4fe2c73b ee9f36b1 786fe2f6 0a47d5a7 bac4ec3e 3c5a0ee9"
+ },
+ "verner3 · subida": {
+  "hash": "c20929b3b7cf2090ee6183e0d4373ab6bbf76af2c68d74c9fde9630ec8604076",
+  "seg": "18d5153f bfc1d059 386fc7a7 b90cc3a7 b147e4d4 f455f016 004497b2 6679c70e 9b6fdbe7 c04f82ac"
+ },
+ "verner3 · meiaManete": {
+  "hash": "0fdc0b6b56552c5639a2e654fba6af48c16a737463004dbd05abe7598fa6ef58",
+  "seg": "bdd65071 86d35518 1a73f5bc 7cc964fc 747bbd85 d0e9c9ce 738f3147 50bb0ed3 9d00745b"
+ },
+ "verner3 · rua": {
+  "hash": "50789cc5b0f84d6a325a208ae8b9fb5a697e0bcd79e1d1df3b73a154049318ca",
+  "seg": "5bf36d97 e9a784fe 8eb89f65 84dad2ad 7f7afff1 452ffbf4"
+ },
+ "verner5 · partida": {
+  "hash": "e7b86d20085fd2fc6c1018616dfa6d4002378a81a44b78427e9109e82d87dae6",
+  "seg": "57fbb541 758a958b 03208add 9f317a4c e8e9d077 9c927b9b a00ce092 01e69e4b 38bbd928 797657a8 b763f0be bac4d130"
+ },
+ "verner5 · subida": {
+  "hash": "2a39cca19ee69bcb00dc4f090669464179d0c8440a8d52a7eda836421719a374",
+  "seg": "7fcd39ee e445c1a9 1ca410ea 6eee14f4 1cd5a24d 4121222d e6b48884 260a3ef6 47d25ced 596c66d9"
+ },
+ "verner5 · meiaManete": {
+  "hash": "9698a7a0faae684422fe155c8e4e340ffdaae93ac30977c327467e08b3a9534e",
+  "seg": "9cf4baa5 bc5a7b63 1e33ed83 c190e379 fde415ed aa04fdf9 76eba596 e3a269c9 fb11012d"
+ },
+ "verner5 · rua": {
+  "hash": "e8a98640ae92034b83e2eea14325d9857bb18273366e518af4077a2b6a60d400",
+  "seg": "4b706577 af783eec cf44bb67 afaf9d18 f2170948 119bc4bd"
+ },
+ "r975 · partida": {
+  "hash": "52463dc59e76f6981772a1aa7c1ee20c369737802840d72eeed884b27fd518d5",
+  "seg": "733a56fe 178a1eee a994863e 4a94dd38 42598b4d 92691597 b9a2a686 af00f3b1 3c12fbc6 3d4b7582 1d12cea7 3d71b583"
+ },
+ "r975 · subida": {
+  "hash": "a6c52a16140edef12b1b876d83d0419744232c3473587c018218d35a77f99bde",
+  "seg": "e1d2ad39 36474218 83f34606 bafb4f54 50ce0563 c2cca472 03302ce5 d8f57f1d 831e6c7f ea2b1047"
+ },
+ "r975 · meiaManete": {
+  "hash": "d45ac2b9708af5cea80f5ddc48d20aa0a4ec3045958c9a6b4e53d33d3ef1a4a4",
+  "seg": "c71b29c1 350079e1 93155089 df7905d2 4c1399d1 8f51028f 8d301a91 9a8b8f9f a0bb48b9"
+ },
+ "r975 · rua": {
+  "hash": "e298c582d3eb182d07f8a406b5886ad56ce25c10287722aa3259b09861cfd806",
+  "seg": "a55659fd 3e8c45c1 af65f9d9 c433c9d6 4d6c961e 1ea5a490"
+ },
+ "trossi · partida": {
+  "hash": "8921631707b9bff61d59e3e39bbc01cb7f9df7b5e0a0a7cabc8c9353e6100fd8",
+  "seg": "21d3cd8d 565285d1 01a4e5bb 2f4efbb6 1d5b87a0 34acfee6 a67979ca 8af1ba40 b6423607 7a10cbab b1348203 62a48efc"
+ },
+ "trossi · subida": {
+  "hash": "673513135b3a71f2897ab3f74f270341aee01d1710ea4b82bd8d446f42f52a11",
+  "seg": "24199356 a6f1e502 3b7d71e8 3f23985d 1d99d331 7bbc88da f87c6b24 442535c8 32452d79 b375d72f"
+ },
+ "trossi · meiaManete": {
+  "hash": "0761addd780e94ce4fe3049a4f5a42272610392c16006bac696c706af2aee153",
+  "seg": "9751c5c4 a07e3845 5e185a0a be9e76bc 8683aeeb 25bdea6a b42d18d9 9bcce390 a92856cc"
+ },
+ "trossi · rua": {
+  "hash": "c016b3bb2bf926cc88f763b1468cd4ddafeca648c39355b7c8d803f3f99db3b3",
+  "seg": "2297f525 c5ffd6ef 7ede89f5 451adda4 24db19ce 1e237e97"
+ },
+ "megola · partida": {
+  "hash": "76389e23324a2f0757ceab4872bc7d93761b810ecb3a5c834f00e9dc7c291f99",
+  "seg": "8c486276 7d6dee46 87794ae0 85819892 661cfe05 7eaa704a 0d81dd3a f0437ab5 b74fb528 d02d4da3 eaac45fd d4769f95"
+ },
+ "megola · subida": {
+  "hash": "e7ed0ba87ec21ea67a8dfff004d8ea3b9dbe53251acd7759de97dc7269702980",
+  "seg": "f68e19e7 4eeeeb16 5f99b1e5 842c4e92 dd17c68a 2fc6b350 08d5a34d bb6fa0c4 1e510d64 3b4b5a23"
+ },
+ "megola · meiaManete": {
+  "hash": "354faf93fdc333b458d58f135c974dd71f7f8238fbb16760f672d020046bceac",
+  "seg": "9f987fac 45525a4c c2ddc94d 365bc99d bb9dfc5e 26230ba7 9aaff213 a90394b5 0f89f7f4"
+ },
+ "megola · rua": {
+  "hash": "d2b0b698d8fee0f154801429a5e7273aa68b54da9b8b0be21502ef3266f62c71",
+  "seg": "ac7e9b5b 1ee974ba bcbbb69f e0ff2443 d6abf545 68f7a04d"
+ },
+ "s55 · partida": {
+  "hash": "03368e86bbc8d9f2d06f2f492187a41d15bc25bb33d15ee8cd1c43a4f9d3a2a6",
+  "seg": "f05b4a87 b9088802 e7621ae0 fef03f67 70d4ef2c be3ef368 f1c70416 7878c576 7b244723 5d6cdbd6 ccd6f337 f055be5a"
+ },
+ "s55 · subida": {
+  "hash": "7fefdec882a05bb8745dcf41b66f08d730f4c29b671891e13763761cf9383675",
+  "seg": "913d3c84 313dedae 6a088365 c2aece98 aba6a27f ce7b78c1 b7a8d9d4 df53e6dc 6bb36c62 4af7e643"
+ },
+ "s55 · meiaManete": {
+  "hash": "d83fcc84f56ce47d4c6d6f9c992a7e8e6ad915daaeda7fa8a288dd357e5acfb3",
+  "seg": "11aad518 b07d3e24 8b855a60 196e7697 5e199398 dd53c612 b409f5b0 96ba2dbf bb6de35e"
+ },
+ "s55 · rua": {
+  "hash": "b4cd1fe862c114958d659be724196d94225aefe587e2927d34f91ff58eac4b2b",
+  "seg": "6d8434d2 630e00d4 ceda3dd1 f95984eb d7c1a126 996ae4f1"
+ }
+}

@@ -1,0 +1,110 @@
+{
+ "k4s · arrancada": {
+  "hash": "9e59311a65c2a76764e9421acff6d21bbf14756c8aba315b68d89e6f37a32643",
+  "seg": "acb2dde1 53c77797 8858f6bb 7b4aaddb 420aa6c1 3d31bbc2 8306a820 c8ac72a5 623c113b edc79cb9 436f0e61 39dbfc52 3243144d 339a4876"
+ },
+ "k4s · cruzeiro": {
+  "hash": "c3ae4ad2f0aac5af61074359373cadb082a5e7ffbee94770ba95a3db2bffaa39",
+  "seg": "7cbb9ee2 1926e847 74c73d46 ef3e21fc 17a124cb 3e343f2b d81748ad dae030a6 dba3fbd2 a62bd4a0"
+ },
+ "a4 · arrancada": {
+  "hash": "4cf05d0855930632582fbecb61cefadb8f3d9b276e0990de2c669f6b871b2690",
+  "seg": "1e3b3ed0 ba37aeba 1ad81719 303b5a80 c630fd6b 60a4a076 5a21a045 3565750a 5e2fbe78 2095e972 5ba71c0a 6e8e030f 405768bf 6f06ef21"
+ },
+ "a4 · cruzeiro": {
+  "hash": "acefab31c09681de2894ffd49ffb2056db6cc30074a4547ae4dcfb30c7340abb",
+  "seg": "45c1b0be f6b694cb de35945c 119edd0a 7210dd7c 3a9591c4 5fbf817a 48925d23 09e2b4f3 04269b64"
+ },
+ "d51 · arrancada": {
+  "hash": "94f1caa35c55d7b33bae720633d928329a132fab8f5fbb17aff82843a60e686d",
+  "seg": "27d78073 1dc88bb8 561c8ce5 6070fe45 5a6d5646 bc664aeb 51a15e86 600d56a5 76060a96 6b846d5a 1c720b4c 24880f50 b5c52669 f5bb0bf4"
+ },
+ "d51 · cruzeiro": {
+  "hash": "db08fa947da15d8fe14e6b378355bcfb0472f04ff63ab1b021240b06428657c7",
+  "seg": "372ea676 f2a227b7 d68d7608 1bd86cc0 20531326 3717c298 9f88d455 ca65cd96 1f982446 54bc4e02"
+ },
+ "up844 · arrancada": {
+  "hash": "56b19850e390e8732eb5c1e5149ad57ffd047ee55118b796b3aa2688f92cadee",
+  "seg": "6113a20d 4911e459 8baad395 4d4a4cca fa1fdcbd d443dda2 69a0fb2a e1813d52 8998b147 9f04b0f6 86cff0d6 20ad9e44 252f280f fe057359"
+ },
+ "up844 · cruzeiro": {
+  "hash": "0c9cb4f2a967e08532cf1832a60bf8d83f1cb8965115eb97e7fc255a44ecc43e",
+  "seg": "eaa07d1c 78b3111b a94784a1 517686c0 57efe4af d40f8676 46187390 ae0b1e43 33cce0e6 fa1eab74"
+ },
+ "bigboy · arrancada": {
+  "hash": "286bbd535641825de6eae04c275123b17ab1df73a5d46c4d8afbac8c15b1f34d",
+  "seg": "19be1d23 76139e3e e7ce4b23 d6fc88e6 eb6a4d72 84cde565 ca1465b9 c5305870 6f61fff3 0dafec2c 55728a9e 6574e122 ed62439c 978dc763"
+ },
+ "bigboy · cruzeiro": {
+  "hash": "87382dffd7206618a83304394372249de8e0d36948339439a1db81bac7c86323",
+  "seg": "639b529a dbb48c45 c2d75ecc 2783475f b43f989a 234e2805 2ccfb8b3 857e26da 7dc815cb 92eb4e5c"
+ },
+ "y6b · arrancada": {
+  "hash": "b274e32e5b63975a9849bff979662f4820ec786d335dfb0926a5b253db79163b",
+  "seg": "1cfc102e 5f10b080 9e653a00 db08b317 f8b6261d 99b40cd5 a10af1d8 c8a650b6 7b4c1d08 1ed62857 1062aa88 df80e285 203627e7 44ea76ee"
+ },
+ "y6b · cruzeiro": {
+  "hash": "2362d5bc1257b744f6fb06930ce4db1c4f7e6a8408b0fed54afd646a0d504fcc",
+  "seg": "a36fc5a1 33e4bbcd be2c2185 6d081a43 37ef8038 31933ba6 4a55ea87 db441ce5 99809fc6 8663d2c5"
+ },
+ "shay · arrancada": {
+  "hash": "8c3018bbea011b14ca3d37f8dc0323b90a6f408be039a588685b0e9c63a63440",
+  "seg": "c8a7c186 a1897346 669c65e5 65cc60ab 199b506f f393feaf 5f050f6f b1d5f261 9a18d7d7 75919e39 2fcf2843 47156715 785d17b9 c00eeef2"
+ },
+ "shay · cruzeiro": {
+  "hash": "3add46967c9d5384dffc8cc1e47469f1b65a03eb91ac37c3fe40f1384b721576",
+  "seg": "183fbb14 c9d6fa75 54aef08e 2c915aa2 d8c26a0c dc698f9a 93e3c216 a8c10152 e673a5ad a3d5d033"
+ },
+ "maria_fumaca · arrancada": {
+  "hash": "a4f743fb33ba7b791aa5024d6d67efacc3c52a15ddbb9e69c7a24f1c8ea5fd28",
+  "seg": "1af73963 894bc9f9 f7a578d1 56b10ea0 1cef0e2d 065a0596 df6d7883 900392e0 f19279ae f56407de 4e835b6b 54f678fc 794d5ee7 ce7c1b0e"
+ },
+ "maria_fumaca · cruzeiro": {
+  "hash": "058fe4c5081c939e76bd71b00c58757b587c021449d957d21dc5ff86e8b5ba32",
+  "seg": "831a33e5 63f62158 fccd1bb8 300b38b6 502f99d6 971db988 c683cdd9 8ae98206 7e547540 39ac1b72"
+ },
+ "pannier · arrancada": {
+  "hash": "f2f21b94e73ac5d12f7a10eaedfb6517171445f93bf79bbb28620a09190980f3",
+  "seg": "0013afc7 0af536bd 927c76ad bbcaf43e dcfd76fa 74886d81 a34a2b51 62827aec 13aeb472 02414986 1be9c58b b56ead43 87d257f3 30950d89"
+ },
+ "pannier · cruzeiro": {
+  "hash": "91dd4787b1e267abf4bcf28d8857e4bae20ac95a36f671881a57f2b43267dec1",
+  "seg": "ddfb884d bfc79811 fd189424 bc2b04c6 df81cac3 6e49288d d36da7f8 05c4a903 1b2a3db4 c7389b2d"
+ },
+ "king · arrancada": {
+  "hash": "e1681c5283b424032becde288929c8ac41696abe74b675c0ac1d852870c936e8",
+  "seg": "7fcebaf5 4ea7e24d ded71f23 69c34ea9 dd79227c 2f769de7 1cc5f679 75b46105 07a7cf01 957d220d 563fce2f 3e2e13d6 36a01a46 35785968"
+ },
+ "king · cruzeiro": {
+  "hash": "71742fdc0c82ffa277c33509e8447bef7a9c0f7ce50d83f3d9035670d530b696",
+  "seg": "c719e9af f6177b99 d0b43f15 218edf45 b3c7d087 9fe62e50 ff9778e4 95a5aa74 490bd8dd 4203cca0"
+ },
+ "corliss · governador": {
+  "hash": "bd360cd964d7efdcfbe9d9e4cb7dd5c2ab29c25b4a9dd0c9374eff92bc3e225f",
+  "seg": "a1504c45 832b20d9 6a77f480 14a5ed1f 7d54f81f 947c0b26 9d7c0ea4 c55f7c43 bcedb22c 416bcf7c 16686747 ef6fffab a0c53731 644b1cac"
+ },
+ "aveling · arrancada": {
+  "hash": "31b4cadd8b2a8ee7428a384adf184ea0065f4cdb9b32b4e1b9d4482c60a83787",
+  "seg": "41896b74 43169056 5f0586eb 9fc9e877 78718c77 a42be2ad 407cbd4a 3f6bbc88 96cbed99 f4c54ba1 82dc61f8 25e3eb5e 44a00d57 2f78eb3e"
+ },
+ "aveling · cruzeiro": {
+  "hash": "60013fd8c9386138d894b520cb337002767d04ad907331dec4150b5b84a3146b",
+  "seg": "4ad76e69 0fdb2c61 571f0ce4 db3f2b17 3f14e755 e97b99aa 0a622ff6 c70a64f1 4ac4dd6c 2f181c23"
+ },
+ "stanley · arrancada": {
+  "hash": "acc5818cea2431af3f7c78ca4ecdd8042de403ced9f2703445817cd2b55fbc23",
+  "seg": "4f96601c b10b2e77 2192b3a4 9af7f67b 25bc75cc c8e8453f dcf702d4 366bcae5 f55d5e9a a63ca3a5 63dd6c52 396180ac 37d55c02 65a4456f"
+ },
+ "stanley · cruzeiro": {
+  "hash": "8efb7e32a55ae65c1ffc5a7cbc8d70c2458d03746ef12a13c8eab04d8db98d18",
+  "seg": "ac19bf4a da6bd6d6 bf12e3fd bf9ebe28 c4339d86 58b0c3b6 af31b512 72c49691 85a9bd84 9c666571"
+ },
+ "vapor_pas · arrancada": {
+  "hash": "b17f8d490b9beb2996b6639ec3c3716cf06d6b3d683972831e5d05fb39f15988",
+  "seg": "2abf154b a74f4b92 5503ef99 2f03b73c 551e8fad b6c61f71 b0a6122f 4d8a7576 a04dca4e ce5e99e3 b5fc7cb0 3d9f9f3d 96da7a67 de1783b3"
+ },
+ "vapor_pas · cruzeiro": {
+  "hash": "8fa59db08f95b0db9b4d7e82ecbc7e95f44313ec954e600218d1f6dde5ba9968",
+  "seg": "1bfd7315 6d1263dd 6e0d2d8b 1299a55f ce25bdc7 fead2a03 feee8c37 8c2b76dc 22035cb6 560b7e40"
+ }
+}

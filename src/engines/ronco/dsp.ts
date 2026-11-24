@@ -28,6 +28,63 @@ import { T_MAN, T_BACK, T_WALL, T_EXREF, SCREW_H, ENV_LOOP, CARCACA, BATIDA, JAT
 import { montarMedios } from './medios';
 import { instalarAviacao } from './aviacao';
 
+// ---- o laço de amostra em partes (`amostraLer` … `amostraOuvinte`) e os ganchos cc* e rot* (Diesel, Rotativos) trocam os valores da
+// amostra pelo vetor `am` (Float64Array: guardar um double ali não aloca). Antes eram campos, um por valor: com 49 campos a mais a
+// instância do Diesel com gerador (Scania, Volvo, Cat, ônibus, gerador) passava do limite de propriedades rápidas do V8, ia para o
+// modo dicionário e o laço ficava 4–5× mais lento. As famílias que usam os índices os copiam em constantes do próprio módulo
+// (no Node, pelo tsx, uma constante importada é um getter a cada leitura)
+export const AM = { KW: 0, LOOP: 1, TE: 2, TI: 3, TB: 4, TP: 5, TR: 6, RPMFRAC: 7, RF: 8, OMEGA: 9, PMAN: 10, PUP: 11, MTHR: 12, INTAKE: 13, VIB: 14, TGAS: 15, BRKIN: 16, EXL: 17, EXR: 18, EXLD: 19, EXRD: 20, INS: 21, INP: 22, INH: 23, MECH: 24, BRK: 25, TUR: 26, SC: 27, RUNNING: 28, CRANKING: 29, CUT: 30, DFCO: 31, RPM: 32, DEG: 33, ADV: 34, ASP: 35, SLOWB: 36, BURN: 37, HWR: 38, HIN: 39, MINSUM: 40, A: 41, AP: 42, P: 43, V: 44, T: 45, COLDN: 46, LVL: 47, SAIDA: 48 } as const;
+export const N_AM = 49;
+const AM_KW = 0;
+const AM_LOOP = 1;
+const AM_TE = 2;
+const AM_TI = 3;
+const AM_TB = 4;
+const AM_TP = 5;
+const AM_TR = 6;
+const AM_RPMFRAC = 7;
+const AM_RF = 8;
+const AM_OMEGA = 9;
+const AM_PMAN = 10;
+const AM_PUP = 11;
+const AM_MTHR = 12;
+const AM_INTAKE = 13;
+const AM_VIB = 14;
+const AM_TGAS = 15;
+const AM_BRKIN = 16;
+const AM_EXL = 17;
+const AM_EXR = 18;
+const AM_EXLD = 19;
+const AM_EXRD = 20;
+const AM_INS = 21;
+const AM_INP = 22;
+const AM_INH = 23;
+const AM_MECH = 24;
+const AM_BRK = 25;
+const AM_TUR = 26;
+const AM_SC = 27;
+const AM_RUNNING = 28;
+const AM_CRANKING = 29;
+const AM_CUT = 30;
+const AM_DFCO = 31;
+const AM_RPM = 32;
+const AM_DEG = 33;
+const AM_ADV = 34;
+const AM_ASP = 35;
+const AM_SLOWB = 36;
+const AM_BURN = 37;
+const AM_HWR = 38;
+const AM_HIN = 39;
+const AM_MINSUM = 40;
+const AM_A = 41;
+const AM_AP = 42;
+const AM_P = 43;
+const AM_V = 44;
+const AM_T = 45;
+const AM_COLDN = 46;
+const AM_LVL = 47;
+const AM_SAIDA = 48;
+
 // ---- troca de configuração com o motor funcionando (EngineDSP.guardarTroca / passarTroca)
 /** duração do cruzamento entre a rede do escape antiga e a nova (s): a nova nasce vazia, e nesse tempo os pulsos já a
  *  atravessaram (ver docs/TECNICO.md → Ronco → "Troca de configuração com o motor funcionando") */
@@ -128,6 +185,8 @@ export class EngineDSP implements DSPDeAudio {
   // as redes de escape antigas que ainda soam no cruzamento, o ganho de antes (rampa até o novo), o estado guardado pela
   // subclasse antes de remontar o dela, e se a última troca foi com o motor funcionando e se as câmaras passaram
   declare redesVelhas: any; declare runMix: any; declare gTroca: any; declare trocaPendente: any; declare trocaViva: any; declare trocaCamaras: any;
+  // o laço de amostra em partes e os ganchos cc* e rot*: os valores que passam de uma parte para a outra, no vetor `am` (ver AM)
+  declare am: Float64Array;
 
   constructor(fs) {
     this.fs = fs; this.dt = 1 / fs;
@@ -171,6 +230,16 @@ export class EngineDSP implements DSPDeAudio {
     this.carcK = 0; this.carcSrc = null; this.carcF = null; this.carcOut = null; this.carcS = null; this.carcKp = 0; this.batK = 0; this.batF = null; this.batW = null; this.batC = 0; this.batV = 0; this.batQ0 = 1;
     this.jatoFis = false; this.jatoQ = 0; this.jatoM = 0; this.saModo = 0; this.saJit = 0;
     this.redesVelhas = null; this.runMix = { in0: 0 }; this.gTroca = 0; this.trocaPendente = null; this.trocaViva = false; this.trocaCamaras = false;
+    this.am = new Float64Array(N_AM);
+    // As propriedades que o laço, o controle e as mensagens criariam com o motor rodando nascem aqui, com o valor que dá a mesma
+    // leitura (são lidas com `|| 0`, `?? x`, `!!x`, `=== undefined`, num teste, ou só depois de escritas). Uma propriedade nova
+    // numa instância de ~520 delas, quando o vetor de propriedades precisa crescer e os campos já mudados passam do limite do V8,
+    // leva o objeto ao modo dicionário: o Scania, o Volvo, o Cat, o ônibus e o gerador iam para lá e o laço ficava 4–5× mais
+    // lento (docs/TECNICO.md → Diesel → CPU do laço de amostra). Sem propriedade nova depois da configuração, isso não acontece
+    this.ambSpec = null; this.ambHum = null; this.alsArm = false; this.runT = 0; this.shiftRetard = false; this.sinceShift = 0;
+    this.lcPrev = undefined; this.limPrev = undefined; this.limRetard = 0; this.limI = undefined; this.limT = 0; this.limFrac = 0; this.lacc = 0;
+    this.denied = 0; this.dfcoOn = false; this.fuelRamp = 1; this.ambL = 0; this.ambR = 0; this.ignCut = false; this.shiftUp = false;
+    this.scJit = 0; this.phB = 0; this.scIn = 0;
   }
 
   message(m) {
@@ -978,22 +1047,16 @@ export class EngineDSP implements DSPDeAudio {
 
   process(outL, outR, n, sendL?, sendR?) {
     if (!this.cfg) { outL.fill(0); if (outR !== outL) outR.fill(0); if (sendL) { sendL.fill(0); sendR.fill(0); } return; }
-    const fs = this.fs, dt = this.dt, N = this.N, rng = this.rng;
-    const fire = this.fire, aPrev = this.aPrev, pc_ = this.p, m_ = this.m;
+    const dt = this.dt, N = this.N, rng = this.rng;
     const P = this.params;
     const targetE = P.listener === 'ext' ? 1 : 0, targetI = P.listener === 'int' ? 1 : 0, targetB = P.listener === 'bay' ? 1 : 0;
     const targetP = P.listener === 'pipe' ? 1 : 0, targetR = P.listener === 'road' ? 1 : 0;
     if (this.ambEnv !== P.env) this.setAmbience(P.env);
     const loop = ENV_LOOP[P.env] || 800;
     const kw = 1 - Math.exp(-dt / 0.15);
-    const evo = this.evo, evc = this.evc, ivo = this.ivo, ivc = this.ivc;
-    const lines = this.lines, nodes = this.nodes, runners = this.runners, rads = this.rads;
-    const nL = lines.length, nN = nodes.length, nR = rads.length;
-    const r = this.rCrank, l = this.lRod, Ap = this.Ap, Vc = this.Vc, Zr = this.Zr, hw = this.hw;
-    const g1 = GAM - 1;
-    const cyc = this.cyc, cyc2 = cyc / 2, cyc3 = (3 * cyc) / 4, cyc4 = cyc / 4; // (gancho 3: 720/360/540/180 no pistão, os mesmos doubles)
-    const batK = this.batK, carcK = this.carcK, jatoFis = this.jatoFis; // (médios e jato: 0/false = legado)
-    let velhas = this.redesVelhas; // (troca de configuração: as redes antigas no cruzamento; null em regime)
+    const hw = this.hw, cyc = this.cyc;
+    // (as constantes do bloco que os métodos do laço usam)
+    this.am[AM_KW] = kw; this.am[AM_LOOP] = loop; this.am[AM_TE] = targetE; this.am[AM_TI] = targetI; this.am[AM_TB] = targetB; this.am[AM_TP] = targetP; this.am[AM_TR] = targetR;
 
     for (let s = 0; s < n; s++) {
       if (this.ctrl-- <= 0) { this.control(16 * dt); this.ctrl = 15; }
@@ -1037,219 +1100,17 @@ export class EngineDSP implements DSPDeAudio {
       const mThr = flow(thrA, pUp, T_MAN, this.pMan, T_MAN);
       const pMan = this.pMan;
 
-      for (let i = 0; i < nL; i++) lines[i].read();
-      if (this.rot) for (const run of this.runRot) run.out0 = 0.985 * run.in0; // (rotativo, gancho 13: um primário por rotor, as 3 câmaras somam)
-      if (velhas) for (const rv of velhas) { for (const l of rv.lines) l.read(); if (rv.runRot) for (const run of rv.runRot) run.out0 = 0.985 * run.in0; }
+      this.amostraLer();
 
       const wn = rng.bi();
       this.tzLP += this.tzK * (wn - this.tzLP);
       const hiN = (wn - this.tzLP) * 1.4;
-      let Tgas = 0, mInSum = 0, vib = 0, intake = 0, brkIn = 0;
-      for (let c = 0; c < N; c++) {
-        let a = this.theta - fire[c]; if (a < 0) a += cyc;
-        if (this.cc && a >= this.ciclo) a -= this.ciclo; // (2 tempos: ciclo de 360°)
-        const ap = aPrev[c];
-        // ---- centelha (diesel: injeção e atraso de ignição no DieselDSP; o ramo a gasolina segue sem reindentar)
-        if (this.cc) this.ccInjecao(c, a, ap, running, cranking, cut, rpm);
-        else {
-        // a centelha é armada no curso de admissão e dispara uma única vez por ciclo,
-        // mesmo que o avanço mude de repente (com atraso grande, depois do ponto morto superior)
-        if (a >= cyc2 && a < cyc3) this.armed[c] = 1;
-        if (this.armed[c] && (aSp < cyc ? a >= aSp || a < cyc4 : a >= aSp - cyc && a < cyc4)) {
-          this.armed[c] = 0;
-          this.spk[c] = a;
-          let cutNow = cut;
-          if (this.limiter && this.limType === 'partial' && !this.launching) {
-            // rodízio irregular: acumula a fração de corte (com sorteio, para não virar um padrão
-            // periódico que soa como um zumbido parado) e corta a explosão quando passa de 1
-            cutNow = this.shifting && this.shiftCut;
-            this.lacc = (this.lacc || 0) + this.limFrac * (0.4 + 1.2 * rng.next());
-            if (this.lacc >= 1) { this.lacc -= 1; cutNow = true; }
-          }
-          const combust = (running || cranking) && !cutNow && !dfco;
-          const idleness = clamp(1 - (this.rpmAvg - this.idle) / 1500, 0, 1);
-          // frio: a mistura vaporiza mal e cada explosão sai um pouco diferente
-          const sigma = (0.025 + idleness * (0.015 + 0.06 * this.cam * this.cam)) * (1 + 0.9 * (1 - this.warm));
-          // sem limitador (motor antigo): passando da faixa vermelha as válvulas flutuam,
-          // a mistura não entra direito e o motor falha e perde força
-          const float = this.limType === 'none' ? clamp((this.rpmAvg - this.redline) / (0.12 * this.redline), 0, 1) : 0;
-          // (carburador em lenta: de vez em quando uma mistura não acende, a "tossida" do motor velho, ~1% das explosões)
-          // (e na desaceleração, com o vácuo alto, a mistura rala falha muito mais: até ~15% das explosões)
-          let misfire = rng.next() < this.cam * this.cam * 0.02 * idleness + 0.5 * float + (this.fuelVar > 1 ? (this.carbMis * idleness + 0.15 * clamp((0.3 - this.pMan / P0) / 0.15, 0, 1)) * this.varScale : 0);
-          if (this.av) misfire = misfire || rng.next() < this.falhaAv(c); // (gancho 5: encharque, mistura, magnetos)
-          if (this.rot) misfire = misfire || rng.next() < this.falhaRot[c]; // (rotativo, gancho 6: por câmara: diluição pela sobreposição, velas T, vedações)
-          if (combust && !misfire) {
-            this.burnHeat += (1 - this.burnHeat) * 0.05;
-            // carburador em carga leve: com a borboleta quase fechada a mistura chega mal vaporizada e mal dividida
-            // entre os cilindros, e cada explosão sai diferente (na força e no ritmo da queima). Com o pé embaixo o
-            // fluxo forte homogeneíza e o motor assenta; em lenta e meio pé volta o "galope" (num Fusca real, 16% de
-            // variação entre explosões a 1400 rpm em neutro e ~33% a 2000 rpm instável). Em carga leve o pulso do escape
-            // sai da pressão no fim da queima, que já amplifica bastante uma variação pequena da mistura
-            const light = this.fuelVar > 1 ? clamp((0.8 - this.pMan / P0) / 0.5, 0, 1) * this.varScale : 0;
-            this.Q[c] = Math.max(0, this.air[c]) * 2.6e6 * this.cylQ[c] * (1 - 0.7 * float) * (0.45 + 0.55 * this.fuelRamp) * clamp(1 + (sigma * this.varScale * this.fuelVar + this.carbVar * light) * rng.gauss(), 0.25, 1.6);
-            if (this.av) this.Q[c] *= this.qMix; // (gancho 6: mistura)
-            if (this.rot) this.rotQueima(c, idleness, slowB); // (rotativo, gancho 7: a fração fHC vai ao escape como pós-queima)
-            // (mistura pobre queima devagar e chega mais quente no escape; a variação é em graus, então não cresce
-            // com a queima mais lenta do vácuo)
-            this.burnK[c] = light ? 1 + 0.1 * light * clamp(rng.gauss(), -1.5, 2) / slowB : 1;
-            if (this.av) this.burnK[c] *= this.burnAv; // (gancho 4: um magneto só, mistura pobre)
-            this.xb[c] = 0;
-            this.knockEnv += 0.6 + 0.4 * rng.next();
-            if (batK) this.batC += this.batW[c] * (0.3 + 0.7 * Math.min(1.5, this.Q[c] / this.batQ0)); // (batida periódica: cada pistão bate do seu jeito, com a força da própria explosão)
-          } else {
-            this.Q[c] = 0; this.xb[c] = 1;
-            // estouro no escape: a mistura que não queimou no cilindro chega ao coletor quente e explode lá. Precisa
-            // de combustível (ignição cortada ou falha; corte de injeção só bombeia ar) e de escape quente (~600 °C).
-            // Cada fonte tem uma taxa típica (estouros por segundo, escape quente e sem catalisador) e um tamanho;
-            // o estouro cresce com a carga do cilindro, e o catalisador queima boa parte do combustível sem barulho
-            let rate = 0, k = 0, pr = 0, wet = true, floor = 0.15, lit = false;
-            if (running && this.rpmAvg > this.idle * 1.4) {
-              const ov = this.overrun;
-              if (combust) { pr = 0.015; k = 0.7; if (this.av) { pr = this.prAv; k = this.kEstouroAv; } } // falha de ignição (válvulas flutuando, comando bravo): mistura inteira, mas quase nunca acende
-              else if (this.launching && this.limiter) { rate = 20; k = 0.8; } // 2-step com corte
-              else if (this.limiter) [rate, k, wet] = { ign: [25, 0.7, true], partial: [8, 0.6, true] }[this.limType] || [0.5, 0.3, false]; // (corte de injeção: só o filme de combustível do coletor)
-              else if (this.shifting && this.shiftCut) [rate, k] = this.ignCut ? [40, 0.8] : [5, 0.5];
-              else if (dfco) {
-                if (this.als) { rate = 22; k = 1.1; floor = 0.6; lit = true; }
-                else if (ov === 'lean') { rate = 1; k = 0.5; } // carburador: a mistura da desaceleração é rica e raramente acende (o pipoco frequente é vazamento no escape)
-                // (os mapas de estouro abrem um pouco a borboleta e enriquecem: a carga não é a da lenta)
-                else if (ov === 'burble' && this.popWindow > 0) { rate = 16 * Math.sqrt(this.popWindow / this.popDur); k = 0.8; floor = 0.35; lit = true; }
-                else if (ov === 'popbang' && this.popWindow > 0) { rate = 20 * Math.min(1, this.popWindow); k = 1.2; floor = 0.5; lit = true; }
-              }
-            }
-            if (this.rot && running && combust) { pr = this.prRot; k = 0.8; } // (rotativo, gancho 8: mistura crua de qualquer falha estoura)
-            if (rate) pr = Math.min(0.9, rate / (N * Math.max(rpm, 300) / 120));
-            this.burnHeat += ((wet && (pr || rate) ? 0.5 : 0) - this.burnHeat) * 0.05;
-            // (nos mapas de estouro a ignição atrasada manda a chama acesa para o escape: não precisa da parede em
-            // brasa. A mistura crua do corte de ignição, do carburador ou de uma falha só acende no escape quente)
-            const hot0 = lit ? 0.7 + 0.3 * smooth(280, 520, this.exhT) : smooth(280, 520, this.exhT);
-            const hot = this.av ? Math.max(hot0, this.avHot) : hot0; // (gancho 7: estouros da partida sem coletor quente)
-            if (pr && rng.next() < pr * hot * (this.hasCat ? 0.6 : 1) && this.pops.length < 10) {
-              const size = Math.pow(clamp(this.air[c] / (this.Vd * 1.2), floor, 1.3), 0.7);
-              const delay = ((evo + adv + 30) / Math.max(600, rpm * 6)) * fs + rng.next() * 0.006 * fs;
-              this.pops.push({ d: delay | 0, t: 0, bank: this.cfg.bank[c], amp: 8e4 * k * size * (0.6 + 0.6 * rng.next()) * (this.hasCat ? 0.7 : 1) * (0.6 + 0.4 * hot) });
-            }
-          }
-        }
-        }
-        // ---- válvulas (cliques do trem de válvulas)
-        if (this.cc) this.ccValvulas(c, a, ap);
-        else if (this.rot) this.rotJanelas(c, a, ap); // (rotativo, gancho 9: tiques do ápice nas bordas das janelas e nas velas)
-        else {
-        if ((ap < evo && a >= evo) || (ap < evc && a >= evc) || (ap < ivo && a >= ivo) || (ap < ivc && a >= ivc)) this.clickEnv += 0.5 + 0.5 * rng.next();
-        if (batK) { if (ap < evc && a >= evc) this.batV += this.batW[N + c]; else if (ap < ivc && a >= ivc) this.batV += this.batW[2 * N + c]; } // (válvula assentando na sede: o mesmo estalo em todo ciclo)
-        if (ap < ivo && a >= ivo) this.air[c] = 0;
-        }
-        aPrev[c] = a;
-
-        // ---- volume
-        const th = a * DEG, sn = Math.sin(th), cs = Math.cos(th);
-        const q = Math.sqrt(l * l - r * r * sn * sn);
-        let V, dxdth;
-        if (this.rot) { const kv = this.kVol; V = Vc + this.Vh * (1 - Math.cos(kv * th)); dxdth = (this.Vh * kv * Math.sin(kv * th)) / Ap; } // (rotativo, gancho 11: V(α) da câmara)
-        else { V = Vc + Ap * (r * (1 - cs) + l - q); dxdth = r * sn * (1 + (r * cs) / q); }
-        const dV = V - this.Vprev[c];
-        this.Vprev[c] = V;
-
-        let p = pc_[c], m = m_[c];
-        const T = clamp((p * V) / (m * RGAS), 220, 3200);
-
-        // ---- combustão (Wiebe)
-        let dQ = 0;
-        if (this.cc) dQ = this.ccQueima(c, a, p, V, deg);
-        else if (this.xb[c] < 1) {
-          let d = a - this.spk[c]; if (d < -cyc2) d += cyc;
-          if (d < 0) d = 0;
-          const u = d / (burn * this.burnK[c]);
-          const x = u >= 1 || d > cyc2 ? 1 : 1 - Math.exp(-5 * u * u * u);
-          dQ = this.Q[c] * (x - this.xb[c]);
-          this.xb[c] = x;
-        }
-        if (this.cc) dQ -= hwr * (T - this.tParede) * dt; // (diesel: a parede segue a água)
-        else dQ -= hwr * (T - T_WALL) * dt;
-
-        // ---- válvula de escape -> tubo primário
-        let mEx = 0;
-        const run = runners[c];
-        // (troca de configuração: a válvula enxerga a contrapressão das redes antiga e nova pesadas como no cruzamento; a
-        // nova sozinha, que nasce vazia, dava um degrau na vazão que saía na boca como estalo)
-        let runE = run;
-        if (velhas) { let w = 1, b = 0; for (const rv of velhas) { const k = pesoRede(rv); w -= k; b += k * rv.runners[c].in0; } runE = this.runMix; runE.in0 = w * run.in0 + b; }
-        if (this.cc) mEx = this.ccEscape(c, a, p, T, runE, Zr);
-        else if (this.rot) mEx = this.rotEscape(c, a, p, T, runE, Zr); // (rotativo, gancho 12: janela trapezoidal)
-        else if (a > evo && a < evc) {
-          const sv = Math.sin(Math.PI * (a - evo) / (evc - evo));
-          const A = this.AexMax * this.cylEx[c] * Math.min(1, 2.5 * sv * sv); // (área efetiva satura cedo: perfil "quadrado")
-          mEx = this.exhaustFlow(A, p, T, P0 + 2 * runE.in0, Zr);
-        }
-        // turbulência no vão da válvula: o jato que sai pelo vão no "estouro" da abertura. A velocidade dele vem da
-        // razão entre a pressão no cilindro e a do tubo (Mach do escoamento isentrópico, que satura no engasgo), e o
-        // chiado cresce com ela sem limiar, como num jato (pressão ∝ vazão·Mach³, potência ∝ U⁸). Com o cilindro
-        // esvaziado o Mach cai e o resto do curso é manso; chiado ligado o tempo todo vira um som de vento contínuo.
-        // O jato engasgado chia em alta frequência (rasgado); grave e médio continuam tonais.
-        // É o "rasgado" metálico, uma rajada colada a cada abertura (na lenta fria, o estalo de cada cilindro); a
-        // colmeia do catalisador, com milhares de canais finos, come um pouco desse agudo antes do abafador
-        let turb = 0;
-        if (mEx > 0) {
-          const pr = p / (P0 + 2 * runE.in0), Mj = pr > 1 ? Math.min(1, Math.sqrt(2 / (GAM - 1) * (Math.pow(pr, (GAM - 1) / GAM) - 1))) : 0;
-          turb = this.valveNoise * this.catNoise * P.air * Mj * Mj * Mj;
-        }
-        // a pressão no tubo é impedância × vazão volumétrica, não mássica: o gás de um cilindro cortado
-        // (ignição/combustível cortado, ~350 K) é 4× mais denso que o queimado (~1500 K) e empurra bem menos
-        // pela mesma massa. Sem isso o corte de giro soava 8 dB mais alto que o motor queimando.
-        // O fator é fixado na abertura da válvula (temperatura do ciclo), não amostra a amostra: assim um ciclo
-        // queimado mantém o timbre (o estouro inicial não fica mais agudo que o resto do curso) e só o ciclo
-        // cortado sai abafado.
-        // (referência = ciclo queimado em carga, ~1650 K: a amplitude no tubo em carga fica como foi acertada; a lenta
-        // sai a ~950 K (−5 dB, que a calibração repõe) e o ciclo cortado ou de freio-motor a ~350 K (piso −20 dB))
-        if (this.cc) { if (ap <= evo && a > evo) this.densC[c] = this.ccDens(T); } // (diesel: p' = c·ṁ/A, ∝ √T)
-        else if (this.rot) { if (ap <= evo && a > evo) this.densC[c] = this.rotDens(T); } // (rotativo: referência do gás mais quente)
-        else if (ap <= evo && a > evo) this.densC[c] = clamp(T / T_EXREF, 0.1, 1.3);
-        const dens = mEx > 0 ? this.densC[c] : 1;
-        // (o chiado do jato na válvula não entra na correção: é o escoamento sônico, não o empurrão do gás)
-        if (this.rot) { const pq = this.posQueima(c, a, Zr); run.out0 += Zr * mEx * (dens + turb * hiN) + pq; if (velhas) for (const rv of velhas) rv.runners[c].out0 += Zr * mEx * (dens + turb * hiN) + pq; } // (rotativo, gancho 13: acumula no primário do rotor)
-        else {
-          run.out0 = 0.985 * run.in0 + Zr * mEx * (dens + turb * hiN);
-          if (velhas) for (const rv of velhas) { const ro = rv.runners[c]; ro.out0 = 0.985 * ro.in0 + Zr * mEx * (dens + turb * hiN); } // (a rede antiga recebe a mesma vazão)
-        }
-        this.mEx[c] = mEx;
-        if (mEx > 0) brkIn += this.brkW[c] * Zr * mEx * dens;
-
-        // ---- válvula de admissão
-        let mIn = 0;
-        if (this.cc) mIn = this.ccAdmissao(c, a, pMan, p, T);
-        else if (this.rot) mIn = this.rotAdmissao(c, a, pMan, p, T); // (rotativo, gancho 14: janelas de admissão)
-        else if (a > ivo && a < ivc) {
-          const sv = Math.sin(Math.PI * (a - ivo) / (ivc - ivo));
-          const A = this.AinMax * this.cylIn[c] * Math.min(1, 1.5 * sv * sv);
-          mIn = flow(A, pMan, T_MAN, p, T);
-        }
-        mInSum += mIn;
-        // (o refluxo para o coletor na abertura da admissão chega abafado pelo plenum e pela borboleta)
-        intake += mIn > 0 ? mIn : 0.35 * mIn;
-        this.air[c] += mIn * dt;
-
-        // ---- 1ª lei para volume de controle aberto
-        const hIn = mIn >= 0 ? T_MAN : T, hEx = mEx >= 0 ? T : T_BACK;
-        p += (g1 * dQ + GAM * RGAS * (hIn * mIn - hEx * mEx) * dt - GAM * p * dV) / V;
-        // blow-by pelos anéis: relevante só em baixa rotação (partida)
-        const mLk = p > P0 ? (this.Aleak * (p - P0) * 0.67) / Math.sqrt(RGAS * T) : 0;
-        p -= (GAM * RGAS * T * mLk * dt) / V;
-        m += (mIn - mEx - mLk) * dt;
-        if (m < 1e-9) m = 1e-9;
-        if (p < 3000) p = 3000;
-        if (this.av && this.arPartida) { const ma = this.partidaAr(c, a) * dt; p += (GAM * RGAS * T_MAN * ma) / V; m += ma; } // (gancho 8: partida a ar)
-        pc_[c] = p; m_[c] = m;
-
-        Tgas += (p - P0) * Ap * dxdth;
-
-        // ---- forças de inércia (vibração)
-        const ph = (this.theta - this.tdcRel[c]) * DEG;
-        const acc = Math.cos(ph) + 0.3 * Math.cos(2 * ph);
-        if (this.rot) vib += 0.1 * Math.cos(ph); // (rotativo, gancho 15: rotor balanceado, só a ordem 1 residual)
-        else if (this.radial) vib += (0.6 * this.ux[c] + this.uy[c]) * 0.3 * Math.cos(2 * ph) + 0.35 * this.dz[c] * (this.ux[c] + this.uy[c]) * Math.cos(ph); // (gancho 9: sem a 1ª ordem)
-        else vib += (0.6 * this.ux[c] + this.uy[c] + 0.35 * this.dz[c] * (this.ux[c] + this.uy[c])) * acc;
-      }
+      // (o corpo do laço por cilindro é o método `amostraCilindro`, compilado à parte: os valores da amostra vão nos campos `am*`)
+      this.am[AM_RUNNING] = running ? 1 : 0; this.am[AM_CRANKING] = cranking ? 1 : 0; this.am[AM_CUT] = cut ? 1 : 0; this.am[AM_DFCO] = dfco ? 1 : 0; this.am[AM_RPM] = rpm; this.am[AM_DEG] = deg;
+      this.am[AM_ADV] = adv; this.am[AM_ASP] = aSp; this.am[AM_SLOWB] = slowB; this.am[AM_BURN] = burn; this.am[AM_HWR] = hwr; this.am[AM_PMAN] = pMan; this.am[AM_HIN] = hiN;
+      this.am[AM_TGAS] = 0; this.am[AM_MINSUM] = 0; this.am[AM_VIB] = 0; this.am[AM_INTAKE] = 0; this.am[AM_BRKIN] = 0;
+      for (let c = 0; c < N; c++) this.amostraCilindro(c);
+      const Tgas = this.am[AM_TGAS], mInSum = this.am[AM_MINSUM], vib = this.am[AM_VIB], intake = this.am[AM_INTAKE], brkIn = this.am[AM_BRKIN];
       this.pMan = clamp(pMan + ((mThr - mInSum) * dt * RGAS * T_MAN) / this.Vman, 3000, pUp * 1.05);
 
       // ---- dinâmica: virabrequim + embreagem + veículo
@@ -1301,281 +1162,562 @@ export class EngineDSP implements DSPDeAudio {
         this.v = Math.max(0, this.v - ((this.kDrag * this.v * this.v + this.roll + this.brake * this.brakeF) / this.mass) * dt);
       }
 
-      // ---- rede acústica do escape
-      for (let i = this.pops.length - 1; i >= 0; i--) {
-        const pp = this.pops[i];
-        if (pp.d > 0) { pp.d--; continue; }
-        const t = pp.t / fs;
-        const v = pp.amp * 0.55 * (Math.exp(-t / 0.0025) * (1 + 0.3 * rng.bi()) + 0.45 * rng.bi() * Math.exp(-t / 0.006));
-        this.bankJ[Math.min(pp.bank, this.bankJ.length - 1)].inj += v;
-        if (velhas) for (const rv of velhas) rv.bankJ[Math.min(pp.bank, rv.bankJ.length - 1)].inj += v;
-        if (++pp.t > 0.03 * fs) this.pops.splice(i, 1);
-      }
-      for (let i = 0; i < nN; i++) nodes[i].step();
-      for (let i = 0; i < nL; i++) lines[i].write();
-      if (velhas) for (const rv of velhas) { for (const nd of rv.nodes) nd.step(); for (const l of rv.lines) l.write(); }
-
-      // ---- ponteira: irradiação + ruído de jato (escala com a velocidade do gás)
-      let exL = 0, exR = 0, exLd = 0, exRd = 0;
-      const iw = this.itdW = (this.itdW + 1) & this.itdM;
-      for (let i = 0; i < nR; i++) {
-        const rd = rads[i];
-        const e = rd.emit;
-        let x = this.radSh[i].run(this.radHP[i].run(e));
-        if (this.tap) this.tap.ponteira(i, e, x);
-        // o chiado segue a velocidade instantânea do gás em cada pulso (∝ v²): é o "puf" de cada explosão saindo
-        // pela ponteira, com silêncio entre elas. (Uma versão que usava a velocidade média do gás tirava esses pufs
-        // e deixava o agudo de todos os carros abafado, como um fundo liso)
-        // (jato 'sonico': o sopro segue a vazão do pulso, não 1/área²: abaixo de 2,5" não cresce com o estreitamento, e a
-        // velocidade na ponteira, vazão ÷ área, satura no escoamento sônico; ver montarMedios)
-        const vel = jatoFis ? Math.max(0, rd.u) * this.jatoQ : Math.max(0, rd.u) / (2.5e4 * this.tipA);
-        this.jetEnv[i] += (vel - this.jetEnv[i]) * 0.15;
-        const jv = this.jetEnv[i], nz = rng.bi();
-        if (jatoFis) { const m = jv * this.jatoM, m2 = m * m, je = jv / Math.sqrt(Math.sqrt(1 + m2 * m2)); x += (this.jetF[i][0].run(nz) + 0.8 * this.jetF[i][1].run(nz)) * je * je * this.jetGain * P.air; }
-        else x += (this.jetF[i][0].run(nz) + 0.8 * this.jetF[i][1].run(nz)) * jv * jv * this.jetGain * P.air;
-        // carcaça do escape: a parede dos tubos e do abafador responde à onda que passa por dentro (antes do abafador) e
-        // irradia a sua aceleração: abaixo da ressonância da parede (~1 kHz) ela é rígida e a resposta sobe 12 dB/oitava,
-        // na ressonância reforça, acima a massa segura; e uma caixa pequena irradia mal o grave (mais 6 dB/oitava abaixo de
-        // ~600 Hz: sem isso ela cancelava parte do grave da boca). É um filtro fixo sobre um sinal periódico: sai em linhas
-        if (carcK) { const src = this.carcSrc[i]; if (src) { const f = this.carcF[i], pw = src.in1, lo = (this.carcS[i] += this.carcKp * (pw - this.carcS[i])), cz = f[1].run(f[0].run(pw - lo)) * carcK; this.carcOut[i] = cz; x += cz; } }
-        if (this.tap) this.tap.jato(i, x);
-        exL += x * rd.panL; exR += x * rd.panR;
-        const ib = this.itdB[i], dd = this.itdD[i]; ib[iw] = x;
-        exLd += ib[(iw - dd[0]) & this.itdM] * rd.panL; exRd += ib[(iw - dd[1]) & this.itdM] * rd.panR;
-      }
-      // troca de configuração: as redes antigas saem em cosseno levantado (cada uma com o peso que tinha) e a nova entra
-      if (velhas) {
-        let wv = 0, oL = 0, oR = 0, oLd = 0, oRd = 0;
-        for (const rv of velhas) {
-          const w = pesoRede(rv), o = this.radiarRedeVelha(rv, P, iw);
-          wv += w; oL += w * o[0]; oR += w * o[1]; oLd += w * o[2]; oRd += w * o[3];
-          rv.k++;
-        }
-        exL = (1 - wv) * exL + oL; exR = (1 - wv) * exR + oR; exLd = (1 - wv) * exLd + oLd; exRd = (1 - wv) * exRd + oRd;
-        if (velhas.some((rv) => rv.k >= rv.n)) { velhas = velhas.filter((rv) => rv.k < rv.n); if (!velhas.length) velhas = null; this.redesVelhas = velhas; }
-      }
-
-      // ---- admissão
-      let inS, inP, inH;
-      {
-        const dIn = (intake - this.inPrev) * fs;
-        this.inPrev = intake;
-        let x = dIn * 0.9 / (this.N * 0.5 + 1) / Math.max(0.02, this.Vd * 1e3);
-        for (let i = 0; i < this.inF.length; i++) x = this.inF[i].run(x);
-        // chiado do ar entrando pela borboleta: cresce com a vazão nela, não com a carga. Pisando com o coletor em
-        // vácuo, a borboleta engole ar em fluxo sônico até o coletor encher: é o "suspiro" curto da acelerada; depois
-        // segue a vazão do motor (normalizado pela rotação ele ficava no máximo durante toda a acelerada)
-        const air = clamp(mThr / (this.Vd * N * 1.2 * this.redline / 120 + 1e-9), 0, 2);
-        const hiss = this.hissF.run(rng.bi()) * air * air * this.hissGain * 0.25 * P.air;
-        const loadIn = 0.3 + 0.7 * clamp(pMan / P0, 0, 1); // em lenta (coletor em vácuo) a admissão quase não se ouve
-        inP = x * this.inGain * 0.004 * loadIn; inH = hiss; inS = inP + inH; // (pulso grave + chiado)
-      }
-
-      // ---- mecânico
-      let mech = 0;
-      {
-        this.clickEnv *= 0.88;
-        // frio: tuchos e pistão batem mais até o óleo esquentar e as folgas fecharem
-        const coldN = 1 - this.warm;
-        const cn = rng.bi() * this.clickEnv * (0.15 + rf) * (1 + 1.6 * coldN);
-        mech += (this.clickF[0].run(cn) + 0.35 * this.clickF[1].run(cn)) * 0.05;
-        if (this.cc) mech += this.ccMecanica(rf, coldN, pMan); // (diesel: knock por dp/dθ, injeção, bomba)
-        else {
-        this.knockEnv *= 0.93;
-        const kn = rng.bi() * this.knockEnv * (0.3 + 0.7 * pMan / P0) * (1 + 1.2 * coldN);
-        mech += (this.knockF[0].run(kn) + 0.6 * this.knockF[1].run(kn) + 0.25 * this.knockF[2].run(kn)) * 0.07;
-        }
-        // batida periódica (`batida`): o pistão que encosta na parede a cada explosão e as válvulas que assentam na sede excitam o
-        // bloco e o cabeçote com um impulso, e a estrutura responde nos seus modos (0,8–2,5 kHz, bem amortecidos). O impulso de
-        // cada cilindro tem um tamanho fixo (folgas) vezes a força da explosão, e cresce com a rotação (a velocidade do
-        // impacto): a forma de onda se repete a cada ciclo e aparece como linhas de meia ordem, não como rajada de ruído.
-        // Na lenta quase não se ouve; com o motor girando leve é ela que enche os médios; em plena carga o escape a cobre
-        if (batK) {
-          const bf = this.batF, br = rf * Math.sqrt(rf), bc = this.batC * br; // (impacto ∝ rotação, e mais forte quanto mais rápido: rf^1,5)
-          mech += bf[3].run(bf[0].run(bc) + BATIDA.peso2 * bf[1].run(bc) + BATIDA.pesoV * bf[2].run(this.batV * br)) * batK; // (sem reforço a frio: na lenta fria de um V8 a batida passava a ser o que se ouvia em 1–6 kHz, onde a gravação é um leito liso)
-          this.batC = 0; this.batV = 0;
-        }
-        this.phW += omega * dt; if (this.phW > 1e4) this.phW -= TAU * 1000;
-        if (this.rot) mech += this.mechRot(omega, rf); // (rotativo, gancho 16: engrenagem fixa / coroa do rotor)
-        else mech += (Math.sin(this.phW * 23) * 0.6 + Math.sin(this.phW * 2.9 * 12) * 0.4) * 0.002 * rf * rf;
-        if (this.state === 'crank') {
-          this.phS += (omega * 11 * dt) / TAU; this.phS -= Math.floor(this.phS);
-          mech += this.starterLP.run((this.phS * 2 - 1) * 0.05 + rng.bi() * 0.02) * (0.6 + 0.4 * Math.sin(this.phW * 2));
-        }
-        if (this.av) mech += this.somPartidaAv(rng); // (arranque de aviação: apito do volante, zumbido, ar)
-        mech = this.mechHP.run(mech);
-        if (this.airCool) mech *= 1.2; // (sem a camisa d'água em volta, tucho, válvula e pistão irradiam mais)
-        if (this.radial) mech *= 1.17; // (gancho 12: cilindros e aletas expostos)
-        // bomba de ar secundário (zumbido elétrico) e ventoinha do radiador
-        if (this.secAir > 0.01 && P.saSound !== false && this.saModo !== 2) { // (`bombaAr: 'sem'`: o carro não tem a bomba)
-          if (this.saModo === 1) {
-            // (motor elétrico: a tensão e a contrapressão variam a rotação ~0,7% e a linha fica larga, sem o 2º harmônico
-            // puro; dois senos parados apareciam como um tom que não é ordem do motor, que a gravação do carro não tem)
-            this.saJit += 0.002 * (rng.bi() - this.saJit);
-            this.phSA += 760 * (1 + 0.4 * this.saJit) * dt; if (this.phSA > 1) this.phSA -= 1;
-            mech += this.secAir * (0.001 * Math.sin(TAU * this.phSA) + 0.003 * this.saF.run(rng.bi()));
-          } else {
-          this.phSA += 760 * dt; if (this.phSA > 1) this.phSA -= 1;
-          mech += this.secAir * (0.001 * Math.sin(TAU * this.phSA) + 0.0004 * Math.sin(2 * TAU * this.phSA) + 0.003 * this.saF.run(rng.bi()));
-          }
-        }
-        if (this.fanSpin > 0.01 && P.fanSound !== false) {
-          this.phFan += 7 * 42 * this.fanSpin * dt; if (this.phFan > 1) this.phFan -= 1;
-          mech += this.fanSpin * (0.006 * Math.sin(TAU * this.phFan) + 0.03 * this.fanF.run(rng.bi())) * this.fanSpin;
-        }
-        const ripple = (Tgas - this.tqGas) / (this.Tmax + 1);
-        if (this.radial) vib = this.vibLP.run(vib * 0.04 * rf * rf + ripple * 0.08); // (radial: a oscilação do torque pesa 1,6×)
-        else vib = this.vibLP.run(vib * 0.04 * rf * rf + ripple * 0.05);
-      }
-
-      // ---- irradiação do coletor perto do motor: a rajada de cada abertura de válvula vaza pelas paredes finas e
-      // juntas antes do abafador. Sobe em ~3 ms e cai em ~10 ms (acima de ~1800 rpm as rajadas se fundem em ondas por
-      // volta), e cada cilindro sopra conforme o próprio pulso. É o agudo "de lata" do Fusca, colado ao motor
-      let brk = 0;
-      if (this.breakK) {
-        this.brkE += (brkIn - this.brkE) * (brkIn > this.brkE ? this.brkKa : this.brkKd);
-        this.brkS += (brkIn - this.brkS) * this.brkKs; // (média de ~0,1 s: entre as rajadas o escape segue pressurizado e as juntas vazam um pouco)
-        this.brkLP += this.brkKl * (this.brkF[0].run(rng.bi()) - this.brkLP); // (passa-alta em 700 Hz e 1 polo em 2,5 kHz)
-        brk = this.brkF[1].run(this.brkLP) * (this.brkE + this.brkFloor * this.brkS) * this.breakK * this.brkK;
-      }
-
-      // ---- turbo
-      let tur = 0, sc = 0;
-      if (this.cc) tur = this.ccTurbo(pMan, pUp, P);
-      else if (this.turbo) {
-        const tw = this.turboW;
-        const f = 500 + 6200 * tw;
-        this.phT += TAU * f * dt; if (this.phT > TAU) this.phT -= TAU;
-        const lvl = tw * tw * (0.2 + 0.8 * clamp(pMan / pUp, 0, 1));
-        if (this.rot) tur += this.rotApito(lvl); // (rotativo: o mesmo apito, atenuado por `kApito`)
-        else tur += (Math.sin(this.phT) + 0.25 * Math.sin(2 * this.phT + 0.7)) * 0.02 * lvl;
-        tur += this.turboHiss.run(rng.bi()) * 0.02 * lvl * (0.3 + this.boost) * P.air;
-        if (this.bovEnv > 0.002) {
-          const nz = rng.bi();
-          tur += (this.bovF[0].run(nz) + 0.6 * this.bovF[1].run(nz)) * this.bovEnv * this.bovAmp * 0.35;
-        }
-      }
-
-      // ---- compressor mecânico: o "uivo" dos rotores; cresce com o giro e com a pressão
-      if (this.blower) {
-        // a correia e a carga variam um pouco a rotação dos rotores: a linha do uivo fica larga, não um apito parado
-        this.scJit = (this.scJit || 0) + 0.02 * (rng.bi() - (this.scJit || 0));
-        const fb = (omega / TAU) * this.scOrder * (1 + 0.09 * this.scJit);
-        this.phB = (this.phB || 0) + TAU * fb * dt; if (this.phB > TAU) this.phB -= TAU;
-        // (o uivo é a pulsação de cada bolsão abrindo para a descarga pressurizada: com o pé embaixo ela é forte; tirando
-        // o pé, a válvula de alívio abre, os dois lados dos rotores ficam quase na mesma pressão e sobra só um fundo dos
-        // rotores girando em vazio. Preso só ao giro, ele soava igual acelerando e caindo)
-        const lv = Math.pow(rf, 1.5) * (0.06 + 0.94 * clamp(this.boost / Math.max(0.2, this.maxBoost), 0, 1));
-        // (a passagem dos lóbulos pulsa a pressão de descarga numa fração grande da própria pressão: no cofre, de pé
-        // embaixo, o uivo briga com o escape; antes ficava ~30 dB abaixo e não se ouvia)
-        // a pulsação não é senoidal: cada bolsão abre de uma vez para a descarga, e a onda tem muitos harmônicos
-        // (o Roots moderno, de lóbulos torcidos 160–170° como o Eaton TVS, abre cada bolsão aos poucos e a pulsação é
-        // suave: com os harmônicos quase sem cair, como num Roots de lóbulos retos, o uivo agudo virava um guincho fino;
-        // o duplo parafuso tem o 2º harmônico tão forte quanto o fundamental, medido num Hellcat, o que dá o som cheio
-        // de sirene, e depois cai; o centrífugo é quase só a passagem das pás). Os harmônicos vêm pela recorrência de
-        // Chebyshev, só até ~20 kHz
-        const ty = this.scType, ex = ty === 'roots' ? 1.6 : 1.8;
-        const c2 = 2 * Math.cos(this.phB), kMax = Math.min(16, Math.floor(0.42 * this.fs / Math.max(fb, 1)));
-        let s1 = Math.sin(this.phB), s0 = 0, wv = 0, e2 = 0;
-        for (let k = 1; k <= kMax; k++) {
-          const a = ty === 'screw' ? (k <= 8 ? SCREW_H[k - 1] : 0.05 * Math.pow(0.6, k - 8)) : Math.pow(k, -ex);
-          wv += a * s1; e2 += a * a; const s = c2 * s1 - s0; s0 = s1; s1 = s;
-        }
-        wv *= 0.79 / Math.sqrt(0.5 * Math.max(e2, 1e-9));
-        // cada cilindro que aspira puxa a descarga e o uivo pulsa no ritmo das admissões (o "nhiii" granulado)
-        this.scIn = (this.scIn || 0) + 0.0005 * (intake - (this.scIn || 0));
-        const am = clamp(1 + (ty === 'centrifugal' ? 0.1 : ty === 'roots' ? 0.2 : 0.35) * (intake / Math.max(this.scIn, 1e-9) - 1), 0.4, 1.8);
-        sc += wv * am * 0.36 * lv * this.scK * this.scGain;
-        // o vazamento pelas pontas dos rotores chia junto com cada bolsão (um chiado médio, abaixo do uivo: centrado
-        // nos agudos ele soava mais brilhante que o compressor real)
-        sc += this.scHiss.run(rng.bi()) * 0.07 * lv * P.air * this.scGain * (0.6 + 0.4 * Math.sin(this.phB));
-      }
-
-      // ---- ouvinte (exL/exR em Pa, o resto já em escala de áudio)
-      const exScale = 2.4e-4;
-      exL *= exScale * P.exhaust; exR *= exScale * P.exhaust; exLd *= exScale * P.exhaust; exRd *= exScale * P.exhaust; brk *= exScale * P.exhaust;
-      this.wE += (targetE - this.wE) * kw; this.wI += (targetI - this.wI) * kw; this.wB += (targetB - this.wB) * kw;
-      this.wP += (targetP - this.wP) * kw; this.wR += (targetR - this.wR) * kw;
-      inS *= P.intake; inP *= P.intake; inH *= P.intake; mech *= P.mech; vib *= P.mech;
-      if (this.tap) this.tap.gravar(s, exScale * P.exhaust, inP, inH, mech, vib, tur, sc, brk);
-      let L = 0, R = 0;
-      // o que sai do cofre (admissão, mecânica, compressor) depende de onde o motor está: dianteiro, chega à câmera
-      // de trás de longe e com a carroceria no meio; central ou traseiro, a câmera fica colada nele e ouve o
-      // carburador puxando ar, a ventoinha e o trem de válvulas com o agudo. É por isso que o mesmo chiado é a
-      // alma do Fusca e soa postiço num Mustang. (O pulso grave da admissão fica contido na caixa do filtro e sob a
-      // tampa do motor; o chiado agudo, que nasce no carburador e na borboleta, escapa pelas grelhas)
-      const me = this.extMech.run(mech), [kIn, kMe, kSc, kRaw, kH] = this.posW, mm = me + kRaw * (mech - me), ia = kIn * inP + kH * inH;
-      if (this.wE > 1e-4) {
-        const bk = (0.3 + 0.7 * kRaw) * brk; // (motor dianteiro: o coletor fica sob o capô e chega por baixo do carro)
-        L += this.wE * (exLd + ia + kMe * mm + 0.2 * tur + kSc * sc + bk + 0.1 * vib);
-        R += this.wE * (exRd + ia + kMe * mm + 0.2 * tur + kSc * sc + bk + 0.1 * vib);
-      }
-      if (this.wP > 1e-4) {
-        // microfone colado na ponteira esquerda: campo próximo, quase só escape
-        L += this.wP * (1.6 * exL + 0.4 * exR + 0.06 * inS + 0.05 * mech + 0.1 * tur + 0.03 * sc + 0.5 * brk);
-        R += this.wP * (1.1 * exL + 0.35 * exR + 0.06 * inS + 0.05 * mech + 0.1 * tur + 0.03 * sc + 0.5 * brk);
-      }
-      if (this.wI > 1e-4) {
-        let cl = exL * 0.75 + exR * 0.25, cr = exR * 0.75 + exL * 0.25;
-        for (let i = 0; i < 3; i++) { cl = this.cabL[i].run(cl); cr = this.cabR[i].run(cr); }
-        // pela parede corta-fogo chegam admissão, mecânica e a vibração do bloco
-        const common = 0.35 * this.cabIn.run(inS) + 0.2 * this.cabMech.run(mech) + 0.25 * (tur + sc) + 0.2 * this.cabBrk.run(brk) + 1.2 * vib;
-        L += this.wI * (cl * 0.6 + common); R += this.wI * (cr * 0.6 + common);
-      }
-      if (this.wB > 1e-4) {
-        // cofre: o escape chega por baixo do carro, abafado; dominam admissão, comando e bloco
-        const ex = this.bayEx.run((exL + exR) * 0.5);
-        const b = 0.55 * ex + 1.0 * inS + 0.7 * mech + 0.8 * (tur + sc) + brk + 0.8 * vib;
-        L += this.wB * b; R += this.wB * b;
-      }
-      if (this.av) { const h = this.avSomExtra(); L += h; R += h; } // (aviação: a hélice da página, ouvinte a 5 m do cubo)
-      // carro andando pela via (posição sempre atualizada; volta de "loop" metros)
-      this.carX += this.v * dt;
-      if (this.carX > loop / 2) this.carX -= loop;
-      // (na rua o motor traseiro sopra para trás, junto com o escape; o dianteiro, para a frente)
-      // (de frente, nada fica entre o compressor e quem está na rua: ele entra como no cofre)
-      const eng = 0.12 * inP + kH * inH + 0.1 * mm + 0.8 * sc;
-      this.road((exL + exR) * 0.5 + 0.7 * brk + kRaw * eng, (1 - kRaw) * eng + 0.2 * tur, P);
-      if (this.wR > 1e-4) { L += this.wR * this.roadL; R += this.wR * this.roadR; }
-      // bloqueio DC + compensação de loudness por rotação + saturação suave
-      // (leve: um motor real fica uns 25 dB mais alto da lenta ao corte; aqui comprimimos só ~5 dB disso)
-      // reforço da lenta medido na calibração, que some conforme o giro sobe (até metade da faixa)
-      const wIdle = 1 - smooth((this.idle / this.redline) * 1.15, 0.5, rpmFrac);
-      this.mk += (Math.pow(this.mkIdle || 1, wIdle) - this.mk) * 0.0005;
-      if (this.gTroca) { // (troca de configuração: o ganho novo da sonda chega em rampa)
-        this.cfgGain += (this.gTroca - this.cfgGain) * (1 - Math.exp(-dt / TROCA_GANHO));
-        if (Math.abs(this.gTroca - this.cfgGain) < 1e-6 * this.gTroca) { this.cfgGain = this.gTroca; this.gTroca = 0; }
-      }
-      if (this.fade < 1) this.fade = Math.min(1, this.fade + dt / 0.04);
-      // arcade: nivelador sobre o escape na fonte (antes do ouvinte, para a distância na rua e a cabine
-      // continuarem valendo). Abaixo da carga total da calibração ele sobe o ganho na razão 1:2, até +10 dB: a lenta
-      // sobe metade do que falta, sem igualar ao giro alto; acima não mexe. O ganho desce em 15 ms e sobe em 300 ms, para não "bombear" no corte de giro
-      const lv = this.cfgGain * this.mk, e2 = 0.5 * (exL * exL + exR * exR) * lv * lv;
-      this.arcE += (e2 - this.arcE) * 0.0004; // (RMS de ~50 ms: um detector de pico lia os pulsos da lenta, não o nível)
-      const gw = P.dynamics === 'arcade' && this.state === 'run' ? clamp(Math.pow(0.17 / Math.sqrt(this.arcE + 1e-12), 0.5), 1, 3.16) : 1;
-      this.arcG += (gw - this.arcG) * (gw < this.arcG ? 0.0014 : 0.00007);
-      // (e o reforço nunca leva um estouro além do teto: pico com ataque na hora e soltura de ~140 ms)
-      this.arcP = Math.max(Math.max(Math.abs(exL), Math.abs(exR)) * lv * P.master * 0.5, this.arcP * 0.99985);
-      const gOut = P.master * 0.5 * this.cfgGain * this.mk * this.fade * Math.min(this.arcG, Math.max(1, 0.9 / (this.arcP + 1e-9)));
-      this.dcL = L - this.dcxL + 0.9985 * this.dcL; this.dcxL = L;
-      this.dcR = R - this.dcxR + 0.9985 * this.dcR; this.dcxR = R;
-      // som de fundo do ambiente (independe do motor)
-      this.ambience(this.wI);
-      const gA = P.ambSound === false ? 0 : P.master * 0.5;
-      outL[s] = Math.tanh(this.dcL * gOut + this.ambL * gA);
-      if (outR !== outL) outR[s] = Math.tanh(this.dcR * gOut + this.ambR * gA);
-      if (sendL) {
-        // envio para a reverberação: de longe o som refletido pesa mais que o direto
-        const onboard = 1 - this.wR;
-        sendL[s] = (this.dcL * onboard + this.wR * this.roadS * (0.75 + 0.25 * this.panS)) * gOut;
-        sendR[s] = (this.dcR * onboard + this.wR * this.roadS * (0.75 - 0.25 * this.panS)) * gOut;
-      }
+      // (o que vem daqui sai em métodos compilados à parte: ver `amostraLer`; os valores do começo da amostra vão nos campos `am*`)
+      this.am[AM_RPMFRAC] = rpmFrac; this.am[AM_RF] = rf; this.am[AM_OMEGA] = omega; this.am[AM_PMAN] = pMan; this.am[AM_PUP] = pUp; this.am[AM_MTHR] = mThr;
+      this.am[AM_INTAKE] = intake; this.am[AM_VIB] = vib; this.am[AM_TGAS] = Tgas; this.am[AM_BRKIN] = brkIn;
+      this.amostraRede();
+      this.amostraIrradiar();
+      this.amostraAdmissao();
+      this.amostraMecanica();
+      this.amostraTurbo();
+      this.amostraOuvinte(s, outL, outR, sendL, sendR);
     }
 
     this.telem += n;
     if (this.post && this.telem >= 1024) {
       this.telem = 0;
       this.post(this.telemetry());
+    }
+  }
+
+  /** um cilindro (ou câmara) numa amostra: centelha ou injeção, válvulas, volume, queima, escape, admissão, a 1ª lei e as
+   *  forças; soma em amTgas, amMInSum, amVib, amIntake e amBrkIn */
+  amostraCilindro(c) {
+    const fire = this.fire, aPrev = this.aPrev, pc_ = this.p, m_ = this.m, N = this.N, rng = this.rng, P = this.params, dt = this.dt, fs = this.fs;
+    const evo = this.evo, evc = this.evc, ivo = this.ivo, ivc = this.ivc, runners = this.runners;
+    const r = this.rCrank, l = this.lRod, Ap = this.Ap, Vc = this.Vc, Zr = this.Zr;
+    const g1 = GAM - 1, cyc = this.cyc, cyc2 = cyc / 2, cyc3 = (3 * cyc) / 4, cyc4 = cyc / 4; // (gancho 3: 720/360/540/180 no pistão, os mesmos doubles)
+    const batK = this.batK, velhas = this.redesVelhas; // (médios: 0 = legado; troca de configuração: as redes antigas no cruzamento, null em regime)
+    const running = this.am[AM_RUNNING] === 1, cranking = this.am[AM_CRANKING] === 1, cut = this.am[AM_CUT] === 1, dfco = this.am[AM_DFCO] === 1, rpm = this.am[AM_RPM], deg = this.am[AM_DEG];
+    const adv = this.am[AM_ADV], aSp = this.am[AM_ASP], slowB = this.am[AM_SLOWB], burn = this.am[AM_BURN], hwr = this.am[AM_HWR], pMan = this.am[AM_PMAN], hiN = this.am[AM_HIN];
+    let Tgas = this.am[AM_TGAS], mInSum = this.am[AM_MINSUM], vib = this.am[AM_VIB], intake = this.am[AM_INTAKE], brkIn = this.am[AM_BRKIN];
+    let a = this.theta - fire[c]; if (a < 0) a += cyc;
+    if (this.cc && a >= this.ciclo) a -= this.ciclo; // (2 tempos: ciclo de 360°)
+    const ap = aPrev[c];
+    // ---- centelha (diesel: injeção e atraso de ignição no DieselDSP; o ramo a gasolina segue sem reindentar)
+    // (ganchos cc* e rot*: os doubles do cilindro vão pelos campos am* e a resposta volta em amSaida; passados como argumento a um
+    // método que o V8 não embute, cada um virava uma caixa nova a cada chamada: 110 MB/s no Diesel)
+    if (this.cc) { this.am[AM_A] = a; this.am[AM_AP] = ap; this.ccInjecao(c); }
+    else {
+    // a centelha é armada no curso de admissão e dispara uma única vez por ciclo,
+    // mesmo que o avanço mude de repente (com atraso grande, depois do ponto morto superior)
+    if (a >= cyc2 && a < cyc3) this.armed[c] = 1;
+    if (this.armed[c] && (aSp < cyc ? a >= aSp || a < cyc4 : a >= aSp - cyc && a < cyc4)) {
+      this.armed[c] = 0;
+      this.spk[c] = a;
+      let cutNow = cut;
+      if (this.limiter && this.limType === 'partial' && !this.launching) {
+        // rodízio irregular: acumula a fração de corte (com sorteio, para não virar um padrão
+        // periódico que soa como um zumbido parado) e corta a explosão quando passa de 1
+        cutNow = this.shifting && this.shiftCut;
+        this.lacc = (this.lacc || 0) + this.limFrac * (0.4 + 1.2 * rng.next());
+        if (this.lacc >= 1) { this.lacc -= 1; cutNow = true; }
+      }
+      const combust = (running || cranking) && !cutNow && !dfco;
+      const idleness = clamp(1 - (this.rpmAvg - this.idle) / 1500, 0, 1);
+      // frio: a mistura vaporiza mal e cada explosão sai um pouco diferente
+      const sigma = (0.025 + idleness * (0.015 + 0.06 * this.cam * this.cam)) * (1 + 0.9 * (1 - this.warm));
+      // sem limitador (motor antigo): passando da faixa vermelha as válvulas flutuam,
+      // a mistura não entra direito e o motor falha e perde força
+      const float = this.limType === 'none' ? clamp((this.rpmAvg - this.redline) / (0.12 * this.redline), 0, 1) : 0;
+      // (carburador em lenta: de vez em quando uma mistura não acende, a "tossida" do motor velho, ~1% das explosões)
+      // (e na desaceleração, com o vácuo alto, a mistura rala falha muito mais: até ~15% das explosões)
+      let misfire = rng.next() < this.cam * this.cam * 0.02 * idleness + 0.5 * float + (this.fuelVar > 1 ? (this.carbMis * idleness + 0.15 * clamp((0.3 - this.pMan / P0) / 0.15, 0, 1)) * this.varScale : 0);
+      if (this.av) misfire = misfire || rng.next() < this.falhaAv(c); // (gancho 5: encharque, mistura, magnetos)
+      if (this.rot) misfire = misfire || rng.next() < this.falhaRot[c]; // (rotativo, gancho 6: por câmara: diluição pela sobreposição, velas T, vedações)
+      if (combust && !misfire) {
+        this.burnHeat += (1 - this.burnHeat) * 0.05;
+        // carburador em carga leve: com a borboleta quase fechada a mistura chega mal vaporizada e mal dividida
+        // entre os cilindros, e cada explosão sai diferente (na força e no ritmo da queima). Com o pé embaixo o
+        // fluxo forte homogeneíza e o motor assenta; em lenta e meio pé volta o "galope" (num Fusca real, 16% de
+        // variação entre explosões a 1400 rpm em neutro e ~33% a 2000 rpm instável). Em carga leve o pulso do escape
+        // sai da pressão no fim da queima, que já amplifica bastante uma variação pequena da mistura
+        const light = this.fuelVar > 1 ? clamp((0.8 - this.pMan / P0) / 0.5, 0, 1) * this.varScale : 0;
+        this.Q[c] = Math.max(0, this.air[c]) * 2.6e6 * this.cylQ[c] * (1 - 0.7 * float) * (0.45 + 0.55 * this.fuelRamp) * clamp(1 + (sigma * this.varScale * this.fuelVar + this.carbVar * light) * rng.gauss(), 0.25, 1.6);
+        if (this.av) this.Q[c] *= this.qMix; // (gancho 6: mistura)
+        if (this.rot) this.rotQueima(c, idleness, slowB); // (rotativo, gancho 7: a fração fHC vai ao escape como pós-queima)
+        // (mistura pobre queima devagar e chega mais quente no escape; a variação é em graus, então não cresce
+        // com a queima mais lenta do vácuo)
+        this.burnK[c] = light ? 1 + 0.1 * light * clamp(rng.gauss(), -1.5, 2) / slowB : 1;
+        if (this.av) this.burnK[c] *= this.burnAv; // (gancho 4: um magneto só, mistura pobre)
+        this.xb[c] = 0;
+        this.knockEnv += 0.6 + 0.4 * rng.next();
+        if (batK) this.batC += this.batW[c] * (0.3 + 0.7 * Math.min(1.5, this.Q[c] / this.batQ0)); // (batida periódica: cada pistão bate do seu jeito, com a força da própria explosão)
+      } else {
+        this.Q[c] = 0; this.xb[c] = 1;
+        // estouro no escape: a mistura que não queimou no cilindro chega ao coletor quente e explode lá. Precisa
+        // de combustível (ignição cortada ou falha; corte de injeção só bombeia ar) e de escape quente (~600 °C).
+        // Cada fonte tem uma taxa típica (estouros por segundo, escape quente e sem catalisador) e um tamanho;
+        // o estouro cresce com a carga do cilindro, e o catalisador queima boa parte do combustível sem barulho
+        let rate = 0, k = 0, pr = 0, wet = true, floor = 0.15, lit = false;
+        if (running && this.rpmAvg > this.idle * 1.4) {
+          const ov = this.overrun;
+          if (combust) { pr = 0.015; k = 0.7; if (this.av) { pr = this.prAv; k = this.kEstouroAv; } } // falha de ignição (válvulas flutuando, comando bravo): mistura inteira, mas quase nunca acende
+          else if (this.launching && this.limiter) { rate = 20; k = 0.8; } // 2-step com corte
+          // (corte de injeção: só o filme de combustível do coletor). Por extenso, sem a tabela `{ ign, partial }[limType]` nem os
+          // vetores: a leitura de um objeto novo pelo nome desotimizava o laço inteiro a cada vez no V8 ("unexpected name in
+          // keyed access"), e o motor no corte rodava fora do código otimizado, a 80–100 % do tempo real e ~1 GB/s de lixo
+          else if (this.limiter) { const lt = this.limType; if (lt === 'ign') { rate = 25; k = 0.7; wet = true; } else if (lt === 'partial') { rate = 8; k = 0.6; wet = true; } else { rate = 0.5; k = 0.3; wet = false; } }
+          else if (this.shifting && this.shiftCut) { if (this.ignCut) { rate = 40; k = 0.8; } else { rate = 5; k = 0.5; } }
+          else if (dfco) {
+            if (this.als) { rate = 22; k = 1.1; floor = 0.6; lit = true; }
+            else if (ov === 'lean') { rate = 1; k = 0.5; } // carburador: a mistura da desaceleração é rica e raramente acende (o pipoco frequente é vazamento no escape)
+            // (os mapas de estouro abrem um pouco a borboleta e enriquecem: a carga não é a da lenta)
+            else if (ov === 'burble' && this.popWindow > 0) { rate = 16 * Math.sqrt(this.popWindow / this.popDur); k = 0.8; floor = 0.35; lit = true; }
+            else if (ov === 'popbang' && this.popWindow > 0) { rate = 20 * Math.min(1, this.popWindow); k = 1.2; floor = 0.5; lit = true; }
+          }
+        }
+        if (this.rot && running && combust) { pr = this.prRot; k = 0.8; } // (rotativo, gancho 8: mistura crua de qualquer falha estoura)
+        if (rate) pr = Math.min(0.9, rate / (N * Math.max(rpm, 300) / 120));
+        this.burnHeat += ((wet && (pr || rate) ? 0.5 : 0) - this.burnHeat) * 0.05;
+        // (nos mapas de estouro a ignição atrasada manda a chama acesa para o escape: não precisa da parede em
+        // brasa. A mistura crua do corte de ignição, do carburador ou de uma falha só acende no escape quente)
+        const hot0 = lit ? 0.7 + 0.3 * smooth(280, 520, this.exhT) : smooth(280, 520, this.exhT);
+        const hot = this.av ? Math.max(hot0, this.avHot) : hot0; // (gancho 7: estouros da partida sem coletor quente)
+        if (pr && rng.next() < pr * hot * (this.hasCat ? 0.6 : 1) && this.pops.length < 10) {
+          const size = Math.pow(clamp(this.air[c] / (this.Vd * 1.2), floor, 1.3), 0.7);
+          const delay = ((evo + adv + 30) / Math.max(600, rpm * 6)) * fs + rng.next() * 0.006 * fs;
+          this.pops.push({ d: delay | 0, t: 0, bank: this.cfg.bank[c], amp: 8e4 * k * size * (0.6 + 0.6 * rng.next()) * (this.hasCat ? 0.7 : 1) * (0.6 + 0.4 * hot) });
+        }
+      }
+    }
+    }
+    // ---- válvulas (cliques do trem de válvulas)
+    if (this.cc) this.ccValvulas(c);
+    else if (this.rot) { this.am[AM_A] = a; this.am[AM_AP] = ap; this.rotJanelas(c); } // (rotativo, gancho 9: tiques do ápice nas bordas das janelas e nas velas)
+    else {
+    if ((ap < evo && a >= evo) || (ap < evc && a >= evc) || (ap < ivo && a >= ivo) || (ap < ivc && a >= ivc)) this.clickEnv += 0.5 + 0.5 * rng.next();
+    if (batK) { if (ap < evc && a >= evc) this.batV += this.batW[N + c]; else if (ap < ivc && a >= ivc) this.batV += this.batW[2 * N + c]; } // (válvula assentando na sede: o mesmo estalo em todo ciclo)
+    if (ap < ivo && a >= ivo) this.air[c] = 0;
+    }
+    aPrev[c] = a;
+
+    // ---- volume
+    const th = a * DEG, sn = Math.sin(th), cs = Math.cos(th);
+    const q = Math.sqrt(l * l - r * r * sn * sn);
+    let V, dxdth;
+    if (this.rot) { const kv = this.kVol; V = Vc + this.Vh * (1 - Math.cos(kv * th)); dxdth = (this.Vh * kv * Math.sin(kv * th)) / Ap; } // (rotativo, gancho 11: V(α) da câmara)
+    else { V = Vc + Ap * (r * (1 - cs) + l - q); dxdth = r * sn * (1 + (r * cs) / q); }
+    const dV = V - this.Vprev[c];
+    this.Vprev[c] = V;
+
+    let p = pc_[c], m = m_[c];
+    const T = clamp((p * V) / (m * RGAS), 220, 3200);
+
+    // ---- combustão (Wiebe)
+    let dQ = 0;
+    if (this.cc) { this.am[AM_P] = p; this.am[AM_V] = V; this.ccQueima(c); dQ = this.am[AM_SAIDA]; }
+    else if (this.xb[c] < 1) {
+      let d = a - this.spk[c]; if (d < -cyc2) d += cyc;
+      if (d < 0) d = 0;
+      const u = d / (burn * this.burnK[c]);
+      const x = u >= 1 || d > cyc2 ? 1 : 1 - Math.exp(-5 * u * u * u);
+      dQ = this.Q[c] * (x - this.xb[c]);
+      this.xb[c] = x;
+    }
+    if (this.cc) dQ -= hwr * (T - this.tParede) * dt; // (diesel: a parede segue a água)
+    else dQ -= hwr * (T - T_WALL) * dt;
+
+    // ---- válvula de escape -> tubo primário
+    let mEx = 0;
+    const run = runners[c];
+    // (troca de configuração: a válvula enxerga a contrapressão das redes antiga e nova pesadas como no cruzamento; a
+    // nova sozinha, que nasce vazia, dava um degrau na vazão que saía na boca como estalo)
+    let runE = run;
+    if (velhas) { let w = 1, b = 0; for (const rv of velhas) { const k = pesoRede(rv); w -= k; b += k * rv.runners[c].in0; } runE = this.runMix; runE.in0 = w * run.in0 + b; }
+    if (this.cc) { this.am[AM_P] = p; this.am[AM_T] = T; this.ccEscape(c, runE); mEx = this.am[AM_SAIDA]; }
+    else if (this.rot) { this.am[AM_A] = a; this.am[AM_P] = p; this.am[AM_T] = T; this.rotEscape(c, runE); mEx = this.am[AM_SAIDA]; } // (rotativo, gancho 12: janela trapezoidal)
+    else if (a > evo && a < evc) {
+      const sv = Math.sin(Math.PI * (a - evo) / (evc - evo));
+      const A = this.AexMax * this.cylEx[c] * Math.min(1, 2.5 * sv * sv); // (área efetiva satura cedo: perfil "quadrado")
+      mEx = this.exhaustFlow(A, p, T, P0 + 2 * runE.in0, Zr);
+    }
+    // turbulência no vão da válvula: o jato que sai pelo vão no "estouro" da abertura. A velocidade dele vem da
+    // razão entre a pressão no cilindro e a do tubo (Mach do escoamento isentrópico, que satura no engasgo), e o
+    // chiado cresce com ela sem limiar, como num jato (pressão ∝ vazão·Mach³, potência ∝ U⁸). Com o cilindro
+    // esvaziado o Mach cai e o resto do curso é manso; chiado ligado o tempo todo vira um som de vento contínuo.
+    // O jato engasgado chia em alta frequência (rasgado); grave e médio continuam tonais.
+    // É o "rasgado" metálico, uma rajada colada a cada abertura (na lenta fria, o estalo de cada cilindro); a
+    // colmeia do catalisador, com milhares de canais finos, come um pouco desse agudo antes do abafador
+    let turb = 0;
+    if (mEx > 0) {
+      const pr = p / (P0 + 2 * runE.in0), Mj = pr > 1 ? Math.min(1, Math.sqrt(2 / (GAM - 1) * (Math.pow(pr, (GAM - 1) / GAM) - 1))) : 0;
+      turb = this.valveNoise * this.catNoise * P.air * Mj * Mj * Mj;
+    }
+    // a pressão no tubo é impedância × vazão volumétrica, não mássica: o gás de um cilindro cortado
+    // (ignição/combustível cortado, ~350 K) é 4× mais denso que o queimado (~1500 K) e empurra bem menos
+    // pela mesma massa. Sem isso o corte de giro soava 8 dB mais alto que o motor queimando.
+    // O fator é fixado na abertura da válvula (temperatura do ciclo), não amostra a amostra: assim um ciclo
+    // queimado mantém o timbre (o estouro inicial não fica mais agudo que o resto do curso) e só o ciclo
+    // cortado sai abafado.
+    // (referência = ciclo queimado em carga, ~1650 K: a amplitude no tubo em carga fica como foi acertada; a lenta
+    // sai a ~950 K (−5 dB, que a calibração repõe) e o ciclo cortado ou de freio-motor a ~350 K (piso −20 dB))
+    if (this.cc) { if (ap <= evo && a > evo) this.densC[c] = this.ccDens(T); } // (diesel: p' = c·ṁ/A, ∝ √T)
+    else if (this.rot) { if (ap <= evo && a > evo) this.densC[c] = this.rotDens(T); } // (rotativo: referência do gás mais quente)
+    else if (ap <= evo && a > evo) this.densC[c] = clamp(T / T_EXREF, 0.1, 1.3);
+    const dens = mEx > 0 ? this.densC[c] : 1;
+    // (o chiado do jato na válvula não entra na correção: é o escoamento sônico, não o empurrão do gás)
+    if (this.rot) { this.am[AM_A] = a; this.posQueima(c); const pq = this.am[AM_SAIDA]; run.out0 += Zr * mEx * (dens + turb * hiN) + pq; if (velhas) for (const rv of velhas) rv.runners[c].out0 += Zr * mEx * (dens + turb * hiN) + pq; } // (rotativo, gancho 13: acumula no primário do rotor)
+    else {
+      run.out0 = 0.985 * run.in0 + Zr * mEx * (dens + turb * hiN);
+      if (velhas) for (const rv of velhas) { const ro = rv.runners[c]; ro.out0 = 0.985 * ro.in0 + Zr * mEx * (dens + turb * hiN); } // (a rede antiga recebe a mesma vazão)
+    }
+    this.mEx[c] = mEx;
+    if (mEx > 0) brkIn += this.brkW[c] * Zr * mEx * dens;
+
+    // ---- válvula de admissão
+    let mIn = 0;
+    if (this.cc) { this.am[AM_P] = p; this.am[AM_T] = T; this.ccAdmissao(c); mIn = this.am[AM_SAIDA]; }
+    else if (this.rot) { this.am[AM_A] = a; this.am[AM_P] = p; this.am[AM_T] = T; this.rotAdmissao(c); mIn = this.am[AM_SAIDA]; } // (rotativo, gancho 14: janelas de admissão)
+    else if (a > ivo && a < ivc) {
+      const sv = Math.sin(Math.PI * (a - ivo) / (ivc - ivo));
+      const A = this.AinMax * this.cylIn[c] * Math.min(1, 1.5 * sv * sv);
+      mIn = flow(A, pMan, T_MAN, p, T);
+    }
+    mInSum += mIn;
+    // (o refluxo para o coletor na abertura da admissão chega abafado pelo plenum e pela borboleta)
+    intake += mIn > 0 ? mIn : 0.35 * mIn;
+    this.air[c] += mIn * dt;
+
+    // ---- 1ª lei para volume de controle aberto
+    const hIn = mIn >= 0 ? T_MAN : T, hEx = mEx >= 0 ? T : T_BACK;
+    p += (g1 * dQ + GAM * RGAS * (hIn * mIn - hEx * mEx) * dt - GAM * p * dV) / V;
+    // blow-by pelos anéis: relevante só em baixa rotação (partida)
+    const mLk = p > P0 ? (this.Aleak * (p - P0) * 0.67) / Math.sqrt(RGAS * T) : 0;
+    p -= (GAM * RGAS * T * mLk * dt) / V;
+    m += (mIn - mEx - mLk) * dt;
+    if (m < 1e-9) m = 1e-9;
+    if (p < 3000) p = 3000;
+    if (this.av && this.arPartida) { const ma = this.partidaAr(c, a) * dt; p += (GAM * RGAS * T_MAN * ma) / V; m += ma; } // (gancho 8: partida a ar)
+    pc_[c] = p; m_[c] = m;
+
+    Tgas += (p - P0) * Ap * dxdth;
+
+    // ---- forças de inércia (vibração)
+    const ph = (this.theta - this.tdcRel[c]) * DEG;
+    const acc = Math.cos(ph) + 0.3 * Math.cos(2 * ph);
+    if (this.rot) vib += 0.1 * Math.cos(ph); // (rotativo, gancho 15: rotor balanceado, só a ordem 1 residual)
+    else if (this.radial) vib += (0.6 * this.ux[c] + this.uy[c]) * 0.3 * Math.cos(2 * ph) + 0.35 * this.dz[c] * (this.ux[c] + this.uy[c]) * Math.cos(ph); // (gancho 9: sem a 1ª ordem)
+    else vib += (0.6 * this.ux[c] + this.uy[c] + 0.35 * this.dz[c] * (this.ux[c] + this.uy[c])) * acc;
+    this.am[AM_TGAS] = Tgas; this.am[AM_MINSUM] = mInSum; this.am[AM_VIB] = vib; this.am[AM_INTAKE] = intake; this.am[AM_BRKIN] = brkIn;
+  }
+
+  // ---- o laço de amostra em partes (`process` chama uma por vez, na ordem de antes). Cada método é compilado à parte
+  // pelo TurboFan, com o seu orçamento de inlining (920 bytes de bytecode por função otimizada): no `process` inteiro o
+  // orçamento acabava na leitura e na escrita dos tubos, e os biquads, o `flow` e o `exhaustFlow` ficavam como chamadas,
+  // cada uma com os doubles encaixotados na ida e na volta (60 a 110 MB/s de lixo por segundo de som). Os valores do
+  // começo da amostra que elas usam passam pelos campos `am*` (sem caixa: o V8 guarda um double num campo sem alocar).
+  // As contas são as mesmas, na mesma ordem, e os sorteios saem na mesma ordem (docs/TECNICO.md → Diesel → CPU do laço de amostra)
+
+  /** a onda que chega às pontas de cada tubo (a rede nova e, num cruzamento, as antigas) */
+  amostraLer() {
+    const lines = this.lines, nL = lines.length, velhas = this.redesVelhas;
+    for (let i = 0; i < nL; i++) lines[i].read();
+    if (this.rot) for (const run of this.runRot) run.out0 = 0.985 * run.in0; // (rotativo, gancho 13: um primário por rotor, as 3 câmaras somam)
+    if (velhas) for (const rv of velhas) { for (const l of rv.lines) l.read(); if (rv.runRot) for (const run of rv.runRot) run.out0 = 0.985 * run.in0; }
+  }
+
+  /** estouros, junções, abafadores e bocas, e a escrita das ondas nos tubos */
+  amostraRede() {
+    const fs = this.fs, rng = this.rng, nodes = this.nodes, lines = this.lines, nN = nodes.length, nL = lines.length, velhas = this.redesVelhas;
+    // ---- rede acústica do escape
+    for (let i = this.pops.length - 1; i >= 0; i--) {
+      const pp = this.pops[i];
+      if (pp.d > 0) { pp.d--; continue; }
+      const t = pp.t / fs;
+      const v = pp.amp * 0.55 * (Math.exp(-t / 0.0025) * (1 + 0.3 * rng.bi()) + 0.45 * rng.bi() * Math.exp(-t / 0.006));
+      this.bankJ[Math.min(pp.bank, this.bankJ.length - 1)].inj += v;
+      if (velhas) for (const rv of velhas) rv.bankJ[Math.min(pp.bank, rv.bankJ.length - 1)].inj += v;
+      if (++pp.t > 0.03 * fs) this.pops.splice(i, 1);
+    }
+    for (let i = 0; i < nN; i++) nodes[i].step();
+    for (let i = 0; i < nL; i++) lines[i].write();
+    if (velhas) for (const rv of velhas) { for (const nd of rv.nodes) nd.step(); for (const l of rv.lines) l.write(); }
+  }
+
+  /** as bocas: irradiação, jato, carcaça e o atraso entre os ouvidos (amExL, amExR, amExLd, amExRd) */
+  amostraIrradiar() {
+    const P = this.params, rng = this.rng, rads = this.rads, nR = rads.length, jatoFis = this.jatoFis, carcK = this.carcK;
+    let velhas = this.redesVelhas;
+    // ---- ponteira: irradiação + ruído de jato (escala com a velocidade do gás)
+    let exL = 0, exR = 0, exLd = 0, exRd = 0;
+    const iw = this.itdW = (this.itdW + 1) & this.itdM;
+    for (let i = 0; i < nR; i++) {
+      const rd = rads[i];
+      const e = rd.emit;
+      let x = this.radSh[i].run(this.radHP[i].run(e));
+      if (this.tap) this.tap.ponteira(i, e, x);
+      // o chiado segue a velocidade instantânea do gás em cada pulso (∝ v²): é o "puf" de cada explosão saindo
+      // pela ponteira, com silêncio entre elas. (Uma versão que usava a velocidade média do gás tirava esses pufs
+      // e deixava o agudo de todos os carros abafado, como um fundo liso)
+      // (jato 'sonico': o sopro segue a vazão do pulso, não 1/área²: abaixo de 2,5" não cresce com o estreitamento, e a
+      // velocidade na ponteira, vazão ÷ área, satura no escoamento sônico; ver montarMedios)
+      const vel = jatoFis ? Math.max(0, rd.u) * this.jatoQ : Math.max(0, rd.u) / (2.5e4 * this.tipA);
+      this.jetEnv[i] += (vel - this.jetEnv[i]) * 0.15;
+      const jv = this.jetEnv[i], nz = rng.bi();
+      if (jatoFis) { const m = jv * this.jatoM, m2 = m * m, je = jv / Math.sqrt(Math.sqrt(1 + m2 * m2)); x += (this.jetF[i][0].run(nz) + 0.8 * this.jetF[i][1].run(nz)) * je * je * this.jetGain * P.air; }
+      else x += (this.jetF[i][0].run(nz) + 0.8 * this.jetF[i][1].run(nz)) * jv * jv * this.jetGain * P.air;
+      // carcaça do escape: a parede dos tubos e do abafador responde à onda que passa por dentro (antes do abafador) e
+      // irradia a sua aceleração: abaixo da ressonância da parede (~1 kHz) ela é rígida e a resposta sobe 12 dB/oitava,
+      // na ressonância reforça, acima a massa segura; e uma caixa pequena irradia mal o grave (mais 6 dB/oitava abaixo de
+      // ~600 Hz: sem isso ela cancelava parte do grave da boca). É um filtro fixo sobre um sinal periódico: sai em linhas
+      if (carcK) { const src = this.carcSrc[i]; if (src) { const f = this.carcF[i], pw = src.in1, lo = (this.carcS[i] += this.carcKp * (pw - this.carcS[i])), cz = f[1].run(f[0].run(pw - lo)) * carcK; this.carcOut[i] = cz; x += cz; } }
+      if (this.tap) this.tap.jato(i, x);
+      exL += x * rd.panL; exR += x * rd.panR;
+      const ib = this.itdB[i], dd = this.itdD[i]; ib[iw] = x;
+      exLd += ib[(iw - dd[0]) & this.itdM] * rd.panL; exRd += ib[(iw - dd[1]) & this.itdM] * rd.panR;
+    }
+    // troca de configuração: as redes antigas saem em cosseno levantado (cada uma com o peso que tinha) e a nova entra
+    if (velhas) {
+      let wv = 0, oL = 0, oR = 0, oLd = 0, oRd = 0;
+      for (const rv of velhas) {
+        const w = pesoRede(rv), o = this.radiarRedeVelha(rv, P, iw);
+        wv += w; oL += w * o[0]; oR += w * o[1]; oLd += w * o[2]; oRd += w * o[3];
+        rv.k++;
+      }
+      exL = (1 - wv) * exL + oL; exR = (1 - wv) * exR + oR; exLd = (1 - wv) * exLd + oLd; exRd = (1 - wv) * exRd + oRd;
+      if (velhas.some((rv) => rv.k >= rv.n)) { velhas = velhas.filter((rv) => rv.k < rv.n); if (!velhas.length) velhas = null; this.redesVelhas = velhas; }
+    }
+    this.am[AM_EXL] = exL; this.am[AM_EXR] = exR; this.am[AM_EXLD] = exLd; this.am[AM_EXRD] = exRd;
+  }
+
+  /** o pulso e o chiado da admissão (amInS, amInP, amInH) */
+  amostraAdmissao() {
+    const fs = this.fs, N = this.N, rng = this.rng, P = this.params, intake = this.am[AM_INTAKE], mThr = this.am[AM_MTHR], pMan = this.am[AM_PMAN];
+    // ---- admissão
+    let inS, inP, inH;
+    {
+      const dIn = (intake - this.inPrev) * fs;
+      this.inPrev = intake;
+      let x = dIn * 0.9 / (this.N * 0.5 + 1) / Math.max(0.02, this.Vd * 1e3);
+      for (let i = 0; i < this.inF.length; i++) x = this.inF[i].run(x);
+      // chiado do ar entrando pela borboleta: cresce com a vazão nela, não com a carga. Pisando com o coletor em
+      // vácuo, a borboleta engole ar em fluxo sônico até o coletor encher: é o "suspiro" curto da acelerada; depois
+      // segue a vazão do motor (normalizado pela rotação ele ficava no máximo durante toda a acelerada)
+      const air = clamp(mThr / (this.Vd * N * 1.2 * this.redline / 120 + 1e-9), 0, 2);
+      const hiss = this.hissF.run(rng.bi()) * air * air * this.hissGain * 0.25 * P.air;
+      const loadIn = 0.3 + 0.7 * clamp(pMan / P0, 0, 1); // em lenta (coletor em vácuo) a admissão quase não se ouve
+      inP = x * this.inGain * 0.004 * loadIn; inH = hiss; inS = inP + inH; // (pulso grave + chiado)
+    }
+    this.am[AM_INS] = inS; this.am[AM_INP] = inP; this.am[AM_INH] = inH;
+  }
+
+  /** a mecânica, a vibração do bloco e a irradiação do coletor (amMech, amVib, amBrk) */
+  amostraMecanica() {
+    const P = this.params, rng = this.rng, dt = this.dt, rf = this.am[AM_RF], pMan = this.am[AM_PMAN], omega = this.am[AM_OMEGA], batK = this.batK, Tgas = this.am[AM_TGAS], brkIn = this.am[AM_BRKIN];
+    let vib = this.am[AM_VIB];
+    // ---- mecânico
+    let mech = 0;
+    {
+      this.clickEnv *= 0.88;
+      // frio: tuchos e pistão batem mais até o óleo esquentar e as folgas fecharem
+      const coldN = 1 - this.warm;
+      const cn = rng.bi() * this.clickEnv * (0.15 + rf) * (1 + 1.6 * coldN);
+      mech += (this.clickF[0].run(cn) + 0.35 * this.clickF[1].run(cn)) * 0.05;
+      if (this.cc) { this.am[AM_COLDN] = coldN; this.ccMecanica(); mech += this.am[AM_SAIDA]; } // (diesel: knock por dp/dθ, injeção, bomba)
+      else {
+      this.knockEnv *= 0.93;
+      const kn = rng.bi() * this.knockEnv * (0.3 + 0.7 * pMan / P0) * (1 + 1.2 * coldN);
+      mech += (this.knockF[0].run(kn) + 0.6 * this.knockF[1].run(kn) + 0.25 * this.knockF[2].run(kn)) * 0.07;
+      }
+      // batida periódica (`batida`): o pistão que encosta na parede a cada explosão e as válvulas que assentam na sede excitam o
+      // bloco e o cabeçote com um impulso, e a estrutura responde nos seus modos (0,8–2,5 kHz, bem amortecidos). O impulso de
+      // cada cilindro tem um tamanho fixo (folgas) vezes a força da explosão, e cresce com a rotação (a velocidade do
+      // impacto): a forma de onda se repete a cada ciclo e aparece como linhas de meia ordem, não como rajada de ruído.
+      // Na lenta quase não se ouve; com o motor girando leve é ela que enche os médios; em plena carga o escape a cobre
+      if (batK) {
+        const bf = this.batF, br = rf * Math.sqrt(rf), bc = this.batC * br; // (impacto ∝ rotação, e mais forte quanto mais rápido: rf^1,5)
+        mech += bf[3].run(bf[0].run(bc) + BATIDA.peso2 * bf[1].run(bc) + BATIDA.pesoV * bf[2].run(this.batV * br)) * batK; // (sem reforço a frio: na lenta fria de um V8 a batida passava a ser o que se ouvia em 1–6 kHz, onde a gravação é um leito liso)
+        this.batC = 0; this.batV = 0;
+      }
+      this.phW += omega * dt; if (this.phW > 1e4) this.phW -= TAU * 1000;
+      if (this.rot) { this.mechRot(); mech += this.am[AM_SAIDA]; } // (rotativo, gancho 16: engrenagem fixa / coroa do rotor)
+      else mech += (Math.sin(this.phW * 23) * 0.6 + Math.sin(this.phW * 2.9 * 12) * 0.4) * 0.002 * rf * rf;
+      if (this.state === 'crank') {
+        this.phS += (omega * 11 * dt) / TAU; this.phS -= Math.floor(this.phS);
+        mech += this.starterLP.run((this.phS * 2 - 1) * 0.05 + rng.bi() * 0.02) * (0.6 + 0.4 * Math.sin(this.phW * 2));
+      }
+      if (this.av) mech += this.somPartidaAv(rng); // (arranque de aviação: apito do volante, zumbido, ar)
+      mech = this.mechHP.run(mech);
+      if (this.airCool) mech *= 1.2; // (sem a camisa d'água em volta, tucho, válvula e pistão irradiam mais)
+      if (this.radial) mech *= 1.17; // (gancho 12: cilindros e aletas expostos)
+      // bomba de ar secundário (zumbido elétrico) e ventoinha do radiador
+      if (this.secAir > 0.01 && P.saSound !== false && this.saModo !== 2) { // (`bombaAr: 'sem'`: o carro não tem a bomba)
+        if (this.saModo === 1) {
+          // (motor elétrico: a tensão e a contrapressão variam a rotação ~0,7% e a linha fica larga, sem o 2º harmônico
+          // puro; dois senos parados apareciam como um tom que não é ordem do motor, que a gravação do carro não tem)
+          this.saJit += 0.002 * (rng.bi() - this.saJit);
+          this.phSA += 760 * (1 + 0.4 * this.saJit) * dt; if (this.phSA > 1) this.phSA -= 1;
+          mech += this.secAir * (0.001 * Math.sin(TAU * this.phSA) + 0.003 * this.saF.run(rng.bi()));
+        } else {
+        this.phSA += 760 * dt; if (this.phSA > 1) this.phSA -= 1;
+        mech += this.secAir * (0.001 * Math.sin(TAU * this.phSA) + 0.0004 * Math.sin(2 * TAU * this.phSA) + 0.003 * this.saF.run(rng.bi()));
+        }
+      }
+      if (this.fanSpin > 0.01 && P.fanSound !== false) {
+        this.phFan += 7 * 42 * this.fanSpin * dt; if (this.phFan > 1) this.phFan -= 1;
+        mech += this.fanSpin * (0.006 * Math.sin(TAU * this.phFan) + 0.03 * this.fanF.run(rng.bi())) * this.fanSpin;
+      }
+      const ripple = (Tgas - this.tqGas) / (this.Tmax + 1);
+      if (this.radial) vib = this.vibLP.run(vib * 0.04 * rf * rf + ripple * 0.08); // (radial: a oscilação do torque pesa 1,6×)
+      else vib = this.vibLP.run(vib * 0.04 * rf * rf + ripple * 0.05);
+    }
+
+    // ---- irradiação do coletor perto do motor: a rajada de cada abertura de válvula vaza pelas paredes finas e
+    // juntas antes do abafador. Sobe em ~3 ms e cai em ~10 ms (acima de ~1800 rpm as rajadas se fundem em ondas por
+    // volta), e cada cilindro sopra conforme o próprio pulso. É o agudo "de lata" do Fusca, colado ao motor
+    let brk = 0;
+    if (this.breakK) {
+      this.brkE += (brkIn - this.brkE) * (brkIn > this.brkE ? this.brkKa : this.brkKd);
+      this.brkS += (brkIn - this.brkS) * this.brkKs; // (média de ~0,1 s: entre as rajadas o escape segue pressurizado e as juntas vazam um pouco)
+      this.brkLP += this.brkKl * (this.brkF[0].run(rng.bi()) - this.brkLP); // (passa-alta em 700 Hz e 1 polo em 2,5 kHz)
+      brk = this.brkF[1].run(this.brkLP) * (this.brkE + this.brkFloor * this.brkS) * this.breakK * this.brkK;
+    }
+    this.am[AM_MECH] = mech; this.am[AM_VIB] = vib; this.am[AM_BRK] = brk;
+  }
+
+  /** o turbo e o compressor mecânico (amTur, amSc) */
+  amostraTurbo() {
+    const P = this.params, rng = this.rng, dt = this.dt, rf = this.am[AM_RF], pMan = this.am[AM_PMAN], pUp = this.am[AM_PUP], omega = this.am[AM_OMEGA], intake = this.am[AM_INTAKE];
+    // ---- turbo
+    let tur = 0, sc = 0;
+    if (this.cc) { this.ccTurbo(P); tur = this.am[AM_SAIDA]; }
+    else if (this.turbo) {
+      const tw = this.turboW;
+      const f = 500 + 6200 * tw;
+      this.phT += TAU * f * dt; if (this.phT > TAU) this.phT -= TAU;
+      const lvl = tw * tw * (0.2 + 0.8 * clamp(pMan / pUp, 0, 1));
+      if (this.rot) { this.am[AM_LVL] = lvl; this.rotApito(); tur += this.am[AM_SAIDA]; } // (rotativo: o mesmo apito, atenuado por `kApito`)
+      else tur += (Math.sin(this.phT) + 0.25 * Math.sin(2 * this.phT + 0.7)) * 0.02 * lvl;
+      tur += this.turboHiss.run(rng.bi()) * 0.02 * lvl * (0.3 + this.boost) * P.air;
+      if (this.bovEnv > 0.002) {
+        const nz = rng.bi();
+        tur += (this.bovF[0].run(nz) + 0.6 * this.bovF[1].run(nz)) * this.bovEnv * this.bovAmp * 0.35;
+      }
+    }
+
+    // ---- compressor mecânico: o "uivo" dos rotores; cresce com o giro e com a pressão
+    if (this.blower) {
+      // a correia e a carga variam um pouco a rotação dos rotores: a linha do uivo fica larga, não um apito parado
+      this.scJit = (this.scJit || 0) + 0.02 * (rng.bi() - (this.scJit || 0));
+      const fb = (omega / TAU) * this.scOrder * (1 + 0.09 * this.scJit);
+      this.phB = (this.phB || 0) + TAU * fb * dt; if (this.phB > TAU) this.phB -= TAU;
+      // (o uivo é a pulsação de cada bolsão abrindo para a descarga pressurizada: com o pé embaixo ela é forte; tirando
+      // o pé, a válvula de alívio abre, os dois lados dos rotores ficam quase na mesma pressão e sobra só um fundo dos
+      // rotores girando em vazio. Preso só ao giro, ele soava igual acelerando e caindo)
+      const lv = Math.pow(rf, 1.5) * (0.06 + 0.94 * clamp(this.boost / Math.max(0.2, this.maxBoost), 0, 1));
+      // (a passagem dos lóbulos pulsa a pressão de descarga numa fração grande da própria pressão: no cofre, de pé
+      // embaixo, o uivo briga com o escape; antes ficava ~30 dB abaixo e não se ouvia)
+      // a pulsação não é senoidal: cada bolsão abre de uma vez para a descarga, e a onda tem muitos harmônicos
+      // (o Roots moderno, de lóbulos torcidos 160–170° como o Eaton TVS, abre cada bolsão aos poucos e a pulsação é
+      // suave: com os harmônicos quase sem cair, como num Roots de lóbulos retos, o uivo agudo virava um guincho fino;
+      // o duplo parafuso tem o 2º harmônico tão forte quanto o fundamental, medido num Hellcat, o que dá o som cheio
+      // de sirene, e depois cai; o centrífugo é quase só a passagem das pás). Os harmônicos vêm pela recorrência de
+      // Chebyshev, só até ~20 kHz
+      const ty = this.scType, ex = ty === 'roots' ? 1.6 : 1.8;
+      const c2 = 2 * Math.cos(this.phB), kMax = Math.min(16, Math.floor(0.42 * this.fs / Math.max(fb, 1)));
+      let s1 = Math.sin(this.phB), s0 = 0, wv = 0, e2 = 0;
+      for (let k = 1; k <= kMax; k++) {
+        const a = ty === 'screw' ? (k <= 8 ? SCREW_H[k - 1] : 0.05 * Math.pow(0.6, k - 8)) : Math.pow(k, -ex);
+        wv += a * s1; e2 += a * a; const s = c2 * s1 - s0; s0 = s1; s1 = s;
+      }
+      wv *= 0.79 / Math.sqrt(0.5 * Math.max(e2, 1e-9));
+      // cada cilindro que aspira puxa a descarga e o uivo pulsa no ritmo das admissões (o "nhiii" granulado)
+      this.scIn = (this.scIn || 0) + 0.0005 * (intake - (this.scIn || 0));
+      const am = clamp(1 + (ty === 'centrifugal' ? 0.1 : ty === 'roots' ? 0.2 : 0.35) * (intake / Math.max(this.scIn, 1e-9) - 1), 0.4, 1.8);
+      sc += wv * am * 0.36 * lv * this.scK * this.scGain;
+      // o vazamento pelas pontas dos rotores chia junto com cada bolsão (um chiado médio, abaixo do uivo: centrado
+      // nos agudos ele soava mais brilhante que o compressor real)
+      sc += this.scHiss.run(rng.bi()) * 0.07 * lv * P.air * this.scGain * (0.6 + 0.4 * Math.sin(this.phB));
+    }
+    this.am[AM_TUR] = tur; this.am[AM_SC] = sc;
+  }
+
+  /** o ouvinte, a rua, o nivelador, o bloqueio DC, o ambiente e a saída da amostra `s` */
+  amostraOuvinte(s, outL, outR, sendL, sendR) {
+    const P = this.params, dt = this.dt, kw = this.am[AM_KW], loop = this.am[AM_LOOP], rpmFrac = this.am[AM_RPMFRAC];
+    const targetE = this.am[AM_TE], targetI = this.am[AM_TI], targetB = this.am[AM_TB], targetP = this.am[AM_TP], targetR = this.am[AM_TR];
+    let exL = this.am[AM_EXL], exR = this.am[AM_EXR], exLd = this.am[AM_EXLD], exRd = this.am[AM_EXRD], brk = this.am[AM_BRK];
+    let inS = this.am[AM_INS], inP = this.am[AM_INP], inH = this.am[AM_INH], mech = this.am[AM_MECH], vib = this.am[AM_VIB];
+    const tur = this.am[AM_TUR], sc = this.am[AM_SC];
+    // ---- ouvinte (exL/exR em Pa, o resto já em escala de áudio)
+    const exScale = 2.4e-4;
+    exL *= exScale * P.exhaust; exR *= exScale * P.exhaust; exLd *= exScale * P.exhaust; exRd *= exScale * P.exhaust; brk *= exScale * P.exhaust;
+    this.wE += (targetE - this.wE) * kw; this.wI += (targetI - this.wI) * kw; this.wB += (targetB - this.wB) * kw;
+    this.wP += (targetP - this.wP) * kw; this.wR += (targetR - this.wR) * kw;
+    inS *= P.intake; inP *= P.intake; inH *= P.intake; mech *= P.mech; vib *= P.mech;
+    if (this.tap) this.tap.gravar(s, exScale * P.exhaust, inP, inH, mech, vib, tur, sc, brk);
+    let L = 0, R = 0;
+    // o que sai do cofre (admissão, mecânica, compressor) depende de onde o motor está: dianteiro, chega à câmera
+    // de trás de longe e com a carroceria no meio; central ou traseiro, a câmera fica colada nele e ouve o
+    // carburador puxando ar, a ventoinha e o trem de válvulas com o agudo. É por isso que o mesmo chiado é a
+    // alma do Fusca e soa postiço num Mustang. (O pulso grave da admissão fica contido na caixa do filtro e sob a
+    // tampa do motor; o chiado agudo, que nasce no carburador e na borboleta, escapa pelas grelhas)
+    const me = this.extMech.run(mech), [kIn, kMe, kSc, kRaw, kH] = this.posW, mm = me + kRaw * (mech - me), ia = kIn * inP + kH * inH;
+    if (this.wE > 1e-4) {
+      const bk = (0.3 + 0.7 * kRaw) * brk; // (motor dianteiro: o coletor fica sob o capô e chega por baixo do carro)
+      L += this.wE * (exLd + ia + kMe * mm + 0.2 * tur + kSc * sc + bk + 0.1 * vib);
+      R += this.wE * (exRd + ia + kMe * mm + 0.2 * tur + kSc * sc + bk + 0.1 * vib);
+    }
+    if (this.wP > 1e-4) {
+      // microfone colado na ponteira esquerda: campo próximo, quase só escape
+      L += this.wP * (1.6 * exL + 0.4 * exR + 0.06 * inS + 0.05 * mech + 0.1 * tur + 0.03 * sc + 0.5 * brk);
+      R += this.wP * (1.1 * exL + 0.35 * exR + 0.06 * inS + 0.05 * mech + 0.1 * tur + 0.03 * sc + 0.5 * brk);
+    }
+    if (this.wI > 1e-4) {
+      let cl = exL * 0.75 + exR * 0.25, cr = exR * 0.75 + exL * 0.25;
+      for (let i = 0; i < 3; i++) { cl = this.cabL[i].run(cl); cr = this.cabR[i].run(cr); }
+      // pela parede corta-fogo chegam admissão, mecânica e a vibração do bloco
+      const common = 0.35 * this.cabIn.run(inS) + 0.2 * this.cabMech.run(mech) + 0.25 * (tur + sc) + 0.2 * this.cabBrk.run(brk) + 1.2 * vib;
+      L += this.wI * (cl * 0.6 + common); R += this.wI * (cr * 0.6 + common);
+    }
+    if (this.wB > 1e-4) {
+      // cofre: o escape chega por baixo do carro, abafado; dominam admissão, comando e bloco
+      const ex = this.bayEx.run((exL + exR) * 0.5);
+      const b = 0.55 * ex + 1.0 * inS + 0.7 * mech + 0.8 * (tur + sc) + brk + 0.8 * vib;
+      L += this.wB * b; R += this.wB * b;
+    }
+    if (this.av) { const h = this.avSomExtra(); L += h; R += h; } // (aviação: a hélice da página, ouvinte a 5 m do cubo)
+    // carro andando pela via (posição sempre atualizada; volta de "loop" metros)
+    this.carX += this.v * dt;
+    if (this.carX > loop / 2) this.carX -= loop;
+    // (na rua o motor traseiro sopra para trás, junto com o escape; o dianteiro, para a frente)
+    // (de frente, nada fica entre o compressor e quem está na rua: ele entra como no cofre)
+    const eng = 0.12 * inP + kH * inH + 0.1 * mm + 0.8 * sc;
+    this.road((exL + exR) * 0.5 + 0.7 * brk + kRaw * eng, (1 - kRaw) * eng + 0.2 * tur, P);
+    if (this.wR > 1e-4) { L += this.wR * this.roadL; R += this.wR * this.roadR; }
+    // bloqueio DC + compensação de loudness por rotação + saturação suave
+    // (leve: um motor real fica uns 25 dB mais alto da lenta ao corte; aqui comprimimos só ~5 dB disso)
+    // reforço da lenta medido na calibração, que some conforme o giro sobe (até metade da faixa)
+    const wIdle = 1 - smooth((this.idle / this.redline) * 1.15, 0.5, rpmFrac);
+    this.mk += (Math.pow(this.mkIdle || 1, wIdle) - this.mk) * 0.0005;
+    if (this.gTroca) { // (troca de configuração: o ganho novo da sonda chega em rampa)
+      this.cfgGain += (this.gTroca - this.cfgGain) * (1 - Math.exp(-dt / TROCA_GANHO));
+      if (Math.abs(this.gTroca - this.cfgGain) < 1e-6 * this.gTroca) { this.cfgGain = this.gTroca; this.gTroca = 0; }
+    }
+    if (this.fade < 1) this.fade = Math.min(1, this.fade + dt / 0.04);
+    // arcade: nivelador sobre o escape na fonte (antes do ouvinte, para a distância na rua e a cabine
+    // continuarem valendo). Abaixo da carga total da calibração ele sobe o ganho na razão 1:2, até +10 dB: a lenta
+    // sobe metade do que falta, sem igualar ao giro alto; acima não mexe. O ganho desce em 15 ms e sobe em 300 ms, para não "bombear" no corte de giro
+    const lv = this.cfgGain * this.mk, e2 = 0.5 * (exL * exL + exR * exR) * lv * lv;
+    this.arcE += (e2 - this.arcE) * 0.0004; // (RMS de ~50 ms: um detector de pico lia os pulsos da lenta, não o nível)
+    const gw = P.dynamics === 'arcade' && this.state === 'run' ? clamp(Math.pow(0.17 / Math.sqrt(this.arcE + 1e-12), 0.5), 1, 3.16) : 1;
+    this.arcG += (gw - this.arcG) * (gw < this.arcG ? 0.0014 : 0.00007);
+    // (e o reforço nunca leva um estouro além do teto: pico com ataque na hora e soltura de ~140 ms)
+    this.arcP = Math.max(Math.max(Math.abs(exL), Math.abs(exR)) * lv * P.master * 0.5, this.arcP * 0.99985);
+    const gOut = P.master * 0.5 * this.cfgGain * this.mk * this.fade * Math.min(this.arcG, Math.max(1, 0.9 / (this.arcP + 1e-9)));
+    this.dcL = L - this.dcxL + 0.9985 * this.dcL; this.dcxL = L;
+    this.dcR = R - this.dcxR + 0.9985 * this.dcR; this.dcxR = R;
+    // som de fundo do ambiente (independe do motor)
+    this.ambience(this.wI);
+    const gA = P.ambSound === false ? 0 : P.master * 0.5;
+    outL[s] = Math.tanh(this.dcL * gOut + this.ambL * gA);
+    if (outR !== outL) outR[s] = Math.tanh(this.dcR * gOut + this.ambR * gA);
+    if (sendL) {
+      // envio para a reverberação: de longe o som refletido pesa mais que o direto
+      const onboard = 1 - this.wR;
+      sendL[s] = (this.dcL * onboard + this.wR * this.roadS * (0.75 + 0.25 * this.panS)) * gOut;
+      sendR[s] = (this.dcR * onboard + this.wR * this.roadS * (0.75 - 0.25 * this.panS)) * gOut;
     }
   }
 
