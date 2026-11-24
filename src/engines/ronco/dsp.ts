@@ -28,6 +28,63 @@ import { T_MAN, T_BACK, T_WALL, T_EXREF, SCREW_H, ENV_LOOP, CARCACA, BATIDA, JAT
 import { montarMedios } from './medios';
 import { instalarAviacao } from './aviacao';
 
+// ---- o laço de amostra em partes (`amostraLer` … `amostraOuvinte`) e os ganchos cc* e rot* (Diesel, Rotativos) trocam os valores da
+// amostra pelo vetor `am` (Float64Array: guardar um double ali não aloca). Antes eram campos, um por valor: com 49 campos a mais a
+// instância do Diesel com gerador (Scania, Volvo, Cat, ônibus, gerador) passava do limite de propriedades rápidas do V8, ia para o
+// modo dicionário e o laço ficava 4–5× mais lento. As famílias que usam os índices os copiam em constantes do próprio módulo
+// (no Node, pelo tsx, uma constante importada é um getter a cada leitura)
+export const AM = { KW: 0, LOOP: 1, TE: 2, TI: 3, TB: 4, TP: 5, TR: 6, RPMFRAC: 7, RF: 8, OMEGA: 9, PMAN: 10, PUP: 11, MTHR: 12, INTAKE: 13, VIB: 14, TGAS: 15, BRKIN: 16, EXL: 17, EXR: 18, EXLD: 19, EXRD: 20, INS: 21, INP: 22, INH: 23, MECH: 24, BRK: 25, TUR: 26, SC: 27, RUNNING: 28, CRANKING: 29, CUT: 30, DFCO: 31, RPM: 32, DEG: 33, ADV: 34, ASP: 35, SLOWB: 36, BURN: 37, HWR: 38, HIN: 39, MINSUM: 40, A: 41, AP: 42, P: 43, V: 44, T: 45, COLDN: 46, LVL: 47, SAIDA: 48 } as const;
+export const N_AM = 49;
+const AM_KW = 0;
+const AM_LOOP = 1;
+const AM_TE = 2;
+const AM_TI = 3;
+const AM_TB = 4;
+const AM_TP = 5;
+const AM_TR = 6;
+const AM_RPMFRAC = 7;
+const AM_RF = 8;
+const AM_OMEGA = 9;
+const AM_PMAN = 10;
+const AM_PUP = 11;
+const AM_MTHR = 12;
+const AM_INTAKE = 13;
+const AM_VIB = 14;
+const AM_TGAS = 15;
+const AM_BRKIN = 16;
+const AM_EXL = 17;
+const AM_EXR = 18;
+const AM_EXLD = 19;
+const AM_EXRD = 20;
+const AM_INS = 21;
+const AM_INP = 22;
+const AM_INH = 23;
+const AM_MECH = 24;
+const AM_BRK = 25;
+const AM_TUR = 26;
+const AM_SC = 27;
+const AM_RUNNING = 28;
+const AM_CRANKING = 29;
+const AM_CUT = 30;
+const AM_DFCO = 31;
+const AM_RPM = 32;
+const AM_DEG = 33;
+const AM_ADV = 34;
+const AM_ASP = 35;
+const AM_SLOWB = 36;
+const AM_BURN = 37;
+const AM_HWR = 38;
+const AM_HIN = 39;
+const AM_MINSUM = 40;
+const AM_A = 41;
+const AM_AP = 42;
+const AM_P = 43;
+const AM_V = 44;
+const AM_T = 45;
+const AM_COLDN = 46;
+const AM_LVL = 47;
+const AM_SAIDA = 48;
+
 // ---- troca de configuração com o motor funcionando (EngineDSP.guardarTroca / passarTroca)
 /** duração do cruzamento entre a rede do escape antiga e a nova (s): a nova nasce vazia, e nesse tempo os pulsos já a
  *  atravessaram (ver docs/TECNICO.md → Ronco → "Troca de configuração com o motor funcionando") */
@@ -128,12 +185,8 @@ export class EngineDSP implements DSPDeAudio {
   // as redes de escape antigas que ainda soam no cruzamento, o ganho de antes (rampa até o novo), o estado guardado pela
   // subclasse antes de remontar o dela, e se a última troca foi com o motor funcionando e se as câmaras passaram
   declare redesVelhas: any; declare runMix: any; declare gTroca: any; declare trocaPendente: any; declare trocaViva: any; declare trocaCamaras: any;
-  // o laço de amostra em partes (`amostraLer` … `amostraOuvinte`): as constantes do bloco e os valores de cada amostra que passam de uma parte
-  // para a outra (números: um campo de double não aloca)
-  declare amKw: number; declare amLoop: number; declare amTE: number; declare amTI: number; declare amTB: number; declare amTP: number; declare amTR: number; declare amRpmFrac: number; declare amRf: number; declare amOmega: number; declare amPMan: number; declare amPUp: number; declare amMThr: number; declare amIntake: number; declare amVib: number; declare amTgas: number; declare amBrkIn: number; declare amExL: number; declare amExR: number; declare amExLd: number; declare amExRd: number; declare amInS: number; declare amInP: number; declare amInH: number; declare amMech: number; declare amBrk: number; declare amTur: number; declare amSc: number;
-  declare amRunning: boolean; declare amCranking: boolean; declare amCut: boolean; declare amDfco: boolean; declare amRpm: number; declare amDeg: number; declare amAdv: number; declare amASp: number; declare amSlowB: number; declare amBurn: number; declare amHwr: number; declare amHiN: number; declare amMInSum: number;
-  // (o que vai e volta dos ganchos cc* e rot* por amostra e cilindro: ver amostraCilindro)
-  declare amA: number; declare amAp: number; declare amP: number; declare amV: number; declare amT: number; declare amColdN: number; declare amLvl: number; declare amSaida: number;
+  // o laço de amostra em partes e os ganchos cc* e rot*: os valores que passam de uma parte para a outra, no vetor `am` (ver AM)
+  declare am: Float64Array;
 
   constructor(fs) {
     this.fs = fs; this.dt = 1 / fs;
@@ -177,9 +230,16 @@ export class EngineDSP implements DSPDeAudio {
     this.carcK = 0; this.carcSrc = null; this.carcF = null; this.carcOut = null; this.carcS = null; this.carcKp = 0; this.batK = 0; this.batF = null; this.batW = null; this.batC = 0; this.batV = 0; this.batQ0 = 1;
     this.jatoFis = false; this.jatoQ = 0; this.jatoM = 0; this.saModo = 0; this.saJit = 0;
     this.redesVelhas = null; this.runMix = { in0: 0 }; this.gTroca = 0; this.trocaPendente = null; this.trocaViva = false; this.trocaCamaras = false;
-    this.amKw = 0; this.amLoop = 0; this.amTE = 0; this.amTI = 0; this.amTB = 0; this.amTP = 0; this.amTR = 0; this.amRpmFrac = 0; this.amRf = 0; this.amOmega = 0; this.amPMan = 0; this.amPUp = 0; this.amMThr = 0; this.amIntake = 0; this.amVib = 0; this.amTgas = 0; this.amBrkIn = 0; this.amExL = 0; this.amExR = 0; this.amExLd = 0; this.amExRd = 0; this.amInS = 0; this.amInP = 0; this.amInH = 0; this.amMech = 0; this.amBrk = 0; this.amTur = 0; this.amSc = 0;
-    this.amRunning = false; this.amCranking = false; this.amCut = false; this.amDfco = false; this.amRpm = 0; this.amDeg = 0; this.amAdv = 0; this.amASp = 0; this.amSlowB = 0; this.amBurn = 0; this.amHwr = 0; this.amHiN = 0; this.amMInSum = 0;
-    this.amA = 0; this.amAp = 0; this.amP = 0; this.amV = 0; this.amT = 0; this.amColdN = 0; this.amLvl = 0; this.amSaida = 0;
+    this.am = new Float64Array(N_AM);
+    // As propriedades que o laço, o controle e as mensagens criariam com o motor rodando nascem aqui, com o valor que dá a mesma
+    // leitura (são lidas com `|| 0`, `?? x`, `!!x`, `=== undefined`, num teste, ou só depois de escritas). Uma propriedade nova
+    // numa instância de ~520 delas, quando o vetor de propriedades precisa crescer e os campos já mudados passam do limite do V8,
+    // leva o objeto ao modo dicionário: o Scania, o Volvo, o Cat, o ônibus e o gerador iam para lá e o laço ficava 4–5× mais
+    // lento (docs/TECNICO.md → Diesel → CPU do laço de amostra). Sem propriedade nova depois da configuração, isso não acontece
+    this.ambSpec = null; this.ambHum = null; this.alsArm = false; this.runT = 0; this.shiftRetard = false; this.sinceShift = 0;
+    this.lcPrev = undefined; this.limPrev = undefined; this.limRetard = 0; this.limI = undefined; this.limT = 0; this.limFrac = 0; this.lacc = 0;
+    this.denied = 0; this.dfcoOn = false; this.fuelRamp = 1; this.ambL = 0; this.ambR = 0; this.ignCut = false; this.shiftUp = false;
+    this.scJit = 0; this.phB = 0; this.scIn = 0;
   }
 
   message(m) {
@@ -996,7 +1056,7 @@ export class EngineDSP implements DSPDeAudio {
     const kw = 1 - Math.exp(-dt / 0.15);
     const hw = this.hw, cyc = this.cyc;
     // (as constantes do bloco que os métodos do laço usam)
-    this.amKw = kw; this.amLoop = loop; this.amTE = targetE; this.amTI = targetI; this.amTB = targetB; this.amTP = targetP; this.amTR = targetR;
+    this.am[AM_KW] = kw; this.am[AM_LOOP] = loop; this.am[AM_TE] = targetE; this.am[AM_TI] = targetI; this.am[AM_TB] = targetB; this.am[AM_TP] = targetP; this.am[AM_TR] = targetR;
 
     for (let s = 0; s < n; s++) {
       if (this.ctrl-- <= 0) { this.control(16 * dt); this.ctrl = 15; }
@@ -1046,11 +1106,11 @@ export class EngineDSP implements DSPDeAudio {
       this.tzLP += this.tzK * (wn - this.tzLP);
       const hiN = (wn - this.tzLP) * 1.4;
       // (o corpo do laço por cilindro é o método `amostraCilindro`, compilado à parte: os valores da amostra vão nos campos `am*`)
-      this.amRunning = running; this.amCranking = cranking; this.amCut = cut; this.amDfco = dfco; this.amRpm = rpm; this.amDeg = deg;
-      this.amAdv = adv; this.amASp = aSp; this.amSlowB = slowB; this.amBurn = burn; this.amHwr = hwr; this.amPMan = pMan; this.amHiN = hiN;
-      this.amTgas = 0; this.amMInSum = 0; this.amVib = 0; this.amIntake = 0; this.amBrkIn = 0;
+      this.am[AM_RUNNING] = running ? 1 : 0; this.am[AM_CRANKING] = cranking ? 1 : 0; this.am[AM_CUT] = cut ? 1 : 0; this.am[AM_DFCO] = dfco ? 1 : 0; this.am[AM_RPM] = rpm; this.am[AM_DEG] = deg;
+      this.am[AM_ADV] = adv; this.am[AM_ASP] = aSp; this.am[AM_SLOWB] = slowB; this.am[AM_BURN] = burn; this.am[AM_HWR] = hwr; this.am[AM_PMAN] = pMan; this.am[AM_HIN] = hiN;
+      this.am[AM_TGAS] = 0; this.am[AM_MINSUM] = 0; this.am[AM_VIB] = 0; this.am[AM_INTAKE] = 0; this.am[AM_BRKIN] = 0;
       for (let c = 0; c < N; c++) this.amostraCilindro(c);
-      const Tgas = this.amTgas, mInSum = this.amMInSum, vib = this.amVib, intake = this.amIntake, brkIn = this.amBrkIn;
+      const Tgas = this.am[AM_TGAS], mInSum = this.am[AM_MINSUM], vib = this.am[AM_VIB], intake = this.am[AM_INTAKE], brkIn = this.am[AM_BRKIN];
       this.pMan = clamp(pMan + ((mThr - mInSum) * dt * RGAS * T_MAN) / this.Vman, 3000, pUp * 1.05);
 
       // ---- dinâmica: virabrequim + embreagem + veículo
@@ -1103,8 +1163,8 @@ export class EngineDSP implements DSPDeAudio {
       }
 
       // (o que vem daqui sai em métodos compilados à parte: ver `amostraLer`; os valores do começo da amostra vão nos campos `am*`)
-      this.amRpmFrac = rpmFrac; this.amRf = rf; this.amOmega = omega; this.amPMan = pMan; this.amPUp = pUp; this.amMThr = mThr;
-      this.amIntake = intake; this.amVib = vib; this.amTgas = Tgas; this.amBrkIn = brkIn;
+      this.am[AM_RPMFRAC] = rpmFrac; this.am[AM_RF] = rf; this.am[AM_OMEGA] = omega; this.am[AM_PMAN] = pMan; this.am[AM_PUP] = pUp; this.am[AM_MTHR] = mThr;
+      this.am[AM_INTAKE] = intake; this.am[AM_VIB] = vib; this.am[AM_TGAS] = Tgas; this.am[AM_BRKIN] = brkIn;
       this.amostraRede();
       this.amostraIrradiar();
       this.amostraAdmissao();
@@ -1128,16 +1188,16 @@ export class EngineDSP implements DSPDeAudio {
     const r = this.rCrank, l = this.lRod, Ap = this.Ap, Vc = this.Vc, Zr = this.Zr;
     const g1 = GAM - 1, cyc = this.cyc, cyc2 = cyc / 2, cyc3 = (3 * cyc) / 4, cyc4 = cyc / 4; // (gancho 3: 720/360/540/180 no pistão, os mesmos doubles)
     const batK = this.batK, velhas = this.redesVelhas; // (médios: 0 = legado; troca de configuração: as redes antigas no cruzamento, null em regime)
-    const running = this.amRunning, cranking = this.amCranking, cut = this.amCut, dfco = this.amDfco, rpm = this.amRpm, deg = this.amDeg;
-    const adv = this.amAdv, aSp = this.amASp, slowB = this.amSlowB, burn = this.amBurn, hwr = this.amHwr, pMan = this.amPMan, hiN = this.amHiN;
-    let Tgas = this.amTgas, mInSum = this.amMInSum, vib = this.amVib, intake = this.amIntake, brkIn = this.amBrkIn;
+    const running = this.am[AM_RUNNING] === 1, cranking = this.am[AM_CRANKING] === 1, cut = this.am[AM_CUT] === 1, dfco = this.am[AM_DFCO] === 1, rpm = this.am[AM_RPM], deg = this.am[AM_DEG];
+    const adv = this.am[AM_ADV], aSp = this.am[AM_ASP], slowB = this.am[AM_SLOWB], burn = this.am[AM_BURN], hwr = this.am[AM_HWR], pMan = this.am[AM_PMAN], hiN = this.am[AM_HIN];
+    let Tgas = this.am[AM_TGAS], mInSum = this.am[AM_MINSUM], vib = this.am[AM_VIB], intake = this.am[AM_INTAKE], brkIn = this.am[AM_BRKIN];
     let a = this.theta - fire[c]; if (a < 0) a += cyc;
     if (this.cc && a >= this.ciclo) a -= this.ciclo; // (2 tempos: ciclo de 360°)
     const ap = aPrev[c];
     // ---- centelha (diesel: injeção e atraso de ignição no DieselDSP; o ramo a gasolina segue sem reindentar)
     // (ganchos cc* e rot*: os doubles do cilindro vão pelos campos am* e a resposta volta em amSaida; passados como argumento a um
     // método que o V8 não embute, cada um virava uma caixa nova a cada chamada: 110 MB/s no Diesel)
-    if (this.cc) { this.amA = a; this.amAp = ap; this.ccInjecao(c); }
+    if (this.cc) { this.am[AM_A] = a; this.am[AM_AP] = ap; this.ccInjecao(c); }
     else {
     // a centelha é armada no curso de admissão e dispara uma única vez por ciclo,
     // mesmo que o avanço mude de repente (com atraso grande, depois do ponto morto superior)
@@ -1224,7 +1284,7 @@ export class EngineDSP implements DSPDeAudio {
     }
     // ---- válvulas (cliques do trem de válvulas)
     if (this.cc) this.ccValvulas(c);
-    else if (this.rot) { this.amA = a; this.amAp = ap; this.rotJanelas(c); } // (rotativo, gancho 9: tiques do ápice nas bordas das janelas e nas velas)
+    else if (this.rot) { this.am[AM_A] = a; this.am[AM_AP] = ap; this.rotJanelas(c); } // (rotativo, gancho 9: tiques do ápice nas bordas das janelas e nas velas)
     else {
     if ((ap < evo && a >= evo) || (ap < evc && a >= evc) || (ap < ivo && a >= ivo) || (ap < ivc && a >= ivc)) this.clickEnv += 0.5 + 0.5 * rng.next();
     if (batK) { if (ap < evc && a >= evc) this.batV += this.batW[N + c]; else if (ap < ivc && a >= ivc) this.batV += this.batW[2 * N + c]; } // (válvula assentando na sede: o mesmo estalo em todo ciclo)
@@ -1246,7 +1306,7 @@ export class EngineDSP implements DSPDeAudio {
 
     // ---- combustão (Wiebe)
     let dQ = 0;
-    if (this.cc) { this.amP = p; this.amV = V; this.ccQueima(c); dQ = this.amSaida; }
+    if (this.cc) { this.am[AM_P] = p; this.am[AM_V] = V; this.ccQueima(c); dQ = this.am[AM_SAIDA]; }
     else if (this.xb[c] < 1) {
       let d = a - this.spk[c]; if (d < -cyc2) d += cyc;
       if (d < 0) d = 0;
@@ -1265,8 +1325,8 @@ export class EngineDSP implements DSPDeAudio {
     // nova sozinha, que nasce vazia, dava um degrau na vazão que saía na boca como estalo)
     let runE = run;
     if (velhas) { let w = 1, b = 0; for (const rv of velhas) { const k = pesoRede(rv); w -= k; b += k * rv.runners[c].in0; } runE = this.runMix; runE.in0 = w * run.in0 + b; }
-    if (this.cc) { this.amP = p; this.amT = T; this.ccEscape(c, runE); mEx = this.amSaida; }
-    else if (this.rot) { this.amA = a; this.amP = p; this.amT = T; this.rotEscape(c, runE); mEx = this.amSaida; } // (rotativo, gancho 12: janela trapezoidal)
+    if (this.cc) { this.am[AM_P] = p; this.am[AM_T] = T; this.ccEscape(c, runE); mEx = this.am[AM_SAIDA]; }
+    else if (this.rot) { this.am[AM_A] = a; this.am[AM_P] = p; this.am[AM_T] = T; this.rotEscape(c, runE); mEx = this.am[AM_SAIDA]; } // (rotativo, gancho 12: janela trapezoidal)
     else if (a > evo && a < evc) {
       const sv = Math.sin(Math.PI * (a - evo) / (evc - evo));
       const A = this.AexMax * this.cylEx[c] * Math.min(1, 2.5 * sv * sv); // (área efetiva satura cedo: perfil "quadrado")
@@ -1297,7 +1357,7 @@ export class EngineDSP implements DSPDeAudio {
     else if (ap <= evo && a > evo) this.densC[c] = clamp(T / T_EXREF, 0.1, 1.3);
     const dens = mEx > 0 ? this.densC[c] : 1;
     // (o chiado do jato na válvula não entra na correção: é o escoamento sônico, não o empurrão do gás)
-    if (this.rot) { this.amA = a; this.posQueima(c); const pq = this.amSaida; run.out0 += Zr * mEx * (dens + turb * hiN) + pq; if (velhas) for (const rv of velhas) rv.runners[c].out0 += Zr * mEx * (dens + turb * hiN) + pq; } // (rotativo, gancho 13: acumula no primário do rotor)
+    if (this.rot) { this.am[AM_A] = a; this.posQueima(c); const pq = this.am[AM_SAIDA]; run.out0 += Zr * mEx * (dens + turb * hiN) + pq; if (velhas) for (const rv of velhas) rv.runners[c].out0 += Zr * mEx * (dens + turb * hiN) + pq; } // (rotativo, gancho 13: acumula no primário do rotor)
     else {
       run.out0 = 0.985 * run.in0 + Zr * mEx * (dens + turb * hiN);
       if (velhas) for (const rv of velhas) { const ro = rv.runners[c]; ro.out0 = 0.985 * ro.in0 + Zr * mEx * (dens + turb * hiN); } // (a rede antiga recebe a mesma vazão)
@@ -1307,8 +1367,8 @@ export class EngineDSP implements DSPDeAudio {
 
     // ---- válvula de admissão
     let mIn = 0;
-    if (this.cc) { this.amP = p; this.amT = T; this.ccAdmissao(c); mIn = this.amSaida; }
-    else if (this.rot) { this.amA = a; this.amP = p; this.amT = T; this.rotAdmissao(c); mIn = this.amSaida; } // (rotativo, gancho 14: janelas de admissão)
+    if (this.cc) { this.am[AM_P] = p; this.am[AM_T] = T; this.ccAdmissao(c); mIn = this.am[AM_SAIDA]; }
+    else if (this.rot) { this.am[AM_A] = a; this.am[AM_P] = p; this.am[AM_T] = T; this.rotAdmissao(c); mIn = this.am[AM_SAIDA]; } // (rotativo, gancho 14: janelas de admissão)
     else if (a > ivo && a < ivc) {
       const sv = Math.sin(Math.PI * (a - ivo) / (ivc - ivo));
       const A = this.AinMax * this.cylIn[c] * Math.min(1, 1.5 * sv * sv);
@@ -1339,7 +1399,7 @@ export class EngineDSP implements DSPDeAudio {
     if (this.rot) vib += 0.1 * Math.cos(ph); // (rotativo, gancho 15: rotor balanceado, só a ordem 1 residual)
     else if (this.radial) vib += (0.6 * this.ux[c] + this.uy[c]) * 0.3 * Math.cos(2 * ph) + 0.35 * this.dz[c] * (this.ux[c] + this.uy[c]) * Math.cos(ph); // (gancho 9: sem a 1ª ordem)
     else vib += (0.6 * this.ux[c] + this.uy[c] + 0.35 * this.dz[c] * (this.ux[c] + this.uy[c])) * acc;
-    this.amTgas = Tgas; this.amMInSum = mInSum; this.amVib = vib; this.amIntake = intake; this.amBrkIn = brkIn;
+    this.am[AM_TGAS] = Tgas; this.am[AM_MINSUM] = mInSum; this.am[AM_VIB] = vib; this.am[AM_INTAKE] = intake; this.am[AM_BRKIN] = brkIn;
   }
 
   // ---- o laço de amostra em partes (`process` chama uma por vez, na ordem de antes). Cada método é compilado à parte
@@ -1347,7 +1407,7 @@ export class EngineDSP implements DSPDeAudio {
   // orçamento acabava na leitura e na escrita dos tubos, e os biquads, o `flow` e o `exhaustFlow` ficavam como chamadas,
   // cada uma com os doubles encaixotados na ida e na volta (60 a 110 MB/s de lixo por segundo de som). Os valores do
   // começo da amostra que elas usam passam pelos campos `am*` (sem caixa: o V8 guarda um double num campo sem alocar).
-  // As contas são as mesmas, na mesma ordem, e os sorteios saem na mesma ordem (docs/TECNICO.md → CPU do laço de amostra)
+  // As contas são as mesmas, na mesma ordem, e os sorteios saem na mesma ordem (docs/TECNICO.md → Diesel → CPU do laço de amostra)
 
   /** a onda que chega às pontas de cada tubo (a rede nova e, num cruzamento, as antigas) */
   amostraLer() {
@@ -1418,12 +1478,12 @@ export class EngineDSP implements DSPDeAudio {
       exL = (1 - wv) * exL + oL; exR = (1 - wv) * exR + oR; exLd = (1 - wv) * exLd + oLd; exRd = (1 - wv) * exRd + oRd;
       if (velhas.some((rv) => rv.k >= rv.n)) { velhas = velhas.filter((rv) => rv.k < rv.n); if (!velhas.length) velhas = null; this.redesVelhas = velhas; }
     }
-    this.amExL = exL; this.amExR = exR; this.amExLd = exLd; this.amExRd = exRd;
+    this.am[AM_EXL] = exL; this.am[AM_EXR] = exR; this.am[AM_EXLD] = exLd; this.am[AM_EXRD] = exRd;
   }
 
   /** o pulso e o chiado da admissão (amInS, amInP, amInH) */
   amostraAdmissao() {
-    const fs = this.fs, N = this.N, rng = this.rng, P = this.params, intake = this.amIntake, mThr = this.amMThr, pMan = this.amPMan;
+    const fs = this.fs, N = this.N, rng = this.rng, P = this.params, intake = this.am[AM_INTAKE], mThr = this.am[AM_MTHR], pMan = this.am[AM_PMAN];
     // ---- admissão
     let inS, inP, inH;
     {
@@ -1439,13 +1499,13 @@ export class EngineDSP implements DSPDeAudio {
       const loadIn = 0.3 + 0.7 * clamp(pMan / P0, 0, 1); // em lenta (coletor em vácuo) a admissão quase não se ouve
       inP = x * this.inGain * 0.004 * loadIn; inH = hiss; inS = inP + inH; // (pulso grave + chiado)
     }
-    this.amInS = inS; this.amInP = inP; this.amInH = inH;
+    this.am[AM_INS] = inS; this.am[AM_INP] = inP; this.am[AM_INH] = inH;
   }
 
   /** a mecânica, a vibração do bloco e a irradiação do coletor (amMech, amVib, amBrk) */
   amostraMecanica() {
-    const P = this.params, rng = this.rng, dt = this.dt, rf = this.amRf, pMan = this.amPMan, omega = this.amOmega, batK = this.batK, Tgas = this.amTgas, brkIn = this.amBrkIn;
-    let vib = this.amVib;
+    const P = this.params, rng = this.rng, dt = this.dt, rf = this.am[AM_RF], pMan = this.am[AM_PMAN], omega = this.am[AM_OMEGA], batK = this.batK, Tgas = this.am[AM_TGAS], brkIn = this.am[AM_BRKIN];
+    let vib = this.am[AM_VIB];
     // ---- mecânico
     let mech = 0;
     {
@@ -1454,7 +1514,7 @@ export class EngineDSP implements DSPDeAudio {
       const coldN = 1 - this.warm;
       const cn = rng.bi() * this.clickEnv * (0.15 + rf) * (1 + 1.6 * coldN);
       mech += (this.clickF[0].run(cn) + 0.35 * this.clickF[1].run(cn)) * 0.05;
-      if (this.cc) { this.amColdN = coldN; this.ccMecanica(); mech += this.amSaida; } // (diesel: knock por dp/dθ, injeção, bomba)
+      if (this.cc) { this.am[AM_COLDN] = coldN; this.ccMecanica(); mech += this.am[AM_SAIDA]; } // (diesel: knock por dp/dθ, injeção, bomba)
       else {
       this.knockEnv *= 0.93;
       const kn = rng.bi() * this.knockEnv * (0.3 + 0.7 * pMan / P0) * (1 + 1.2 * coldN);
@@ -1471,7 +1531,7 @@ export class EngineDSP implements DSPDeAudio {
         this.batC = 0; this.batV = 0;
       }
       this.phW += omega * dt; if (this.phW > 1e4) this.phW -= TAU * 1000;
-      if (this.rot) { this.mechRot(); mech += this.amSaida; } // (rotativo, gancho 16: engrenagem fixa / coroa do rotor)
+      if (this.rot) { this.mechRot(); mech += this.am[AM_SAIDA]; } // (rotativo, gancho 16: engrenagem fixa / coroa do rotor)
       else mech += (Math.sin(this.phW * 23) * 0.6 + Math.sin(this.phW * 2.9 * 12) * 0.4) * 0.002 * rf * rf;
       if (this.state === 'crank') {
         this.phS += (omega * 11 * dt) / TAU; this.phS -= Math.floor(this.phS);
@@ -1513,21 +1573,21 @@ export class EngineDSP implements DSPDeAudio {
       this.brkLP += this.brkKl * (this.brkF[0].run(rng.bi()) - this.brkLP); // (passa-alta em 700 Hz e 1 polo em 2,5 kHz)
       brk = this.brkF[1].run(this.brkLP) * (this.brkE + this.brkFloor * this.brkS) * this.breakK * this.brkK;
     }
-    this.amMech = mech; this.amVib = vib; this.amBrk = brk;
+    this.am[AM_MECH] = mech; this.am[AM_VIB] = vib; this.am[AM_BRK] = brk;
   }
 
   /** o turbo e o compressor mecânico (amTur, amSc) */
   amostraTurbo() {
-    const P = this.params, rng = this.rng, dt = this.dt, rf = this.amRf, pMan = this.amPMan, pUp = this.amPUp, omega = this.amOmega, intake = this.amIntake;
+    const P = this.params, rng = this.rng, dt = this.dt, rf = this.am[AM_RF], pMan = this.am[AM_PMAN], pUp = this.am[AM_PUP], omega = this.am[AM_OMEGA], intake = this.am[AM_INTAKE];
     // ---- turbo
     let tur = 0, sc = 0;
-    if (this.cc) { this.ccTurbo(P); tur = this.amSaida; }
+    if (this.cc) { this.ccTurbo(P); tur = this.am[AM_SAIDA]; }
     else if (this.turbo) {
       const tw = this.turboW;
       const f = 500 + 6200 * tw;
       this.phT += TAU * f * dt; if (this.phT > TAU) this.phT -= TAU;
       const lvl = tw * tw * (0.2 + 0.8 * clamp(pMan / pUp, 0, 1));
-      if (this.rot) { this.amLvl = lvl; this.rotApito(); tur += this.amSaida; } // (rotativo: o mesmo apito, atenuado por `kApito`)
+      if (this.rot) { this.am[AM_LVL] = lvl; this.rotApito(); tur += this.am[AM_SAIDA]; } // (rotativo: o mesmo apito, atenuado por `kApito`)
       else tur += (Math.sin(this.phT) + 0.25 * Math.sin(2 * this.phT + 0.7)) * 0.02 * lvl;
       tur += this.turboHiss.run(rng.bi()) * 0.02 * lvl * (0.3 + this.boost) * P.air;
       if (this.bovEnv > 0.002) {
@@ -1570,16 +1630,16 @@ export class EngineDSP implements DSPDeAudio {
       // nos agudos ele soava mais brilhante que o compressor real)
       sc += this.scHiss.run(rng.bi()) * 0.07 * lv * P.air * this.scGain * (0.6 + 0.4 * Math.sin(this.phB));
     }
-    this.amTur = tur; this.amSc = sc;
+    this.am[AM_TUR] = tur; this.am[AM_SC] = sc;
   }
 
   /** o ouvinte, a rua, o nivelador, o bloqueio DC, o ambiente e a saída da amostra `s` */
   amostraOuvinte(s, outL, outR, sendL, sendR) {
-    const P = this.params, dt = this.dt, kw = this.amKw, loop = this.amLoop, rpmFrac = this.amRpmFrac;
-    const targetE = this.amTE, targetI = this.amTI, targetB = this.amTB, targetP = this.amTP, targetR = this.amTR;
-    let exL = this.amExL, exR = this.amExR, exLd = this.amExLd, exRd = this.amExRd, brk = this.amBrk;
-    let inS = this.amInS, inP = this.amInP, inH = this.amInH, mech = this.amMech, vib = this.amVib;
-    const tur = this.amTur, sc = this.amSc;
+    const P = this.params, dt = this.dt, kw = this.am[AM_KW], loop = this.am[AM_LOOP], rpmFrac = this.am[AM_RPMFRAC];
+    const targetE = this.am[AM_TE], targetI = this.am[AM_TI], targetB = this.am[AM_TB], targetP = this.am[AM_TP], targetR = this.am[AM_TR];
+    let exL = this.am[AM_EXL], exR = this.am[AM_EXR], exLd = this.am[AM_EXLD], exRd = this.am[AM_EXRD], brk = this.am[AM_BRK];
+    let inS = this.am[AM_INS], inP = this.am[AM_INP], inH = this.am[AM_INH], mech = this.am[AM_MECH], vib = this.am[AM_VIB];
+    const tur = this.am[AM_TUR], sc = this.am[AM_SC];
     // ---- ouvinte (exL/exR em Pa, o resto já em escala de áudio)
     const exScale = 2.4e-4;
     exL *= exScale * P.exhaust; exR *= exScale * P.exhaust; exLd *= exScale * P.exhaust; exRd *= exScale * P.exhaust; brk *= exScale * P.exhaust;
