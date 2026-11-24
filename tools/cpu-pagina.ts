@@ -53,13 +53,14 @@ export class Filho {
   private constructor(p: ChildProcess) {
     this.p = p;
     p.on('message', (m) => { const f = this.espera; this.espera = null; f?.(m); });
+    p.on('error', () => { /* (o canal fechou: a saída do processo já responde a quem espera) */ });
     p.on('exit', (c) => { if (this.espera) { const f = this.espera; this.espera = null; f({ erro: `o processo de medida saiu com ${c}` }); } });
   }
   static async abrir(ped: Pedido): Promise<Filho> {
     const arq = await empacotar();
     // (ENGINE_CPU_NODE_ARGS: opções do node para o processo de medida, como --trace-turbo-inlining, para investigar)
     const extra = process.env.ENGINE_CPU_NODE_ARGS ? process.env.ENGINE_CPU_NODE_ARGS.split(' ') : [];
-    const f = new Filho(spawn(process.execPath, [...extra, arq], { cwd: RAIZ, stdio: ['ignore', 'inherit', 'inherit', 'ipc'], serialization: 'advanced' }));
+    const f = new Filho(spawn(process.execPath, ['--allow-natives-syntax', ...extra, arq], { cwd: RAIZ, stdio: ['ignore', 'inherit', 'inherit', 'ipc'], serialization: 'advanced' }));
     const r = await f.pedir({ tipo: 'montar', ...ped });
     f.info = r.info ?? {};
     return f;
@@ -73,8 +74,8 @@ export class Filho {
   /** tempo de CPU do processo (s) em `s` segundos de som */
   async rodar(s: number) { const r = await this.pedir({ tipo: 'rodar', s }); this.info = r.info ?? this.info; return r.cpu as number; }
   /** bytes alocados (amostragem do heap do V8, que estima o total), coletas e o tempo delas em `s` segundos de som */
-  alocacao(s: number, amostrar = true): Promise<{ bytes: number; coletas: number; msColetas: number; cpu: number; sitios: [string, number][] }> { return this.pedir({ tipo: amostrar ? 'alocacao' : 'coletas', s }); }
-  fechar() { try { this.p.send({ tipo: 'fim' }); } catch { /* já saiu */ } }
+  alocacao(s: number, amostrar = true): Promise<{ bytes: number; coletas: number; msColetas: number; cpu: number; rapidas: boolean; sitios: [string, number][] }> { return this.pedir({ tipo: amostrar ? 'alocacao' : 'coletas', s }); }
+  fechar() { if (this.p.connected) try { this.p.send({ tipo: 'fim' }); } catch { /* já saiu */ } }
 }
 
 /** `total` segundos de som em cada processo, em trechos alternados de `trecho` s (um processo de cada vez); devolve o

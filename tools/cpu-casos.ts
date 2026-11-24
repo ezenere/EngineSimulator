@@ -24,6 +24,11 @@ import { CenaDSP } from '../src/scene/dsp-cena';
 import { ambientePassagem } from '../src/scene/ambientes';
 
 const SR = 48000, B = 128, TAU = Math.PI * 2;
+// (o processo de medida roda com --allow-natives-syntax: `rapido` diz se o objeto está com propriedades rápidas ou caiu no
+// modo dicionário do V8, que deixa o laço 4–5× mais lento; ver docs/TECNICO.md → Diesel → CPU do laço de amostra)
+let rapido: (o: any) => boolean = () => true;
+try { rapido = new Function('o', 'return %HasFastProperties(o)') as any; } catch { /* sem a opção */ }
+let alvo: any = null; // (o DSP do caso, para a guarda)
 export type Motor = { rodar: (s: number) => void; info?: () => Record<string, any> };
 type Fabrica = (caso: string, dados: any) => Motor;
 
@@ -46,6 +51,7 @@ function no(d: any, ev: [number, (d: any) => void][] = [], cada?: (d: any) => vo
 }
 /** monta o DSP como a página: o nó, a telemetria, o ouvinte e a config calibrada por mensagem */
 function pagina(d: any, cfg: any, params: Record<string, any> = {}) {
+  alvo = d;
   d.post = () => {};
   d.message({ type: 'params', params: { listener: 'ext', ...params } });
   d.message({ type: 'config', cfg });
@@ -188,7 +194,7 @@ async function alocacao(s: number, amostrar: boolean) {
   }
   await new Promise((r) => setTimeout(r, 50)); // (as entradas de coleta chegam depois do laço)
   ob.disconnect();
-  return { bytes, coletas, msColetas, cpu: (c.user + c.system) / 1e6, sitios: [...sitios.entries()].sort((x, y) => y[1] - x[1]).slice(0, 20) };
+  return { bytes, coletas, msColetas, cpu: (c.user + c.system) / 1e6, rapidas: alvo ? rapido(alvo instanceof RotativosDSP ? alvo.rot : alvo) : true, sitios: [...sitios.entries()].sort((x, y) => y[1] - x[1]).slice(0, 20) };
 }
 if (process.send) {
   process.on('message', async (m: any) => {
@@ -198,7 +204,7 @@ if (process.send) {
         responder({ info: motor.info?.() ?? {} });
       } else if (m.tipo === 'rodar') {
         const c0 = process.cpuUsage(); motor!.rodar(m.s); const c = process.cpuUsage(c0);
-        responder({ cpu: (c.user + c.system) / 1e6, info: motor!.info?.() ?? {} });
+        responder({ cpu: (c.user + c.system) / 1e6, info: { ...(motor!.info?.() ?? {}), ...(alvo ? { rapidas: rapido(alvo instanceof RotativosDSP ? alvo.rot : alvo) } : {}) } });
       } else if (m.tipo === 'alocacao' || m.tipo === 'coletas') responder(await alocacao(m.s, m.tipo === 'alocacao'));
       else if (m.tipo === 'fim') process.exit(0);
     } catch (e: any) { responder({ erro: String(e?.stack || e) }); }

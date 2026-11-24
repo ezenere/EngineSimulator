@@ -72,6 +72,7 @@ const FAMILIAS: Record<string, () => Promise<Caso[]>> = {
   const lista: Caso[] = [];
   for (const f of fams.length ? fams : Object.keys(FAMILIAS)) lista.push(...(await FAMILIAS[f]()));
   const res: any[] = new Array(lista.length);
+  let lentas = 0;
   const fila = lista.map((c, i) => [c, i] as const);
   // (a calibração roda aqui, um caso de cada vez; os processos de medida, até J ao mesmo tempo: a alocação não depende
   // da carga da máquina, o tempo de CPU depende pouco nesta escala)
@@ -82,13 +83,15 @@ const FAMILIAS: Record<string, () => Promise<Caso[]>> = {
       try { const a = await f.alocacao(S); res[i] = { c, a }; } catch (e: any) { res[i] = { c, erro: String(e?.message || e) }; } finally { f.fechar(); }
     }
   }));
-  console.log(`| família | caso | CPU (% do tempo real) | alocação (MB/s de som) | coletas/s | ms de coleta por s |`);
-  console.log(`|---|---|---:|---:|---:|---:|`);
+  console.log(`| família | caso | CPU (% do tempo real) | alocação (MB/s de som) | coletas/s | ms de coleta por s | propriedades |`);
+  console.log(`|---|---|---:|---:|---:|---:|---|`);
   for (const r of res) {
     if (r.erro) { console.log(`| ${r.c.familia} | ${r.c.rotulo} | erro: ${r.erro.slice(0, 120)} | | | |`); continue; }
     const a = r.a;
-    console.log(`| ${r.c.familia} | ${r.c.rotulo} | ${((100 * a.cpu) / S).toFixed(1)} | ${(a.bytes / S / 1e6).toFixed(1)} | ${(a.coletas / S).toFixed(1)} | ${(a.msColetas / S).toFixed(2)} |`);
+    console.log(`| ${r.c.familia} | ${r.c.rotulo} | ${((100 * a.cpu) / S).toFixed(1)} | ${(a.bytes / S / 1e6).toFixed(1)} | ${(a.coletas / S).toFixed(1)} | ${(a.msColetas / S).toFixed(2)} | ${a.rapidas ? 'rápidas' : 'DICIONÁRIO'} |`);
+    if (!a.rapidas) lentas++;
   }
+  if (lentas) { console.log(`\n${lentas} caso(s) com o DSP no modo dicionário do V8 (propriedades lentas): veja quem cria propriedade com o motor rodando`); process.exitCode = 1; }
   if (sitios) for (const r of res) if (!r.erro) {
     console.log(`\n${r.c.familia} · ${r.c.rotulo}: onde aloca (MB/s; função:linha:coluna no pacote)`);
     for (const [k, b] of r.a.sitios) if (b / S > 0.05e6) console.log(`  ${(b / S / 1e6).toFixed(2).padStart(7)}  ${k}`);
