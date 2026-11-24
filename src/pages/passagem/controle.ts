@@ -20,11 +20,11 @@ import { useSyncExternalStore } from 'react';
 import type { CadeiaDeAudio } from '../../ui';
 import type { Ambiente, Ouvinte, Trajetoria, FonteSonora, TelemetriaCena, LocalOuvinte, Solo, Vec3, LugarAcustico } from '../../scene/tipos';
 import { Observador, OUVIDO_ABAIXO, type Destino, type ModoObservador } from './observador';
-import { Lugar, TUNEL, ESTACAO, CORTE, PONTE } from './lugar';
+import { Lugar, TUNEL, CORTE, PONTE, PLATAFORMA } from './lugar';
 import { qualCenario, ESTACAO_OUTRA, VALE, type Cenario } from './mundo/planta';
 import { pontoDeChegada, pontosDeVista, assento, type PontoDeVista } from './pontos';
 import type { Corpo, Portador, TelemetriaPortador, FamiliaMotor } from '../../carriers/tipos';
-import { ambientePassagem } from '../../scene/ambientes';
+import { ambientePassagem, ambienteDoLugar } from '../../scene/ambientes';
 import { Via, PontoVia } from '../../scene/trajetoria';
 import { Trem, TREM_PADRAO, maxVagoes, type ConfigTrem } from '../../carriers/trem';
 import { Rotor, type CargaRotor } from '../../carriers/rotor';
@@ -693,9 +693,15 @@ export class ControlePassagem {
   private ambEnviado = '';
   /** as medidas do lugar para a Cena (Ambiente.lugar, src/scene/lugar.ts): o ambiente depende de onde você está */
   lugarAcustico(): LugarAcustico | undefined {
-    const lg = this.lugar(), t = lg.tun, E = ESTACAO;
-    if (t) return { tunel: { s0: t.ta, s1: t.tb, mLonge: t.mLonge, mPerto: t.mPerto, altura: t.h, nicho: TUNEL.nicho.fundo } };
-    if (lg.amb === 'estacao') return { estacao: { s0: -E.meio, s1: E.meio, mLonge: ESTACAO_OUTRA.telhado, mFundo: lg.bordaPlataforma + E.largura + E.fundo, teto: E.teto, mMuro: ESTACAO_OUTRA.muro, muro: ESTACAO_OUTRA.muroAlto } };
+    const lg = this.lugar(), t = lg.tun, e = lg.est, bo = lg.bordaPlataforma;
+    if (t) return { tunel: { s0: t.ta, s1: t.tb, mLonge: t.mLonge, mPerto: t.mPerto, altura: t.h, nicho: TUNEL.nicho.fundo }, pisos: [{ s0: t.ta, s1: t.tb, m0: t.borda, m1: t.mPerto, z: TUNEL.passarela }] };
+    // (as plataformas em que se pisa: a sua e a de lá)
+    const pisos = e ? [{ s0: -e.meio, s1: e.meio, m0: bo, m1: bo + e.largura + e.fundo, z: PLATAFORMA }, ...(e.outra ? [{ s0: -e.meio, s1: e.meio, m0: e.outra.plataforma[0], m1: e.outra.plataforma[1], z: PLATAFORMA }] : [])] : undefined;
+    // as estações como planta.ts as mede (medidasEstacao): a caixa do metrô; a gare da antiga sobre a plataforma, aberta
+    // do lado da via (de lá do trem) e nas pontas; o galpão de superfície (o telhado desenhado passa 4 m das pontas)
+    if (e?.caixa) return { estacao: { s0: -e.meio, s1: e.meio, mLonge: e.caixa.longe, mFundo: e.caixa.perto, teto: e.caixa.teto, tipo: 'subterranea' }, fundoFora: ambientePassagem('tunel').fundo, pisos };
+    if (e && !e.outra) return { estacao: { s0: -e.cobre, s1: e.cobre, mLonge: -bo, mFundo: bo + e.largura + e.fundo, teto: e.teto, tipo: 'gare' }, pisos };
+    if (e) return { estacao: { s0: -e.cobre - 4, s1: e.cobre + 4, mLonge: e.outra!.telhado, mFundo: bo + e.largura + e.fundo, teto: e.teto, mMuro: ESTACAO_OUTRA.muro, muro: ESTACAO_OUTRA.muroAlto, tipo: 'coberta' }, pisos };
     if (lg.amb === 'corte') return { corte: { ...CORTE } };
     if (lg.amb === 'ponte') return { ponte: { m0: PONTE.longe, m1: PONTE.perto, espessura: PONTE.espessura, vale: PONTE.vale, fundo: VALE.fundo, borda: VALE.borda } };
     return undefined;
@@ -704,8 +710,7 @@ export class ControlePassagem {
   mandarCena(ir = false) {
     this.pendCena = false;
     const a = this.audio; if (!a) return;
-    const amb = this.ambienteCena();
-    amb.lugar = this.lugarAcustico();
+    const amb = ambienteDoLugar(this.ambienteCena(), this.lugarAcustico());
     this.pendOuv = false; this.tOuv = performance.now(); this.saltoEnviado = this.obs.salto;
     a.send({ type: 'cena', amb, traj: this.traj, ouv: this.ouvinte() });
     const chave = JSON.stringify([amb.id, amb.solo, amb.reverb.rt60]);

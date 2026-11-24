@@ -145,11 +145,11 @@
   },
   "alocação no laço (--trace-gc, 10 s; mediana de 3 processos): MB coletados por segundo": {
     "grupo": "cpu",
-    "medido": 5.86,
+    "medido": 3.94,
     "unidade": "MB/s",
     "folga": "±20 %",
     "alvo": "sem alocação",
-    "motivo": "Os laços por amostra (anel, Hermite, filtros, fontes) não alocam. Sobra o encaixotamento de doubles uma vez por bloco de controle no Cena.processar (argumentos de funções que o V8 não embute, campos de objeto) e nos geradores de fundo: ~6 MB/s, 15 coletas jovens em 10 s, de ~0,1 ms cada contra o quantum de 2,67 ms. Antes o desvio era um texto sem teto e aceitaria 1 500 coletas (AUDITORIA T-CEN-04); agora o teto é este retrato em MB/s e a pausa máxima tem portão próprio (≤ 1 ms). Defeito de execução em src/scene/ (frente de robustez), não de som.",
+    "motivo": "Os laços por amostra (anel, Hermite, filtros, fontes) não alocam. Sobra o encaixotamento de doubles uma vez por bloco de controle no Cena.processar (argumentos de funções que o V8 não embute, campos de objeto) e nos geradores de fundo: ~6 MB/s, 15 coletas jovens em 10 s, de ~0,1 ms cada contra o quantum de 2,67 ms. Antes o desvio era um texto sem teto e aceitaria 1 500 coletas (AUDITORIA T-CEN-04); agora o teto é este retrato em MB/s e a pausa máxima tem portão próprio (≤ 1 ms). Defeito de execução em src/scene/ (frente de robustez), não de som. (24/11/2026: 5,86 → 3,94 MB/s, 16 → 10 coletas: o anel de cada fonte passou a guardar o atraso inteiro da trajetória (CENA 5.1, revista), e a reancoragem com crossfade, que o trem do laço fazia duas vezes na chegada, não acontece mais.)",
     "nota_folga": "a mediana de 3 processos vai de 5,9 a 6,3 MB/s entre execuções"
   }
 }

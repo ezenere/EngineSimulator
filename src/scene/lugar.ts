@@ -24,6 +24,12 @@
 //    dois fora fica de fora).
 //  · Ponte: não há recinto; a laje do tabuleiro é um obstáculo extrudado ao longo da via (o retângulo de sombra.ts), e
 //    embaixo dele o chão refletor é o vale.
+//  · Estações (24/11/2026): a coberta de superfície (as pontas e o vão entre o muro e o telhado abertos); a subterrânea
+//    do metrô (a caixa fechada; as pontas dão em túneis da mesma seção, e o campo que sai por elas segue guiado, caindo
+//    como o do túnel: c² = 1/(1 + (d/√S)^1,6)); a gare da estação antiga (aberta do lado da via e nas pontas). A
+//    reverberação da subterrânea e da gare é delas (ambientes.ts, `reverbDoLugar`).
+//  · Pisos elevados (as plataformas, a passarela do túnel): quem está em cima de um tem nele o refletor das fontes cujo
+//    ponto de reflexão especular cai nele (propagador.ts, `planoImagem`); as outras refletem no chão da via.
 import type { EspecFundo, LugarAcustico } from './tipos';
 import type { Via } from './trajetoria';
 import { CalculoSombra } from './sombra';
@@ -32,9 +38,13 @@ import { CalculoSombra } from './sombra';
 export const FUNDO_FORA_PADRAO: EspecFundo = { vento: 38, ventilacao: 0, murmurio: 0 };
 /** Q da boca do túnel (testa no morro e chão na frente: um quarto de espaço) e da ponta da estação (meio espaço) */
 export const Q_BOCA = 4, Q_PONTA = 2;
+/** expoente (em energia) do campo guiado num túnel a partir de uma abertura que dá nele: o 1/r^0,8 do envio do túnel (2.10) */
+export const N_DUTO = 1.6;
 /** m: a altura do ouvido de pé no chão da via; o acoplamento de cada fonte ao campo reverberante é medido daqui (cena.ts) */
 export const Z_REF_ENVIO = 1.6;
 
+/** quantos pisos elevados o lugar guarda (as duas plataformas, a passarela) */
+export const MAX_PISOS = 4;
 export const TIPO_NENHUM = 0, TIPO_TUNEL = 1, TIPO_ESTACAO = 2, TIPO_CORTE = 3, TIPO_PONTE = 4;
 // uma abertura: [eixo da normal (0 s, 1 m, 2 z), coordenada do plano, u0, u1, v0, v1 (os outros dois eixos, em ordem),
 // arestas que difratam (u0, u1, v0, v1: 1/0), d₀, n]
@@ -65,9 +75,17 @@ export class LugarCena {
   q = new Float64Array(12);
   /** o ouvinte, a cada bloco de controle: s, m, z e a saída de acoplar() (AC_*, a partir de 3) */
   ouv = new Float64Array(9);
+  /** os pisos elevados (até MAX_PISOS): s0, s1, m0, m1, z de cada um */
+  pisos = new Float64Array(MAX_PISOS * 5);
+  nPisos = 0;
 
   configurar(l: LugarAcustico | undefined, via: Via) {
-    this.via = via; this.nAb = 0; this.tipo = TIPO_NENHUM; this.ativo = false; this.areaBoca = 0;
+    this.via = via; this.nAb = 0; this.tipo = TIPO_NENHUM; this.ativo = false; this.areaBoca = 0; this.nPisos = 0;
+    for (const k of l?.pisos ?? []) {
+      if (this.nPisos >= MAX_PISOS) break;
+      const o = this.nPisos * 5; this.pisos[o] = k.s0; this.pisos[o + 1] = k.s1; this.pisos[o + 2] = k.m0; this.pisos[o + 3] = k.m1; this.pisos[o + 4] = k.z;
+      this.nPisos++;
+    }
     this.fundoFora = l?.fundoFora ?? FUNDO_FORA_PADRAO;
     this.periodo = via.tipo === 'volta' ? via.comp : Infinity;
     const cx = this.caixa;
@@ -84,10 +102,23 @@ export class LugarCena {
       const e = l.estacao, area = (e.mFundo - e.mLonge) * e.teto;
       this.tipo = TIPO_ESTACAO;
       cx[0] = e.s0; cx[1] = e.s1; cx[2] = e.mLonge; cx[3] = e.mFundo; cx[4] = -Infinity; cx[5] = e.teto;
-      const d0 = Math.sqrt((area * Q_PONTA) / (16 * Math.PI));
-      for (const s of [e.s0, e.s1]) this.abertura(0, s, e.mLonge, e.mFundo, 0, e.teto, 1, 1, 0, 1, d0, 2);
-      // o vão entre o muro e a beira do telhado, do lado de lá: plano m = mLonge; (u, v) = (s, z); fenda de largura teto − muro
-      this.abertura(1, e.mLonge, e.s0, e.s1, e.muro, e.teto, 1, 1, 1, 1, Math.max(0.05, e.teto - e.muro) / (4 * Math.PI), 1);
+      const tipo = e.tipo ?? 'coberta';
+      if (tipo === 'subterranea') {
+        // a caixa fechada; as pontas dão nos túneis da mesma seção: a energia que sai por elas segue guiada, e o campo no
+        // túnel cai como o do próprio túnel (2.10: o envio com 1/r^0,8 em amplitude, n = 1,6 em energia), a partir de
+        // d₀ = √S (a largura do tubo): c² = 1/(1 + (d/√S)^1,6)
+        for (const s of [e.s0, e.s1]) this.abertura(0, s, e.mLonge, e.mFundo, 0, e.teto, 1, 1, 0, 1, Math.sqrt(area), N_DUTO);
+      } else if (tipo === 'gare') {
+        // a cobertura aberta do lado da via (plano m = mLonge, do chão ao teto: uma fenda longa) e nas pontas
+        const d0 = Math.sqrt((area * Q_PONTA) / (16 * Math.PI));
+        for (const s of [e.s0, e.s1]) this.abertura(0, s, e.mLonge, e.mFundo, 0, e.teto, 1, 1, 0, 1, d0, 2);
+        this.abertura(1, e.mLonge, e.s0, e.s1, 0, e.teto, 1, 1, 0, 1, e.teto / (4 * Math.PI), 1);
+      } else {
+        const d0 = Math.sqrt((area * Q_PONTA) / (16 * Math.PI)), muro = e.muro ?? 0;
+        for (const s of [e.s0, e.s1]) this.abertura(0, s, e.mLonge, e.mFundo, 0, e.teto, 1, 1, 0, 1, d0, 2);
+        // o vão entre o muro e a beira do telhado, do lado de lá: plano m = mLonge; (u, v) = (s, z); fenda de largura teto − muro
+        this.abertura(1, e.mLonge, e.s0, e.s1, muro, e.teto, 1, 1, 1, 1, Math.max(0.05, e.teto - muro) / (4 * Math.PI), 1);
+      }
       this.sCentro = (e.s0 + e.s1) / 2;
     } else if (l.corte) {
       const c = l.corte;
@@ -100,7 +131,7 @@ export class LugarCena {
       this.tipo = TIPO_PONTE;
       this.ponte[0] = p.m0; this.ponte[1] = p.m1; this.ponte[2] = p.espessura; this.ponte[3] = p.vale; this.ponte[4] = p.fundo; this.ponte[5] = p.borda;
     }
-    this.ativo = this.tipo !== TIPO_NENHUM;
+    this.ativo = this.tipo !== TIPO_NENHUM || this.nPisos > 0;
     this.ocultaEnvio = this.tipo === TIPO_PONTE;
   }
 
@@ -160,7 +191,7 @@ export class LugarCena {
       else if (eixo === 1) { qm = a[b + 1]; qs = s < a[b + 2] ? a[b + 2] : s > a[b + 3] ? a[b + 3] : s; qz = z < a[b + 4] ? a[b + 4] : z > a[b + 5] ? a[b + 5] : z; }
       else { qz = a[b + 1]; qs = s < a[b + 2] ? a[b + 2] : s > a[b + 3] ? a[b + 3] : s; qm = m < a[b + 4] ? a[b + 4] : m > a[b + 5] ? a[b + 5] : m; }
       const d = Math.sqrt((s - qs) * (s - qs) + (m - qm) * (m - qm) + (z - qz) * (z - qz));
-      const r = d / a[b + 10], ck = 1 / (1 + (a[b + 11] === 2 ? r * r : r));
+      const r = d / a[b + 10], n = a[b + 11], ck = 1 / (1 + (n === 2 ? r * r : n === 1 ? r : Math.pow(r, n)));
       c2 += ck;
       if (ck > melhor) { melhor = ck; ps = qs; pm = qm; pz = qz; dMelhor = d; }
     }
@@ -242,6 +273,20 @@ export class LugarCena {
     this.sombra.calcularV();
     const o = this.sombra.out;
     q[9] = o[3] > 0 ? o[0] : o[1] > 0 ? o[0] : -Infinity;
+  }
+
+  /**
+   * O piso elevado em que o ponto (s, m, z) está em cima (o mais alto), ou −1: dentro da área dele (com a folga `h`: positiva
+   * para quem já está nele, negativa para quem chega) e mais de 0,3 m acima dele. (Entradas por Float64Array: this.q[6..8].)
+   */
+  pisoSob(h: number) {
+    const q = this.q, s = this.reduzirS(q[6]), m = q[7], z = q[8], P = this.pisos;
+    let melhor = -1, zMelhor = -Infinity;
+    for (let k = 0; k < this.nPisos; k++) {
+      const o = k * 5;
+      if (s >= P[o] - h && s <= P[o + 1] + h && m >= P[o + 2] - h && m <= P[o + 3] + h && z > P[o + 4] + 0.3 && P[o + 4] > zMelhor) { melhor = k; zMelhor = P[o + 4]; }
+    }
+    return melhor;
   }
 
   /** altura do chão do vale (ponte) na distância m da via: o fundo até `fundo`, a encosta em S até 0 em `borda` */

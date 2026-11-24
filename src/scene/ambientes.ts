@@ -5,7 +5,7 @@
 // página (num AudioBuffer, com `convolver.normalize = false`) e pela validação offline (tools/cena/).
 // A resposta sai com energia 1 em cada canal: o ganho `reverb.wet` é então a razão de potência entre o
 // campo reverberante e o envio, em regime.
-import type { Ambiente, EspecReverb, IdAmbiente } from './tipos';
+import type { Ambiente, EspecReverb, IdAmbiente, LugarAcustico } from './tipos';
 import { RNG } from '../acoustics/rng';
 import { Bq } from './filtros';
 
@@ -113,6 +113,61 @@ export function gerarRespostaPorBanda(amb: Ambiente, fs: number, semente = 0x1e5
     for (let i = 0; i < n; i++) d[i] *= g;
   }
   return { L: saida[0], R: saida[1] };
+}
+
+// ------------------------------------------------------------------ a reverberação do lugar (estações)
+/**
+ * A estação de superfície desenhada (o galpão de aço: 320 m, da beira do telhado do lado de lá, −15,6 m, à parede do
+ * fundo, 12,03 m com o trem de 3,36 m; 7 m de pé-direito) com o RT de 2,0 s em 500 Hz: a área de absorção equivalente
+ * dela, A = 0,161·V/T (Sabine), calibra o `wet` de 0,6 da tabela de 2.10. Para a mesma potência posta no lugar, o campo
+ * difuso vale 4W/(cA): outra estação fechada leva o `wet` escalado pela razão das áreas.
+ */
+export const A_ESTACAO_SUPERFICIE = (0.161 * 320 * (12.03 + 15.6) * 7) / 2.0;
+/**
+ * Estação subterrânea de azulejo e concreto (o metrô). RT60 de memória: Kang, *Acoustics of Long Spaces* (2002), traz
+ * medições em plataformas do metrô de Londres sem tratamento de 1,5 a 3 s em 500 Hz–1 kHz; aqui 2,5 s em 500 Hz, mais
+ * no grave (azulejo e concreto quase não absorvem) e menos em 8 kHz (o ar, num volume de ~15 000 m³: 4mV ≈ 700 m²
+ * limita a 3,5 s sozinho). Reflexões iniciais pela caixa desenhada, com o ouvido na plataforma a 2,5 m: o forro a 5,4 m
+ * (17 ms), a parede de cá a ~4 m (23 ms) e a de lá a ~14 m (82 ms); eco palpitante entre as duas paredes paralelas de
+ * azulejo, 18 m: 2·18/343 = 0,105 s. O `wet` sai da caixa (`reverbDoLugar`).
+ */
+export const REVERB_SUBTERRANEA: EspecReverb = {
+  len: 3.6, tau: 0.6, diff: 0.85, wet: 0.6, dry: 1, flutter: 0.105,
+  echoes: [[0.017, 0.5, 0.002], [0.023, 0.45, 0.003], [0.082, 0.35, 0.006]], rt60: [3.0, 2.5, 2.0, 1.1],
+};
+/**
+ * Gare de telha aberta do lado da via e nas pontas (a estação antiga). RT por Eyring na caixa desenhada (60 × 6,6 m,
+ * da plataforma à telha, 3,2 m; as aberturas absorvem tudo, telha 0,1, pedra 0,02, a fachada 0,03): ᾱ = 0,24, T ≈ 0,6 s.
+ * Reflexões iniciais: a telha (~1,5 m a mais de caminho, 4 ms) e a fachada do prédio atrás da plataforma (~6,6 m, 19 ms).
+ * O campo dela não é difuso (a energia sai pelo lado aberto depois de uma ou duas reflexões): o `wet` é o do corte, o
+ * outro lugar semiaberto com duas superfícies que refletem (0,25), não o de uma conta de campo difuso.
+ */
+export const REVERB_GARE: EspecReverb = {
+  len: 0.9, tau: 0.09, diff: 0.3, wet: 0.25, dry: 1,
+  echoes: [[0.004, 0.6, 0.001], [0.019, 0.4, 0.003]], rt60: [0.7, 0.6, 0.55, 0.4],
+};
+/**
+ * A reverberação do lugar, quando ele tem uma própria (a estação subterrânea, a gare), no lugar da do ambiente; o fator do
+ * RT60 do modo de testes (a razão entre o RT do ambiente recebido e o da tabela) vale também para ela. A estação
+ * subterrânea leva o `wet` da de superfície escalado pela razão das áreas de absorção: wet = 0,6·A_sup/A, A = 0,161·V/T₅₀₀,
+ * V = a caixa (comprimento × largura × pé-direito). Sem estação de outro tipo, a reverberação do ambiente.
+ */
+export function reverbDoLugar(amb: Ambiente, lugar: LugarAcustico | undefined): EspecReverb {
+  const e = lugar?.estacao;
+  if (!e || !e.tipo || e.tipo === 'coberta') return amb.reverb;
+  const r = e.tipo === 'subterranea' ? REVERB_SUBTERRANEA : REVERB_GARE;
+  const base = (AMBIENTES_PASSAGEM as Record<string, Ambiente>)[amb.id]?.reverb.rt60, atual = amb.reverb.rt60;
+  const rt60 = r.rt60!.map((x, i) => (base && atual ? (x * atual[i]) / base[i] : x)) as unknown as [number, number, number, number];
+  let wet = r.wet;
+  if (e.tipo === 'subterranea') {
+    const V = Math.max(1, (e.s1 - e.s0) * (e.mFundo - e.mLonge) * e.teto);
+    wet = (0.6 * A_ESTACAO_SUPERFICIE) / ((0.161 * V) / r.rt60![1]);
+  }
+  return { ...r, rt60, wet, len: Math.max(r.len, Math.max(...rt60) * 1.15) };
+}
+/** o ambiente com as medidas do lugar e a reverberação dele (o que a página manda à Cena e ao ConvolverNode) */
+export function ambienteDoLugar(amb: Ambiente, lugar: LugarAcustico | undefined): Ambiente {
+  return { ...amb, lugar, reverb: reverbDoLugar(amb, lugar) };
 }
 
 /** ambiente da passagem por id (cópia rasa, para o chamador poder mudar solo/túnel) */
